@@ -73,9 +73,9 @@ const Index = () => {
         <div className="relative mx-auto max-w-7xl px-6 py-16 sm:py-24">
           <div className="text-center space-y-6">
             <h1 className="text-5xl sm:text-6xl font-bold text-foreground">
-              <span className="gradient-primary bg-clip-text text-transparent">[S]</span>onic{" "}
-              <span className="gradient-primary bg-clip-text text-transparent">[A]</span>ssignment{" "}
-              <span className="gradient-primary bg-clip-text text-transparent">[M]</span>achine
+              <span className="text-primary">[S]</span>onic{" "}
+              <span className="text-primary">[A]</span>ssignment{" "}
+              <span className="text-primary">[M]</span>achine
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Advanced categorical analysis to predict audio connections to human characteristics

@@ -14,9 +14,10 @@ interface Category {
 interface AnalysisResultsProps {
   results: Category[] | null;
   isAnalyzing: boolean;
+  sourceImages?: Array<{ name: string; imageUrl: string }>;
 }
 
-export const AnalysisResults = ({ results, isAnalyzing }: AnalysisResultsProps) => {
+export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: AnalysisResultsProps) => {
   if (isAnalyzing) {
     return (
       <Card className="p-8 shadow-elegant">
@@ -38,7 +39,7 @@ export const AnalysisResults = ({ results, isAnalyzing }: AnalysisResultsProps) 
   return (
     <div className="space-y-6">
       {/* Network Visualization */}
-      <NetworkVisualization categories={results} />
+      <NetworkVisualization categories={results} sourceImages={sourceImages} />
 
       {/* Detailed Results */}
       <Card className="p-8 shadow-elegant">

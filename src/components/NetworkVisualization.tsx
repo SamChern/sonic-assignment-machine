@@ -27,9 +27,10 @@ interface NetworkVisualizationProps {
     description: string;
     sources?: Array<{ name: string; type: string }>;
   }>;
+  sourceImages?: Array<{ name: string; imageUrl: string }>;
 }
 
-export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) => {
+export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
@@ -316,10 +317,28 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
             Natural clustering shows category proximity • Node size = category prevalence strength • Blue-green spectrum
           </p>
         </div>
-        <div className="relative h-[500px] rounded-lg bg-black border border-border/30">
+        <div className="relative h-[500px] rounded-lg bg-black border border-border/30 overflow-hidden">
+          {/* Background images */}
+          {sourceImages.length > 0 && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              {sourceImages.map((source, index) => (
+                <img
+                  key={source.name}
+                  src={source.imageUrl}
+                  alt={source.name}
+                  className="absolute w-64 h-64 object-cover opacity-15 blur-sm"
+                  style={{
+                    transform: `translate(${(index % 3 - 1) * 150}px, ${Math.floor(index / 3) * 150 - 100}px) rotate(${index * 15}deg)`,
+                    filter: 'grayscale(40%) brightness(0.6)',
+                    mixBlendMode: 'screen',
+                  }}
+                />
+              ))}
+            </div>
+          )}
           <svg
             ref={svgRef}
-            className="w-full h-full"
+            className="w-full h-full relative z-10"
             style={{ background: "transparent" }}
           />
           {hoveredNode && (

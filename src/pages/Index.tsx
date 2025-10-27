@@ -12,7 +12,7 @@ const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [spotifyTracks, setSpotifyTracks] = useState<any[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [results, setResults] = useState<any[] | null>(null);
+  const [results, setResults] = useState<{ categories: any[]; images: any[] } | null>(null);
 
   const handleFileSelect = (file: File) => {
     setSelectedFiles(prev => [...prev, file]);
@@ -75,7 +75,7 @@ const Index = () => {
 
       console.log('Received analysis:', data);
 
-      // Map backend results to our category icons
+      // Map backend results to our category icons and collect images
       const resultsWithIcons = data.categories.map((category: any) => ({
         ...category,
         icon: getCategoryIcon(category.name.toLowerCase()),
@@ -85,7 +85,15 @@ const Index = () => {
         })
       }));
 
-      setResults(resultsWithIcons);
+      // Collect images from Spotify tracks for visualization
+      const imageData = spotifyTracks
+        .filter(track => track.album.images && track.album.images.length > 0)
+        .map(track => ({
+          name: `${track.name} - ${track.artists[0].name}`,
+          imageUrl: track.album.images[0].url
+        }));
+
+      setResults({ categories: resultsWithIcons, images: imageData });
       setIsAnalyzing(false);
       toast.success(`SemanticAC analysis complete for ${totalItems} source${totalItems > 1 ? 's' : ''}!`);
     } catch (error) {
@@ -210,7 +218,11 @@ const Index = () => {
         {(results || isAnalyzing) && (
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-foreground">Results</h2>
-            <AnalysisResults results={results} isAnalyzing={isAnalyzing} />
+            <AnalysisResults 
+              results={results?.categories || null} 
+              isAnalyzing={isAnalyzing} 
+              sourceImages={results?.images || []}
+            />
           </div>
         )}
       </div>

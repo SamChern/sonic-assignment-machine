@@ -1,7 +1,15 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Brain, Users, Heart, MessageSquare, Music } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Category {
   name: string;
@@ -18,6 +26,7 @@ interface AnalysisResultsProps {
 }
 
 export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: AnalysisResultsProps) => {
+  const [selectedSource, setSelectedSource] = useState<string>("all");
   if (isAnalyzing) {
     return (
       <Card className="p-8 shadow-elegant">
@@ -36,10 +45,62 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: Ana
 
   if (!results) return null;
 
+  // Get all unique sources
+  const allSources = new Set<string>();
+  results.forEach(category => {
+    category.sources?.forEach(source => {
+      allSources.add(source.name);
+    });
+  });
+  const uniqueSources = Array.from(allSources);
+
+  // Filter categories based on selected source
+  const filteredResults = selectedSource === "all" 
+    ? results 
+    : results.map(category => ({
+        ...category,
+        sources: category.sources?.filter(s => s.name === selectedSource) || []
+      })).filter(category => category.sources && category.sources.length > 0);
+
+  const filteredImages = selectedSource === "all"
+    ? sourceImages
+    : sourceImages.filter(img => img.name === selectedSource);
+
   return (
     <div className="space-y-6">
+      {/* Filter Controls */}
+      {uniqueSources.length > 1 && (
+        <Card className="p-4 bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-semibold text-foreground whitespace-nowrap">
+              Filter by Source:
+            </label>
+            <Select value={selectedSource} onValueChange={setSelectedSource}>
+              <SelectTrigger className="w-[300px] bg-background border-border">
+                <SelectValue placeholder="Select a source" />
+              </SelectTrigger>
+              <SelectContent className="bg-background border-border z-50">
+                <SelectItem value="all" className="cursor-pointer">
+                  All Sources ({uniqueSources.length})
+                </SelectItem>
+                {uniqueSources.map((source) => (
+                  <SelectItem key={source} value={source} className="cursor-pointer">
+                    {source.length > 40 ? source.substring(0, 40) + '...' : source}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedSource !== "all" && (
+              <div className="text-xs text-muted-foreground">
+                Viewing: <span className="font-semibold text-primary">{selectedSource}</span>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Network Visualization */}
-      <NetworkVisualization categories={results} sourceImages={sourceImages} />
+      <NetworkVisualization categories={filteredResults} sourceImages={filteredImages} />
 
       {/* Detailed Results */}
       <Card className="p-8 shadow-elegant">
@@ -52,7 +113,7 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: Ana
           </div>
 
           <div className="space-y-4">
-            {results.map((category, index) => (
+            {filteredResults.map((category, index) => (
               <div
                 key={index}
                 className="group rounded-lg border border-border bg-card p-4 transition-smooth hover:border-primary/50 hover:shadow-glow"

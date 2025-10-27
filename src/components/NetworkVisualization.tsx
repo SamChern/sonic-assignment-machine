@@ -476,7 +476,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
           
           {/* Similarity Metric - Bottom Left */}
           <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-4 shadow-lg z-20 min-w-[240px]">
-            <div className="text-xs font-semibold text-foreground mb-3">Ontological Alignment</div>
+            <div className="text-xs font-semibold text-foreground mb-3">SAM-Based Similarity</div>
             
             <div className="relative h-6 rounded-full overflow-hidden border border-border/30 mb-2">
               <div 

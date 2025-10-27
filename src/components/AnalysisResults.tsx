@@ -104,6 +104,7 @@ export const getCategoryIcon = (categoryName: string) => {
     cognitive: <Brain className="h-6 w-6" />,
     social: <Users className="h-6 w-6" />,
     communication: <MessageSquare className="h-6 w-6" />,
+    contextual: <Brain className="h-6 w-6" />,
     artistic: <Music className="h-6 w-6" />,
   };
   

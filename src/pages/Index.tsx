@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sparkles, FileAudio } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
 
 const Index = () => {
@@ -46,63 +47,52 @@ const Index = () => {
     setIsAnalyzing(true);
     setResults(null);
 
-    // SemanticAC-inspired multi-source ontological analysis
-    setTimeout(() => {
-      const allSources = [
-        ...selectedFiles.map(f => ({ name: f.name, type: 'file' })),
-        ...spotifyTracks.map(t => ({ name: `${t.name} - ${t.artists[0].name}`, type: 'track' }))
+    try {
+      // Prepare sources for backend analysis
+      const sources = [
+        ...selectedFiles.map(f => ({ name: f.name, type: 'file' as const })),
+        ...spotifyTracks.map(t => ({ 
+          name: `${t.name} - ${t.artists[0].name}`, 
+          type: 'track' as const 
+        }))
       ];
 
-      // Generate semantic analysis results following SemanticAC framework
-      const mockResults = [
-        {
-          name: "Acoustic Feature Alignment",
-          confidence: 88 + Math.random() * 8,
-          description: `Semantic consistency between audio spectrograms and label embeddings across ${totalItems} source${totalItems > 1 ? 's' : ''}`,
-          icon: getCategoryIcon("cognitive"),
-          sources: allSources.slice(0, Math.min(3, allSources.length))
-        },
-        {
-          name: "Temporal-Spectral Patterns",
-          confidence: 82 + Math.random() * 12,
-          description: `Hierarchical transformer analysis reveals ${totalItems > 1 ? 'cross-source' : 'internal'} mel-spectrogram feature correspondence`,
-          icon: getCategoryIcon("artistic"),
-          sources: allSources.slice(0, Math.min(4, allSources.length))
-        },
-        {
-          name: "Semantic Label Similarity",
-          confidence: 76 + Math.random() * 15,
-          description: `Text encoder extracted semantic representations with ${Math.round(70 + Math.random() * 20)}% label-to-audio alignment confidence`,
-          icon: getCategoryIcon("communication"),
-          sources: allSources
-        },
-        {
-          name: "Environmental Sound Classification",
-          confidence: 85 + Math.random() * 10,
-          description: `Audio event detection using contrastive learning between ${totalItems > 1 ? 'multiple sources' : 'single source'} and semantic embeddings`,
-          icon: getCategoryIcon("social"),
-          sources: allSources.slice(0, Math.min(2, allSources.length))
-        },
-        {
-          name: "Multimodal Embedding Space",
-          confidence: 79 + Math.random() * 14,
-          description: `Cosine similarity optimization in ${totalItems > 1 ? 'shared' : 'projected'} C-dimensional semantic space for audio-text alignment`,
-          icon: getCategoryIcon("cognitive"),
-          sources: allSources
-        },
-        ...(totalItems > 1 ? [{
-          name: "Cross-Source Ontological Coherence",
-          confidence: 73 + Math.random() * 18,
-          description: `Network analysis reveals ${Math.round(68 + Math.random() * 22)}% semantic overlap using CSCM (CNN-based Similarity Calculation Module)`,
-          icon: getCategoryIcon("emotional"),
-          sources: allSources
-        }] : [])
-      ];
+      console.log('Sending sources for analysis:', sources);
 
-      setResults(mockResults.map(r => ({ ...r, confidence: Math.round(r.confidence) })));
+      // Call backend AI analysis
+      const { data, error } = await supabase.functions.invoke('analyze-audio', {
+        body: { sources }
+      });
+
+      if (error) {
+        console.error('Analysis error:', error);
+        throw new Error(error.message || 'Analysis failed');
+      }
+
+      if (!data || !data.categories) {
+        throw new Error('Invalid analysis response');
+      }
+
+      console.log('Received analysis:', data);
+
+      // Map backend results to our category icons
+      const resultsWithIcons = data.categories.map((category: any) => ({
+        ...category,
+        icon: getCategoryIcon(category.name.toLowerCase()),
+        sources: category.sources.map((sourceName: string) => {
+          const source = sources.find(s => s.name === sourceName);
+          return { name: sourceName, type: source?.type || 'file' };
+        })
+      }));
+
+      setResults(resultsWithIcons);
       setIsAnalyzing(false);
       toast.success(`SemanticAC analysis complete for ${totalItems} source${totalItems > 1 ? 's' : ''}!`);
-    }, 3000 + totalItems * 500);
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setIsAnalyzing(false);
+      toast.error(error instanceof Error ? error.message : 'Analysis failed. Please try again.');
+    }
   };
 
   return (

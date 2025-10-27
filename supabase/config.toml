@@ -2,3 +2,6 @@ project_id = "bskltmvfxolwhnfpsmno"
 
 [functions.spotify-search]
 verify_jwt = false
+
+[functions.analyze-audio]
+verify_jwt = false

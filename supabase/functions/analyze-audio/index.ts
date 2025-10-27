@@ -35,85 +35,54 @@ Deno.serve(async (req) => {
     // Create semantic analysis prompt based on SemanticAC framework
     const sourcesList = sources.map(s => `- ${s.name} (${s.type})`).join('\n');
     
-    const systemPrompt = `You are an expert audio semantic analyzer implementing the SemanticAC framework. 
-Your role is to analyze audio sources using:
-- Semantic label extraction and text encoding
-- Audio-text modality alignment via transformer-based encoders
-- Hierarchical feature extraction from mel-spectrograms
-- Contrastive learning for semantic consistency
-- Cosine similarity in shared embedding space
+    const systemPrompt = `You are an expert audio semantic analyzer implementing the SemanticAC framework.
 
-Map your analysis to exactly 6 ontological categories: Emotional, Cognitive, Social, Communication, Contextual, and Artistic.
+CRITICAL: You MUST return per-source scoring. Each source gets its OWN individual scores for ALL 6 categories.
 
-CRITICAL SCORING REQUIREMENTS:
-- Each source receives its own individual score (0-100) for EACH of the 6 categories
-- Scores MUST be comparative and relative across sources
-- Scores represent how CENTRAL that category is to each source's sonic identity
-- Use the FULL 0-100 range to differentiate sources
-- If two sources differ in a category, their scores MUST reflect that difference
-- Do NOT give similar scores unless sources genuinely share the same characteristics
-
-Respond ONLY with valid JSON in this exact format:
+Example correct output for 2 sources:
 {
   "sources": [
     {
-      "name": "<exact source name from input>",
+      "name": "So What - Miles Davis",
       "categories": [
-        {
-          "name": "Emotional",
-          "score": <number 0-100>,
-          "description": "<specific analysis for this source>"
-        },
-        {
-          "name": "Cognitive",
-          "score": <number 0-100>,
-          "description": "<specific analysis for this source>"
-        },
-        {
-          "name": "Social",
-          "score": <number 0-100>,
-          "description": "<specific analysis for this source>"
-        },
-        {
-          "name": "Communication",
-          "score": <number 0-100>,
-          "description": "<specific analysis for this source>"
-        },
-        {
-          "name": "Contextual",
-          "score": <number 0-100>,
-          "description": "<specific analysis for this source>"
-        },
-        {
-          "name": "Artistic",
-          "score": <number 0-100>,
-          "description": "<specific analysis for this source>"
-        }
+        {"name": "Emotional", "score": 65, "description": "Restrained modal jazz with subdued emotional expression"},
+        {"name": "Cognitive", "score": 92, "description": "Complex modal improvisation requiring deep theoretical understanding"},
+        {"name": "Social", "score": 88, "description": "Legendary ensemble collaboration"},
+        {"name": "Communication", "score": 78, "description": "Abstract instrumental dialogue"},
+        {"name": "Contextual", "score": 95, "description": "Defining moment in modal jazz history"},
+        {"name": "Artistic", "score": 98, "description": "Revolutionary modal approach"}
+      ]
+    },
+    {
+      "name": "Anti-Hero - Taylor Swift",
+      "categories": [
+        {"name": "Emotional", "score": 94, "description": "Raw confessional lyrics with high vulnerability"},
+        {"name": "Cognitive", "score": 72, "description": "Narrative storytelling with metaphorical depth"},
+        {"name": "Social", "score": 85, "description": "Resonates with fan community experiences"},
+        {"name": "Communication", "score": 96, "description": "Direct lyrical communication of personal narrative"},
+        {"name": "Contextual", "score": 80, "description": "Contemporary pop with indie-folk influences"},
+        {"name": "Artistic", "score": 88, "description": "Strong songwriting craft and production"}
       ]
     }
   ]
-}`;
+}
+
+SCORING RULES:
+- Each source MUST have exactly 6 categories with individual scores
+- Scores MUST be comparative: different sources should have different scores
+- Use full 0-100 range to show differences
+- Score represents how CENTRAL that category is to that specific source's identity`;
 
     const userPrompt = `Analyze these audio sources using SemanticAC semantic ontology framework:
 
 ${sourcesList}
 
-Perform PER-SOURCE comparative semantic analysis for EACH of the 6 categories: Emotional, Cognitive, Social, Communication, Contextual, and Artistic.
+Return a JSON object with a "sources" array. Each source MUST have:
+1. "name" field matching the exact source name above
+2. "categories" array with ALL 6 categories: Emotional, Cognitive, Social, Communication, Contextual, Artistic
+3. Each category MUST have: "name", "score" (0-100), and "description"
 
-SCORING INSTRUCTIONS:
-- Assign a score (0-100) to EACH source for EACH category
-- Scores must reflect how CENTRAL that category is to that specific source's identity
-- Be DISCRIMINATING: Use the full range. Don't cluster scores together.
-- Compare sources to differentiate them meaningfully
-- Example: A Miles Davis modal jazz piece should score differently from a Taylor Swift pop song in Emotional intensity
-
-Consider for each source:
-- Temporal-spectral patterns in mel-spectrograms
-- Semantic label alignment and text embeddings
-- Genre-specific ontological characteristics
-- Hierarchical transformer feature extraction
-- Comparative semantic positioning across sources
-- Environmental sound classification patterns`;
+Be DISCRIMINATING with scores - use the full range to differentiate sources meaningfully.`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -163,9 +132,24 @@ Consider for each source:
                        [null, analysisText];
       const jsonText = jsonMatch[1] || analysisText;
       analysisResult = JSON.parse(jsonText.trim());
+      
+      // Validate the response has the correct structure
+      if (!analysisResult.sources || !Array.isArray(analysisResult.sources)) {
+        console.error('Invalid response structure - missing sources array:', analysisResult);
+        throw new Error('AI returned invalid format - expected sources array');
+      }
+      
+      // Validate each source has categories
+      for (const source of analysisResult.sources) {
+        if (!source.categories || !Array.isArray(source.categories) || source.categories.length !== 6) {
+          console.error('Invalid source structure:', source);
+          throw new Error(`Source "${source.name}" missing proper categories array`);
+        }
+      }
     } catch (parseError) {
       console.error('Failed to parse AI response:', parseError);
-      throw new Error('Failed to parse analysis results');
+      console.error('Raw response was:', analysisText);
+      throw new Error('Failed to parse analysis results: ' + (parseError instanceof Error ? parseError.message : 'Unknown error'));
     }
 
     console.log('Analysis complete:', analysisResult);

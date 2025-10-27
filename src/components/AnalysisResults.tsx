@@ -8,6 +8,7 @@ interface Category {
   confidence: number;
   description: string;
   icon: React.ReactNode;
+  sources?: { name: string; type: string }[];
 }
 
 interface AnalysisResultsProps {
@@ -68,6 +69,23 @@ export const AnalysisResults = ({ results, isAnalyzing }: AnalysisResultsProps) 
                     </div>
                     <Progress value={category.confidence} className="h-2" />
                     <p className="text-sm text-muted-foreground">{category.description}</p>
+                    {category.sources && category.sources.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border">
+                        <p className="text-xs text-muted-foreground/70 mb-1">
+                          Detected in {category.sources.length} source{category.sources.length > 1 ? 's' : ''}:
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {category.sources.map((source, idx) => (
+                            <span
+                              key={idx}
+                              className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full"
+                            >
+                              {source.name.length > 25 ? source.name.substring(0, 25) + '...' : source.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

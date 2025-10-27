@@ -33,6 +33,7 @@ interface NetworkVisualizationProps {
 export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [connectionStrength, setConnectionStrength] = useState<number>(0);
 
   useEffect(() => {
     if (!svgRef.current || !categories.length) return;
@@ -62,6 +63,23 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
     });
 
     const sources = Array.from(allSources);
+
+    // Calculate overall connection strength
+    const calculateConnectionStrength = () => {
+      if (sources.length <= 1) return 100;
+      
+      // Calculate average confidence variance across categories
+      const categoryVariances = categories.map(cat => {
+        const sourceCount = cat.sources?.length || 0;
+        return (sourceCount / sources.length) * cat.confidence;
+      });
+      
+      const avgVariance = categoryVariances.reduce((a, b) => a + b, 0) / categories.length;
+      return Math.min(100, Math.max(0, avgVariance));
+    };
+
+    const strength = calculateConnectionStrength();
+    setConnectionStrength(strength);
 
     // Create nodes: one for each source-category combination
     const nodes: Node[] = [];
@@ -342,7 +360,56 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
             style={{ background: "transparent" }}
           />
           
-          {/* Color-coded legend */}
+          {/* Connection Strength Visualization - Bottom Left */}
+          <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-4 shadow-lg z-20 min-w-[240px]">
+            <div className="text-xs font-semibold text-foreground mb-3">Ontological Coherence</div>
+            
+            {/* Connection strength gradient bar */}
+            <div className="relative h-6 rounded-full overflow-hidden border border-border/30 mb-2">
+              <div 
+                className="h-full transition-all duration-500 ease-out"
+                style={{
+                  width: `${connectionStrength}%`,
+                  background: `linear-gradient(90deg, 
+                    hsl(140, 70%, 45%), 
+                    hsl(170, 80%, 55%), 
+                    hsl(200, 85%, 60%)
+                  )`
+                }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-xs font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                  {connectionStrength.toFixed(0)}%
+                </span>
+              </div>
+            </div>
+            
+            {/* Strength indicators */}
+            <div className="grid grid-cols-3 gap-2 text-xs mt-3">
+              <div className="text-center">
+                <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-green-500/40 to-green-500/60 mb-1" />
+                <span className="text-muted-foreground text-[10px]">Cross-Source</span>
+              </div>
+              <div className="text-center">
+                <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-cyan-500/40 to-cyan-500/60 mb-1" />
+                <span className="text-muted-foreground text-[10px]">Similarity</span>
+              </div>
+              <div className="text-center">
+                <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-blue-500/40 to-blue-500/60 mb-1" />
+                <span className="text-muted-foreground text-[10px]">Clustering</span>
+              </div>
+            </div>
+            
+            <div className="mt-3 pt-2 border-t border-border/30">
+              <div className="text-[10px] text-muted-foreground">
+                {connectionStrength > 70 ? '🟢 Strong ontological alignment' :
+                 connectionStrength > 40 ? '🟡 Moderate category overlap' :
+                 '🔴 Diverse categorical patterns'}
+              </div>
+            </div>
+          </div>
+          
+          {/* Color-coded legend - Bottom Right */}
           <div className="absolute bottom-4 right-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-3 shadow-lg z-20">
             <div className="text-xs font-semibold text-foreground mb-2">Category Legend</div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
@@ -365,8 +432,9 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
             </div>
           </div>
           
+          {/* Hover info */}
           {hoveredNode && (
-            <div className="absolute bottom-4 left-4 right-32 p-3 rounded-lg bg-card/95 border border-primary/30 backdrop-blur-sm">
+            <div className="absolute top-4 left-4 right-4 p-3 rounded-lg bg-card/95 border border-primary/30 backdrop-blur-sm">
               <p className="text-sm font-medium text-foreground">
                 {hoveredNode}
               </p>

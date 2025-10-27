@@ -41,13 +41,14 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
     // Clear previous content
     d3.select(svgRef.current).selectAll("*").remove();
 
-    // Vibrant color palette matching the reference visualization
+    // Blue and green gradient color palette
     const colors = [
-      "hsl(180, 100%, 50%)",  // Bright cyan
-      "hsl(330, 100%, 60%)",  // Magenta/pink
-      "hsl(50, 100%, 50%)",   // Yellow
-      "hsl(120, 100%, 50%)",  // Bright green
-      "hsl(0, 100%, 60%)",    // Red
+      "hsl(200, 85%, 55%)",  // Sky blue
+      "hsl(160, 75%, 50%)",  // Teal green
+      "hsl(180, 80%, 60%)",  // Cyan
+      "hsl(140, 70%, 55%)",  // Green
+      "hsl(220, 75%, 60%)",  // Deep blue
+      "hsl(170, 80%, 55%)",  // Turquoise
     ];
 
     // Create nodes from categories
@@ -110,9 +111,9 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
       .selectAll("line")
       .data(links)
       .join("line")
-      .attr("stroke", "hsl(0, 0%, 30%)")
-      .attr("stroke-opacity", (d) => d.strength * 0.5)
-      .attr("stroke-width", (d) => d.strength * 1.5);
+      .attr("stroke", "hsl(180, 40%, 40%)")
+      .attr("stroke-opacity", (d) => d.strength * 0.4)
+      .attr("stroke-width", (d) => d.strength * 2);
 
     // Draw glow circles behind nodes
     const glowCircles = svg.append("g")

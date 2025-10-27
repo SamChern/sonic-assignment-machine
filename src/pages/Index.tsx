@@ -3,18 +3,26 @@ import { AudioUploader } from "@/components/AudioUploader";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { AnalysisResults, getCategoryIcon } from "@/components/AnalysisResults";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import heroBackground from "@/assets/hero-background.jpg";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [spotifyTrack, setSpotifyTrack] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any[] | null>(null);
 
+  const handleSpotifyTrack = (track: any) => {
+    setSpotifyTrack(track);
+    setSelectedFile(null);
+    toast.success(`Selected: ${track.name} by ${track.artists.map((a: any) => a.name).join(", ")}`);
+  };
+
   const handleAnalyze = async () => {
-    if (!selectedFile) {
-      toast.error("Please select an audio file first");
+    if (!selectedFile && !spotifyTrack) {
+      toast.error("Please select an audio file or Spotify track first");
       return;
     }
 
@@ -89,15 +97,46 @@ const Index = () => {
       <div className="mx-auto max-w-5xl px-6 py-12 space-y-8">
         {/* Upload Section */}
         <div className="space-y-4">
-          <h2 className="text-2xl font-bold text-foreground">Upload Audio</h2>
-          <AudioUploader onFileSelect={setSelectedFile} selectedFile={selectedFile} />
+          <h2 className="text-2xl font-bold text-foreground">Select Audio Source</h2>
+          <AudioUploader 
+            onFileSelect={setSelectedFile} 
+            selectedFile={selectedFile}
+            onSpotifyTrack={handleSpotifyTrack}
+          />
         </div>
+        
+        {/* Spotify Track Display */}
+        {spotifyTrack && (
+          <Card className="p-6">
+            <div className="flex gap-4 items-center">
+              {spotifyTrack.album.images[0] && (
+                <img
+                  src={spotifyTrack.album.images[0].url}
+                  alt={spotifyTrack.album.name}
+                  className="w-24 h-24 rounded"
+                />
+              )}
+              <div>
+                <h3 className="text-xl font-bold text-foreground">{spotifyTrack.name}</h3>
+                <p className="text-muted-foreground">
+                  {spotifyTrack.artists.map((a: any) => a.name).join(", ")}
+                </p>
+                <p className="text-sm text-muted-foreground">{spotifyTrack.album.name}</p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Player Section */}
-        {selectedFile && (
+        {(selectedFile || spotifyTrack) && (
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-foreground">Preview</h2>
-            <AudioPlayer file={selectedFile} />
+            {selectedFile && <AudioPlayer file={selectedFile} />}
+            {spotifyTrack && spotifyTrack.preview_url && (
+              <audio controls className="w-full">
+                <source src={spotifyTrack.preview_url} type="audio/mpeg" />
+              </audio>
+            )}
             <Button
               size="lg"
               className="gradient-primary shadow-elegant w-full sm:w-auto"

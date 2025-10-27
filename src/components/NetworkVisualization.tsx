@@ -341,8 +341,32 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
             className="w-full h-full relative z-10"
             style={{ background: "transparent" }}
           />
+          
+          {/* Color-coded legend */}
+          <div className="absolute bottom-4 right-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-3 shadow-lg z-20">
+            <div className="text-xs font-semibold text-foreground mb-2">Category Legend</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              {Object.entries({
+                'Emotional': 'hsl(200, 85%, 55%)',
+                'Cognitive': 'hsl(160, 75%, 50%)',
+                'Social': 'hsl(180, 80%, 60%)',
+                'Communication': 'hsl(140, 70%, 55%)',
+                'Contextual': 'hsl(220, 75%, 60%)',
+                'Artistic': 'hsl(170, 80%, 55%)',
+              }).map(([category, color]) => (
+                <div key={category} className="flex items-center gap-2">
+                  <div 
+                    className="w-3 h-3 rounded-full border border-black/30 shadow-sm"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className="text-xs text-muted-foreground font-medium">{category}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
           {hoveredNode && (
-            <div className="absolute bottom-4 left-4 right-4 p-3 rounded-lg bg-card/95 border border-primary/30 backdrop-blur-sm">
+            <div className="absolute bottom-4 left-4 right-32 p-3 rounded-lg bg-card/95 border border-primary/30 backdrop-blur-sm">
               <p className="text-sm font-medium text-foreground">
                 {hoveredNode}
               </p>

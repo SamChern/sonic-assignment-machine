@@ -64,47 +64,82 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
 
     // Create nodes: one for each source-category combination
     const nodes: Node[] = [];
-    categories.forEach((category, catIndex) => {
+    categories.forEach((category) => {
       category.sources?.forEach(source => {
         nodes.push({
           id: `${source.name}::${category.name}`,
           name: source.name,
           category: category.name,
-          confidence: category.confidence,
+          confidence: category.confidence, // This drives node size
           color: categoryColors[category.name] || 'hsl(180, 70%, 55%)',
         });
       });
     });
 
-    // Create links between nodes of the same category (group by category)
+    // Calculate category similarity based on confidence patterns
+    const categorySimilarity: Record<string, Record<string, number>> = {};
+    categories.forEach(cat1 => {
+      categorySimilarity[cat1.name] = {};
+      categories.forEach(cat2 => {
+        if (cat1.name !== cat2.name) {
+          // Similarity based on confidence difference
+          const diff = Math.abs(cat1.confidence - cat2.confidence);
+          categorySimilarity[cat1.name][cat2.name] = Math.max(0, 1 - diff / 100);
+        }
+      });
+    });
+
+    // Create links
     const links: Link[] = [];
+    
+    // 1. Strong links within same category (cluster files by category)
     categories.forEach(category => {
       const categoryNodes = nodes.filter(n => n.category === category.name);
-      // Strong links within same category
       for (let i = 0; i < categoryNodes.length; i++) {
         for (let j = i + 1; j < categoryNodes.length; j++) {
           links.push({
             source: categoryNodes[i].id,
             target: categoryNodes[j].id,
-            strength: 0.8, // Strong links within category
+            strength: 0.9, // Very strong intra-category links
           });
         }
       }
     });
 
-    // Weaker links between nodes of the same source across different categories
+    // 2. Medium links for same source across categories (show cross-category relationships)
     sources.forEach(sourceName => {
       const sourceNodes = nodes.filter(n => n.name === sourceName);
       for (let i = 0; i < sourceNodes.length; i++) {
         for (let j = i + 1; j < sourceNodes.length; j++) {
+          const cat1 = sourceNodes[i].category;
+          const cat2 = sourceNodes[j].category;
+          const similarity = categorySimilarity[cat1]?.[cat2] || 0.3;
           links.push({
             source: sourceNodes[i].id,
             target: sourceNodes[j].id,
-            strength: 0.2, // Weak cross-category links
+            strength: similarity * 0.4, // Medium strength based on category similarity
           });
         }
       }
     });
+
+    // 3. Weak links between different sources in similar categories (show category proximity)
+    for (let i = 0; i < categories.length; i++) {
+      for (let j = i + 1; j < categories.length; j++) {
+        const cat1Nodes = nodes.filter(n => n.category === categories[i].name);
+        const cat2Nodes = nodes.filter(n => n.category === categories[j].name);
+        const similarity = categorySimilarity[categories[i].name]?.[categories[j].name] || 0;
+        
+        // Create a few representative links between category clusters
+        if (similarity > 0.5 && cat1Nodes.length > 0 && cat2Nodes.length > 0) {
+          links.push({
+            source: cat1Nodes[0].id,
+            target: cat2Nodes[0].id,
+            strength: similarity * 0.15, // Weak inter-category links
+          });
+        }
+      }
+    }
 
     // Create SVG container
     const svg = d3.select(svgRef.current)
@@ -128,77 +163,111 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
         .attr("stop-opacity", 0);
     });
 
-    // Position categories in a circle for initial layout
-    const categoryList = Array.from(new Set(categories.map(c => c.name)));
-    const angleStep = (2 * Math.PI) / categoryList.length;
-    const radius = Math.min(width, height) * 0.35;
-
-    // Create force simulation with category-based clustering
+    // Create force simulation with natural clustering
     const simulation = d3.forceSimulation(nodes as d3.SimulationNodeDatum[])
       .force("link", d3.forceLink(links)
         .id((d: any) => d.id)
-        .distance((d: any) => d.strength > 0.5 ? 60 : 180)
+        .distance((d: any) => {
+          // Shorter distance for stronger links (same category)
+          if (d.strength > 0.7) return 50;
+          if (d.strength > 0.3) return 120;
+          return 200;
+        })
         .strength((d: any) => d.strength))
-      .force("charge", d3.forceManyBody().strength(-250))
+      .force("charge", d3.forceManyBody()
+        .strength(-200)
+        .distanceMax(300))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius((d: any) => 12 + (d.confidence / 100) * 22))
-      // Add radial force to push categories outward in a circle
-      .force("r", d3.forceRadial((d: any) => {
-        const catIndex = categoryList.indexOf(d.category);
-        return radius;
-      }, width / 2, height / 2).strength(0.3))
-      // Add angular force to separate categories
-      .force("theta", d3.forceRadial(0, (d: any) => {
-        const catIndex = categoryList.indexOf(d.category);
-        return width / 2 + radius * Math.cos(catIndex * angleStep);
-      }, (d: any) => {
-        const catIndex = categoryList.indexOf(d.category);
-        return height / 2 + radius * Math.sin(catIndex * angleStep);
-      }).strength(0.1));
+      .force("collision", d3.forceCollide()
+        .radius((d: any) => 15 + (d.confidence / 100) * 25)
+        .strength(0.8))
+      // Add clustering force based on category
+      .force("cluster", () => {
+        const categoryList = Array.from(new Set(categories.map(c => c.name)));
+        const clusterCenters: Record<string, { x: number; y: number; count: number }> = {};
+        
+        // Calculate cluster centers
+        nodes.forEach(node => {
+          if (!clusterCenters[node.category]) {
+            clusterCenters[node.category] = { x: 0, y: 0, count: 0 };
+          }
+          if (node.x !== undefined && node.y !== undefined) {
+            clusterCenters[node.category].x += node.x;
+            clusterCenters[node.category].y += node.y;
+            clusterCenters[node.category].count += 1;
+          }
+        });
 
-    // Draw links
+        // Apply clustering force
+        nodes.forEach(node => {
+          const cluster = clusterCenters[node.category];
+          if (cluster && cluster.count > 0 && node.x !== undefined && node.y !== undefined) {
+            const centerX = cluster.x / cluster.count;
+            const centerY = cluster.y / cluster.count;
+            const dx = centerX - node.x;
+            const dy = centerY - node.y;
+            const strength = 0.1;
+            node.x += dx * strength;
+            node.y += dy * strength;
+          }
+        });
+      });
+
+    // Draw links with varying opacity based on strength
     const link = svg.append("g")
       .selectAll("line")
       .data(links)
       .join("line")
-      .attr("stroke", (d) => d.strength > 0.5 ? "hsl(180, 50%, 45%)" : "hsl(180, 30%, 35%)")
-      .attr("stroke-opacity", (d) => d.strength > 0.5 ? 0.4 : 0.15)
-      .attr("stroke-width", (d) => d.strength > 0.5 ? 2 : 1);
+      .attr("stroke", (d) => {
+        if (d.strength > 0.7) return "hsl(180, 60%, 50%)";
+        if (d.strength > 0.3) return "hsl(180, 45%, 42%)";
+        return "hsl(180, 30%, 35%)";
+      })
+      .attr("stroke-opacity", (d) => {
+        if (d.strength > 0.7) return 0.5;
+        if (d.strength > 0.3) return 0.25;
+        return 0.1;
+      })
+      .attr("stroke-width", (d) => {
+        if (d.strength > 0.7) return 2.5;
+        if (d.strength > 0.3) return 1.5;
+        return 0.8;
+      });
 
     // Draw glow circles behind nodes
     const glowCircles = svg.append("g")
       .selectAll("circle")
       .data(nodes)
       .join("circle")
-      .attr("r", (d) => 20 + (d.confidence / 100) * 35)
+      .attr("r", (d) => 22 + (d.confidence / 100) * 38)
       .attr("fill", (d) => `url(#glow-${d.category.replace(/\s+/g, '-')})`)
-      .attr("opacity", 0.6);
+      .attr("opacity", 0.5);
 
-    // Draw nodes - size represents category strength/identity for that source
+    // Draw nodes - SIZE REPRESENTS CATEGORY STRENGTH/PREVALENCE FOR THAT SOURCE
     const node = svg.append("g")
       .selectAll("circle")
       .data(nodes)
       .join("circle")
-      .attr("r", (d) => 10 + (d.confidence / 100) * 20) // Node size based on confidence
+      .attr("r", (d) => 8 + (d.confidence / 100) * 22) // Confidence drives node size
       .attr("fill", (d) => d.color)
       .attr("stroke", "hsl(0, 0%, 10%)")
-      .attr("stroke-width", 2)
+      .attr("stroke-width", 2.5)
       .style("cursor", "pointer")
       .on("mouseenter", (event, d) => {
         setHoveredNode(`${d.name} - ${d.category}: ${d.confidence}%`);
         d3.select(event.currentTarget)
           .transition()
           .duration(200)
-          .attr("r", (d: any) => 15 + (d.confidence / 100) * 25)
-          .attr("stroke-width", 3);
+          .attr("r", (d: any) => 13 + (d.confidence / 100) * 27)
+          .attr("stroke-width", 4);
       })
       .on("mouseleave", (event, d) => {
         setHoveredNode(null);
         d3.select(event.currentTarget)
           .transition()
           .duration(200)
-          .attr("r", (d: any) => 10 + (d.confidence / 100) * 20)
-          .attr("stroke-width", 2);
+          .attr("r", (d: any) => 8 + (d.confidence / 100) * 22)
+          .attr("stroke-width", 2.5);
       })
       .call(d3.drag<SVGCircleElement, Node>()
         .on("start", (event, d) => {
@@ -215,20 +284,6 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
           d.fx = null;
           d.fy = null;
         }));
-
-    // Add category group labels
-    const categoryLabels = svg.append("g")
-      .selectAll("text")
-      .data(categoryList)
-      .join("text")
-      .attr("text-anchor", "middle")
-      .attr("x", (d, i) => width / 2 + (radius + 60) * Math.cos(i * angleStep))
-      .attr("y", (d, i) => height / 2 + (radius + 60) * Math.sin(i * angleStep))
-      .attr("fill", (d) => categoryColors[d] || "hsl(180, 70%, 55%)")
-      .attr("font-size", "14px")
-      .attr("font-weight", "700")
-      .style("text-shadow", "0 0 4px rgba(0,0,0,0.9)")
-      .text((d) => d);
 
     // Update positions on simulation tick
     simulation.on("tick", () => {
@@ -258,7 +313,7 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-foreground">Ontological Identity Network</h3>
           <p className="text-sm text-muted-foreground">
-            Categories clustered together • Node size = category strength per source • Blue-green spectrum
+            Natural clustering shows category proximity • Node size = category prevalence strength • Blue-green spectrum
           </p>
         </div>
         <div className="relative h-[500px] rounded-lg bg-black border border-border/30">

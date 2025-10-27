@@ -39,29 +39,29 @@ Deno.serve(async (req) => {
 
 CRITICAL: You MUST return per-source scoring. Each source gets its OWN individual scores for ALL 6 categories.
 
-Example correct output for 2 sources:
+Example correct output structure:
 {
   "sources": [
     {
-      "name": "So What - Miles Davis",
+      "name": "Miles Davis - So What",
       "categories": [
-        {"name": "Emotional", "score": 65, "description": "Restrained modal jazz with subdued emotional expression"},
-        {"name": "Cognitive", "score": 92, "description": "Complex modal improvisation requiring deep theoretical understanding"},
-        {"name": "Social", "score": 88, "description": "Legendary ensemble collaboration"},
-        {"name": "Communication", "score": 78, "description": "Abstract instrumental dialogue"},
-        {"name": "Contextual", "score": 95, "description": "Defining moment in modal jazz history"},
-        {"name": "Artistic", "score": 98, "description": "Revolutionary modal approach"}
+        {"name": "Emotional", "score": 65, "description": "Modal jazz restraint with subdued emotional expression"},
+        {"name": "Cognitive", "score": 85, "description": "Complex harmonic improvisation requiring deep listening"},
+        {"name": "Social", "score": 88, "description": "Legendary ensemble collaboration and musical dialogue"},
+        {"name": "Communication", "score": 78, "description": "Abstract instrumental conversation between musicians"},
+        {"name": "Contextual", "score": 95, "description": "Defining moment in modal jazz history from Kind of Blue"},
+        {"name": "Artistic", "score": 98, "description": "Revolutionary modal approach and improvisational mastery"}
       ]
     },
     {
-      "name": "Anti-Hero - Taylor Swift",
+      "name": "Taylor Swift - Anti-Hero",
       "categories": [
-        {"name": "Emotional", "score": 94, "description": "Raw confessional lyrics with high vulnerability"},
-        {"name": "Cognitive", "score": 72, "description": "Narrative storytelling with metaphorical depth"},
-        {"name": "Social", "score": 85, "description": "Resonates with fan community experiences"},
-        {"name": "Communication", "score": 96, "description": "Direct lyrical communication of personal narrative"},
-        {"name": "Contextual", "score": 80, "description": "Contemporary pop with indie-folk influences"},
-        {"name": "Artistic", "score": 88, "description": "Strong songwriting craft and production"}
+        {"name": "Emotional", "score": 92, "description": "Highly confessional lyrics with raw emotional vulnerability"},
+        {"name": "Cognitive", "score": 72, "description": "Narrative storytelling with metaphorical self-reflection"},
+        {"name": "Social", "score": 85, "description": "Resonates with shared experiences of self-doubt and anxiety"},
+        {"name": "Communication", "score": 96, "description": "Direct lyrical communication of internal narrative"},
+        {"name": "Contextual", "score": 80, "description": "Contemporary pop-indie crossover with personal storytelling"},
+        {"name": "Artistic", "score": 88, "description": "Strong songwriting craft with minimalist production choices"}
       ]
     }
   ]
@@ -69,9 +69,10 @@ Example correct output for 2 sources:
 
 SCORING RULES:
 - Each source MUST have exactly 6 categories with individual scores
-- Scores MUST be comparative: different sources should have different scores
-- Use full 0-100 range to show differences
-- Score represents how CENTRAL that category is to that specific source's identity`;
+- Scores MUST be comparative: different sources should have meaningfully different scores
+- Use full 0-100 range to show differences between sources
+- Score represents how CENTRAL that category is to that specific source's sonic identity
+- Be discriminating - avoid clustering scores together`;
 
     const userPrompt = `Analyze these audio sources using SemanticAC semantic ontology framework:
 

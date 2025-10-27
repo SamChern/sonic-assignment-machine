@@ -130,7 +130,10 @@ Consider for each source:
       }
       const errorText = await response.text();
       console.error('AI gateway error:', response.status, errorText);
-      throw new Error(`AI gateway error: ${response.statusText}`);
+      return new Response(JSON.stringify({ error: `AI gateway error: ${response.statusText}` }), {
+        status: response.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const data = await response.json();
@@ -150,21 +153,67 @@ Consider for each source:
       
       // Validate the response has the correct structure
       if (!analysisResult.sources || !Array.isArray(analysisResult.sources)) {
-        console.error('Invalid response structure - missing sources array:', analysisResult);
-        throw new Error('AI returned invalid format - expected sources array');
+        console.error('Invalid response structure - missing sources array. Attempting repair...');
+        console.error('Received structure:', JSON.stringify(analysisResult, null, 2));
+        
+        // Try to repair by converting category-centric to source-centric
+        if (analysisResult.categories && Array.isArray(analysisResult.categories)) {
+          console.log('Attempting to convert category-centric format to source-centric format...');
+          
+          // Reconstruct as per-source structure
+          const sourceMap = new Map<string, any>();
+          
+          analysisResult.categories.forEach((category: any) => {
+            if (category.sources && Array.isArray(category.sources)) {
+              category.sources.forEach((sourceName: string) => {
+                if (!sourceMap.has(sourceName)) {
+                  sourceMap.set(sourceName, {
+                    name: sourceName,
+                    categories: []
+                  });
+                }
+                sourceMap.get(sourceName).categories.push({
+                  name: category.name,
+                  score: category.confidence || 50,
+                  description: category.description || ''
+                });
+              });
+            }
+          });
+          
+          analysisResult = { sources: Array.from(sourceMap.values()) };
+          console.log('Repair successful. New structure:', JSON.stringify(analysisResult, null, 2));
+        } else {
+          return new Response(JSON.stringify({ 
+            error: 'AI returned invalid format - expected { sources: [...] } with 6 categories per source. Received a different structure. Please try again.' 
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       }
       
       // Validate each source has categories
       for (const source of analysisResult.sources) {
         if (!source.categories || !Array.isArray(source.categories) || source.categories.length !== 6) {
           console.error('Invalid source structure:', source);
-          throw new Error(`Source "${source.name}" missing proper categories array`);
+          return new Response(JSON.stringify({ 
+            error: `Source "${source.name}" has ${source.categories?.length || 0} categories instead of required 6. Please try again.` 
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
         }
       }
     } catch (parseError) {
       console.error('Failed to parse AI response:', parseError);
       console.error('Raw response was:', analysisText);
-      throw new Error('Failed to parse analysis results: ' + (parseError instanceof Error ? parseError.message : 'Unknown error'));
+      return new Response(JSON.stringify({ 
+        error: 'Failed to parse AI response as JSON. The model may have returned invalid JSON. Please try again.' 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     console.log('Analysis complete:', analysisResult);

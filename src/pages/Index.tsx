@@ -69,8 +69,15 @@ const Index = () => {
         throw new Error(error.message || 'Analysis failed');
       }
 
+      // Check if backend returned an error in the response
+      if (data?.error) {
+        console.error('Backend error:', data.error);
+        throw new Error(data.error);
+      }
+
       if (!data || !data.sources) {
-        throw new Error('Invalid analysis response');
+        console.error('Invalid response structure:', data);
+        throw new Error('Invalid analysis response - no sources returned. Please try again.');
       }
 
       console.log('Received analysis:', data);

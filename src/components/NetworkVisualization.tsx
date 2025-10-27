@@ -5,9 +5,9 @@ import samLogo from "@/assets/sam-logo.png";
 
 interface Node {
   id: string;
-  name: string;
+  sourceName: string;
   category: string;
-  confidence: number;
+  score: number;
   color: string;
   x?: number;
   y?: number;
@@ -21,23 +21,29 @@ interface Link {
   strength: number;
 }
 
+interface CategoryScore {
+  name: string;
+  score: number;
+  description: string;
+}
+
+interface SourceAnalysis {
+  name: string;
+  categories: CategoryScore[];
+}
+
 interface NetworkVisualizationProps {
-  categories: Array<{
-    name: string;
-    confidence: number;
-    description: string;
-    sources?: Array<{ name: string; type: string }>;
-  }>;
+  sources: SourceAnalysis[];
   sourceImages?: Array<{ name: string; imageUrl: string }>;
 }
 
-export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkVisualizationProps) => {
+export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
-  const [connectionStrength, setConnectionStrength] = useState<number>(0);
+  const [avgSimilarity, setAvgSimilarity] = useState<number>(0);
 
   useEffect(() => {
-    if (!svgRef.current || !categories.length) return;
+    if (!svgRef.current || !sources.length) return;
 
     const width = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
@@ -47,119 +53,114 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
 
     // Blue and green gradient color palette for categories
     const categoryColors: Record<string, string> = {
-      'Emotional': 'hsl(200, 85%, 55%)',      // Sky blue
-      'Cognitive': 'hsl(160, 75%, 50%)',      // Teal green
-      'Social': 'hsl(180, 80%, 60%)',         // Cyan
-      'Communication': 'hsl(140, 70%, 55%)',  // Green
-      'Contextual': 'hsl(220, 75%, 60%)',     // Deep blue
-      'Artistic': 'hsl(170, 80%, 55%)',       // Turquoise
+      'Emotional': 'hsl(200, 85%, 55%)',
+      'Cognitive': 'hsl(160, 75%, 50%)',
+      'Social': 'hsl(180, 80%, 60%)',
+      'Communication': 'hsl(140, 70%, 55%)',
+      'Contextual': 'hsl(220, 75%, 60%)',
+      'Artistic': 'hsl(170, 80%, 55%)',
     };
-
-    // Collect all unique sources from all categories
-    const allSources = new Set<string>();
-    categories.forEach(cat => {
-      cat.sources?.forEach(source => {
-        allSources.add(source.name);
-      });
-    });
-
-    const sources = Array.from(allSources);
-
-    // Calculate overall connection strength
-    const calculateConnectionStrength = () => {
-      if (sources.length <= 1) return 100;
-      
-      // Calculate average confidence variance across categories
-      const categoryVariances = categories.map(cat => {
-        const sourceCount = cat.sources?.length || 0;
-        return (sourceCount / sources.length) * cat.confidence;
-      });
-      
-      const avgVariance = categoryVariances.reduce((a, b) => a + b, 0) / categories.length;
-      return Math.min(100, Math.max(0, avgVariance));
-    };
-
-    const strength = calculateConnectionStrength();
-    setConnectionStrength(strength);
 
     // Create nodes: one for each source-category combination
     const nodes: Node[] = [];
-    categories.forEach((category) => {
-      category.sources?.forEach(source => {
+    sources.forEach((source) => {
+      source.categories.forEach(category => {
         nodes.push({
           id: `${source.name}::${category.name}`,
-          name: source.name,
+          sourceName: source.name,
           category: category.name,
-          confidence: category.confidence, // This drives node size
+          score: category.score,
           color: categoryColors[category.name] || 'hsl(180, 70%, 55%)',
         });
       });
     });
 
-    // Calculate category similarity based on confidence patterns
-    const categorySimilarity: Record<string, Record<string, number>> = {};
-    categories.forEach(cat1 => {
-      categorySimilarity[cat1.name] = {};
-      categories.forEach(cat2 => {
-        if (cat1.name !== cat2.name) {
-          // Similarity based on confidence difference
-          const diff = Math.abs(cat1.confidence - cat2.confidence);
-          categorySimilarity[cat1.name][cat2.name] = Math.max(0, 1 - diff / 100);
-        }
+    // Calculate similarity between sources based on category score profiles
+    const calculateSourceSimilarity = (source1: SourceAnalysis, source2: SourceAnalysis): number => {
+      let totalDiff = 0;
+      source1.categories.forEach((cat1, idx) => {
+        const cat2 = source2.categories[idx];
+        totalDiff += Math.abs(cat1.score - cat2.score);
       });
-    });
+      const avgDiff = totalDiff / source1.categories.length;
+      return Math.max(0, 1 - avgDiff / 100); // Convert to 0-1 similarity
+    };
+
+    // Calculate category similarity across all sources for that category
+    const calculateCategorySimilarity = (categoryName: string): number => {
+      const categoryScores = sources.map(s => 
+        s.categories.find(c => c.name === categoryName)?.score || 0
+      );
+      const avg = categoryScores.reduce((a, b) => a + b, 0) / categoryScores.length;
+      const variance = categoryScores.reduce((sum, score) => sum + Math.pow(score - avg, 2), 0) / categoryScores.length;
+      const stdDev = Math.sqrt(variance);
+      return Math.max(0, 1 - stdDev / 50); // Normalize std dev to 0-1 similarity
+    };
 
     // Create links
     const links: Link[] = [];
     
-    // 1. Strong links within same category (cluster files by category)
-    categories.forEach(category => {
-      const categoryNodes = nodes.filter(n => n.category === category.name);
+    // 1. Strong links within same category (cluster nodes by category)
+    const categoryNames = Array.from(new Set(nodes.map(n => n.category)));
+    categoryNames.forEach(categoryName => {
+      const categoryNodes = nodes.filter(n => n.category === categoryName);
+      const catSimilarity = calculateCategorySimilarity(categoryName);
+      
       for (let i = 0; i < categoryNodes.length; i++) {
         for (let j = i + 1; j < categoryNodes.length; j++) {
           links.push({
             source: categoryNodes[i].id,
             target: categoryNodes[j].id,
-            strength: 0.9, // Very strong intra-category links
+            strength: 0.7 + catSimilarity * 0.2, // 0.7-0.9 range
           });
         }
       }
     });
 
-    // 2. Medium links for same source across categories (show cross-category relationships)
-    sources.forEach(sourceName => {
-      const sourceNodes = nodes.filter(n => n.name === sourceName);
+    // 2. Medium links for same source across categories (show source's fingerprint)
+    sources.forEach(source => {
+      const sourceNodes = nodes.filter(n => n.sourceName === source.name);
       for (let i = 0; i < sourceNodes.length; i++) {
         for (let j = i + 1; j < sourceNodes.length; j++) {
-          const cat1 = sourceNodes[i].category;
-          const cat2 = sourceNodes[j].category;
-          const similarity = categorySimilarity[cat1]?.[cat2] || 0.3;
+          // Link strength based on both scores being high (both categories are central to this source)
+          const avgScore = (sourceNodes[i].score + sourceNodes[j].score) / 200; // Normalize to 0-1
           links.push({
             source: sourceNodes[i].id,
             target: sourceNodes[j].id,
-            strength: similarity * 0.4, // Medium strength based on category similarity
+            strength: avgScore * 0.5, // 0-0.5 range
           });
         }
       }
     });
 
-    // 3. Weak links between different sources in similar categories (show category proximity)
-    for (let i = 0; i < categories.length; i++) {
-      for (let j = i + 1; j < categories.length; j++) {
-        const cat1Nodes = nodes.filter(n => n.category === categories[i].name);
-        const cat2Nodes = nodes.filter(n => n.category === categories[j].name);
-        const similarity = categorySimilarity[categories[i].name]?.[categories[j].name] || 0;
-        
-        // Create a few representative links between category clusters
-        if (similarity > 0.5 && cat1Nodes.length > 0 && cat2Nodes.length > 0) {
-          links.push({
-            source: cat1Nodes[0].id,
-            target: cat2Nodes[0].id,
-            strength: similarity * 0.15, // Weak inter-category links
-          });
+    // 3. Weak links between different sources in same category (show comparative differences)
+    categoryNames.forEach(categoryName => {
+      const categoryNodes = nodes.filter(n => n.category === categoryName);
+      const sourceGroups = sources.map(s => ({
+        name: s.name,
+        node: categoryNodes.find(n => n.sourceName === s.name)
+      })).filter(g => g.node);
+
+      for (let i = 0; i < sourceGroups.length; i++) {
+        for (let j = i + 1; j < sourceGroups.length; j++) {
+          if (sourceGroups[i].node && sourceGroups[j].node) {
+            const scoreDiff = Math.abs(sourceGroups[i].node!.score - sourceGroups[j].node!.score);
+            const similarity = Math.max(0, 1 - scoreDiff / 100);
+            if (similarity > 0.3) {
+              links.push({
+                source: sourceGroups[i].node!.id,
+                target: sourceGroups[j].node!.id,
+                strength: similarity * 0.2, // 0-0.2 range
+              });
+            }
+          }
         }
       }
-    }
+    });
+
+    // Calculate average similarity for display
+    const avgSim = links.reduce((sum, link) => sum + link.strength, 0) / links.length * 100;
+    setAvgSimilarity(Math.round(avgSim));
 
     // Create SVG container
     const svg = d3.select(svgRef.current)
@@ -183,30 +184,26 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
         .attr("stop-opacity", 0);
     });
 
-    // Create force simulation with natural clustering
+    // Create force simulation
     const simulation = d3.forceSimulation(nodes as d3.SimulationNodeDatum[])
       .force("link", d3.forceLink(links)
         .id((d: any) => d.id)
         .distance((d: any) => {
-          // Shorter distance for stronger links (same category)
-          if (d.strength > 0.7) return 50;
-          if (d.strength > 0.3) return 120;
-          return 200;
+          if (d.strength > 0.6) return 50;
+          if (d.strength > 0.3) return 100;
+          return 180;
         })
         .strength((d: any) => d.strength))
       .force("charge", d3.forceManyBody()
-        .strength(-200)
-        .distanceMax(300))
+        .strength(-250)
+        .distanceMax(400))
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force("collision", d3.forceCollide()
-        .radius((d: any) => 15 + (d.confidence / 100) * 25)
-        .strength(0.8))
-      // Add clustering force based on category
+        .radius((d: any) => 12 + (d.score / 100) * 28)
+        .strength(0.9))
       .force("cluster", () => {
-        const categoryList = Array.from(new Set(categories.map(c => c.name)));
         const clusterCenters: Record<string, { x: number; y: number; count: number }> = {};
         
-        // Calculate cluster centers
         nodes.forEach(node => {
           if (!clusterCenters[node.category]) {
             clusterCenters[node.category] = { x: 0, y: 0, count: 0 };
@@ -218,7 +215,6 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
           }
         });
 
-        // Apply clustering force
         nodes.forEach(node => {
           const cluster = clusterCenters[node.category];
           if (cluster && cluster.count > 0 && node.x !== undefined && node.y !== undefined) {
@@ -226,32 +222,32 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
             const centerY = cluster.y / cluster.count;
             const dx = centerX - node.x;
             const dy = centerY - node.y;
-            const strength = 0.1;
+            const strength = 0.15;
             node.x += dx * strength;
             node.y += dy * strength;
           }
         });
       });
 
-    // Draw links with varying opacity based on strength
+    // Draw links
     const link = svg.append("g")
       .selectAll("line")
       .data(links)
       .join("line")
       .attr("stroke", (d) => {
-        if (d.strength > 0.7) return "hsl(180, 60%, 50%)";
-        if (d.strength > 0.3) return "hsl(180, 45%, 42%)";
-        return "hsl(180, 30%, 35%)";
+        if (d.strength > 0.6) return "hsl(180, 65%, 52%)";
+        if (d.strength > 0.3) return "hsl(180, 50%, 45%)";
+        return "hsl(180, 35%, 38%)";
       })
       .attr("stroke-opacity", (d) => {
-        if (d.strength > 0.7) return 0.5;
-        if (d.strength > 0.3) return 0.25;
-        return 0.1;
+        if (d.strength > 0.6) return 0.6;
+        if (d.strength > 0.3) return 0.3;
+        return 0.12;
       })
       .attr("stroke-width", (d) => {
-        if (d.strength > 0.7) return 2.5;
-        if (d.strength > 0.3) return 1.5;
-        return 0.8;
+        if (d.strength > 0.6) return 3;
+        if (d.strength > 0.3) return 1.8;
+        return 0.9;
       });
 
     // Draw glow circles behind nodes
@@ -259,35 +255,35 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
       .selectAll("circle")
       .data(nodes)
       .join("circle")
-      .attr("r", (d) => 22 + (d.confidence / 100) * 38)
+      .attr("r", (d) => 24 + (d.score / 100) * 42)
       .attr("fill", (d) => `url(#glow-${d.category.replace(/\s+/g, '-')})`)
       .attr("opacity", 0.5);
 
-    // Draw nodes - SIZE REPRESENTS CATEGORY STRENGTH/PREVALENCE FOR THAT SOURCE
+    // Draw nodes - SIZE REPRESENTS CATEGORY SCORE FOR THAT SOURCE
     const node = svg.append("g")
       .selectAll("circle")
       .data(nodes)
       .join("circle")
-      .attr("r", (d) => 8 + (d.confidence / 100) * 22) // Confidence drives node size
+      .attr("r", (d) => 10 + (d.score / 100) * 25) // Score drives node size
       .attr("fill", (d) => d.color)
-      .attr("opacity", 0.8) // 20% transparency to blend with background
-      .attr("stroke", "none") // Remove borders
+      .attr("opacity", 0.8)
+      .attr("stroke", "none")
       .style("cursor", "pointer")
       .on("mouseenter", (event, d) => {
-        setHoveredNode(`${d.name} - ${d.category}: ${d.confidence}%`);
+        setHoveredNode(`${d.sourceName} - ${d.category}: ${d.score}%`);
         d3.select(event.currentTarget)
           .transition()
           .duration(200)
-          .attr("r", (d: any) => 13 + (d.confidence / 100) * 27)
-          .attr("opacity", 1); // Full opacity on hover
+          .attr("r", (d: any) => 15 + (d.score / 100) * 30)
+          .attr("opacity", 1);
       })
       .on("mouseleave", (event, d) => {
         setHoveredNode(null);
         d3.select(event.currentTarget)
           .transition()
           .duration(200)
-          .attr("r", (d: any) => 8 + (d.confidence / 100) * 22)
-          .attr("opacity", 0.8); // Back to 20% blend
+          .attr("r", (d: any) => 10 + (d.score / 100) * 25)
+          .attr("opacity", 0.8);
       })
       .call(d3.drag<SVGCircleElement, Node>()
         .on("start", (event, d) => {
@@ -325,13 +321,13 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
     return () => {
       simulation.stop();
     };
-  }, [categories]);
+  }, [sources]);
 
   return (
     <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
       <div className="p-6">
         <div className="mb-4 relative">
-          {/* SAM Logo - Top Left Corner in Circular Container */}
+          {/* SAM Logo - Top Left Corner */}
           <div className="absolute -top-6 -left-6 w-28 h-28 z-10 pointer-events-none">
             <div
               className="relative w-full h-full rounded-full p-[2px]"
@@ -364,7 +360,7 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
           <div className="ml-24">
             <h3 className="text-lg font-semibold text-foreground">Ontological Identity Network</h3>
             <p className="text-sm text-muted-foreground">
-              Natural clustering shows category proximity • Node size = category prevalence strength • Blue-green spectrum
+              Per-source comparative scoring • Node size = category centrality to source identity • Blue-green spectrum
             </p>
           </div>
         </div>
@@ -393,16 +389,15 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
             style={{ background: "transparent" }}
           />
           
-          {/* Connection Strength Visualization - Bottom Left */}
+          {/* Similarity Metric - Bottom Left */}
           <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-4 shadow-lg z-20 min-w-[240px]">
-            <div className="text-xs font-semibold text-foreground mb-3">SAM-Based Similarity</div>
+            <div className="text-xs font-semibold text-foreground mb-3">Ontological Alignment</div>
             
-            {/* Connection strength gradient bar */}
             <div className="relative h-6 rounded-full overflow-hidden border border-border/30 mb-2">
               <div 
                 className="h-full transition-all duration-500 ease-out"
                 style={{
-                  width: `${connectionStrength}%`,
+                  width: `${avgSimilarity}%`,
                   background: `linear-gradient(90deg, 
                     hsl(140, 70%, 45%), 
                     hsl(170, 80%, 55%), 
@@ -412,37 +407,21 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
               />
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="text-xs font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                  {connectionStrength.toFixed(0)}%
+                  {avgSimilarity}%
                 </span>
-              </div>
-            </div>
-            
-            {/* Strength indicators */}
-            <div className="grid grid-cols-3 gap-2 text-xs mt-3">
-              <div className="text-center">
-                <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-green-500/40 to-green-500/60 mb-1" />
-                <span className="text-muted-foreground text-[10px]">Cross-Source</span>
-              </div>
-              <div className="text-center">
-                <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-cyan-500/40 to-cyan-500/60 mb-1" />
-                <span className="text-muted-foreground text-[10px]">Similarity</span>
-              </div>
-              <div className="text-center">
-                <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-blue-500/40 to-blue-500/60 mb-1" />
-                <span className="text-muted-foreground text-[10px]">Clustering</span>
               </div>
             </div>
             
             <div className="mt-3 pt-2 border-t border-border/30">
               <div className="text-[10px] text-muted-foreground">
-                {connectionStrength > 70 ? '🟢 Strong ontological alignment' :
-                 connectionStrength > 40 ? '🟡 Moderate category overlap' :
-                 '🔴 Diverse categorical patterns'}
+                {avgSimilarity > 60 ? '🟢 High cross-source similarity' :
+                 avgSimilarity > 35 ? '🟡 Moderate differentiation' :
+                 '🔴 Highly distinct profiles'}
               </div>
             </div>
           </div>
           
-          {/* Color-coded legend - Bottom Right */}
+          {/* Category Legend - Bottom Right */}
           <div className="absolute bottom-4 right-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-3 shadow-lg z-20">
             <div className="text-xs font-semibold text-foreground mb-2">Category Legend</div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
@@ -454,26 +433,23 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
                 'Contextual': 'hsl(220, 75%, 60%)',
                 'Artistic': 'hsl(170, 80%, 55%)',
               }).map(([category, color]) => (
-                <div key={category} className="flex items-center gap-2">
-                  <div 
-                    className="w-3 h-3 rounded-full border border-black/30 shadow-sm"
+                <div key={category} className="flex items-center gap-1.5">
+                  <div
+                    className="h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: color }}
                   />
-                  <span className="text-xs text-muted-foreground font-medium">{category}</span>
+                  <span className="text-xs text-muted-foreground">{category}</span>
                 </div>
               ))}
             </div>
           </div>
-          
-          {/* Hover info */}
+
+          {/* Hover Info */}
           {hoveredNode && (
-            <div className="absolute top-4 left-4 right-4 p-3 rounded-lg bg-card/95 border border-primary/30 backdrop-blur-sm">
-              <p className="text-sm font-medium text-foreground">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-md border border-primary/30 rounded-lg px-4 py-2 shadow-lg z-20">
+              <div className="text-xs font-semibold text-foreground whitespace-nowrap">
                 {hoveredNode}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Drag to reposition • Larger nodes = stronger category identity
-              </p>
+              </div>
             </div>
           )}
         </div>

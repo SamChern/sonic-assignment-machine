@@ -45,21 +45,52 @@ Your role is to analyze audio sources using:
 
 Map your analysis to exactly 6 ontological categories: Emotional, Cognitive, Social, Communication, Contextual, and Artistic.
 
-For each category, provide:
-1. A confidence score (0-100)
-2. A description explaining the semantic features detected
-3. Which sources exhibit these characteristics
+CRITICAL SCORING REQUIREMENTS:
+- Each source receives its own individual score (0-100) for EACH of the 6 categories
+- Scores MUST be comparative and relative across sources
+- Scores represent how CENTRAL that category is to each source's sonic identity
+- Use the FULL 0-100 range to differentiate sources
+- If two sources differ in a category, their scores MUST reflect that difference
+- Do NOT give similar scores unless sources genuinely share the same characteristics
 
 Respond ONLY with valid JSON in this exact format:
 {
-  "categories": [
+  "sources": [
     {
-      "name": "Emotional",
-      "confidence": <number>,
-      "description": "<detailed analysis>",
-      "sources": ["<source name>", ...]
-    },
-    ... (repeat for all 6 categories)
+      "name": "<exact source name from input>",
+      "categories": [
+        {
+          "name": "Emotional",
+          "score": <number 0-100>,
+          "description": "<specific analysis for this source>"
+        },
+        {
+          "name": "Cognitive",
+          "score": <number 0-100>,
+          "description": "<specific analysis for this source>"
+        },
+        {
+          "name": "Social",
+          "score": <number 0-100>,
+          "description": "<specific analysis for this source>"
+        },
+        {
+          "name": "Communication",
+          "score": <number 0-100>,
+          "description": "<specific analysis for this source>"
+        },
+        {
+          "name": "Contextual",
+          "score": <number 0-100>,
+          "description": "<specific analysis for this source>"
+        },
+        {
+          "name": "Artistic",
+          "score": <number 0-100>,
+          "description": "<specific analysis for this source>"
+        }
+      ]
+    }
   ]
 }`;
 
@@ -67,13 +98,21 @@ Respond ONLY with valid JSON in this exact format:
 
 ${sourcesList}
 
-Perform multi-source semantic analysis mapping audio features to the 6 categories: Emotional, Cognitive, Social, Communication, Contextual, and Artistic.
+Perform PER-SOURCE comparative semantic analysis for EACH of the 6 categories: Emotional, Cognitive, Social, Communication, Contextual, and Artistic.
 
-Consider:
+SCORING INSTRUCTIONS:
+- Assign a score (0-100) to EACH source for EACH category
+- Scores must reflect how CENTRAL that category is to that specific source's identity
+- Be DISCRIMINATING: Use the full range. Don't cluster scores together.
+- Compare sources to differentiate them meaningfully
+- Example: A Miles Davis modal jazz piece should score differently from a Taylor Swift pop song in Emotional intensity
+
+Consider for each source:
 - Temporal-spectral patterns in mel-spectrograms
 - Semantic label alignment and text embeddings
-- Cross-source ontological coherence
+- Genre-specific ontological characteristics
 - Hierarchical transformer feature extraction
+- Comparative semantic positioning across sources
 - Environmental sound classification patterns`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

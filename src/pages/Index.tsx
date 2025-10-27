@@ -12,7 +12,7 @@ const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [spotifyTracks, setSpotifyTracks] = useState<any[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [results, setResults] = useState<{ categories: any[]; images: any[] } | null>(null);
+  const [results, setResults] = useState<{ sources: any[]; images: any[] } | null>(null);
 
   const handleFileSelect = (file: File) => {
     setSelectedFiles(prev => [...prev, file]);
@@ -69,21 +69,14 @@ const Index = () => {
         throw new Error(error.message || 'Analysis failed');
       }
 
-      if (!data || !data.categories) {
+      if (!data || !data.sources) {
         throw new Error('Invalid analysis response');
       }
 
       console.log('Received analysis:', data);
 
-      // Map backend results to our category icons and collect images
-      const resultsWithIcons = data.categories.map((category: any) => ({
-        ...category,
-        icon: getCategoryIcon(category.name.toLowerCase()),
-        sources: category.sources.map((sourceName: string) => {
-          const source = sources.find(s => s.name === sourceName);
-          return { name: sourceName, type: source?.type || 'file' };
-        })
-      }));
+      // Map backend results (per-source structure)
+      const resultsWithIcons = data.sources;
 
       // Collect images from Spotify tracks for visualization
       const imageData = spotifyTracks
@@ -93,9 +86,9 @@ const Index = () => {
           imageUrl: track.album.images[0].url
         }));
 
-      setResults({ categories: resultsWithIcons, images: imageData });
+      setResults({ sources: resultsWithIcons, images: imageData });
       setIsAnalyzing(false);
-      toast.success(`SemanticAC analysis complete for ${totalItems} source${totalItems > 1 ? 's' : ''}!`);
+      toast.success(`Comparative semantic analysis complete for ${totalItems} source${totalItems > 1 ? 's' : ''}!`);
     } catch (error) {
       console.error('Analysis error:', error);
       setIsAnalyzing(false);
@@ -218,7 +211,7 @@ const Index = () => {
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-foreground">Results</h2>
             <AnalysisResults 
-              results={results?.categories || null} 
+              results={results?.sources || null} 
               isAnalyzing={isAnalyzing} 
               sourceImages={results?.images || []}
             />

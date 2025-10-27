@@ -331,28 +331,35 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
     <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
       <div className="p-6">
         <div className="mb-4 relative">
-          {/* SAM Logo - Top Left Corner in Circular Container */}
-          <div className="absolute -top-8 -left-8 w-40 h-40 z-10">
-            <div className="relative w-full h-full rounded-full overflow-hidden" 
-                 style={{
-                   background: 'linear-gradient(135deg, hsl(200, 85%, 55%), hsl(180, 80%, 60%), hsl(160, 75%, 50%))',
-                   boxShadow: '0 0 20px hsl(180, 80%, 60%), 0 0 40px hsl(180, 80%, 60%, 0.5)',
-                   padding: '3px',
-                 }}>
-              <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden">
-                <img 
-                  src={samLogo} 
-                  alt="SAM - Sonic Assignment Machine" 
-                  className="w-[85%] h-[85%] object-contain"
+          {/* SAM Logo - Top Left Corner in Circular Container (no inner square) */}
+          <div className="absolute -top-8 -left-8 w-40 h-40 z-10 pointer-events-none">
+            <div
+              className="relative w-full h-full rounded-full p-[3px]"
+              style={{
+                background:
+                  "linear-gradient(135deg, hsl(200 85% 55%), hsl(180 80% 60%), hsl(160 75% 50%))",
+                boxShadow:
+                  "0 0 16px hsl(180 80% 60% / 0.9), 0 0 36px hsl(180 80% 60% / 0.45)",
+              }}
+            >
+              <div className="w-full h-full rounded-full bg-transparent overflow-hidden">
+                <img
+                  src={samLogo}
+                  alt="SAM - Sonic Assignment Machine"
+                  className="w-full h-full object-contain rounded-full"
                   style={{
-                    filter: 'brightness(1.1) contrast(1.1)',
-                    mixBlendMode: 'screen',
+                    mixBlendMode: "screen",
+                    filter: "brightness(1.1) contrast(1.15)",
+                    WebkitMaskImage:
+                      "radial-gradient(circle at center, rgba(0,0,0,1) 72%, rgba(0,0,0,0) 100%)",
+                    maskImage:
+                      "radial-gradient(circle at center, rgba(0,0,0,1) 72%, rgba(0,0,0,0) 100%)",
                   }}
                 />
               </div>
             </div>
           </div>
-          
+
           <div className="ml-36">
             <h3 className="text-lg font-semibold text-foreground">Ontological Identity Network</h3>
             <p className="text-sm text-muted-foreground">

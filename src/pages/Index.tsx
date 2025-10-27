@@ -125,8 +125,7 @@ const Index = () => {
               <span className="text-primary">[M]</span>achine
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              SemanticAC-inspired framework extracting label semantics through transformer-based
-              encoders and aligning audio-text modalities in shared embedding space
+              Semantic Ontological Network, extracting audio-based encoders and audio-text modalities to show categorical relationships
             </p>
           </div>
         </div>

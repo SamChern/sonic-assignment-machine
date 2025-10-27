@@ -84,12 +84,18 @@ SCORING GUIDELINES:
 
 ${sourcesList}
 
+For each source, provide a score (0-100) for each category that reflects how CENTRAL that category is to the source's identity. Use the full 0-100 range. If two sources differ in emotional intensity, their scores MUST reflect that difference.
+
 Return a JSON object with a "sources" array. Each source MUST have:
 1. "name" field matching the exact source name above
 2. "categories" array with ALL 6 categories: Emotional, Cognitive, Social, Communication, Contextual, Artistic
 3. Each category MUST have: "name", "score" (0-100), and "description"
 
-Be DISCRIMINATING with scores - use the full range to differentiate sources meaningfully.`;
+Consider for each source:
+- Temporal-spectral patterns and harmonic complexity
+- Semantic label alignment and genre characteristics
+- Comparative semantic positioning across all sources
+- How each category contributes to that source's unique identity`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',

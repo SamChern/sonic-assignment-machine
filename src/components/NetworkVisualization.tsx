@@ -331,20 +331,28 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
     <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
       <div className="p-6">
         <div className="mb-4 relative">
-          {/* SAM Logo - Top Left Corner Embedded */}
-          <div className="absolute -top-8 -left-8 w-56 h-24 opacity-80 z-10">
-            <img 
-              src={samLogo} 
-              alt="SAM - Sonic Assignment Machine" 
-              className="w-full h-full object-contain"
-              style={{
-                filter: 'brightness(1.1) contrast(1.1)',
-                mixBlendMode: 'screen',
-              }}
-            />
+          {/* SAM Logo - Top Left Corner in Circular Container */}
+          <div className="absolute -top-8 -left-8 w-40 h-40 z-10">
+            <div className="relative w-full h-full rounded-full p-1" 
+                 style={{
+                   background: 'linear-gradient(135deg, hsl(200, 85%, 55%), hsl(180, 80%, 60%), hsl(160, 75%, 50%))',
+                   boxShadow: '0 0 20px hsl(180, 80%, 60%), 0 0 40px hsl(180, 80%, 60%, 0.5)',
+                 }}>
+              <div className="w-full h-full rounded-full bg-black/90 flex items-center justify-center p-4">
+                <img 
+                  src={samLogo} 
+                  alt="SAM - Sonic Assignment Machine" 
+                  className="w-full h-full object-contain"
+                  style={{
+                    filter: 'brightness(1.1) contrast(1.1)',
+                    mixBlendMode: 'screen',
+                  }}
+                />
+              </div>
+            </div>
           </div>
           
-          <div className="ml-52">
+          <div className="ml-36">
             <h3 className="text-lg font-semibold text-foreground">Ontological Identity Network</h3>
             <p className="text-sm text-muted-foreground">
               Natural clustering shows category proximity • Node size = category prevalence strength • Blue-green spectrum

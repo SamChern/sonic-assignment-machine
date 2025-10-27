@@ -333,16 +333,17 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
         <div className="mb-4 relative">
           {/* SAM Logo - Top Left Corner in Circular Container */}
           <div className="absolute -top-8 -left-8 w-40 h-40 z-10">
-            <div className="relative w-full h-full rounded-full p-1" 
+            <div className="relative w-full h-full rounded-full overflow-hidden" 
                  style={{
                    background: 'linear-gradient(135deg, hsl(200, 85%, 55%), hsl(180, 80%, 60%), hsl(160, 75%, 50%))',
                    boxShadow: '0 0 20px hsl(180, 80%, 60%), 0 0 40px hsl(180, 80%, 60%, 0.5)',
+                   padding: '3px',
                  }}>
-              <div className="w-full h-full rounded-full bg-black/90 flex items-center justify-center p-4">
+              <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden">
                 <img 
                   src={samLogo} 
                   alt="SAM - Sonic Assignment Machine" 
-                  className="w-full h-full object-contain"
+                  className="w-[85%] h-[85%] object-contain"
                   style={{
                     filter: 'brightness(1.1) contrast(1.1)',
                     mixBlendMode: 'screen',

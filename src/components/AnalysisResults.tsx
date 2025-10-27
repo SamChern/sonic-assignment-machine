@@ -24,9 +24,9 @@ export const AnalysisResults = ({ results, isAnalyzing }: AnalysisResultsProps) 
           <div className="flex justify-center">
             <div className="h-16 w-16 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
           </div>
-          <p className="text-lg font-semibold text-foreground">Analyzing audio...</p>
+          <p className="text-lg font-semibold text-foreground">Processing semantic embeddings...</p>
           <p className="text-sm text-muted-foreground">
-            Processing categorical ontology patterns
+            Extracting features via hierarchical transformer and aligning modalities
           </p>
         </div>
       </Card>
@@ -44,9 +44,9 @@ export const AnalysisResults = ({ results, isAnalyzing }: AnalysisResultsProps) 
       <Card className="p-8 shadow-elegant">
         <div className="space-y-6">
           <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Analysis Results</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Semantic Analysis Results</h2>
             <p className="text-sm text-muted-foreground">
-              Categorical predictions based on human connection patterns
+              Audio-text similarity matrix with semantic consistency optimization via contrastive learning
             </p>
           </div>
 

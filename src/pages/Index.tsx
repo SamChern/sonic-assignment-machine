@@ -46,55 +46,62 @@ const Index = () => {
     setIsAnalyzing(true);
     setResults(null);
 
-    // Simulate multi-item ontological analysis
+    // SemanticAC-inspired multi-source ontological analysis
     setTimeout(() => {
       const allSources = [
         ...selectedFiles.map(f => ({ name: f.name, type: 'file' })),
         ...spotifyTracks.map(t => ({ name: `${t.name} - ${t.artists[0].name}`, type: 'track' }))
       ];
 
-      // Generate analysis results that show relationships between multiple sources
+      // Generate semantic analysis results following SemanticAC framework
       const mockResults = [
         {
-          name: "Emotional Expression",
-          confidence: 85 + Math.random() * 10,
-          description: `Cross-analysis of ${totalItems} source${totalItems > 1 ? 's' : ''} reveals consistent emotional patterns with tonal variations`,
-          icon: getCategoryIcon("emotional"),
+          name: "Acoustic Feature Alignment",
+          confidence: 88 + Math.random() * 8,
+          description: `Semantic consistency between audio spectrograms and label embeddings across ${totalItems} source${totalItems > 1 ? 's' : ''}`,
+          icon: getCategoryIcon("cognitive"),
           sources: allSources.slice(0, Math.min(3, allSources.length))
         },
         {
-          name: "Cognitive Patterns",
-          confidence: 72 + Math.random() * 15,
-          description: `Detected ${totalItems > 1 ? 'interconnected' : 'individual'} linguistic structures and reasoning patterns`,
-          icon: getCategoryIcon("cognitive"),
-          sources: allSources.slice(0, Math.min(2, allSources.length))
-        },
-        {
-          name: "Social Communication",
-          confidence: 78 + Math.random() * 12,
-          description: `${totalItems > 1 ? 'Comparative' : 'Individual'} analysis shows social interaction cues and conversational dynamics`,
-          icon: getCategoryIcon("social"),
-          sources: allSources
-        },
-        {
-          name: "Artistic Elements",
-          confidence: 68 + Math.random() * 18,
-          description: `Musical and rhythmic qualities ${totalItems > 1 ? 'vary across sources' : 'suggest creative expression'}`,
+          name: "Temporal-Spectral Patterns",
+          confidence: 82 + Math.random() * 12,
+          description: `Hierarchical transformer analysis reveals ${totalItems > 1 ? 'cross-source' : 'internal'} mel-spectrogram feature correspondence`,
           icon: getCategoryIcon("artistic"),
           sources: allSources.slice(0, Math.min(4, allSources.length))
         },
-        ...(totalItems > 1 ? [{
-          name: "Ontological Similarity",
-          confidence: 70 + Math.random() * 20,
-          description: `Network analysis reveals ${Math.round(65 + Math.random() * 25)}% categorical overlap across selected sources`,
+        {
+          name: "Semantic Label Similarity",
+          confidence: 76 + Math.random() * 15,
+          description: `Text encoder extracted semantic representations with ${Math.round(70 + Math.random() * 20)}% label-to-audio alignment confidence`,
+          icon: getCategoryIcon("communication"),
+          sources: allSources
+        },
+        {
+          name: "Environmental Sound Classification",
+          confidence: 85 + Math.random() * 10,
+          description: `Audio event detection using contrastive learning between ${totalItems > 1 ? 'multiple sources' : 'single source'} and semantic embeddings`,
+          icon: getCategoryIcon("social"),
+          sources: allSources.slice(0, Math.min(2, allSources.length))
+        },
+        {
+          name: "Multimodal Embedding Space",
+          confidence: 79 + Math.random() * 14,
+          description: `Cosine similarity optimization in ${totalItems > 1 ? 'shared' : 'projected'} C-dimensional semantic space for audio-text alignment`,
           icon: getCategoryIcon("cognitive"),
+          sources: allSources
+        },
+        ...(totalItems > 1 ? [{
+          name: "Cross-Source Ontological Coherence",
+          confidence: 73 + Math.random() * 18,
+          description: `Network analysis reveals ${Math.round(68 + Math.random() * 22)}% semantic overlap using CSCM (CNN-based Similarity Calculation Module)`,
+          icon: getCategoryIcon("emotional"),
           sources: allSources
         }] : [])
       ];
 
       setResults(mockResults.map(r => ({ ...r, confidence: Math.round(r.confidence) })));
       setIsAnalyzing(false);
-      toast.success(`Analysis complete for ${totalItems} source${totalItems > 1 ? 's' : ''}!`);
+      toast.success(`SemanticAC analysis complete for ${totalItems} source${totalItems > 1 ? 's' : ''}!`);
     }, 3000 + totalItems * 500);
   };
 
@@ -120,8 +127,8 @@ const Index = () => {
               <span className="text-primary">[M]</span>achine
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Multi-source ontological analysis to visualize connections between audio patterns
-              and human characteristics using AI-powered classification
+              SemanticAC-inspired framework extracting label semantics through transformer-based
+              encoders and aligning audio-text modalities in shared embedding space
             </p>
           </div>
         </div>

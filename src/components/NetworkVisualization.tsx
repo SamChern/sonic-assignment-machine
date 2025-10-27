@@ -344,8 +344,11 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
           .duration(200)
           .attr("r", (d: any) => 10 + (d.score / 100) * 25)
           .attr("opacity", 0.8);
-      })
-      .call(d3.drag<SVGCircleElement, Node>()
+      });
+
+    // Only add drag behavior if simulation exists (multi-source view)
+    if (simulation) {
+      node.call(d3.drag<SVGCircleElement, Node>()
         .on("start", (event, d) => {
           if (!event.active) simulation.alphaTarget(0.3).restart();
           d.fx = d.x;
@@ -360,26 +363,44 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
           d.fx = null;
           d.fy = null;
         }));
+    }
 
-    // Update positions on simulation tick
-    simulation.on("tick", () => {
+    // Update positions on simulation tick (only if simulation exists)
+    if (simulation) {
+      simulation.on("tick", () => {
+        link
+          .attr("x1", (d: any) => d.source.x)
+          .attr("y1", (d: any) => d.source.y)
+          .attr("x2", (d: any) => d.target.x)
+          .attr("y2", (d: any) => d.target.y);
+
+        node
+          .attr("cx", (d: any) => d.x)
+          .attr("cy", (d: any) => d.y);
+
+        glowCircles
+          .attr("cx", (d: any) => d.x)
+          .attr("cy", (d: any) => d.y);
+      });
+    } else {
+      // For single-source (no simulation), just set positions from fixed coords
       link
-        .attr("x1", (d: any) => d.source.x)
-        .attr("y1", (d: any) => d.source.y)
-        .attr("x2", (d: any) => d.target.x)
-        .attr("y2", (d: any) => d.target.y);
+        .attr("x1", (d: any) => d.source.x || 0)
+        .attr("y1", (d: any) => d.source.y || 0)
+        .attr("x2", (d: any) => d.target.x || 0)
+        .attr("y2", (d: any) => d.target.y || 0);
 
       node
-        .attr("cx", (d: any) => d.x)
-        .attr("cy", (d: any) => d.y);
+        .attr("cx", (d: any) => d.x || 0)
+        .attr("cy", (d: any) => d.y || 0);
 
       glowCircles
-        .attr("cx", (d: any) => d.x)
-        .attr("cy", (d: any) => d.y);
-    });
+        .attr("cx", (d: any) => d.x || 0)
+        .attr("cy", (d: any) => d.y || 0);
+    }
 
     return () => {
-      simulation.stop();
+      simulation?.stop();
     };
   }, [sources]);
 

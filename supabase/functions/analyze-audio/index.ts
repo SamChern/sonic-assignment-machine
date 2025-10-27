@@ -37,6 +37,8 @@ Deno.serve(async (req) => {
     
     const systemPrompt = `You are an expert audio semantic analyzer implementing the SemanticAC framework.
 
+Return ONLY valid JSON matching { sources: [...] } with 6 categories per source. Do not include top-level categories. Do not append (track) or extra descriptors to names. No markdown.
+
 CRITICAL REQUIREMENTS:
 
 1. COMPARATIVE ANALYSIS: You must explicitly differentiate between sources. Each source has a unique sonic identity - your analysis must reveal these differences through distinct scoring patterns.
@@ -109,7 +111,7 @@ Consider for each source:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.7,
+        temperature: 0.2,
       }),
     });
 

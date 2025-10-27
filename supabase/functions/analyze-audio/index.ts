@@ -37,43 +37,32 @@ Deno.serve(async (req) => {
     
     const systemPrompt = `You are an expert audio semantic analyzer implementing the SemanticAC framework.
 
-Return ONLY valid JSON matching { sources: [...] } with 6 categories per source. Do not include top-level categories. Do not append (track) or extra descriptors to names. No markdown.
-
-CRITICAL REQUIREMENTS:
-
-1. COMPARATIVE ANALYSIS: You must explicitly differentiate between sources. Each source has a unique sonic identity - your analysis must reveal these differences through distinct scoring patterns.
-
-2. RELATIVE SCORING: Scores (0-100) must reflect how CENTRAL each category is to that specific source's sonic identity. A high Emotional score means emotion is a defining characteristic of that source, not just that emotion is present.
-
-3. DIFFERENTIATION MANDATE: Scores MUST vary meaningfully between sources unless they genuinely share identical characteristics in a category. Avoid giving similar scores across sources - use the full 0-100 range to show real differences.
-
-Example correct output structure:
+CRITICAL OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 {
   "sources": [
     {
-      "name": "Miles Davis - So What",
+      "name": "EXACT SOURCE NAME HERE",
       "categories": [
-        {"name": "Emotional", "score": 65, "description": "Modal jazz restraint with subdued emotional expression"},
-        {"name": "Cognitive", "score": 85, "description": "Complex harmonic improvisation requiring deep listening"},
-        {"name": "Social", "score": 88, "description": "Legendary ensemble collaboration and musical dialogue"},
-        {"name": "Communication", "score": 78, "description": "Abstract instrumental conversation between musicians"},
-        {"name": "Contextual", "score": 95, "description": "Defining moment in modal jazz history from Kind of Blue"},
-        {"name": "Artistic", "score": 98, "description": "Revolutionary modal approach and improvisational mastery"}
-      ]
-    },
-    {
-      "name": "Taylor Swift - Anti-Hero",
-      "categories": [
-        {"name": "Emotional", "score": 92, "description": "Highly confessional lyrics with raw emotional vulnerability"},
-        {"name": "Cognitive", "score": 72, "description": "Narrative storytelling with metaphorical self-reflection"},
-        {"name": "Social", "score": 85, "description": "Resonates with shared experiences of self-doubt and anxiety"},
-        {"name": "Communication", "score": 96, "description": "Direct lyrical communication of internal narrative"},
-        {"name": "Contextual", "score": 80, "description": "Contemporary pop-indie crossover with personal storytelling"},
-        {"name": "Artistic", "score": 88, "description": "Strong songwriting craft with minimalist production choices"}
+        {"name": "Emotional", "score": 0-100, "description": "analysis"},
+        {"name": "Cognitive", "score": 0-100, "description": "analysis"},
+        {"name": "Social", "score": 0-100, "description": "analysis"},
+        {"name": "Communication", "score": 0-100, "description": "analysis"},
+        {"name": "Contextual", "score": 0-100, "description": "analysis"},
+        {"name": "Artistic", "score": 0-100, "description": "analysis"}
       ]
     }
   ]
 }
+
+DO NOT group by categories. DO NOT use "confidence" - use "score". DO NOT include top-level categories array.
+
+ANALYSIS REQUIREMENTS:
+
+1. COMPARATIVE ANALYSIS: Explicitly differentiate between sources. Each source has a unique sonic identity - reveal these differences through distinct scoring patterns.
+
+2. RELATIVE SCORING: Scores (0-100) reflect how CENTRAL each category is to that specific source's sonic identity. High score = defining characteristic.
+
+3. DIFFERENTIATION MANDATE: Scores MUST vary meaningfully between sources. Use the full 0-100 range to show real differences.
 
 SCORING GUIDELINES:
 - Each source MUST have exactly 6 categories: Emotional, Cognitive, Social, Communication, Contextual, Artistic
@@ -82,22 +71,24 @@ SCORING GUIDELINES:
 - Use the full 0-100 range - scores in the 40s, 50s, 60s are valid and useful
 - Identical scores across sources require strong justification`;
 
-    const userPrompt = `Analyze these audio sources using SemanticAC semantic ontology framework:
+    const userPrompt = `Analyze these ${sources.length} audio source${sources.length > 1 ? 's' : ''} using the SemanticAC semantic ontology framework:
 
 ${sourcesList}
 
-For each source, provide a score (0-100) for each category that reflects how CENTRAL that category is to the source's identity. Use the full 0-100 range. If two sources differ in emotional intensity, their scores MUST reflect that difference.
+CRITICAL: Return ONLY a JSON object with "sources" array. DO NOT group by categories.
 
-Return a JSON object with a "sources" array. Each source MUST have:
-1. "name" field matching the exact source name above
-2. "categories" array with ALL 6 categories: Emotional, Cognitive, Social, Communication, Contextual, Artistic
-3. Each category MUST have: "name", "score" (0-100), and "description"
+For EACH source listed above, provide:
+1. "name" field - EXACT source name from the list above (including artist name after the dash)
+2. "categories" array with ALL 6 categories in this exact order: Emotional, Cognitive, Social, Communication, Contextual, Artistic
+3. Each category MUST have: "name", "score" (integer 0-100), and "description" (comparative analysis)
+
+Use the full 0-100 range. Scores MUST differ between sources to show their unique ontological fingerprints.
 
 Consider for each source:
 - Temporal-spectral patterns and harmonic complexity
-- Semantic label alignment and genre characteristics
-- Comparative semantic positioning across all sources
-- How each category contributes to that source's unique identity`;
+- Semantic label alignment and genre characteristics  
+- Comparative semantic positioning - how does THIS source differ from the others?
+- How central is each category to THIS source's unique identity?`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -160,32 +151,48 @@ Consider for each source:
         if (analysisResult.categories && Array.isArray(analysisResult.categories)) {
           console.log('Attempting to convert category-centric format to source-centric format...');
           
-          // Reconstruct as per-source structure
-          const sourceMap = new Map<string, any>();
-          
+          // Build a map of all unique source names from the categories
+          const sourceNamesSet = new Set<string>();
           analysisResult.categories.forEach((category: any) => {
             if (category.sources && Array.isArray(category.sources)) {
+              category.sources.forEach((sourceName: string) => sourceNamesSet.add(sourceName));
+            }
+          });
+          
+          // Create source objects
+          const sourceMap = new Map<string, any>();
+          Array.from(sourceNamesSet).forEach(sourceName => {
+            sourceMap.set(sourceName, {
+              name: sourceName,
+              categories: []
+            });
+          });
+          
+          // Populate categories for each source
+          analysisResult.categories.forEach((category: any) => {
+            const categoryName = category.name;
+            const score = category.confidence || category.score || 50;
+            const description = category.description || '';
+            
+            if (category.sources && Array.isArray(category.sources)) {
               category.sources.forEach((sourceName: string) => {
-                if (!sourceMap.has(sourceName)) {
-                  sourceMap.set(sourceName, {
-                    name: sourceName,
-                    categories: []
+                const source = sourceMap.get(sourceName);
+                if (source) {
+                  source.categories.push({
+                    name: categoryName,
+                    score: score,
+                    description: description
                   });
                 }
-                sourceMap.get(sourceName).categories.push({
-                  name: category.name,
-                  score: category.confidence || 50,
-                  description: category.description || ''
-                });
               });
             }
           });
           
           analysisResult = { sources: Array.from(sourceMap.values()) };
-          console.log('Repair successful. New structure:', JSON.stringify(analysisResult, null, 2));
+          console.log('Repair successful. Converted structure:', JSON.stringify(analysisResult, null, 2));
         } else {
           return new Response(JSON.stringify({ 
-            error: 'AI returned invalid format - expected { sources: [...] } with 6 categories per source. Received a different structure. Please try again.' 
+            error: 'AI returned invalid format. Expected { sources: [...] } with 6 categories per source. Please try again.' 
           }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

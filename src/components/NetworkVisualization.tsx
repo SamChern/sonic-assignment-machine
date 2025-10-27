@@ -61,6 +61,9 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       'Artistic': 'hsl(170, 80%, 55%)',
     };
 
+    // Check if we're viewing a single source's fingerprint
+    const isSingleSource = sources.length === 1;
+
     // Create nodes: one for each source-category combination
     const nodes: Node[] = [];
     sources.forEach((source) => {
@@ -74,6 +77,21 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
         });
       });
     });
+
+    // For single source fingerprint, arrange in a circular/radial pattern
+    if (isSingleSource) {
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const radius = Math.min(width, height) * 0.3;
+      
+      nodes.forEach((node, index) => {
+        const angle = (index / nodes.length) * 2 * Math.PI - Math.PI / 2;
+        node.x = centerX + radius * Math.cos(angle);
+        node.y = centerY + radius * Math.sin(angle);
+        node.fx = node.x; // Fix positions for fingerprint view
+        node.fy = node.y;
+      });
+    }
 
     // Calculate similarity between sources based on category score profiles
     const calculateSourceSimilarity = (source1: SourceAnalysis, source2: SourceAnalysis): number => {
@@ -100,63 +118,105 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
     // Create links
     const links: Link[] = [];
     
-    // 1. Strong links within same category (cluster nodes by category)
-    const categoryNames = Array.from(new Set(nodes.map(n => n.category)));
-    categoryNames.forEach(categoryName => {
-      const categoryNodes = nodes.filter(n => n.category === categoryName);
-      const catSimilarity = calculateCategorySimilarity(categoryName);
-      
-      for (let i = 0; i < categoryNodes.length; i++) {
-        for (let j = i + 1; j < categoryNodes.length; j++) {
+    if (isSingleSource) {
+      // For single source, create links from center to each category node
+      // showing the strength/centrality of each category
+      const centerNode: Node = {
+        id: 'center',
+        sourceName: sources[0].name,
+        category: 'Center',
+        score: 100,
+        color: 'hsl(180, 70%, 55%)',
+        x: width / 2,
+        y: height / 2,
+        fx: width / 2,
+        fy: height / 2,
+      };
+      nodes.push(centerNode);
+
+      // Create radial links from center to each category
+      nodes.forEach(node => {
+        if (node.id !== 'center') {
           links.push({
-            source: categoryNodes[i].id,
-            target: categoryNodes[j].id,
-            strength: 0.7 + catSimilarity * 0.2, // 0.7-0.9 range
+            source: 'center',
+            target: node.id,
+            strength: node.score / 100, // Link strength based on category score
+          });
+        }
+      });
+
+      // Connect adjacent categories in the circle to show relationships
+      for (let i = 0; i < nodes.length - 1; i++) {
+        if (nodes[i].id !== 'center' && nodes[(i + 1) % (nodes.length - 1)].id !== 'center') {
+          const node1 = nodes[i];
+          const node2 = nodes[(i + 1) % (nodes.length - 1)];
+          links.push({
+            source: node1.id,
+            target: node2.id,
+            strength: 0.2, // Weaker links between adjacent categories
           });
         }
       }
-    });
-
-    // 2. Medium links for same source across categories (show source's fingerprint)
-    sources.forEach(source => {
-      const sourceNodes = nodes.filter(n => n.sourceName === source.name);
-      for (let i = 0; i < sourceNodes.length; i++) {
-        for (let j = i + 1; j < sourceNodes.length; j++) {
-          // Link strength based on both scores being high (both categories are central to this source)
-          const avgScore = (sourceNodes[i].score + sourceNodes[j].score) / 200; // Normalize to 0-1
-          links.push({
-            source: sourceNodes[i].id,
-            target: sourceNodes[j].id,
-            strength: avgScore * 0.5, // 0-0.5 range
-          });
+    } else {
+      // Multi-source view: original clustering logic
+      // 1. Strong links within same category (cluster nodes by category)
+      const categoryNames = Array.from(new Set(nodes.map(n => n.category)));
+      categoryNames.forEach(categoryName => {
+        const categoryNodes = nodes.filter(n => n.category === categoryName);
+        const catSimilarity = calculateCategorySimilarity(categoryName);
+        
+        for (let i = 0; i < categoryNodes.length; i++) {
+          for (let j = i + 1; j < categoryNodes.length; j++) {
+            links.push({
+              source: categoryNodes[i].id,
+              target: categoryNodes[j].id,
+              strength: 0.7 + catSimilarity * 0.2, // 0.7-0.9 range
+            });
+          }
         }
-      }
-    });
+      });
 
-    // 3. Weak links between different sources in same category (show comparative differences)
-    categoryNames.forEach(categoryName => {
-      const categoryNodes = nodes.filter(n => n.category === categoryName);
-      const sourceGroups = sources.map(s => ({
-        name: s.name,
-        node: categoryNodes.find(n => n.sourceName === s.name)
-      })).filter(g => g.node);
+      // 2. Medium links for same source across categories (show source's fingerprint)
+      sources.forEach(source => {
+        const sourceNodes = nodes.filter(n => n.sourceName === source.name);
+        for (let i = 0; i < sourceNodes.length; i++) {
+          for (let j = i + 1; j < sourceNodes.length; j++) {
+            // Link strength based on both scores being high (both categories are central to this source)
+            const avgScore = (sourceNodes[i].score + sourceNodes[j].score) / 200; // Normalize to 0-1
+            links.push({
+              source: sourceNodes[i].id,
+              target: sourceNodes[j].id,
+              strength: avgScore * 0.5, // 0-0.5 range
+            });
+          }
+        }
+      });
 
-      for (let i = 0; i < sourceGroups.length; i++) {
-        for (let j = i + 1; j < sourceGroups.length; j++) {
-          if (sourceGroups[i].node && sourceGroups[j].node) {
-            const scoreDiff = Math.abs(sourceGroups[i].node!.score - sourceGroups[j].node!.score);
-            const similarity = Math.max(0, 1 - scoreDiff / 100);
-            if (similarity > 0.3) {
-              links.push({
-                source: sourceGroups[i].node!.id,
-                target: sourceGroups[j].node!.id,
-                strength: similarity * 0.2, // 0-0.2 range
-              });
+      // 3. Weak links between different sources in same category (show comparative differences)
+      categoryNames.forEach(categoryName => {
+        const categoryNodes = nodes.filter(n => n.category === categoryName);
+        const sourceGroups = sources.map(s => ({
+          name: s.name,
+          node: categoryNodes.find(n => n.sourceName === s.name)
+        })).filter(g => g.node);
+
+        for (let i = 0; i < sourceGroups.length; i++) {
+          for (let j = i + 1; j < sourceGroups.length; j++) {
+            if (sourceGroups[i].node && sourceGroups[j].node) {
+              const scoreDiff = Math.abs(sourceGroups[i].node!.score - sourceGroups[j].node!.score);
+              const similarity = Math.max(0, 1 - scoreDiff / 100);
+              if (similarity > 0.3) {
+                links.push({
+                  source: sourceGroups[i].node!.id,
+                  target: sourceGroups[j].node!.id,
+                  strength: similarity * 0.2, // 0-0.2 range
+                });
+              }
             }
           }
         }
-      }
-    });
+      });
+    }
 
     // Calculate average similarity for display
     const avgSim = links.reduce((sum, link) => sum + link.strength, 0) / links.length * 100;
@@ -184,8 +244,8 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
         .attr("stop-opacity", 0);
     });
 
-    // Create force simulation
-    const simulation = d3.forceSimulation(nodes as d3.SimulationNodeDatum[])
+    // Create force simulation (only for multi-source view)
+    const simulation = !isSingleSource ? d3.forceSimulation(nodes as d3.SimulationNodeDatum[])
       .force("link", d3.forceLink(links)
         .id((d: any) => d.id)
         .distance((d: any) => {
@@ -227,7 +287,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             node.y += dy * strength;
           }
         });
-      });
+      }) : null;
 
     // Draw links
     const link = svg.append("g")
@@ -358,9 +418,13 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
           </div>
 
           <div className="ml-24">
-            <h3 className="text-lg font-semibold text-foreground">Ontological Identity Network</h3>
+            <h3 className="text-lg font-semibold text-foreground">
+              {sources.length === 1 ? 'Ontological Fingerprint' : 'Ontological Identity Network'}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              Per-source comparative scoring • Node size = category centrality to source identity • Blue-green spectrum
+              {sources.length === 1 
+                ? 'Radial view showing category centrality to source identity • Line thickness = score strength'
+                : 'Natural clustering shows category proximity • Node size = category prevalence strength • Blue-green spectrum'}
             </p>
           </div>
         </div>

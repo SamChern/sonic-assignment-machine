@@ -270,8 +270,8 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
       .join("circle")
       .attr("r", (d) => 8 + (d.confidence / 100) * 22) // Confidence drives node size
       .attr("fill", (d) => d.color)
-      .attr("stroke", "hsl(0, 0%, 10%)")
-      .attr("stroke-width", 2.5)
+      .attr("opacity", 0.8) // 20% transparency to blend with background
+      .attr("stroke", "none") // Remove borders
       .style("cursor", "pointer")
       .on("mouseenter", (event, d) => {
         setHoveredNode(`${d.name} - ${d.category}: ${d.confidence}%`);
@@ -279,7 +279,7 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
           .transition()
           .duration(200)
           .attr("r", (d: any) => 13 + (d.confidence / 100) * 27)
-          .attr("stroke-width", 4);
+          .attr("opacity", 1); // Full opacity on hover
       })
       .on("mouseleave", (event, d) => {
         setHoveredNode(null);
@@ -287,7 +287,7 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
           .transition()
           .duration(200)
           .attr("r", (d: any) => 8 + (d.confidence / 100) * 22)
-          .attr("stroke-width", 2.5);
+          .attr("opacity", 0.8); // Back to 20% blend
       })
       .call(d3.drag<SVGCircleElement, Node>()
         .on("start", (event, d) => {

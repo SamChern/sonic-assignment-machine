@@ -37,7 +37,13 @@ Deno.serve(async (req) => {
     
     const systemPrompt = `You are an expert audio semantic analyzer implementing the SemanticAC framework.
 
-CRITICAL: You MUST return per-source scoring. Each source gets its OWN individual scores for ALL 6 categories.
+CRITICAL REQUIREMENTS:
+
+1. COMPARATIVE ANALYSIS: You must explicitly differentiate between sources. Each source has a unique sonic identity - your analysis must reveal these differences through distinct scoring patterns.
+
+2. RELATIVE SCORING: Scores (0-100) must reflect how CENTRAL each category is to that specific source's sonic identity. A high Emotional score means emotion is a defining characteristic of that source, not just that emotion is present.
+
+3. DIFFERENTIATION MANDATE: Scores MUST vary meaningfully between sources unless they genuinely share identical characteristics in a category. Avoid giving similar scores across sources - use the full 0-100 range to show real differences.
 
 Example correct output structure:
 {
@@ -67,12 +73,12 @@ Example correct output structure:
   ]
 }
 
-SCORING RULES:
-- Each source MUST have exactly 6 categories with individual scores
-- Scores MUST be comparative: different sources should have meaningfully different scores
-- Use full 0-100 range to show differences between sources
-- Score represents how CENTRAL that category is to that specific source's sonic identity
-- Be discriminating - avoid clustering scores together`;
+SCORING GUIDELINES:
+- Each source MUST have exactly 6 categories: Emotional, Cognitive, Social, Communication, Contextual, Artistic
+- Scores represent category centrality to source identity, not just presence
+- Compare sources directly - if one is more emotional than another, scores must reflect this
+- Use the full 0-100 range - scores in the 40s, 50s, 60s are valid and useful
+- Identical scores across sources require strong justification`;
 
     const userPrompt = `Analyze these audio sources using SemanticAC semantic ontology framework:
 

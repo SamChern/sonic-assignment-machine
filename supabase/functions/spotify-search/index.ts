@@ -5,8 +5,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SPOTIFY_CLIENT_ID = Deno.env.get('SPOTIFY_CLIENT_ID');
-const SPOTIFY_CLIENT_SECRET = Deno.env.get('SPOTIFY_CLIENT_SECRET');
+const SPOTIFY_CLIENT_ID = Deno.env.get('SPOTIFY_CLIENT_ID')?.trim();
+const SPOTIFY_CLIENT_SECRET = Deno.env.get('SPOTIFY_CLIENT_SECRET')?.trim();
+
+console.log('Spotify credentials check:', {
+  hasClientId: !!SPOTIFY_CLIENT_ID,
+  hasClientSecret: !!SPOTIFY_CLIENT_SECRET,
+  clientIdLength: SPOTIFY_CLIENT_ID?.length,
+  clientSecretLength: SPOTIFY_CLIENT_SECRET?.length
+});
 
 async function getSpotifyToken(): Promise<string> {
   console.log('Getting Spotify access token...');

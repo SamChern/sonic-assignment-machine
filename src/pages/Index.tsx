@@ -68,7 +68,7 @@ const Index = () => {
             backgroundPosition: "center",
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/80 to-background" />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
         
         <div className="relative mx-auto max-w-7xl px-6 py-16 sm:py-24">
           <div className="text-center space-y-6">

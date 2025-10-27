@@ -41,13 +41,13 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
     // Clear previous content
     d3.select(svgRef.current).selectAll("*").remove();
 
-    // Color palette matching the app theme
+    // Vibrant color palette matching the reference visualization
     const colors = [
-      "hsl(220, 70%, 60%)",  // Primary blue
-      "hsl(190, 80%, 60%)",  // Cyan
-      "hsl(260, 70%, 60%)",  // Purple
-      "hsl(340, 70%, 60%)",  // Pink
-      "hsl(160, 70%, 50%)",  // Teal
+      "hsl(180, 100%, 50%)",  // Bright cyan
+      "hsl(330, 100%, 60%)",  // Magenta/pink
+      "hsl(50, 100%, 50%)",   // Yellow
+      "hsl(120, 100%, 50%)",  // Bright green
+      "hsl(0, 100%, 60%)",    // Red
     ];
 
     // Create nodes from categories
@@ -110,28 +110,28 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
       .selectAll("line")
       .data(links)
       .join("line")
-      .attr("stroke", "hsl(220, 20%, 40%)")
-      .attr("stroke-opacity", (d) => d.strength * 0.3)
-      .attr("stroke-width", (d) => d.strength * 2);
+      .attr("stroke", "hsl(0, 0%, 30%)")
+      .attr("stroke-opacity", (d) => d.strength * 0.5)
+      .attr("stroke-width", (d) => d.strength * 1.5);
 
     // Draw glow circles behind nodes
     const glowCircles = svg.append("g")
       .selectAll("circle")
       .data(nodes)
       .join("circle")
-      .attr("r", (d) => 30 + (d.confidence / 100) * 20)
+      .attr("r", (d) => 30 + (d.confidence / 100) * 25)
       .attr("fill", (d, i) => `url(#glow-${i})`)
-      .attr("opacity", 0.6);
+      .attr("opacity", 0.7);
 
     // Draw nodes
     const node = svg.append("g")
       .selectAll("circle")
       .data(nodes)
       .join("circle")
-      .attr("r", (d) => 15 + (d.confidence / 100) * 10)
+      .attr("r", (d) => 15 + (d.confidence / 100) * 12)
       .attr("fill", (d, i) => colors[i])
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 2)
+      .attr("stroke", "hsl(0, 0%, 10%)")
+      .attr("stroke-width", 3)
       .style("cursor", "pointer")
       .on("mouseenter", (event, d) => {
         setHoveredNode(d.id);
@@ -169,10 +169,10 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
       .data(nodes)
       .join("text")
       .attr("text-anchor", "middle")
-      .attr("dy", (d) => 30 + (d.confidence / 100) * 15)
-      .attr("fill", "#fff")
-      .attr("font-size", "12px")
-      .attr("font-weight", "600")
+      .attr("dy", (d) => 35 + (d.confidence / 100) * 18)
+      .attr("fill", "hsl(0, 0%, 90%)")
+      .attr("font-size", "13px")
+      .attr("font-weight", "700")
       .attr("pointer-events", "none")
       .text((d) => d.name);
 
@@ -182,9 +182,9 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
       .data(nodes)
       .join("text")
       .attr("text-anchor", "middle")
-      .attr("dy", (d) => 45 + (d.confidence / 100) * 15)
-      .attr("fill", "hsl(220, 15%, 70%)")
-      .attr("font-size", "10px")
+      .attr("dy", (d) => 50 + (d.confidence / 100) * 18)
+      .attr("fill", "hsl(0, 0%, 70%)")
+      .attr("font-size", "11px")
       .attr("pointer-events", "none")
       .text((d) => `${d.confidence}%`);
 
@@ -219,7 +219,7 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
   }, [categories]);
 
   return (
-    <Card className="relative overflow-hidden bg-gradient-to-br from-card to-muted/20 shadow-elegant">
+    <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
       <div className="p-6">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-foreground">Category Network</h3>
@@ -227,7 +227,7 @@ export const NetworkVisualization = ({ categories }: NetworkVisualizationProps) 
             Interactive visualization of categorical connections
           </p>
         </div>
-        <div className="relative h-[500px] rounded-lg bg-gradient-to-br from-background/50 to-muted/10 border border-border">
+        <div className="relative h-[500px] rounded-lg bg-black border border-border/30">
           <svg
             ref={svgRef}
             className="w-full h-full"

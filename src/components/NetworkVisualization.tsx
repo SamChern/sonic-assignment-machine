@@ -331,10 +331,10 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
     <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
       <div className="p-6">
         <div className="mb-4 relative">
-          {/* SAM Logo - Top Left Corner in Circular Container (no inner square) */}
-          <div className="absolute -top-8 -left-8 w-40 h-40 z-10 pointer-events-none">
+          {/* SAM Logo - Top Left Corner in Circular Container */}
+          <div className="absolute -top-6 -left-6 w-28 h-28 z-10 pointer-events-none">
             <div
-              className="relative w-full h-full rounded-full p-[3px]"
+              className="relative w-full h-full rounded-full p-[2px]"
               style={{
                 background:
                   "linear-gradient(135deg, hsl(200 85% 55%), hsl(180 80% 60%), hsl(160 75% 50%))",
@@ -342,7 +342,8 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
                   "0 0 16px hsl(180 80% 60% / 0.9), 0 0 36px hsl(180 80% 60% / 0.45)",
               }}
             >
-              <div className="w-full h-full rounded-full bg-transparent overflow-hidden">
+              <div className="w-full h-full rounded-full overflow-hidden relative"
+                   style={{ backgroundColor: 'rgba(0, 0, 0, 0.85)' }}>
                 <img
                   src={samLogo}
                   alt="SAM - Sonic Assignment Machine"
@@ -360,7 +361,7 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
             </div>
           </div>
 
-          <div className="ml-36">
+          <div className="ml-24">
             <h3 className="text-lg font-semibold text-foreground">Ontological Identity Network</h3>
             <p className="text-sm text-muted-foreground">
               Natural clustering shows category proximity • Node size = category prevalence strength • Blue-green spectrum

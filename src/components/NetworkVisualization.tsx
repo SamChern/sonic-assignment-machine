@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
+import samLogo from "@/assets/sam-logo.png";
 
 interface Node {
   id: string;
@@ -329,7 +330,19 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
   return (
     <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
       <div className="p-6">
-        <div className="mb-4">
+        <div className="mb-4 relative">
+          {/* SAM Logo - Top Left */}
+          <div className="absolute -top-2 -left-2 w-32 h-16 opacity-70">
+            <img 
+              src={samLogo} 
+              alt="Sonic Assignment Machine" 
+              className="w-full h-full object-contain mix-blend-screen"
+              style={{
+                filter: 'brightness(1.2) contrast(1.1)',
+              }}
+            />
+          </div>
+          
           <h3 className="text-lg font-semibold text-foreground">Ontological Identity Network</h3>
           <p className="text-sm text-muted-foreground">
             Natural clustering shows category proximity • Node size = category prevalence strength • Blue-green spectrum

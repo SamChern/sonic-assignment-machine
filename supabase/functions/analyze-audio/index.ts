@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     console.log(`Analyzing ${sources.length} audio source(s):`, sources);
 
     // Create semantic analysis prompt based on SemanticAC framework
-    const sourcesList = sources.map(s => `- ${s.name} (${s.type})`).join('\n');
+    const sourcesList = sources.map(s => `- ${s.name}`).join('\n');
     
     const systemPrompt = `You are an expert audio semantic analyzer implementing the SemanticAC framework.
 
@@ -200,8 +200,11 @@ Consider for each source:
         }
       }
       
-      // Validate each source has categories
+      // Validate each source has categories and clean up names
       for (const source of analysisResult.sources) {
+        // Remove any "(track)" or "(file)" suffix that the AI might have added
+        source.name = source.name.replace(/\s*\((track|file)\)\s*$/i, '').trim();
+        
         if (!source.categories || !Array.isArray(source.categories) || source.categories.length !== 6) {
           console.error('Invalid source structure:', source);
           return new Response(JSON.stringify({ 

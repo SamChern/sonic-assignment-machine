@@ -52,11 +52,16 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: Ana
   // Filter sources based on selection
   const filteredSources = selectedSource === "all" 
     ? results 
-    : results.filter(source => source.name === selectedSource);
+    : results.filter(source => {
+        // Clean comparison - remove any whitespace differences
+        const cleanSourceName = source.name.trim();
+        const cleanSelectedName = selectedSource.trim();
+        return cleanSourceName === cleanSelectedName;
+      });
 
   const filteredImages = selectedSource === "all"
     ? sourceImages
-    : sourceImages.filter(img => img.name === selectedSource);
+    : sourceImages.filter(img => img.name.trim() === selectedSource.trim());
 
   return (
     <div className="space-y-6">

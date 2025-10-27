@@ -326,10 +326,10 @@ export const NetworkVisualization = ({ categories, sourceImages = [] }: NetworkV
                   key={source.name}
                   src={source.imageUrl}
                   alt={source.name}
-                  className="absolute w-64 h-64 object-cover opacity-15 blur-sm"
+                  className="absolute w-64 h-64 object-cover opacity-30 blur-sm"
                   style={{
                     transform: `translate(${(index % 3 - 1) * 150}px, ${Math.floor(index / 3) * 150 - 100}px) rotate(${index * 15}deg)`,
-                    filter: 'grayscale(40%) brightness(0.6)',
+                    filter: 'grayscale(30%) brightness(0.7)',
                     mixBlendMode: 'screen',
                   }}
                 />

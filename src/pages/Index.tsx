@@ -9,20 +9,18 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Check, X } from "lucide-react";
 
 const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [spotifyTracks, setSpotifyTracks] = useState<any[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<{ sources: any[]; images: any[] } | null>(null);
-  const [selectedSource, setSelectedSource] = useState<string>("all");
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("select");
 
   const handleFileSelect = (file: File) => {
@@ -116,17 +114,30 @@ const Index = () => {
   };
 
   // Filter sources based on selection
-  const filteredSources = selectedSource === "all" 
+  const filteredSources = selectedSources.length === 0
     ? results?.sources || []
     : (results?.sources || []).filter((source: any) => {
         const cleanSourceName = source.name.trim();
-        const cleanSelectedName = selectedSource.trim();
-        return cleanSourceName === cleanSelectedName;
+        return selectedSources.some(selected => selected.trim() === cleanSourceName);
       });
 
-  const filteredImages = selectedSource === "all"
+  const filteredImages = selectedSources.length === 0
     ? results?.images || []
-    : (results?.images || []).filter((img: any) => img.name.trim() === selectedSource.trim());
+    : (results?.images || []).filter((img: any) => 
+        selectedSources.some(selected => selected.trim() === img.name.trim())
+      );
+
+  const toggleSource = (sourceName: string) => {
+    setSelectedSources(prev =>
+      prev.includes(sourceName)
+        ? prev.filter(s => s !== sourceName)
+        : [...prev, sourceName]
+    );
+  };
+
+  const clearAllFilters = () => {
+    setSelectedSources([]);
+  };
 
   return (
     <div className="min-h-screen">
@@ -281,29 +292,72 @@ const Index = () => {
             {/* Filter Controls */}
             {results && results.sources.length > 1 && (
               <Card className="p-4 bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                   <label className="text-sm font-semibold text-foreground whitespace-nowrap">
                     Filter by Source:
                   </label>
-                  <Select value={selectedSource} onValueChange={setSelectedSource}>
-                    <SelectTrigger className="w-[300px] bg-background border-border">
-                      <SelectValue placeholder="Select a source" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border-border z-50">
-                      <SelectItem value="all" className="cursor-pointer">
-                        All Sources ({results.sources.length})
-                      </SelectItem>
-                      {results.sources.map((source: any) => (
-                        <SelectItem key={source.name} value={source.name} className="cursor-pointer">
-                          {source.name.length > 40 ? source.name.substring(0, 40) + '...' : source.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedSource !== "all" && (
-                    <div className="text-xs text-muted-foreground">
-                      Viewing ontological fingerprint: <span className="font-semibold text-primary">{selectedSource}</span>
-                    </div>
+                  <Popover open={open} onOpenChange={setOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={open}
+                        className="w-[300px] justify-between bg-background border-border"
+                      >
+                        {selectedSources.length === 0
+                          ? `All Sources (${results.sources.length})`
+                          : `${selectedSources.length} selected`}
+                        <Check className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0 bg-background border-border z-50">
+                      <Command className="bg-background">
+                        <CommandInput placeholder="Search sources..." className="h-9" />
+                        <CommandEmpty>No source found.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-auto">
+                          {results.sources.map((source: any) => (
+                            <CommandItem
+                              key={source.name}
+                              value={source.name}
+                              onSelect={() => toggleSource(source.name)}
+                              className="cursor-pointer"
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${
+                                  selectedSources.includes(source.name) ? "opacity-100" : "opacity-0"
+                                }`}
+                              />
+                              <span className="truncate">
+                                {source.name.length > 35 ? source.name.substring(0, 35) + '...' : source.name}
+                              </span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {selectedSources.length > 0 && (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedSources.map((sourceName) => (
+                          <Badge key={sourceName} variant="secondary" className="gap-1">
+                            {sourceName.length > 20 ? sourceName.substring(0, 20) + '...' : sourceName}
+                            <X
+                              className="h-3 w-3 cursor-pointer hover:text-destructive"
+                              onClick={() => toggleSource(sourceName)}
+                            />
+                          </Badge>
+                        ))}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAllFilters}
+                        className="text-xs"
+                      >
+                        Clear All
+                      </Button>
+                    </>
                   )}
                 </div>
               </Card>
@@ -317,29 +371,72 @@ const Index = () => {
             {/* Filter Controls */}
             {results && results.sources.length > 1 && (
               <Card className="p-4 bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                   <label className="text-sm font-semibold text-foreground whitespace-nowrap">
                     Filter by Source:
                   </label>
-                  <Select value={selectedSource} onValueChange={setSelectedSource}>
-                    <SelectTrigger className="w-[300px] bg-background border-border">
-                      <SelectValue placeholder="Select a source" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border-border z-50">
-                      <SelectItem value="all" className="cursor-pointer">
-                        All Sources ({results.sources.length})
-                      </SelectItem>
-                      {results.sources.map((source: any) => (
-                        <SelectItem key={source.name} value={source.name} className="cursor-pointer">
-                          {source.name.length > 40 ? source.name.substring(0, 40) + '...' : source.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedSource !== "all" && (
-                    <div className="text-xs text-muted-foreground">
-                      Viewing ontological fingerprint: <span className="font-semibold text-primary">{selectedSource}</span>
-                    </div>
+                  <Popover open={open} onOpenChange={setOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={open}
+                        className="w-[300px] justify-between bg-background border-border"
+                      >
+                        {selectedSources.length === 0
+                          ? `All Sources (${results.sources.length})`
+                          : `${selectedSources.length} selected`}
+                        <Check className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0 bg-background border-border z-50">
+                      <Command className="bg-background">
+                        <CommandInput placeholder="Search sources..." className="h-9" />
+                        <CommandEmpty>No source found.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-auto">
+                          {results.sources.map((source: any) => (
+                            <CommandItem
+                              key={source.name}
+                              value={source.name}
+                              onSelect={() => toggleSource(source.name)}
+                              className="cursor-pointer"
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${
+                                  selectedSources.includes(source.name) ? "opacity-100" : "opacity-0"
+                                }`}
+                              />
+                              <span className="truncate">
+                                {source.name.length > 35 ? source.name.substring(0, 35) + '...' : source.name}
+                              </span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {selectedSources.length > 0 && (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedSources.map((sourceName) => (
+                          <Badge key={sourceName} variant="secondary" className="gap-1">
+                            {sourceName.length > 20 ? sourceName.substring(0, 20) + '...' : sourceName}
+                            <X
+                              className="h-3 w-3 cursor-pointer hover:text-destructive"
+                              onClick={() => toggleSource(sourceName)}
+                            />
+                          </Badge>
+                        ))}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAllFilters}
+                        className="text-xs"
+                      >
+                        Clear All
+                      </Button>
+                    </>
                   )}
                 </div>
               </Card>

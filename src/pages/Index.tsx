@@ -220,7 +220,7 @@ const Index = () => {
                 <h2 className="text-2xl font-bold text-foreground">Selected Sources</h2>
                 <div className="grid gap-4 md:grid-cols-2">
                   {selectedFiles.map((file, index) => (
-                    <Card key={`file-${index}`} className="p-4">
+                    <Card key={`file-${index}`} className="p-4 bg-secondary/20 border-secondary/30">
                       <div className="flex gap-3 items-start">
                         <FileAudio className="h-12 w-12 text-primary flex-shrink-0" />
                         <div className="flex-1 min-w-0">
@@ -241,7 +241,7 @@ const Index = () => {
                   ))}
                   
                   {spotifyTracks.map((track) => (
-                    <Card key={track.id} className="p-4">
+                    <Card key={track.id} className="p-4 bg-secondary/20 border-secondary/30">
                       <div className="flex gap-3 items-start">
                         {track.album.images[0] && (
                           <img

@@ -32,6 +32,27 @@ interface SourceAnalysis {
   categories: CategoryScore[];
 }
 
+interface CategorySimilarity {
+  name: string;
+  similarity: number;
+  variance: number;
+  interpretation: 'high' | 'moderate' | 'low';
+}
+
+interface SourcePairSimilarity {
+  source1: string;
+  source2: string;
+  similarity: number;
+}
+
+interface SimilarityMetrics {
+  overall: number;
+  byCategory: CategorySimilarity[];
+  sourcePairs: SourcePairSimilarity[];
+  dominantCategory?: string;
+  distinctiveCategory?: string;
+}
+
 interface NetworkVisualizationProps {
   sources: SourceAnalysis[];
   sourceImages?: Array<{ name: string; imageUrl: string }>;
@@ -40,7 +61,12 @@ interface NetworkVisualizationProps {
 export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
-  const [avgSimilarity, setAvgSimilarity] = useState<number>(0);
+  const [similarityMetrics, setSimilarityMetrics] = useState<SimilarityMetrics>({
+    overall: 0,
+    byCategory: [],
+    sourcePairs: [],
+  });
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     if (!svgRef.current || !sources.length) return;
@@ -105,18 +131,20 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
     };
 
     // Calculate category similarity across all sources for that category
-    const calculateCategorySimilarity = (categoryName: string): number => {
+    const calculateCategorySimilarity = (categoryName: string): { similarity: number; variance: number } => {
       const categoryScores = sources.map(s => 
         s.categories.find(c => c.name === categoryName)?.score || 0
       );
       const avg = categoryScores.reduce((a, b) => a + b, 0) / categoryScores.length;
       const variance = categoryScores.reduce((sum, score) => sum + Math.pow(score - avg, 2), 0) / categoryScores.length;
       const stdDev = Math.sqrt(variance);
-      return Math.max(0, 1 - stdDev / 50); // Normalize std dev to 0-1 similarity
+      const similarity = Math.max(0, 1 - stdDev / 50); // Normalize std dev to 0-1 similarity
+      return { similarity, variance };
     };
 
     // Create links
     const links: Link[] = [];
+    const categorySimilarities: CategorySimilarity[] = [];
     
     if (isSingleSource) {
       // For single source, create links from center to each category node
@@ -161,9 +189,23 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       // Multi-source view: original clustering logic
       // 1. Strong links within same category (cluster nodes by category)
       const categoryNames = Array.from(new Set(nodes.map(n => n.category)));
+      
       categoryNames.forEach(categoryName => {
         const categoryNodes = nodes.filter(n => n.category === categoryName);
-        const catSimilarity = calculateCategorySimilarity(categoryName);
+        const { similarity: catSimilarity, variance } = calculateCategorySimilarity(categoryName);
+        
+        // Store category similarity metrics
+        let interpretation: 'high' | 'moderate' | 'low';
+        if (catSimilarity > 0.75) interpretation = 'high';
+        else if (catSimilarity > 0.5) interpretation = 'moderate';
+        else interpretation = 'low';
+        
+        categorySimilarities.push({
+          name: categoryName,
+          similarity: catSimilarity,
+          variance,
+          interpretation,
+        });
         
         for (let i = 0; i < categoryNodes.length; i++) {
           for (let j = i + 1; j < categoryNodes.length; j++) {
@@ -218,9 +260,39 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       });
     }
 
-    // Calculate average similarity for display
-    const avgSim = links.reduce((sum, link) => sum + link.strength, 0) / links.length * 100;
-    setAvgSimilarity(Math.round(avgSim));
+    // Calculate comprehensive similarity metrics
+    const avgSim = links.reduce((sum, link) => sum + link.strength, 0) / links.length;
+    
+    // Calculate pairwise source similarities (only for multi-source)
+    const sourcePairs: SourcePairSimilarity[] = [];
+    if (!isSingleSource) {
+      for (let i = 0; i < sources.length; i++) {
+        for (let j = i + 1; j < sources.length; j++) {
+          const similarity = calculateSourceSimilarity(sources[i], sources[j]);
+          sourcePairs.push({
+            source1: sources[i].name,
+            source2: sources[j].name,
+            similarity: similarity,
+          });
+        }
+      }
+    }
+    
+    // Sort to find most/least similar pairs
+    sourcePairs.sort((a, b) => b.similarity - a.similarity);
+    
+    // Find dominant and distinctive categories
+    const sortedCategories = [...(isSingleSource ? [] : categorySimilarities)].sort((a, b) => b.similarity - a.similarity);
+    const dominantCategory = sortedCategories[0]?.name;
+    const distinctiveCategory = sortedCategories[sortedCategories.length - 1]?.name;
+    
+    setSimilarityMetrics({
+      overall: Math.round(avgSim * 100),
+      byCategory: isSingleSource ? [] : categorySimilarities,
+      sourcePairs: sourcePairs.slice(0, 5), // Top 5 pairs
+      dominantCategory,
+      distinctiveCategory,
+    });
 
     // Create SVG container
     const svg = d3.select(svgRef.current)
@@ -474,36 +546,21 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             style={{ background: "transparent" }}
           />
           
-          {/* Similarity Metric - Bottom Left */}
-          <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-4 shadow-lg z-20 min-w-[240px]">
-            <div className="text-xs font-semibold text-foreground mb-3">SAM-Based Similarity</div>
-            
-            <div className="relative h-6 rounded-full overflow-hidden border border-border/30 mb-2">
-              <div 
-                className="h-full transition-all duration-500 ease-out"
-                style={{
-                  width: `${avgSimilarity}%`,
-                  background: `linear-gradient(90deg, 
-                    hsl(140, 70%, 45%), 
-                    hsl(170, 80%, 55%), 
-                    hsl(200, 85%, 60%)
-                  )`
-                }}
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-xs font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                  {avgSimilarity}%
-                </span>
-              </div>
+          {/* Enhanced Similarity Metrics - Bottom Left */}
+          <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-4 shadow-lg z-20 max-w-[400px]">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs font-semibold text-foreground">SAM-Based Similarity</div>
+              {sources.length > 1 && (
+                <button
+                  onClick={() => setShowDetails(!showDetails)}
+                  className="text-[10px] text-primary hover:text-primary/80 transition-colors px-2 py-1 bg-primary/10 rounded"
+                >
+                  {showDetails ? 'Hide Details' : 'View Details'}
+                </button>
+              )}
             </div>
             
-            <div className="mt-3 pt-2 border-t border-border/30">
-              <div className="text-[10px] text-muted-foreground">
-                {avgSimilarity > 60 ? '🟢 High cross-source similarity' :
-                 avgSimilarity > 35 ? '🟡 Moderate differentiation' :
-                 '🔴 Highly distinct profiles'}
-              </div>
-            </div>
+            {/* This section was already replaced above - should not be here */}
           </div>
           
           {/* Category Legend - Bottom Right */}

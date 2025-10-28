@@ -176,11 +176,26 @@ const Index = () => {
 
           {/* Tab 1: Select Audio Sources */}
           <TabsContent value="select" className="space-y-8">
-            <div className="space-y-4">
+            <div className="flex justify-between items-start mb-6">
               <h2 className="text-2xl font-bold text-foreground">
                 Select Audio Sources
                 {totalItems > 0 && <span className="text-primary ml-2">({totalItems} selected)</span>}
               </h2>
+              
+              {totalItems > 0 && (
+                <Button
+                  size="lg"
+                  className="gradient-primary shadow-elegant"
+                  onClick={handleAnalyze}
+                  disabled={isAnalyzing}
+                >
+                  <Sparkles className="mr-2 h-5 w-5" />
+                  {isAnalyzing ? "Analyzing..." : `Analyze ${totalItems} Source${totalItems > 1 ? 's' : ''}`}
+                </Button>
+              )}
+            </div>
+
+            <div className="space-y-4">
               <AudioUploader 
                 onFileSelect={handleFileSelect} 
                 selectedFile={null}
@@ -242,16 +257,6 @@ const Index = () => {
                     </Card>
                   ))}
                 </div>
-
-                <Button
-                  size="lg"
-                  className="gradient-primary shadow-elegant w-full sm:w-auto"
-                  onClick={handleAnalyze}
-                  disabled={isAnalyzing}
-                >
-                  <Sparkles className="mr-2 h-5 w-5" />
-                  {isAnalyzing ? "Analyzing..." : `Analyze ${totalItems} Source${totalItems > 1 ? 's' : ''}`}
-                </Button>
               </div>
             )}
 

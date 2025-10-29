@@ -7,6 +7,7 @@ import socialIcon from "@/assets/social-sam.png";
 import contextIcon from "@/assets/context-sam.png";
 import cognitionIcon from "@/assets/cognition-sam.png";
 import communicationIcon from "@/assets/communication-sam.png";
+import artisticIcon from "@/assets/artistic-sam.png";
 
 interface Node {
   id: string;
@@ -756,6 +757,24 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                         WebkitMaskPosition: 'center',
                         WebkitMaskRepeat: 'no-repeat',
                         maskImage: `url(${contextIcon})`,
+                        maskSize: '90% 90%',
+                        maskPosition: 'center',
+                        maskRepeat: 'no-repeat',
+                        border: 'none',
+                        outline: '0',
+                        display: 'block',
+                      }}
+                    />
+                  ) : category === 'Artistic' ? (
+                    <div
+                      className="h-3 w-3"
+                      style={{
+                        backgroundColor: color,
+                        WebkitMaskImage: `url(${artisticIcon})`,
+                        WebkitMaskSize: '90% 90%',
+                        WebkitMaskPosition: 'center',
+                        WebkitMaskRepeat: 'no-repeat',
+                        maskImage: `url(${artisticIcon})`,
                         maskSize: '90% 90%',
                         maskPosition: 'center',
                         maskRepeat: 'no-repeat',

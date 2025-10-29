@@ -697,8 +697,14 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                       className="h-2.5 w-2.5"
                       style={{
                         backgroundColor: color,
-                        WebkitMask: `url(${socialIcon}) center / contain no-repeat`,
-                        mask: `url(${socialIcon}) center / contain no-repeat`,
+                        WebkitMaskImage: `url(${socialIcon})`,
+                        WebkitMaskSize: 'contain',
+                        WebkitMaskPosition: 'center',
+                        WebkitMaskRepeat: 'no-repeat',
+                        maskImage: `url(${socialIcon})`,
+                        maskSize: 'contain',
+                        maskPosition: 'center',
+                        maskRepeat: 'no-repeat',
                       }}
                     />
                   ) : (

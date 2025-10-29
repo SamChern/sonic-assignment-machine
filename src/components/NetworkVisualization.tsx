@@ -677,11 +677,19 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
               }).map(([category, color]) => (
                 <div key={category} className="flex items-center gap-1.5">
                   {category === 'Emotional' ? (
-                    <img 
-                      src={emotionIcon} 
-                      alt="Emotional" 
+                    <div
                       className="h-2.5 w-2.5"
-                      style={{ filter: `hue-rotate(0deg) saturate(1.5) brightness(1.1)` }}
+                      style={{
+                        backgroundColor: color,
+                        WebkitMaskImage: `url(${emotionIcon})`,
+                        WebkitMaskSize: 'contain',
+                        WebkitMaskPosition: 'center',
+                        WebkitMaskRepeat: 'no-repeat',
+                        maskImage: `url(${emotionIcon})`,
+                        maskSize: 'contain',
+                        maskPosition: 'center',
+                        maskRepeat: 'no-repeat',
+                      }}
                     />
                   ) : (
                     <div

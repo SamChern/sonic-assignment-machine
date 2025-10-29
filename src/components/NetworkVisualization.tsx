@@ -710,17 +710,20 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                     />
                   ) : category === 'Contextual' ? (
                     <div
-                      className="h-2.5 w-2.5"
+                      className="h-3 w-3"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${contextIcon})`,
-                        WebkitMaskSize: 'contain',
+                        WebkitMaskSize: '90% 90%',
                         WebkitMaskPosition: 'center',
                         WebkitMaskRepeat: 'no-repeat',
                         maskImage: `url(${contextIcon})`,
-                        maskSize: 'contain',
+                        maskSize: '90% 90%',
                         maskPosition: 'center',
                         maskRepeat: 'no-repeat',
+                        border: 'none',
+                        outline: '0',
+                        display: 'block',
                       }}
                     />
                   ) : (

@@ -3,7 +3,7 @@ import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import samLogo from "@/assets/sam-logo.png";
 import emotionIcon from "@/assets/emotion-sam.png";
-import socialIcon from "@/assets/social-sam.jpg";
+import socialIcon from "@/assets/social-sam.png";
 
 interface Node {
   id: string;

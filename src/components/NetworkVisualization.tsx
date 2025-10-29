@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import samLogo from "@/assets/sam-logo.png";
 import emotionIcon from "@/assets/emotion-sam.png";
 import socialIcon from "@/assets/social-sam.png";
+import contextIcon from "@/assets/context-sam.png";
 
 interface Node {
   id: string;
@@ -702,6 +703,21 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                         WebkitMaskPosition: 'center',
                         WebkitMaskRepeat: 'no-repeat',
                         maskImage: `url(${socialIcon})`,
+                        maskSize: 'contain',
+                        maskPosition: 'center',
+                        maskRepeat: 'no-repeat',
+                      }}
+                    />
+                  ) : category === 'Contextual' ? (
+                    <div
+                      className="h-2.5 w-2.5"
+                      style={{
+                        backgroundColor: color,
+                        WebkitMaskImage: `url(${contextIcon})`,
+                        WebkitMaskSize: 'contain',
+                        WebkitMaskPosition: 'center',
+                        WebkitMaskRepeat: 'no-repeat',
+                        maskImage: `url(${contextIcon})`,
                         maskSize: 'contain',
                         maskPosition: 'center',
                         maskRepeat: 'no-repeat',

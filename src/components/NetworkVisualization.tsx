@@ -3,6 +3,7 @@ import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import samLogo from "@/assets/sam-logo.png";
 import emotionIcon from "@/assets/emotion-sam.png";
+import socialIcon from "@/assets/social-sam.jpg";
 
 interface Node {
   id: string;
@@ -686,6 +687,21 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                         WebkitMaskPosition: 'center',
                         WebkitMaskRepeat: 'no-repeat',
                         maskImage: `url(${emotionIcon})`,
+                        maskSize: 'contain',
+                        maskPosition: 'center',
+                        maskRepeat: 'no-repeat',
+                      }}
+                    />
+                  ) : category === 'Social' ? (
+                    <div
+                      className="h-2.5 w-2.5"
+                      style={{
+                        backgroundColor: color,
+                        WebkitMaskImage: `url(${socialIcon})`,
+                        WebkitMaskSize: 'contain',
+                        WebkitMaskPosition: 'center',
+                        WebkitMaskRepeat: 'no-repeat',
+                        maskImage: `url(${socialIcon})`,
                         maskSize: 'contain',
                         maskPosition: 'center',
                         maskRepeat: 'no-repeat',

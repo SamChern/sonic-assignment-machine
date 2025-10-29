@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import samLogo from "@/assets/sam-logo.png";
+import emotionIcon from "@/assets/emotion-sam.png";
 
 interface Node {
   id: string;
@@ -675,10 +676,19 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                 'Artistic': 'hsl(170, 80%, 55%)',
               }).map(([category, color]) => (
                 <div key={category} className="flex items-center gap-1.5">
-                  <div
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: color }}
-                  />
+                  {category === 'Emotional' ? (
+                    <img 
+                      src={emotionIcon} 
+                      alt="Emotional" 
+                      className="h-2.5 w-2.5"
+                      style={{ filter: `hue-rotate(0deg) saturate(1.5) brightness(1.1)` }}
+                    />
+                  ) : (
+                    <div
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: color }}
+                    />
+                  )}
                   <span className="text-xs text-muted-foreground">{category}</span>
                 </div>
               ))}

@@ -684,7 +684,17 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
           
           {/* Category Legend - Bottom Right */}
           <div className="absolute bottom-4 right-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-3 shadow-lg z-20">
-            <div className="text-xs font-semibold text-foreground mb-2">Category Legend</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-semibold text-foreground">Category Legend</div>
+              {selectedCategories.size > 0 && (
+                <button
+                  onClick={() => setSelectedCategories(new Set())}
+                  className="text-[10px] px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-colors duration-200"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
               {Object.entries({
                 'Emotional': 'hsl(200, 85%, 55%)',

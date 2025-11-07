@@ -717,7 +717,8 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                     borderRadius: '4px',
                     backgroundColor: isSelected ? 'hsl(var(--primary) / 0.1)' : 'transparent',
                     border: isSelected ? '1px solid hsl(var(--primary) / 0.3)' : '1px solid transparent',
-                    transition: 'all 0.2s ease',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    transform: isSelected ? 'scale(1.02)' : 'scale(1)',
                   }}
                   onClick={() => {
                     setSelectedCategories(prev => {
@@ -855,17 +856,25 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                     />
                   )}
                   <span 
-                    className="text-xs transition-all duration-200 flex-1"
+                    className="text-xs flex-1"
                     style={{
                       color: isAnySelected && !isSelected ? 'hsl(var(--muted-foreground) / 0.4)' : 'hsl(var(--muted-foreground))',
                       fontWeight: isSelected ? 600 : 400,
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
                   >
                     {category}
                   </span>
-                  {isSelected && (
+                  <div 
+                    className="overflow-hidden"
+                    style={{
+                      width: isSelected ? '12px' : '0px',
+                      opacity: isSelected ? 1 : 0,
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                  >
                     <Check className="h-3 w-3 text-primary" strokeWidth={3} />
-                  )}
+                  </div>
                 </div>
               );
               })}

@@ -683,7 +683,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                 <div key={category} className="flex items-center gap-1.5 group cursor-pointer">
                   {category === 'Emotional' ? (
                     <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${emotionIcon})`,
@@ -702,7 +702,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                     />
                   ) : category === 'Social' ? (
                     <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${socialIcon})`,
@@ -721,7 +721,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                     />
                   ) : category === 'Cognitive' ? (
                     <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${cognitionIcon})`,
@@ -740,7 +740,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                     />
                   ) : category === 'Communication' ? (
                     <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${communicationIcon})`,
@@ -759,7 +759,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                     />
                   ) : category === 'Contextual' ? (
                     <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${contextIcon})`,
@@ -778,7 +778,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                     />
                   ) : category === 'Artistic' ? (
                     <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${artisticIcon})`,
@@ -797,7 +797,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                     />
                   ) : (
                     <div
-                      className="h-2.5 w-2.5 rounded-full transition-all duration-200 group-hover:scale-125"
+                      className="h-2.5 w-2.5 rounded-full transition-all duration-200 group-hover:scale-140"
                       style={{ 
                         backgroundColor: color,
                         filter: 'drop-shadow(0 0 0px transparent)',

@@ -67,6 +67,7 @@ interface NetworkVisualizationProps {
 export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [similarityMetrics, setSimilarityMetrics] = useState<SimilarityMetrics>({
     overall: 0,
     byCategory: [],
@@ -395,7 +396,10 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       .join("circle")
       .attr("r", (d) => 24 + (d.score / 100) * 42)
       .attr("fill", (d) => `url(#glow-${d.category.replace(/\s+/g, '-')})`)
-      .attr("opacity", 0.5);
+      .attr("opacity", (d) => {
+        if (selectedCategories.size === 0) return 0.5;
+        return selectedCategories.has(d.category) ? 0.5 : 0.1;
+      });
 
     // Draw nodes - SIZE REPRESENTS CATEGORY SCORE FOR THAT SOURCE
     const node = svg.append("g")
@@ -404,8 +408,15 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       .join("circle")
       .attr("r", (d) => 10 + (d.score / 100) * 25) // Score drives node size
       .attr("fill", (d) => d.color)
-      .attr("opacity", 0.8)
-      .attr("stroke", "none")
+      .attr("opacity", (d) => {
+        if (selectedCategories.size === 0) return 0.8;
+        return selectedCategories.has(d.category) ? 0.95 : 0.2;
+      })
+      .attr("stroke", (d) => {
+        if (selectedCategories.size === 0) return "none";
+        return selectedCategories.has(d.category) ? "#fff" : "none";
+      })
+      .attr("stroke-width", (d) => selectedCategories.has(d.category) ? 2 : 0)
       .style("cursor", "pointer")
       .on("mouseenter", (event, d) => {
         setHoveredNode(`${d.sourceName} - ${d.category}: ${d.score}%`);
@@ -421,7 +432,10 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
           .transition()
           .duration(200)
           .attr("r", (d: any) => 10 + (d.score / 100) * 25)
-          .attr("opacity", 0.8);
+          .attr("opacity", (d: any) => {
+            if (selectedCategories.size === 0) return 0.8;
+            return selectedCategories.has(d.category) ? 0.95 : 0.2;
+          });
       });
 
     // Only add drag behavior if simulation exists (multi-source view)
@@ -480,7 +494,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
     return () => {
       simulation?.stop();
     };
-  }, [sources]);
+  }, [sources, selectedCategories]);
 
   return (
     <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
@@ -679,8 +693,26 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                 'Communication': 'hsl(140, 70%, 55%)',
                 'Contextual': 'hsl(220, 75%, 60%)',
                 'Artistic': 'hsl(170, 80%, 55%)',
-              }).map(([category, color]) => (
-                <div key={category} className="flex items-center gap-1.5 group cursor-pointer">
+              }).map(([category, color]) => {
+                const isSelected = selectedCategories.has(category);
+                const isAnySelected = selectedCategories.size > 0;
+                
+                return (
+                <div 
+                  key={category} 
+                  className="flex items-center gap-1.5 group cursor-pointer"
+                  onClick={() => {
+                    setSelectedCategories(prev => {
+                      const newSet = new Set(prev);
+                      if (newSet.has(category)) {
+                        newSet.delete(category);
+                      } else {
+                        newSet.add(category);
+                      }
+                      return newSet;
+                    });
+                  }}
+                >
                   {category === 'Emotional' ? (
                     <div
                       className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
@@ -804,9 +836,18 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                       }}
                     />
                   )}
-                  <span className="text-xs text-muted-foreground">{category}</span>
+                  <span 
+                    className="text-xs transition-all duration-200"
+                    style={{
+                      color: isAnySelected && !isSelected ? 'hsl(var(--muted-foreground) / 0.4)' : 'hsl(var(--muted-foreground))',
+                      fontWeight: isSelected ? 600 : 400,
+                    }}
+                  >
+                    {category}
+                  </span>
                 </div>
-              ))}
+              );
+              })}
             </div>
           </div>
 

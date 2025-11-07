@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Check } from "lucide-react";
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import samLogo from "@/assets/sam-logo.png";
@@ -710,7 +711,14 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                 return (
                 <div 
                   key={category} 
-                  className="flex items-center gap-1.5 group cursor-pointer"
+                  className="flex items-center gap-1.5 group cursor-pointer relative"
+                  style={{
+                    padding: '2px 4px',
+                    borderRadius: '4px',
+                    backgroundColor: isSelected ? 'hsl(var(--primary) / 0.1)' : 'transparent',
+                    border: isSelected ? '1px solid hsl(var(--primary) / 0.3)' : '1px solid transparent',
+                    transition: 'all 0.2s ease',
+                  }}
                   onClick={() => {
                     setSelectedCategories(prev => {
                       const newSet = new Set(prev);
@@ -847,7 +855,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                     />
                   )}
                   <span 
-                    className="text-xs transition-all duration-200"
+                    className="text-xs transition-all duration-200 flex-1"
                     style={{
                       color: isAnySelected && !isSelected ? 'hsl(var(--muted-foreground) / 0.4)' : 'hsl(var(--muted-foreground))',
                       fontWeight: isSelected ? 600 : 400,
@@ -855,6 +863,9 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                   >
                     {category}
                   </span>
+                  {isSelected && (
+                    <Check className="h-3 w-3 text-primary" strokeWidth={3} />
+                  )}
                 </div>
               );
               })}

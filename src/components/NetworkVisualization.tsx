@@ -680,10 +680,10 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                 'Contextual': 'hsl(220, 75%, 60%)',
                 'Artistic': 'hsl(170, 80%, 55%)',
               }).map(([category, color]) => (
-                <div key={category} className="flex items-center gap-1.5">
+                <div key={category} className="flex items-center gap-1.5 group cursor-pointer">
                   {category === 'Emotional' ? (
                     <div
-                      className="h-3 w-3"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${emotionIcon})`,
@@ -697,11 +697,12 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                         border: 'none',
                         outline: '0',
                         display: 'block',
+                        filter: 'drop-shadow(0 0 0px transparent)',
                       }}
                     />
                   ) : category === 'Social' ? (
                     <div
-                      className="h-3 w-3"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${socialIcon})`,
@@ -715,11 +716,12 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                         border: 'none',
                         outline: '0',
                         display: 'block',
+                        filter: 'drop-shadow(0 0 0px transparent)',
                       }}
                     />
                   ) : category === 'Cognitive' ? (
                     <div
-                      className="h-3 w-3"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${cognitionIcon})`,
@@ -733,11 +735,12 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                         border: 'none',
                         outline: '0',
                         display: 'block',
+                        filter: 'drop-shadow(0 0 0px transparent)',
                       }}
                     />
                   ) : category === 'Communication' ? (
                     <div
-                      className="h-3 w-3"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${communicationIcon})`,
@@ -751,11 +754,12 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                         border: 'none',
                         outline: '0',
                         display: 'block',
+                        filter: 'drop-shadow(0 0 0px transparent)',
                       }}
                     />
                   ) : category === 'Contextual' ? (
                     <div
-                      className="h-3 w-3"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${contextIcon})`,
@@ -769,11 +773,12 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                         border: 'none',
                         outline: '0',
                         display: 'block',
+                        filter: 'drop-shadow(0 0 0px transparent)',
                       }}
                     />
                   ) : category === 'Artistic' ? (
                     <div
-                      className="h-3 w-3"
+                      className="h-3 w-3 transition-all duration-200 group-hover:scale-125"
                       style={{
                         backgroundColor: color,
                         WebkitMaskImage: `url(${artisticIcon})`,
@@ -787,12 +792,16 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                         border: 'none',
                         outline: '0',
                         display: 'block',
+                        filter: 'drop-shadow(0 0 0px transparent)',
                       }}
                     />
                   ) : (
                     <div
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: color }}
+                      className="h-2.5 w-2.5 rounded-full transition-all duration-200 group-hover:scale-125"
+                      style={{ 
+                        backgroundColor: color,
+                        filter: 'drop-shadow(0 0 0px transparent)',
+                      }}
                     />
                   )}
                   <span className="text-xs text-muted-foreground">{category}</span>

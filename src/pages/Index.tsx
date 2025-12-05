@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { AudioUploader } from "@/components/AudioUploader";
 import { AnalysisResults } from "@/components/AnalysisResults";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles, FileAudio, Network, ListTree } from "lucide-react";
+import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Library, Save } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
@@ -13,8 +14,15 @@ import { Badge } from "@/components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, X } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
+import { UserLibrary } from "@/components/UserLibrary";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const Index = () => {
+  const { user, profile, signOut, loading: authLoading } = useAuth();
+  const { saveSpotifyTrack, saveFileSource } = useAudioSources();
+  
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [spotifyTracks, setSpotifyTracks] = useState<any[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -26,6 +34,10 @@ const Index = () => {
   const handleFileSelect = (file: File) => {
     setSelectedFiles(prev => [...prev, file]);
     toast.success(`Added: ${file.name}`);
+    // Optionally save to library
+    if (user) {
+      saveFileSource(file);
+    }
   };
 
   const handleSpotifyTrack = (track: any) => {
@@ -35,6 +47,34 @@ const Index = () => {
     }
     setSpotifyTracks(prev => [...prev, track]);
     toast.success(`Added: ${track.name} by ${track.artists.map((a: any) => a.name).join(", ")}`);
+    // Optionally save to library
+    if (user) {
+      saveSpotifyTrack(track);
+    }
+  };
+
+  const handleLibrarySelect = (sources: AudioSource[]) => {
+    sources.forEach(source => {
+      if (source.source_type === 'spotify') {
+        // Convert to track format for analysis
+        const mockTrack = {
+          id: source.spotify_id || source.id,
+          name: source.name.split(' - ')[0],
+          artists: (source.artists || []).map(name => ({ name })),
+          album: {
+            name: source.album_name || '',
+            images: source.album_image ? [{ url: source.album_image }] : [],
+          },
+          external_urls: { spotify: source.spotify_url },
+          preview_url: source.preview_url,
+        };
+        if (!spotifyTracks.find(t => t.id === mockTrack.id)) {
+          setSpotifyTracks(prev => [...prev, mockTrack]);
+        }
+      }
+    });
+    toast.success(`Added ${sources.length} source(s) to analysis`);
+    setActiveTab("select");
   };
 
   const removeFile = (index: number) => {
@@ -153,6 +193,35 @@ const Index = () => {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
         
+        {/* Auth Controls */}
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-3">
+          {authLoading ? (
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          ) : user ? (
+            <div className="flex items-center gap-3">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={profile?.avatar_url || undefined} />
+                <AvatarFallback>
+                  <User className="h-4 w-4" />
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm text-foreground font-medium hidden sm:inline">
+                {profile?.username || user.email?.split('@')[0]}
+              </span>
+              <Button variant="ghost" size="sm" onClick={signOut}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <Link to="/auth">
+              <Button variant="outline" size="sm" className="gap-2">
+                <User className="h-4 w-4" />
+                Sign In
+              </Button>
+            </Link>
+          )}
+        </div>
+        
         <div className="relative mx-auto max-w-7xl px-6 py-16 sm:py-24">
           <div className="text-center space-y-6">
             <h1 className="text-5xl sm:text-6xl font-bold text-foreground">
@@ -170,18 +239,26 @@ const Index = () => {
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-6 py-12">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-8">
+          <TabsList className="grid w-full grid-cols-4 mb-8">
             <TabsTrigger value="select" className="flex items-center gap-2">
               <FileAudio className="h-4 w-4" />
-              Select Audio Sources
+              <span className="hidden sm:inline">Select Sources</span>
+              <span className="sm:hidden">Sources</span>
+            </TabsTrigger>
+            <TabsTrigger value="library" className="flex items-center gap-2">
+              <Library className="h-4 w-4" />
+              <span className="hidden sm:inline">Browse Library</span>
+              <span className="sm:hidden">Library</span>
             </TabsTrigger>
             <TabsTrigger value="network" className="flex items-center gap-2" disabled={!results}>
               <Network className="h-4 w-4" />
-              Ontological Identity Network
+              <span className="hidden sm:inline">Network</span>
+              <span className="sm:hidden">Network</span>
             </TabsTrigger>
             <TabsTrigger value="analysis" className="flex items-center gap-2" disabled={!results}>
               <ListTree className="h-4 w-4" />
-              Per-Source Semantic Analysis
+              <span className="hidden sm:inline">Analysis</span>
+              <span className="sm:hidden">Analysis</span>
             </TabsTrigger>
           </TabsList>
 
@@ -287,7 +364,20 @@ const Index = () => {
             )}
           </TabsContent>
 
-          {/* Tab 2: Ontological Identity Network */}
+          {/* Tab 2: Browse Library */}
+          <TabsContent value="library" className="space-y-6">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">Browse Audio Library</h2>
+                <p className="text-muted-foreground mt-1">
+                  Select sources from your library or browse public collections
+                </p>
+              </div>
+            </div>
+            <UserLibrary onSelectMultiple={handleLibrarySelect} />
+          </TabsContent>
+
+          {/* Tab 3: Ontological Identity Network */}
           <TabsContent value="network" className="space-y-6">
             {/* Filter Controls */}
             {results && results.sources.length > 1 && (

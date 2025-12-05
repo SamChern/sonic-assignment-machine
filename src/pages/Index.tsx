@@ -5,7 +5,7 @@ import { AnalysisResults } from "@/components/AnalysisResults";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Library, Save } from "lucide-react";
+import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Library, Save, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
@@ -20,7 +20,7 @@ import { UserLibrary } from "@/components/UserLibrary";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const Index = () => {
-  const { user, profile, signOut, loading: authLoading } = useAuth();
+  const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
   
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -199,6 +199,14 @@ const Index = () => {
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           ) : user ? (
             <div className="flex items-center gap-3">
+              {isAdmin && (
+                <Link to="/admin">
+                  <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary">
+                    <Shield className="h-4 w-4" />
+                    <span className="hidden sm:inline">Admin</span>
+                  </Button>
+                </Link>
+              )}
               <Avatar className="h-8 w-8">
                 <AvatarImage src={profile?.avatar_url || undefined} />
                 <AvatarFallback>

@@ -2,7 +2,7 @@
 CREATE TYPE public.app_role AS ENUM ('admin', 'moderator', 'user');
 
 -- Create user_roles table
-CREATE TABLE public.user_roles (
+CREATE TABLE public.user_roles (SAM-Master, 'admin)'
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   role app_role NOT NULL,

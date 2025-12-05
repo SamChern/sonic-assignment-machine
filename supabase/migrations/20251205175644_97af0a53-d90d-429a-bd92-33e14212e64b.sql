@@ -7,7 +7,7 @@ CREATE TABLE public.user_roles (SAM-Master, 'admin)'
   user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   role app_role NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-  UNIQUE (user_id, role)
+  UNIQUE (SAM-Master, "admin")
 );
 
 -- Enable RLS

@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { 
   Users, 
@@ -16,10 +17,16 @@ import {
   ArrowLeft, 
   Sparkles,
   User,
-  FileAudio 
+  FileAudio,
+  Shield,
+  ShieldCheck,
+  Trash2
 } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { AnalysisResults } from "@/components/AnalysisResults";
+import type { Database } from "@/integrations/supabase/types";
+
+type AppRole = Database["public"]["Enums"]["app_role"];
 
 interface UserProfile {
   id: string;
@@ -27,6 +34,13 @@ interface UserProfile {
   username: string | null;
   avatar_url: string | null;
   bio: string | null;
+  created_at: string;
+}
+
+interface UserRole {
+  id: string;
+  user_id: string;
+  role: AppRole;
   created_at: string;
 }
 
@@ -47,6 +61,7 @@ const AdminDashboard = () => {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [allSources, setAllSources] = useState<AudioSourceWithProfile[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
@@ -79,6 +94,13 @@ const AdminDashboard = () => {
     
     setUsers(profilesData || []);
 
+    // Fetch all user roles
+    const { data: rolesData } = await supabase
+      .from('user_roles')
+      .select('*');
+    
+    setUserRoles(rolesData || []);
+
     // Fetch all audio sources
     const { data: sourcesData } = await supabase
       .from('audio_sources')
@@ -93,6 +115,46 @@ const AdminDashboard = () => {
 
     setAllSources(sourcesWithProfiles);
     setDataLoading(false);
+  };
+
+  const getUserRoles = (userId: string): AppRole[] => {
+    return userRoles.filter(r => r.user_id === userId).map(r => r.role);
+  };
+
+  const assignRole = async (userId: string, role: AppRole) => {
+    const existingRole = userRoles.find(r => r.user_id === userId && r.role === role);
+    if (existingRole) {
+      toast.info(`User already has ${role} role`);
+      return;
+    }
+
+    const { error } = await supabase
+      .from('user_roles')
+      .insert({ user_id: userId, role });
+
+    if (error) {
+      toast.error(`Failed to assign role: ${error.message}`);
+      return;
+    }
+
+    toast.success(`Assigned ${role} role successfully`);
+    fetchAllData();
+  };
+
+  const removeRole = async (userId: string, role: AppRole) => {
+    const { error } = await supabase
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId)
+      .eq('role', role);
+
+    if (error) {
+      toast.error(`Failed to remove role: ${error.message}`);
+      return;
+    }
+
+    toast.success(`Removed ${role} role successfully`);
+    fetchAllData();
   };
 
   const toggleUserSelection = (userId: string) => {
@@ -244,6 +306,10 @@ const AdminDashboard = () => {
               <Users className="h-4 w-4" />
               Users & Sources
             </TabsTrigger>
+            <TabsTrigger value="roles" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Role Management
+            </TabsTrigger>
             <TabsTrigger value="analysis" className="gap-2" disabled={!analysisResults}>
               <Network className="h-4 w-4" />
               Cross-User Analysis
@@ -344,6 +410,88 @@ const AdminDashboard = () => {
                 );
               })
             )}
+          </TabsContent>
+
+          <TabsContent value="roles" className="space-y-6">
+            <Card className="p-6 bg-card/80">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                Manage User Roles
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                Assign or remove admin and moderator roles for users.
+              </p>
+              
+              <div className="space-y-4">
+                {users.map(userProfile => {
+                  const roles = getUserRoles(userProfile.user_id);
+                  
+                  return (
+                    <div
+                      key={userProfile.id}
+                      className="flex items-center justify-between p-4 rounded-lg border border-border bg-secondary/20"
+                    >
+                      <div className="flex items-center gap-4">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={userProfile.avatar_url || undefined} />
+                          <AvatarFallback>
+                            <User className="h-5 w-5" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {userProfile.username || 'Anonymous User'}
+                          </p>
+                          <div className="flex gap-1 mt-1">
+                            {roles.length === 0 ? (
+                              <Badge variant="outline" className="text-xs">No roles</Badge>
+                            ) : (
+                              roles.map(role => (
+                                <Badge
+                                  key={role}
+                                  variant={role === 'admin' ? 'default' : 'secondary'}
+                                  className={role === 'admin' ? 'bg-primary' : ''}
+                                >
+                                  {role}
+                                </Badge>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Select
+                          onValueChange={(value) => assignRole(userProfile.user_id, value as AppRole)}
+                        >
+                          <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="Add role..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="moderator">Moderator</SelectItem>
+                            <SelectItem value="user">User</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        
+                        {roles.map(role => (
+                          <Button
+                            key={role}
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => removeRole(userProfile.user_id, role)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Remove {role}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
           </TabsContent>
 
           <TabsContent value="analysis" className="space-y-6">

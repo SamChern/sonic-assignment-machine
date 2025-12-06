@@ -2,12 +2,12 @@
 CREATE TYPE public.app_role AS ENUM ('admin', 'moderator', 'user');
 
 -- Create user_roles table
-CREATE TABLE public.user_roles (SAM-Master, 'admin)'
+CREATE TABLE public.user_roles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   role app_role NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-  UNIQUE (SAM-Master, "admin")
+  UNIQUE (user_id, role)
 );
 
 -- Enable RLS

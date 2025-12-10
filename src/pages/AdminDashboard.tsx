@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
 import { 
   Users, 
@@ -16,7 +18,10 @@ import {
   ArrowLeft, 
   Sparkles,
   User,
-  FileAudio 
+  FileAudio,
+  Filter,
+  X,
+  Check
 } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { AnalysisResults } from "@/components/AnalysisResults";
@@ -54,6 +59,22 @@ const AdminDashboard = () => {
   const [analysisResults, setAnalysisResults] = useState<{ sources: any[]; images: any[] } | null>(null);
   const [activeTab, setActiveTab] = useState("users");
   const [dataLoading, setDataLoading] = useState(true);
+  const [filteredUserIds, setFilteredUserIds] = useState<string[]>([]);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const displayedUsers = filteredUserIds.length > 0 
+    ? users.filter(u => filteredUserIds.includes(u.user_id))
+    : users;
+
+  const toggleUserFilter = (userId: string) => {
+    setFilteredUserIds(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const clearFilters = () => setFilteredUserIds([]);
 
   useEffect(() => {
     if (!loading && (!user || !isAdmin)) {
@@ -251,13 +272,81 @@ const AdminDashboard = () => {
           </TabsList>
 
           <TabsContent value="users" className="space-y-6">
-            {users.length === 0 ? (
+            {/* User Filter */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Filter className="h-4 w-4" />
+                    Filter by User
+                    {filteredUserIds.length > 0 && (
+                      <Badge variant="secondary" className="ml-1">
+                        {filteredUserIds.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-0 bg-popover" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search users..." />
+                    <CommandList>
+                      <CommandEmpty>No users found.</CommandEmpty>
+                      <CommandGroup>
+                        {users.map(u => (
+                          <CommandItem
+                            key={u.user_id}
+                            onSelect={() => toggleUserFilter(u.user_id)}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Avatar className="h-6 w-6">
+                              <AvatarImage src={u.avatar_url || undefined} />
+                              <AvatarFallback><User className="h-3 w-3" /></AvatarFallback>
+                            </Avatar>
+                            <span className="flex-1">{u.username || 'Anonymous'}</span>
+                            {filteredUserIds.includes(u.user_id) && (
+                              <Check className="h-4 w-4 text-primary" />
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {/* Filter badges */}
+              {filteredUserIds.map(uid => {
+                const u = users.find(user => user.user_id === uid);
+                if (!u) return null;
+                return (
+                  <Badge key={uid} variant="secondary" className="gap-1 pr-1">
+                    {u.username || 'Anonymous'}
+                    <button
+                      onClick={() => toggleUserFilter(uid)}
+                      className="ml-1 hover:bg-muted rounded-full p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                );
+              })}
+
+              {filteredUserIds.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  Clear All
+                </Button>
+              )}
+            </div>
+
+            {displayedUsers.length === 0 ? (
               <Card className="p-8 text-center">
                 <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-lg text-muted-foreground">No users yet</p>
+                <p className="text-lg text-muted-foreground">
+                  {filteredUserIds.length > 0 ? 'No users match your filter' : 'No users yet'}
+                </p>
               </Card>
             ) : (
-              users.map(userProfile => {
+              displayedUsers.map(userProfile => {
                 const userSources = getSourcesByUser(userProfile.user_id);
                 const allSelected = userSources.length > 0 && 
                   userSources.every(s => selectedSourceIds.includes(s.id));

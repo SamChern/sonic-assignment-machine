@@ -30,12 +30,20 @@ export const useEC2Api = () => {
     
     try {
       const url = getEC2Url(endpoint);
+      const isHealthCheck = endpoint.includes('/health');
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add API key for protected endpoints (not health check)
+      if (!isHealthCheck) {
+        headers['x-api-key'] = EC2_CONFIG.apiKey;
+      }
       
       const fetchOptions: RequestInit = {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         signal: controller.signal,
       };
 

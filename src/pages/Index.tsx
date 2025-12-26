@@ -5,7 +5,7 @@ import { AnalysisResults } from "@/components/AnalysisResults";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Library, Save, Shield } from "lucide-react";
+import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Library, Save, Shield, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
@@ -18,10 +18,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
 import { UserLibrary } from "@/components/UserLibrary";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useEC2Api } from "@/hooks/useEC2Api";
 
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
+  const { checkHealth, loading: ec2Loading } = useEC2Api();
   
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [spotifyTracks, setSpotifyTracks] = useState<any[]>([]);
@@ -30,6 +32,15 @@ const Index = () => {
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("select");
+
+  const handleHealthCheck = async () => {
+    const result = await checkHealth();
+    if (result.error) {
+      toast.error(`EC2 Connection Failed: ${result.error}`);
+    } else {
+      toast.success(`EC2 Connected! Status: ${result.data?.status || 'OK'}`);
+    }
+  };
 
   const handleFileSelect = (file: File) => {
     setSelectedFiles(prev => [...prev, file]);
@@ -195,6 +206,18 @@ const Index = () => {
         
         {/* Auth Controls */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-3">
+          {/* EC2 Health Check Button */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
+            onClick={handleHealthCheck}
+            disabled={ec2Loading}
+          >
+            <Activity className={`h-4 w-4 ${ec2Loading ? 'animate-pulse' : ''}`} />
+            <span className="hidden sm:inline">{ec2Loading ? 'Checking...' : 'EC2 Health'}</span>
+          </Button>
+          
           {authLoading ? (
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           ) : user ? (

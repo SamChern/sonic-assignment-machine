@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { getEC2Url, EC2_CONFIG } from '@/config/ec2';
 
 interface EC2ApiResponse<T = unknown> {
   data: T | null;
@@ -10,6 +10,7 @@ interface EC2ApiResponse<T = unknown> {
 interface EC2ApiOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   body?: Record<string, unknown>;
+  timeout?: number;
 }
 
 export const useEC2Api = () => {
@@ -19,26 +20,60 @@ export const useEC2Api = () => {
     endpoint: string,
     options: EC2ApiOptions = {}
   ): Promise<EC2ApiResponse<T>> => {
-    const { method = 'GET', body } = options;
+    const { method = 'GET', body, timeout = EC2_CONFIG.timeout } = options;
     
     setLoading(true);
     
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
     try {
-      const { data, error } = await supabase.functions.invoke('aws-proxy', {
-        body: { endpoint, method, body }
-      });
+      const url = getEC2Url(endpoint);
+      
+      const fetchOptions: RequestInit = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      };
 
-      if (error) {
-        console.error('EC2 API error:', error);
-        return { data: null, error: error.message, loading: false };
+      if (body && method !== 'GET') {
+        fetchOptions.body = JSON.stringify(body);
       }
 
+      const response = await fetch(url, fetchOptions);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('EC2 API error:', response.status, errorText);
+        return { 
+          data: null, 
+          error: `HTTP ${response.status}: ${errorText || response.statusText}`, 
+          loading: false 
+        };
+      }
+
+      const data = await response.json();
       return { data: data as T, error: null, loading: false };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      let errorMessage = 'Unknown error';
+      
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          errorMessage = 'Request timed out';
+        } else if (err.message.includes('Failed to fetch')) {
+          errorMessage = 'Cannot connect to EC2 - check if port 80 is open in AWS Security Group';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
       console.error('EC2 API call failed:', errorMessage);
       return { data: null, error: errorMessage, loading: false };
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   }, []);

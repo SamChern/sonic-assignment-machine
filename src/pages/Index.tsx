@@ -5,7 +5,8 @@ import { AnalysisResults } from "@/components/AnalysisResults";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Library, Save, Shield, Activity } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Library, Save, Shield, Activity, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
@@ -32,6 +33,7 @@ const Index = () => {
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("select");
+  const [sourcesExpanded, setSourcesExpanded] = useState(true);
 
   const handleHealthCheck = async () => {
     const result = await checkHealth();
@@ -337,61 +339,71 @@ const Index = () => {
               />
             </div>
             
-            {/* Selected Sources Display */}
+            {/* Selected Sources Display - Compact & Collapsible */}
             {totalItems > 0 && (
-              <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-foreground">Selected Sources</h2>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {selectedFiles.map((file, index) => (
-                    <Card key={`file-${index}`} className="p-4 bg-secondary/20 border-secondary/30">
-                      <div className="flex gap-3 items-start">
-                        <FileAudio className="h-12 w-12 text-primary flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-foreground truncate">{file.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => removeFile(index)}
-                        >
-                          Remove
-                        </Button>
+              <Collapsible open={sourcesExpanded} onOpenChange={setSourcesExpanded}>
+                <Card className="p-3 bg-secondary/10 border-secondary/20">
+                  <CollapsibleTrigger asChild>
+                    <button className="flex items-center justify-between w-full text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">Selected Sources</span>
+                        <Badge variant="secondary" className="text-xs">{totalItems}</Badge>
                       </div>
-                    </Card>
-                  ))}
+                      {sourcesExpanded ? (
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
                   
-                  {spotifyTracks.map((track) => (
-                    <Card key={track.id} className="p-4 bg-secondary/20 border-secondary/30">
-                      <div className="flex gap-3 items-start">
-                        {track.album.images[0] && (
-                          <img
-                            src={track.album.images[0].url}
-                            alt={track.album.name}
-                            className="w-12 h-12 rounded flex-shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-foreground truncate">{track.name}</h3>
-                          <p className="text-sm text-muted-foreground truncate">
-                            {track.artists.map((a: any) => a.name).join(", ")}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">{track.album.name}</p>
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => removeTrack(track.id)}
+                  <CollapsibleContent className="mt-3">
+                    <div className="flex flex-wrap gap-2">
+                      {selectedFiles.map((file, index) => (
+                        <Badge 
+                          key={`file-${index}`} 
+                          variant="outline" 
+                          className="py-1 px-2 gap-1.5 bg-secondary/20"
                         >
-                          Remove
-                        </Button>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
+                          <FileAudio className="h-3 w-3 text-primary" />
+                          <span className="text-xs max-w-[120px] truncate">{file.name}</span>
+                          <button 
+                            onClick={() => removeFile(index)}
+                            className="ml-1 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                      
+                      {spotifyTracks.map((track) => (
+                        <Badge 
+                          key={track.id} 
+                          variant="outline" 
+                          className="py-1 px-2 gap-1.5 bg-secondary/20"
+                        >
+                          {track.album.images[0] && (
+                            <img
+                              src={track.album.images[0].url}
+                              alt={track.album.name}
+                              className="w-4 h-4 rounded"
+                            />
+                          )}
+                          <span className="text-xs max-w-[120px] truncate">
+                            {track.name} - {track.artists[0]?.name}
+                          </span>
+                          <button 
+                            onClick={() => removeTrack(track.id)}
+                            className="ml-1 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
             )}
 
             {/* Loading State */}

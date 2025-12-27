@@ -606,7 +606,16 @@ export const AggregateNetworkVisualization = ({
         )}
 
         {/* Network visualization */}
-        <svg ref={svgRef} className="w-full h-[500px]" />
+        <div className="relative w-full h-[500px]">
+          <svg ref={svgRef} className="w-full h-full" />
+          {/* Edge blur overlays */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-background to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background to-transparent" />
+            <div className="absolute top-0 left-0 bottom-0 w-16 bg-gradient-to-r from-background to-transparent" />
+            <div className="absolute top-0 right-0 bottom-0 w-16 bg-gradient-to-l from-background to-transparent" />
+          </div>
+        </div>
 
         {/* Hover tooltip */}
         {hoveredUser && (

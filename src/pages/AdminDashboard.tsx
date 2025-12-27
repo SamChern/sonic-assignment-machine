@@ -22,11 +22,13 @@ import {
   Filter,
   X,
   Check,
-  Fingerprint
+  Fingerprint,
+  GitCompare
 } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { AnalysisResults } from "@/components/AnalysisResults";
 import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";
+import { FingerprintComparison } from "@/components/FingerprintComparison";
 import { useFingerprints } from "@/hooks/useFingerprints";
 
 interface UserProfile {
@@ -271,11 +273,15 @@ const AdminDashboard = () => {
             </TabsTrigger>
             <TabsTrigger value="fingerprints" className="gap-2">
               <Fingerprint className="h-4 w-4" />
-              Aggregate Fingerprints
+              <span className="hidden sm:inline">Aggregate</span>
+            </TabsTrigger>
+            <TabsTrigger value="compare" className="gap-2">
+              <GitCompare className="h-4 w-4" />
+              <span className="hidden sm:inline">Compare</span>
             </TabsTrigger>
             <TabsTrigger value="analysis" className="gap-2" disabled={!analysisResults}>
               <Network className="h-4 w-4" />
-              Cross-User Analysis
+              <span className="hidden sm:inline">Analysis</span>
             </TabsTrigger>
           </TabsList>
 
@@ -462,6 +468,21 @@ const AdminDashboard = () => {
                 setActiveTab("users");
               }}
             />
+          </TabsContent>
+
+          <TabsContent value="compare" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Compare User Fingerprints</h3>
+                <p className="text-sm text-muted-foreground">
+                  Select 2 or more users to overlay their radar charts side-by-side
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={refreshFingerprints} disabled={fingerprintsLoading}>
+                {fingerprintsLoading ? 'Loading...' : 'Refresh'}
+              </Button>
+            </div>
+            <FingerprintComparison fingerprints={allFingerprints} />
           </TabsContent>
 
           <TabsContent value="analysis" className="space-y-6">

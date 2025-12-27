@@ -309,6 +309,33 @@ export const AggregateNetworkVisualization = ({
       .attr("height", height)
       .attr("fill", "url(#aggregate-bg-gradient)");
 
+    // Fingerprint-style contour background
+    const contourGroup = svg.append("g").attr("class", "fingerprint-contours");
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const maxRadius = Math.min(width, height) * 0.45;
+    const numContours = 12;
+    
+    for (let i = 1; i <= numContours; i++) {
+      const baseRadius = (i / numContours) * maxRadius;
+      // Create slightly elliptical, offset contours like a fingerprint
+      const xRadius = baseRadius * (1 + Math.sin(i * 0.3) * 0.15);
+      const yRadius = baseRadius * (1 - Math.sin(i * 0.3) * 0.1);
+      const offsetX = Math.sin(i * 0.5) * 8;
+      const offsetY = Math.cos(i * 0.5) * 5;
+      
+      contourGroup.append("ellipse")
+        .attr("cx", centerX + offsetX)
+        .attr("cy", centerY + offsetY)
+        .attr("rx", xRadius)
+        .attr("ry", yRadius)
+        .attr("fill", "none")
+        .attr("stroke", "hsl(var(--primary))")
+        .attr("stroke-width", 1.5 - (i * 0.08))
+        .attr("stroke-opacity", 0.08 + (i * 0.01))
+        .attr("stroke-dasharray", i % 3 === 0 ? "none" : "8 4");
+    }
+
     // Cluster hulls group (drawn first, behind everything)
     const hullGroup = svg.append("g").attr("class", "hulls");
 

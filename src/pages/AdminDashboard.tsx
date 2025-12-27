@@ -165,6 +165,7 @@ const AdminDashboard = () => {
       const sources = sourcesToAnalyze.map(s => ({
         name: s.name,
         type: s.source_type === 'spotify' ? 'track' as const : 'file' as const,
+        spotify_id: s.spotify_id || undefined, // Enable cache lookup by Spotify ID
       }));
 
       const { data, error } = await supabase.functions.invoke('analyze-audio', {

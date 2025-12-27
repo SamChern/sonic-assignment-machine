@@ -343,19 +343,30 @@ const Index = () => {
             {totalItems > 0 && (
               <Collapsible open={sourcesExpanded} onOpenChange={setSourcesExpanded}>
                 <Card className="p-3 bg-secondary/10 border-secondary/20">
-                  <CollapsibleTrigger asChild>
-                    <button className="flex items-center justify-between w-full text-left">
-                      <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between">
+                    <CollapsibleTrigger asChild>
+                      <button className="flex items-center gap-2 text-left">
                         <span className="text-sm font-medium text-foreground">Selected Sources</span>
                         <Badge variant="secondary" className="text-xs">{totalItems}</Badge>
-                      </div>
-                      {sourcesExpanded ? (
-                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </button>
-                  </CollapsibleTrigger>
+                        {sourcesExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </button>
+                    </CollapsibleTrigger>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-xs h-6 px-2 text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        setSelectedFiles([]);
+                        setSpotifyTracks([]);
+                      }}
+                    >
+                      Clear all
+                    </Button>
+                  </div>
                   
                   <CollapsibleContent className="mt-3">
                     <div className="flex flex-wrap gap-2">

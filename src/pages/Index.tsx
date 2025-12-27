@@ -108,12 +108,13 @@ const Index = () => {
     setResults(null);
 
     try {
-      // Prepare sources for backend analysis
+      // Prepare sources for backend analysis (include spotify_id for caching)
       const sources = [
         ...selectedFiles.map(f => ({ name: f.name, type: 'file' as const })),
         ...spotifyTracks.map(t => ({ 
           name: `${t.name} - ${t.artists[0].name}`, 
-          type: 'track' as const 
+          type: 'track' as const,
+          spotify_id: t.id, // Enable cache lookup by Spotify ID
         }))
       ];
 

@@ -21,10 +21,13 @@ import {
   FileAudio,
   Filter,
   X,
-  Check
+  Check,
+  Fingerprint
 } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { AnalysisResults } from "@/components/AnalysisResults";
+import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";
+import { useFingerprints } from "@/hooks/useFingerprints";
 
 interface UserProfile {
   id: string;
@@ -51,6 +54,7 @@ interface AudioSourceWithProfile {
 const AdminDashboard = () => {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
+  const { allFingerprints, loading: fingerprintsLoading, refresh: refreshFingerprints } = useFingerprints();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [allSources, setAllSources] = useState<AudioSourceWithProfile[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -265,6 +269,10 @@ const AdminDashboard = () => {
               <Users className="h-4 w-4" />
               Users & Sources
             </TabsTrigger>
+            <TabsTrigger value="fingerprints" className="gap-2">
+              <Fingerprint className="h-4 w-4" />
+              Aggregate Fingerprints
+            </TabsTrigger>
             <TabsTrigger value="analysis" className="gap-2" disabled={!analysisResults}>
               <Network className="h-4 w-4" />
               Cross-User Analysis
@@ -433,6 +441,27 @@ const AdminDashboard = () => {
                 );
               })
             )}
+          </TabsContent>
+
+          <TabsContent value="fingerprints" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Aggregate User Fingerprints</h3>
+                <p className="text-sm text-muted-foreground">
+                  Each bubble represents a user's combined ontological fingerprint
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={refreshFingerprints} disabled={fingerprintsLoading}>
+                {fingerprintsLoading ? 'Loading...' : 'Refresh'}
+              </Button>
+            </div>
+            <AggregateNetworkVisualization 
+              fingerprints={allFingerprints}
+              onUserClick={(userId) => {
+                setFilteredUserIds([userId]);
+                setActiveTab("users");
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="analysis" className="space-y-6">

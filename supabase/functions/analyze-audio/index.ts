@@ -1,17 +1,35 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 interface AudioSource {
   name: string;
   type: 'file' | 'track';
+  audio_source_id?: string; // Optional: link to audio_sources table
 }
 
 interface AnalysisRequest {
   sources: AudioSource[];
+  user_id?: string; // Optional: if provided, save results and update fingerprint
+  save_results?: boolean; // Whether to persist the analysis
+}
+
+interface CategoryResult {
+  name: string;
+  score: number;
+  description: string;
+}
+
+interface SourceResult {
+  name: string;
+  categories: CategoryResult[];
 }
 
 Deno.serve(async (req) => {
@@ -20,7 +38,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { sources }: AnalysisRequest = await req.json();
+    const { sources, user_id, save_results = false }: AnalysisRequest = await req.json();
 
     if (!sources || sources.length === 0) {
       throw new Error('No audio sources provided');
@@ -31,6 +49,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Analyzing ${sources.length} audio source(s):`, sources);
+    console.log(`User ID: ${user_id}, Save results: ${save_results}`);
 
     // Create semantic analysis prompt based on SemanticAC framework
     const sourcesList = sources.map(s => `- ${s.name}`).join('\n');
@@ -133,7 +152,7 @@ Consider for each source:
     console.log('Raw AI response:', analysisText);
 
     // Parse JSON response
-    let analysisResult;
+    let analysisResult: { sources: SourceResult[] };
     try {
       // Extract JSON from potential markdown code blocks
       const jsonMatch = analysisText.match(/```json\s*([\s\S]*?)\s*```/) || 
@@ -148,12 +167,12 @@ Consider for each source:
         console.error('Received structure:', JSON.stringify(analysisResult, null, 2));
         
         // Try to repair by converting category-centric to source-centric
-        if (analysisResult.categories && Array.isArray(analysisResult.categories)) {
+        if ((analysisResult as any).categories && Array.isArray((analysisResult as any).categories)) {
           console.log('Attempting to convert category-centric format to source-centric format...');
           
           // Build a map of all unique source names from the categories
           const sourceNamesSet = new Set<string>();
-          analysisResult.categories.forEach((category: any) => {
+          (analysisResult as any).categories.forEach((category: any) => {
             if (category.sources && Array.isArray(category.sources)) {
               category.sources.forEach((sourceName: string) => sourceNamesSet.add(sourceName));
             }
@@ -169,7 +188,7 @@ Consider for each source:
           });
           
           // Populate categories for each source
-          analysisResult.categories.forEach((category: any) => {
+          (analysisResult as any).categories.forEach((category: any) => {
             const categoryName = category.name;
             const score = category.confidence || category.score || 50;
             const description = category.description || '';
@@ -228,7 +247,65 @@ Consider for each source:
 
     console.log('Analysis complete:', analysisResult);
 
-    return new Response(JSON.stringify(analysisResult), {
+    // If user_id is provided and save_results is true, persist the analysis
+    let fingerprint = null;
+    if (user_id && save_results && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      console.log('Saving analysis results for user:', user_id);
+      
+      const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+      // Create a map of source names to their audio_source_ids
+      const sourceIdMap = new Map<string, string | undefined>();
+      sources.forEach(s => {
+        sourceIdMap.set(s.name, s.audio_source_id);
+      });
+
+      // Insert each source analysis
+      for (const sourceResult of analysisResult.sources) {
+        const categories = sourceResult.categories.reduce((acc, cat) => {
+          const key = cat.name.toLowerCase();
+          acc[`${key}_score`] = cat.score;
+          acc[`${key}_desc`] = cat.description;
+          return acc;
+        }, {} as Record<string, any>);
+
+        const { error: insertError } = await supabaseAdmin
+          .from('source_analyses')
+          .insert({
+            user_id,
+            audio_source_id: sourceIdMap.get(sourceResult.name) || null,
+            source_name: sourceResult.name,
+            ...categories,
+          });
+
+        if (insertError) {
+          console.error('Error inserting source analysis:', insertError);
+        }
+      }
+
+      // Recalculate user fingerprint using the database function
+      const { error: rpcError } = await supabaseAdmin
+        .rpc('recalculate_user_fingerprint', { p_user_id: user_id });
+
+      if (rpcError) {
+        console.error('Error recalculating fingerprint:', rpcError);
+      } else {
+        // Fetch the updated fingerprint
+        const { data: fpData } = await supabaseAdmin
+          .from('user_fingerprints')
+          .select('*')
+          .eq('user_id', user_id)
+          .single();
+
+        fingerprint = fpData;
+        console.log('Updated fingerprint:', fingerprint);
+      }
+    }
+
+    return new Response(JSON.stringify({ 
+      sources: analysisResult.sources,
+      fingerprint,
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

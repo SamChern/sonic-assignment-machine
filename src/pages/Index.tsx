@@ -121,7 +121,11 @@ const Index = () => {
 
       // Call backend AI analysis
       const { data, error } = await supabase.functions.invoke('analyze-audio', {
-        body: { sources }
+        body: { 
+          sources,
+          user_id: user?.id,
+          save_results: !!user,
+        }
       });
 
       if (error) {

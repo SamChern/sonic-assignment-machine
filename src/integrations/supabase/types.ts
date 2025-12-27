@@ -89,6 +89,116 @@ export type Database = {
         }
         Relationships: []
       }
+      source_analyses: {
+        Row: {
+          artistic_desc: string | null
+          artistic_score: number
+          audio_source_id: string | null
+          cognitive_desc: string | null
+          cognitive_score: number
+          communication_desc: string | null
+          communication_score: number
+          contextual_desc: string | null
+          contextual_score: number
+          created_at: string
+          emotional_desc: string | null
+          emotional_score: number
+          id: string
+          social_desc: string | null
+          social_score: number
+          source_name: string
+          user_id: string
+        }
+        Insert: {
+          artistic_desc?: string | null
+          artistic_score: number
+          audio_source_id?: string | null
+          cognitive_desc?: string | null
+          cognitive_score: number
+          communication_desc?: string | null
+          communication_score: number
+          contextual_desc?: string | null
+          contextual_score: number
+          created_at?: string
+          emotional_desc?: string | null
+          emotional_score: number
+          id?: string
+          social_desc?: string | null
+          social_score: number
+          source_name: string
+          user_id: string
+        }
+        Update: {
+          artistic_desc?: string | null
+          artistic_score?: number
+          audio_source_id?: string | null
+          cognitive_desc?: string | null
+          cognitive_score?: number
+          communication_desc?: string | null
+          communication_score?: number
+          contextual_desc?: string | null
+          contextual_score?: number
+          created_at?: string
+          emotional_desc?: string | null
+          emotional_score?: number
+          id?: string
+          social_desc?: string | null
+          social_score?: number
+          source_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_analyses_audio_source_id_fkey"
+            columns: ["audio_source_id"]
+            isOneToOne: false
+            referencedRelation: "audio_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_fingerprints: {
+        Row: {
+          artistic_avg: number
+          cognitive_avg: number
+          communication_avg: number
+          contextual_avg: number
+          created_at: string
+          emotional_avg: number
+          id: string
+          social_avg: number
+          total_sources_analyzed: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          artistic_avg?: number
+          cognitive_avg?: number
+          communication_avg?: number
+          contextual_avg?: number
+          created_at?: string
+          emotional_avg?: number
+          id?: string
+          social_avg?: number
+          total_sources_analyzed?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          artistic_avg?: number
+          cognitive_avg?: number
+          communication_avg?: number
+          contextual_avg?: number
+          created_at?: string
+          emotional_avg?: number
+          id?: string
+          social_avg?: number
+          total_sources_analyzed?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -121,6 +231,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      recalculate_user_fingerprint: {
+        Args: { p_user_id: string }
+        Returns: undefined
       }
     }
     Enums: {

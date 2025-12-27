@@ -309,33 +309,6 @@ export const AggregateNetworkVisualization = ({
       .attr("height", height)
       .attr("fill", "url(#aggregate-bg-gradient)");
 
-    // Fingerprint-style contour background
-    const contourGroup = svg.append("g").attr("class", "fingerprint-contours");
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const maxRadius = Math.min(width, height) * 0.45;
-    const numContours = 12;
-    
-    for (let i = 1; i <= numContours; i++) {
-      const baseRadius = (i / numContours) * maxRadius;
-      // Create slightly elliptical, offset contours like a fingerprint
-      const xRadius = baseRadius * (1 + Math.sin(i * 0.3) * 0.15);
-      const yRadius = baseRadius * (1 - Math.sin(i * 0.3) * 0.1);
-      const offsetX = Math.sin(i * 0.5) * 8;
-      const offsetY = Math.cos(i * 0.5) * 5;
-      
-      contourGroup.append("ellipse")
-        .attr("cx", centerX + offsetX)
-        .attr("cy", centerY + offsetY)
-        .attr("rx", xRadius)
-        .attr("ry", yRadius)
-        .attr("fill", "none")
-        .attr("stroke", "hsl(var(--primary))")
-        .attr("stroke-width", 1.5 - (i * 0.08))
-        .attr("stroke-opacity", 0.08 + (i * 0.01))
-        .attr("stroke-dasharray", i % 3 === 0 ? "none" : "8 4");
-    }
-
     // Cluster hulls group (drawn first, behind everything)
     const hullGroup = svg.append("g").attr("class", "hulls");
 
@@ -372,20 +345,20 @@ export const AggregateNetworkVisualization = ({
         })
       );
 
-    // Cluster ring (outer glow showing cluster membership)
-    nodeElements.append("circle")
-      .attr("r", (d) => d.radius + 12)
-      .attr("fill", "none")
-      .attr("stroke", (d) => d.color)
-      .attr("stroke-width", 3)
-      .attr("stroke-dasharray", "6 3")
-      .attr("opacity", 0.5);
-
-    // Glow effect
-    nodeElements.append("circle")
-      .attr("r", (d) => d.radius + 8)
-      .attr("fill", (d) => d.color)
-      .attr("opacity", 0.15);
+    // Fingerprint contour rings around each user
+    const numRings = 8;
+    for (let ring = numRings; ring >= 1; ring--) {
+      nodeElements.append("ellipse")
+        .attr("rx", (d) => d.radius + ring * 6 + Math.sin(ring * 0.7) * 3)
+        .attr("ry", (d) => d.radius + ring * 6 - Math.sin(ring * 0.5) * 2)
+        .attr("cx", (d) => Math.sin(ring * 0.8 + d.radius) * 2)
+        .attr("cy", (d) => Math.cos(ring * 0.6 + d.radius) * 1.5)
+        .attr("fill", "none")
+        .attr("stroke", (d) => d.color)
+        .attr("stroke-width", 1.2 - ring * 0.08)
+        .attr("stroke-opacity", 0.15 + (numRings - ring) * 0.03)
+        .attr("stroke-dasharray", ring % 2 === 0 ? "none" : "4 2");
+    }
 
     // Main circle
     nodeElements.append("circle")

@@ -302,10 +302,18 @@ const Index = () => {
           {/* Tab 1: Select Audio Sources */}
           <TabsContent value="select" className="space-y-8">
             <div className="flex justify-between items-start mb-6">
-              <h2 className="text-2xl font-bold text-foreground">
-                Select Audio Sources
-                {totalItems > 0 && <span className="text-primary ml-2">({totalItems} selected)</span>}
-              </h2>
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">
+                  Select Audio Sources
+                  {totalItems > 0 && <span className="text-primary ml-2">({totalItems} selected)</span>}
+                </h2>
+                {user && (
+                  <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+                    <Save className="h-3.5 w-3.5 text-green-500" />
+                    <span>Auto-saving selections & fingerprints to your library</span>
+                  </p>
+                )}
+              </div>
               
               {totalItems > 0 && (
                 <Button

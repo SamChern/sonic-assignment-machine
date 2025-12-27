@@ -303,6 +303,30 @@ export const AggregateNetworkVisualization = ({
     bgGradient.append("stop").attr("offset", "0%").attr("stop-color", "hsl(var(--primary))").attr("stop-opacity", 0.05);
     bgGradient.append("stop").attr("offset", "100%").attr("stop-color", "transparent");
 
+    // Glow filter for SAM logo
+    const glowFilter = defs.append("filter")
+      .attr("id", "logo-glow")
+      .attr("x", "-50%")
+      .attr("y", "-50%")
+      .attr("width", "200%")
+      .attr("height", "200%");
+    glowFilter.append("feGaussianBlur")
+      .attr("stdDeviation", "3")
+      .attr("result", "coloredBlur");
+    glowFilter.append("feFlood")
+      .attr("flood-color", "hsl(var(--primary))")
+      .attr("flood-opacity", "0.6")
+      .attr("result", "glowColor");
+    glowFilter.append("feComposite")
+      .attr("in", "glowColor")
+      .attr("in2", "coloredBlur")
+      .attr("operator", "in")
+      .attr("result", "softGlow");
+    const glowMerge = glowFilter.append("feMerge");
+    glowMerge.append("feMergeNode").attr("in", "softGlow");
+    glowMerge.append("feMergeNode").attr("in", "softGlow");
+    glowMerge.append("feMergeNode").attr("in", "SourceGraphic");
+
     // Background
     svg.append("rect")
       .attr("width", width)
@@ -367,14 +391,15 @@ export const AggregateNetworkVisualization = ({
       .attr("stroke", "hsl(var(--background))")
       .attr("stroke-width", 2);
 
-    // SAM logo in center of each user node
+    // SAM logo in center of each user node with glow
     nodeElements.append("image")
       .attr("href", "/images/sam-logo.png")
-      .attr("width", (d) => d.radius * 1.4)
-      .attr("height", (d) => d.radius * 0.7)
-      .attr("x", (d) => -d.radius * 0.7)
-      .attr("y", (d) => -d.radius * 0.35)
-      .attr("opacity", 0.85)
+      .attr("width", (d) => d.radius * 1.6)
+      .attr("height", (d) => d.radius * 0.8)
+      .attr("x", (d) => -d.radius * 0.8)
+      .attr("y", (d) => -d.radius * 0.4)
+      .attr("opacity", 1)
+      .attr("filter", "url(#logo-glow)")
       .style("pointer-events", "none");
 
     // Username label

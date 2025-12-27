@@ -206,17 +206,19 @@ const Index = () => {
         
         {/* Auth Controls */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-3">
-          {/* EC2 Health Check Button */}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
-            onClick={handleHealthCheck}
-            disabled={ec2Loading}
-          >
-            <Activity className={`h-4 w-4 ${ec2Loading ? 'animate-pulse' : ''}`} />
-            <span className="hidden sm:inline">{ec2Loading ? 'Checking...' : 'EC2 Health'}</span>
-          </Button>
+          {/* EC2 Health Check Button - Admin Only */}
+          {isAdmin && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
+              onClick={handleHealthCheck}
+              disabled={ec2Loading}
+            >
+              <Activity className={`h-4 w-4 ${ec2Loading ? 'animate-pulse' : ''}`} />
+              <span className="hidden sm:inline">{ec2Loading ? 'Checking...' : 'EC2 Health'}</span>
+            </Button>
+          )}
           
           {authLoading ? (
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />

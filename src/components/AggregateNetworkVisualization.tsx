@@ -394,14 +394,16 @@ export const AggregateNetworkVisualization = ({
       .attr("stroke-width", 2);
 
     // SAM logo in center of each user node with cluster-colored glow
+    // Use screen blend mode to make black background transparent
     nodeElements.append("image")
       .attr("href", "/images/sam-logo.png")
       .attr("width", (d) => d.radius * 1.6)
       .attr("height", (d) => d.radius * 0.8)
       .attr("x", (d) => -d.radius * 0.8)
       .attr("y", (d) => -d.radius * 0.4)
-      .attr("opacity", 1)
+      .attr("opacity", 0.9)
       .attr("filter", (d) => `url(#logo-glow-${d.cluster?.id ?? 0})`)
+      .style("mix-blend-mode", "screen")
       .style("pointer-events", "none");
 
     // Username label

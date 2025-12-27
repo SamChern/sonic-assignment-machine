@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useCallback } from "react";
 
 export interface UserFingerprint {
   id: string;
@@ -39,104 +40,124 @@ export interface SourceAnalysis {
   created_at: string;
 }
 
+// Fetch functions extracted for React Query
+async function fetchMyFingerprintData(userId: string): Promise<UserFingerprint | null> {
+  const { data, error } = await supabase
+    .from('user_fingerprints')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching fingerprint:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+async function fetchMyAnalysesData(userId: string): Promise<SourceAnalysis[]> {
+  const { data, error } = await supabase
+    .from('source_analyses')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching analyses:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+async function fetchAllFingerprintsData(): Promise<UserFingerprint[]> {
+  // Fetch all fingerprints (public via RLS)
+  const { data: fingerprints, error: fpError } = await supabase
+    .from('user_fingerprints')
+    .select('*')
+    .gt('total_sources_analyzed', 0)
+    .order('total_sources_analyzed', { ascending: false });
+
+  if (fpError) {
+    console.error('Error fetching all fingerprints:', fpError);
+    throw fpError;
+  }
+
+  // Fetch profiles to get usernames
+  const userIds = (fingerprints || []).map(fp => fp.user_id);
+  if (userIds.length === 0) {
+    return [];
+  }
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('user_id, username, avatar_url')
+    .in('user_id', userIds);
+
+  // Merge fingerprints with profile data
+  const merged = (fingerprints || []).map(fp => {
+    const profile = (profiles || []).find(p => p.user_id === fp.user_id);
+    return {
+      ...fp,
+      username: profile?.username || null,
+      avatar_url: profile?.avatar_url || null,
+    };
+  });
+
+  return merged;
+}
+
 export function useFingerprints() {
-  const { user, isAdmin } = useAuth();
-  const [myFingerprint, setMyFingerprint] = useState<UserFingerprint | null>(null);
-  const [allFingerprints, setAllFingerprints] = useState<UserFingerprint[]>([]);
-  const [myAnalyses, setMyAnalyses] = useState<SourceAnalysis[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const fetchMyFingerprint = useCallback(async () => {
-    if (!user) {
-      setMyFingerprint(null);
-      return;
-    }
+  // My fingerprint query - 2 min stale time
+  const {
+    data: myFingerprint = null,
+    isLoading: isLoadingMyFingerprint,
+  } = useQuery({
+    queryKey: ['fingerprint', user?.id],
+    queryFn: () => fetchMyFingerprintData(user!.id),
+    enabled: !!user,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes cache
+  });
 
-    const { data, error } = await supabase
-      .from('user_fingerprints')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle();
+  // My analyses query - 2 min stale time
+  const {
+    data: myAnalyses = [],
+    isLoading: isLoadingMyAnalyses,
+  } = useQuery({
+    queryKey: ['analyses', user?.id],
+    queryFn: () => fetchMyAnalysesData(user!.id),
+    enabled: !!user,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
 
-    if (error) {
-      console.error('Error fetching fingerprint:', error);
-      return;
-    }
+  // All fingerprints query - 5 min stale time (cross-user network)
+  const {
+    data: allFingerprints = [],
+    isLoading: isLoadingAllFingerprints,
+  } = useQuery({
+    queryKey: ['fingerprints', 'all'],
+    queryFn: fetchAllFingerprintsData,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 15 * 60 * 1000, // 15 minutes cache
+  });
 
-    setMyFingerprint(data);
-  }, [user]);
+  // Combined loading state
+  const loading = isLoadingMyFingerprint || isLoadingMyAnalyses || isLoadingAllFingerprints;
 
-  const fetchMyAnalyses = useCallback(async () => {
-    if (!user) {
-      setMyAnalyses([]);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('source_analyses')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching analyses:', error);
-      return;
-    }
-
-    setMyAnalyses(data || []);
-  }, [user]);
-
-  const fetchAllFingerprints = useCallback(async () => {
-    // Fetch all fingerprints (public via RLS)
-    const { data: fingerprints, error: fpError } = await supabase
-      .from('user_fingerprints')
-      .select('*')
-      .gt('total_sources_analyzed', 0)
-      .order('total_sources_analyzed', { ascending: false });
-
-    if (fpError) {
-      console.error('Error fetching all fingerprints:', fpError);
-      return;
-    }
-
-    // Fetch profiles to get usernames
-    const userIds = (fingerprints || []).map(fp => fp.user_id);
-    if (userIds.length === 0) {
-      setAllFingerprints([]);
-      return;
-    }
-
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('user_id, username, avatar_url')
-      .in('user_id', userIds);
-
-    // Merge fingerprints with profile data
-    const merged = (fingerprints || []).map(fp => {
-      const profile = (profiles || []).find(p => p.user_id === fp.user_id);
-      return {
-        ...fp,
-        username: profile?.username || null,
-        avatar_url: profile?.avatar_url || null,
-      };
-    });
-
-    setAllFingerprints(merged);
-  }, []);
-
+  // Refresh function that invalidates all queries
   const refresh = useCallback(async () => {
-    setLoading(true);
     await Promise.all([
-      fetchMyFingerprint(),
-      fetchMyAnalyses(),
-      fetchAllFingerprints(),
+      queryClient.invalidateQueries({ queryKey: ['fingerprint', user?.id] }),
+      queryClient.invalidateQueries({ queryKey: ['analyses', user?.id] }),
+      queryClient.invalidateQueries({ queryKey: ['fingerprints', 'all'] }),
     ]);
-    setLoading(false);
-  }, [fetchMyFingerprint, fetchMyAnalyses, fetchAllFingerprints]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  }, [queryClient, user?.id]);
 
   return {
     myFingerprint,

@@ -157,6 +157,66 @@ export type Database = {
           },
         ]
       }
+      source_cache: {
+        Row: {
+          artistic_desc: string | null
+          artistic_score: number
+          cognitive_desc: string | null
+          cognitive_score: number
+          communication_desc: string | null
+          communication_score: number
+          contextual_desc: string | null
+          contextual_score: number
+          created_at: string
+          emotional_desc: string | null
+          emotional_score: number
+          id: string
+          social_desc: string | null
+          social_score: number
+          source_key: string
+          source_name: string
+          source_type: string
+        }
+        Insert: {
+          artistic_desc?: string | null
+          artistic_score: number
+          cognitive_desc?: string | null
+          cognitive_score: number
+          communication_desc?: string | null
+          communication_score: number
+          contextual_desc?: string | null
+          contextual_score: number
+          created_at?: string
+          emotional_desc?: string | null
+          emotional_score: number
+          id?: string
+          social_desc?: string | null
+          social_score: number
+          source_key: string
+          source_name: string
+          source_type: string
+        }
+        Update: {
+          artistic_desc?: string | null
+          artistic_score?: number
+          cognitive_desc?: string | null
+          cognitive_score?: number
+          communication_desc?: string | null
+          communication_score?: number
+          contextual_desc?: string | null
+          contextual_score?: number
+          created_at?: string
+          emotional_desc?: string | null
+          emotional_score?: number
+          id?: string
+          social_desc?: string | null
+          social_score?: number
+          source_key?: string
+          source_name?: string
+          source_type?: string
+        }
+        Relationships: []
+      }
       user_fingerprints: {
         Row: {
           artistic_avg: number

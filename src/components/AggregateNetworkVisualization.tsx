@@ -2,7 +2,8 @@ import { useRef, useEffect, useState, useMemo } from "react";
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Heart, Brain, Users, MessageCircle, Map, Palette } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { User, Heart, Brain, Users, MessageCircle, Map, Palette, Layers } from "lucide-react";
 import samLogo from "@/assets/sam-logo.png";
 
 interface UserFingerprint {
@@ -23,6 +24,15 @@ interface AggregateNetworkVisualizationProps {
   onUserClick?: (userId: string) => void;
 }
 
+interface Cluster {
+  id: number;
+  centroid: number[];
+  members: UserFingerprint[];
+  color: string;
+  label: string;
+  dominantCategory: typeof categories[0];
+}
+
 const categories = [
   { key: "emotional_avg", name: "Emotional", color: "#ef4444", icon: Heart },
   { key: "cognitive_avg", name: "Cognitive", color: "#3b82f6", icon: Brain },
@@ -32,10 +42,30 @@ const categories = [
   { key: "artistic_avg", name: "Artistic", color: "#ec4899", icon: Palette },
 ];
 
+// Cluster colors (distinct from category colors)
+const clusterColors = [
+  "#06b6d4", // cyan
+  "#f97316", // orange
+  "#84cc16", // lime
+  "#6366f1", // indigo
+  "#f43f5e", // rose
+  "#14b8a6", // teal
+];
+
+// Get fingerprint as vector
+function getVector(fp: UserFingerprint): number[] {
+  return categories.map(c => Number(fp[c.key as keyof UserFingerprint]) || 0);
+}
+
+// Calculate Euclidean distance between two vectors
+function euclideanDistance(v1: number[], v2: number[]): number {
+  return Math.sqrt(v1.reduce((sum, val, i) => sum + Math.pow(val - v2[i], 2), 0));
+}
+
 // Calculate cosine similarity between two fingerprints
 function calculateSimilarity(fp1: UserFingerprint, fp2: UserFingerprint): number {
-  const values1 = categories.map(c => Number(fp1[c.key as keyof UserFingerprint]) || 0);
-  const values2 = categories.map(c => Number(fp2[c.key as keyof UserFingerprint]) || 0);
+  const values1 = getVector(fp1);
+  const values2 = getVector(fp2);
   
   const dotProduct = values1.reduce((sum, v, i) => sum + v * values2[i], 0);
   const magnitude1 = Math.sqrt(values1.reduce((sum, v) => sum + v * v, 0));
@@ -45,18 +75,117 @@ function calculateSimilarity(fp1: UserFingerprint, fp2: UserFingerprint): number
   return dotProduct / (magnitude1 * magnitude2);
 }
 
-// Get dominant category for a fingerprint
-function getDominantCategory(fp: UserFingerprint) {
-  let maxKey = "emotional_avg";
+// Get dominant category for a fingerprint or centroid
+function getDominantCategory(values: number[]) {
+  let maxIdx = 0;
   let maxVal = 0;
-  categories.forEach(cat => {
-    const val = Number(fp[cat.key as keyof UserFingerprint]) || 0;
+  values.forEach((val, i) => {
     if (val > maxVal) {
       maxVal = val;
-      maxKey = cat.key;
+      maxIdx = i;
     }
   });
-  return categories.find(c => c.key === maxKey)!;
+  return categories[maxIdx];
+}
+
+// K-Means clustering implementation
+function kMeansClustering(fingerprints: UserFingerprint[], k: number, maxIterations = 50): Cluster[] {
+  if (fingerprints.length < k) {
+    k = fingerprints.length;
+  }
+  if (k <= 0) return [];
+
+  const vectors = fingerprints.map(getVector);
+  
+  // Initialize centroids using k-means++ algorithm
+  const centroids: number[][] = [];
+  const usedIndices = new Set<number>();
+  
+  // First centroid: random
+  const firstIdx = Math.floor(Math.random() * vectors.length);
+  centroids.push([...vectors[firstIdx]]);
+  usedIndices.add(firstIdx);
+  
+  // Remaining centroids: choose based on distance
+  while (centroids.length < k) {
+    const distances = vectors.map((v, idx) => {
+      if (usedIndices.has(idx)) return 0;
+      const minDist = Math.min(...centroids.map(c => euclideanDistance(v, c)));
+      return minDist * minDist;
+    });
+    
+    const totalDist = distances.reduce((a, b) => a + b, 0);
+    let random = Math.random() * totalDist;
+    
+    for (let i = 0; i < distances.length; i++) {
+      random -= distances[i];
+      if (random <= 0 && !usedIndices.has(i)) {
+        centroids.push([...vectors[i]]);
+        usedIndices.add(i);
+        break;
+      }
+    }
+  }
+
+  let assignments: number[] = new Array(vectors.length).fill(0);
+  
+  // Iterate
+  for (let iter = 0; iter < maxIterations; iter++) {
+    // Assign each point to nearest centroid
+    const newAssignments = vectors.map(v => {
+      let minDist = Infinity;
+      let minIdx = 0;
+      centroids.forEach((c, i) => {
+        const dist = euclideanDistance(v, c);
+        if (dist < minDist) {
+          minDist = dist;
+          minIdx = i;
+        }
+      });
+      return minIdx;
+    });
+
+    // Check for convergence
+    if (newAssignments.every((a, i) => a === assignments[i])) {
+      break;
+    }
+    assignments = newAssignments;
+
+    // Update centroids
+    for (let c = 0; c < k; c++) {
+      const clusterPoints = vectors.filter((_, i) => assignments[i] === c);
+      if (clusterPoints.length > 0) {
+        centroids[c] = categories.map((_, catIdx) => 
+          clusterPoints.reduce((sum, p) => sum + p[catIdx], 0) / clusterPoints.length
+        );
+      }
+    }
+  }
+
+  // Build cluster objects
+  const clusters: Cluster[] = centroids.map((centroid, idx) => {
+    const members = fingerprints.filter((_, i) => assignments[i] === idx);
+    const dominantCategory = getDominantCategory(centroid);
+    
+    return {
+      id: idx,
+      centroid,
+      members,
+      color: clusterColors[idx % clusterColors.length],
+      label: `${dominantCategory.name}-dominant`,
+      dominantCategory,
+    };
+  }).filter(c => c.members.length > 0);
+
+  return clusters;
+}
+
+// Determine optimal number of clusters using elbow method heuristic
+function determineOptimalK(fingerprints: UserFingerprint[]): number {
+  if (fingerprints.length <= 2) return 1;
+  if (fingerprints.length <= 4) return 2;
+  if (fingerprints.length <= 8) return 3;
+  return Math.min(5, Math.ceil(fingerprints.length / 3));
 }
 
 export const AggregateNetworkVisualization = ({ 
@@ -65,7 +194,26 @@ export const AggregateNetworkVisualization = ({
 }: AggregateNetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredUser, setHoveredUser] = useState<UserFingerprint | null>(null);
+  const [hoveredCluster, setHoveredCluster] = useState<Cluster | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+
+  // Compute clusters
+  const clusters = useMemo(() => {
+    if (fingerprints.length < 2) return [];
+    const k = determineOptimalK(fingerprints);
+    return kMeansClustering(fingerprints, k);
+  }, [fingerprints]);
+
+  // Map user_id to cluster
+  const userClusterMap = useMemo((): globalThis.Map<string, Cluster> => {
+    const map = new globalThis.Map<string, Cluster>();
+    clusters.forEach(cluster => {
+      cluster.members.forEach(member => {
+        map.set(member.user_id, cluster);
+      });
+    });
+    return map;
+  }, [clusters]);
 
   // Calculate similarity metrics
   const similarityMetrics = useMemo(() => {
@@ -114,26 +262,33 @@ export const AggregateNetworkVisualization = ({
 
     svg.attr("width", width).attr("height", height);
 
-    // Create nodes from fingerprints
-    const nodes = fingerprints.map((fp, i) => ({
-      id: fp.user_id,
-      fingerprint: fp,
-      radius: 20 + (fp.total_sources_analyzed * 3),
-      color: getDominantCategory(fp).color,
-      x: width / 2 + (Math.random() - 0.5) * 200,
-      y: height / 2 + (Math.random() - 0.5) * 200,
-    }));
+    // Create nodes from fingerprints with cluster info
+    const nodes = fingerprints.map((fp, i) => {
+      const cluster = userClusterMap.get(fp.user_id);
+      return {
+        id: fp.user_id,
+        fingerprint: fp,
+        radius: 20 + (fp.total_sources_analyzed * 3),
+        color: cluster?.color || getDominantCategory(getVector(fp)).color,
+        cluster,
+        x: width / 2 + (Math.random() - 0.5) * 200,
+        y: height / 2 + (Math.random() - 0.5) * 200,
+      };
+    });
 
     // Create links based on similarity threshold
-    const links: { source: any; target: any; similarity: number }[] = [];
+    const links: { source: any; target: any; similarity: number; sameCluster: boolean }[] = [];
     for (let i = 0; i < fingerprints.length; i++) {
       for (let j = i + 1; j < fingerprints.length; j++) {
         const similarity = calculateSimilarity(fingerprints[i], fingerprints[j]);
-        if (similarity > 0.7) { // Only show strong connections
+        const sameCluster = userClusterMap.get(fingerprints[i].user_id)?.id === 
+                           userClusterMap.get(fingerprints[j].user_id)?.id;
+        if (similarity > 0.6 || sameCluster) {
           links.push({
             source: nodes[i],
             target: nodes[j],
             similarity,
+            sameCluster,
           });
         }
       }
@@ -154,14 +309,18 @@ export const AggregateNetworkVisualization = ({
       .attr("height", height)
       .attr("fill", "url(#aggregate-bg-gradient)");
 
+    // Cluster hulls group (drawn first, behind everything)
+    const hullGroup = svg.append("g").attr("class", "hulls");
+
     // Draw links
     const linkGroup = svg.append("g").attr("class", "links");
     linkGroup.selectAll("line")
       .data(links)
       .join("line")
-      .attr("stroke", "hsl(var(--primary))")
-      .attr("stroke-opacity", (d) => d.similarity * 0.5)
-      .attr("stroke-width", (d) => d.similarity * 3);
+      .attr("stroke", (d) => d.sameCluster ? d.source.color : "hsl(var(--muted-foreground))")
+      .attr("stroke-opacity", (d) => d.sameCluster ? 0.4 : 0.15)
+      .attr("stroke-width", (d) => d.sameCluster ? 2 : 1)
+      .attr("stroke-dasharray", (d) => d.sameCluster ? "none" : "4 4");
 
     // Draw nodes
     const nodeGroup = svg.append("g").attr("class", "nodes");
@@ -186,11 +345,20 @@ export const AggregateNetworkVisualization = ({
         })
       );
 
+    // Cluster ring (outer glow showing cluster membership)
+    nodeElements.append("circle")
+      .attr("r", (d) => d.radius + 12)
+      .attr("fill", "none")
+      .attr("stroke", (d) => d.color)
+      .attr("stroke-width", 3)
+      .attr("stroke-dasharray", "6 3")
+      .attr("opacity", 0.5);
+
     // Glow effect
     nodeElements.append("circle")
-      .attr("r", (d) => d.radius + 10)
+      .attr("r", (d) => d.radius + 8)
       .attr("fill", (d) => d.color)
-      .attr("opacity", 0.2);
+      .attr("opacity", 0.15);
 
     // Main circle
     nodeElements.append("circle")
@@ -199,7 +367,7 @@ export const AggregateNetworkVisualization = ({
       .attr("stroke", "hsl(var(--background))")
       .attr("stroke-width", 2);
 
-    // User initial or avatar placeholder
+    // User initial
     nodeElements.append("text")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
@@ -211,7 +379,7 @@ export const AggregateNetworkVisualization = ({
     // Username label
     nodeElements.append("text")
       .attr("text-anchor", "middle")
-      .attr("y", (d) => d.radius + 16)
+      .attr("y", (d) => d.radius + 20)
       .attr("fill", "hsl(var(--foreground))")
       .attr("font-size", 11)
       .attr("font-weight", 500)
@@ -240,15 +408,17 @@ export const AggregateNetworkVisualization = ({
     nodeElements
       .on("mouseenter", function(event, d) {
         setHoveredUser(d.fingerprint);
+        setHoveredCluster(d.cluster || null);
         setTooltipPos({ x: event.pageX, y: event.pageY });
-        d3.select(this).select("circle:nth-child(2)")
+        d3.select(this).select("circle:nth-child(3)")
           .transition()
           .duration(200)
           .attr("r", d.radius * 1.2);
       })
       .on("mouseleave", function(event, d) {
         setHoveredUser(null);
-        d3.select(this).select("circle:nth-child(2)")
+        setHoveredCluster(null);
+        d3.select(this).select("circle:nth-child(3)")
           .transition()
           .duration(200)
           .attr("r", d.radius);
@@ -257,13 +427,61 @@ export const AggregateNetworkVisualization = ({
         if (onUserClick) onUserClick(d.id);
       });
 
-    // Force simulation
+    // Force simulation with cluster forces
     const simulation = d3.forceSimulation(nodes as any)
-      .force("link", d3.forceLink(links).distance(150))
-      .force("charge", d3.forceManyBody().strength(-200))
+      .force("link", d3.forceLink(links).distance((d: any) => d.sameCluster ? 80 : 150))
+      .force("charge", d3.forceManyBody().strength(-250))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius((d: any) => d.radius + 20))
+      .force("collision", d3.forceCollide().radius((d: any) => d.radius + 25))
+      // Cluster force: pull nodes toward their cluster center
+      .force("cluster", (alpha: number) => {
+        nodes.forEach(node => {
+          if (!node.cluster) return;
+          const clusterNodes = nodes.filter(n => n.cluster?.id === node.cluster?.id);
+          if (clusterNodes.length < 2) return;
+          
+          // Calculate cluster center
+          const cx = clusterNodes.reduce((sum, n) => sum + (n.x || 0), 0) / clusterNodes.length;
+          const cy = clusterNodes.reduce((sum, n) => sum + (n.y || 0), 0) / clusterNodes.length;
+          
+          // Pull toward cluster center
+          const strength = alpha * 0.1;
+          (node as any).vx += (cx - (node.x || 0)) * strength;
+          (node as any).vy += (cy - (node.y || 0)) * strength;
+        });
+      })
       .on("tick", () => {
+        // Update convex hulls for clusters
+        hullGroup.selectAll("path").remove();
+        clusters.forEach(cluster => {
+          const clusterNodes = nodes.filter(n => n.cluster?.id === cluster.id);
+          if (clusterNodes.length >= 3) {
+            const points: [number, number][] = clusterNodes.map(n => [n.x || 0, n.y || 0]);
+            const hull = d3.polygonHull(points);
+            if (hull) {
+              // Expand hull slightly
+              const expandedHull = hull.map(([x, y]) => {
+                const cx = points.reduce((sum, p) => sum + p[0], 0) / points.length;
+                const cy = points.reduce((sum, p) => sum + p[1], 0) / points.length;
+                const dx = x - cx;
+                const dy = y - cy;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const expansion = 40;
+                return [x + (dx / dist) * expansion, y + (dy / dist) * expansion] as [number, number];
+              });
+
+              hullGroup.append("path")
+                .attr("d", `M${expandedHull.join("L")}Z`)
+                .attr("fill", cluster.color)
+                .attr("fill-opacity", 0.08)
+                .attr("stroke", cluster.color)
+                .attr("stroke-opacity", 0.3)
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", "8 4");
+            }
+          }
+        });
+
         linkGroup.selectAll("line")
           .attr("x1", (d: any) => d.source.x)
           .attr("y1", (d: any) => d.source.y)
@@ -276,7 +494,7 @@ export const AggregateNetworkVisualization = ({
     return () => {
       simulation.stop();
     };
-  }, [fingerprints, onUserClick]);
+  }, [fingerprints, clusters, userClusterMap, onUserClick]);
 
   if (fingerprints.length === 0) {
     return (
@@ -299,10 +517,39 @@ export const AggregateNetworkVisualization = ({
             <h3 className="text-lg font-bold text-foreground">Aggregate User Fingerprints</h3>
             <p className="text-xs text-muted-foreground">
               {fingerprints.length} user{fingerprints.length !== 1 ? 's' : ''} • 
-              Bubble size = sources analyzed
+              {clusters.length} cluster{clusters.length !== 1 ? 's' : ''} detected
             </p>
           </div>
         </div>
+
+        {/* Cluster legend in top right */}
+        {clusters.length > 0 && (
+          <div className="absolute top-4 right-4 z-10 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-border/50">
+            <div className="flex items-center gap-2 mb-2">
+              <Layers className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-semibold text-foreground">Communities</span>
+            </div>
+            <div className="space-y-1">
+              {clusters.map(cluster => (
+                <div 
+                  key={cluster.id} 
+                  className="flex items-center gap-2 text-xs"
+                  onMouseEnter={() => setHoveredCluster(cluster)}
+                  onMouseLeave={() => setHoveredCluster(null)}
+                >
+                  <div 
+                    className="w-3 h-3 rounded-full border-2"
+                    style={{ backgroundColor: cluster.color, borderColor: cluster.color }}
+                  />
+                  <span className="text-muted-foreground">{cluster.label}</span>
+                  <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                    {cluster.members.length}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Network visualization */}
         <svg ref={svgRef} className="w-full h-[500px]" />
@@ -314,7 +561,7 @@ export const AggregateNetworkVisualization = ({
             style={{ 
               left: tooltipPos.x + 15, 
               top: tooltipPos.y + 15,
-              maxWidth: 250
+              maxWidth: 280
             }}
           >
             <div className="flex items-center gap-2 mb-2">
@@ -327,6 +574,18 @@ export const AggregateNetworkVisualization = ({
                 <p className="text-xs text-muted-foreground">{hoveredUser.total_sources_analyzed} sources</p>
               </div>
             </div>
+            {hoveredCluster && (
+              <div 
+                className="flex items-center gap-2 mb-2 px-2 py-1 rounded-full text-xs"
+                style={{ backgroundColor: `${hoveredCluster.color}20` }}
+              >
+                <div 
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: hoveredCluster.color }}
+                />
+                <span style={{ color: hoveredCluster.color }}>{hoveredCluster.label}</span>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-1 text-xs">
               {categories.map(cat => (
                 <div key={cat.key} className="flex items-center gap-1">
@@ -341,6 +600,92 @@ export const AggregateNetworkVisualization = ({
           </div>
         )}
       </Card>
+
+      {/* Cluster Analysis */}
+      {clusters.length > 0 && (
+        <Card className="p-6 bg-card/80">
+          <div className="flex items-center gap-2 mb-4">
+            <Layers className="h-5 w-5 text-primary" />
+            <h4 className="font-semibold text-foreground">Community Clusters</h4>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {clusters.map(cluster => {
+              const Icon = cluster.dominantCategory.icon;
+              return (
+                <div 
+                  key={cluster.id}
+                  className="p-4 rounded-lg border-2 transition-colors"
+                  style={{ 
+                    borderColor: cluster.color,
+                    backgroundColor: `${cluster.color}08`
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <div 
+                      className="p-2 rounded-full"
+                      style={{ backgroundColor: `${cluster.color}20` }}
+                    >
+                      <Icon className="h-4 w-4" style={{ color: cluster.color }} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">{cluster.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {cluster.members.length} member{cluster.members.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Cluster centroid profile */}
+                  <div className="space-y-1 mb-3">
+                    {categories.map((cat, idx) => (
+                      <div key={cat.key} className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground w-20 truncate">{cat.name}</span>
+                        <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+                          <div 
+                            className="h-full rounded-full"
+                            style={{ 
+                              width: `${cluster.centroid[idx]}%`,
+                              backgroundColor: cat.color 
+                            }}
+                          />
+                        </div>
+                        <span className="font-medium w-6 text-right">
+                          {cluster.centroid[idx].toFixed(0)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Member avatars */}
+                  <div className="flex flex-wrap gap-1">
+                    {cluster.members.slice(0, 6).map(member => (
+                      <Avatar 
+                        key={member.user_id} 
+                        className="h-6 w-6 border-2"
+                        style={{ borderColor: cluster.color }}
+                      >
+                        <AvatarImage src={member.avatar_url || undefined} />
+                        <AvatarFallback className="text-[10px]">
+                          {member.username?.charAt(0).toUpperCase() || "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                    {cluster.members.length > 6 && (
+                      <div 
+                        className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-medium"
+                        style={{ backgroundColor: `${cluster.color}20`, color: cluster.color }}
+                      >
+                        +{cluster.members.length - 6}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Similarity Metrics */}
       {similarityMetrics && (
@@ -423,7 +768,7 @@ export const AggregateNetworkVisualization = ({
           })}
         </div>
         <p className="text-center text-xs text-muted-foreground mt-2">
-          Node color indicates dominant category • Lines show similarity &gt;70%
+          Dashed outlines show cluster boundaries • Solid lines connect similar users within clusters
         </p>
       </Card>
     </div>

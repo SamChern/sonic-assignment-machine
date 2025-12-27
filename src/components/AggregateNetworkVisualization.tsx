@@ -367,14 +367,15 @@ export const AggregateNetworkVisualization = ({
       .attr("stroke", "hsl(var(--background))")
       .attr("stroke-width", 2);
 
-    // User initial
-    nodeElements.append("text")
-      .attr("text-anchor", "middle")
-      .attr("dominant-baseline", "middle")
-      .attr("fill", "white")
-      .attr("font-weight", "bold")
-      .attr("font-size", (d) => d.radius * 0.6)
-      .text((d) => d.fingerprint.username?.charAt(0).toUpperCase() || "U");
+    // SAM logo in center of each user node
+    nodeElements.append("image")
+      .attr("href", "/images/sam-logo.png")
+      .attr("width", (d) => d.radius * 1.4)
+      .attr("height", (d) => d.radius * 0.7)
+      .attr("x", (d) => -d.radius * 0.7)
+      .attr("y", (d) => -d.radius * 0.35)
+      .attr("opacity", 0.85)
+      .style("pointer-events", "none");
 
     // Username label
     nodeElements.append("text")

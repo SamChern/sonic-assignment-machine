@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Heart, Brain, Users, MessageCircle, Map, Palette } from "lucide-react";
+import fingerprintBg from "@/assets/fingerprint-bg.webp";
 
 interface UserFingerprint {
   user_id: string;
@@ -71,7 +72,23 @@ export const FingerprintVisualization = ({
 
   return (
     <div className="relative">
-      <svg width={width} height={height} className="mx-auto">
+      {/* Fingerprint background image */}
+      <div 
+        className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10"
+        style={{ 
+          width, 
+          height,
+          margin: '0 auto'
+        }}
+      >
+        <img 
+          src={fingerprintBg} 
+          alt="" 
+          className="w-full h-full object-contain"
+          style={{ filter: 'grayscale(100%)' }}
+        />
+      </div>
+      <svg width={width} height={height} className="mx-auto relative">
         {/* Grid circles */}
         {gridCircles.map((percent) => (
           <circle

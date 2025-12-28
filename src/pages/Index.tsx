@@ -314,8 +314,8 @@ const Index = () => {
               <span className="text-primary">[A]</span>ssignment{" "}
               <span className="text-primary">[M]</span>achine
             </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Semantic Ontological Network, extracting audio-based encoders and audio-text modalities to show categorical relationships
+            <p className="text-base text-muted-foreground max-w-2xl mx-auto">
+              Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
             </p>
           </div>
         </div>

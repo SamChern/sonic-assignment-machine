@@ -361,7 +361,7 @@ const Index = () => {
               <img 
                 src={secondaryImage} 
                 alt="Sonic fingerprint radar visualization" 
-                className="w-full h-auto rounded-2xl opacity-90"
+                className="w-full h-auto rounded-full opacity-90 aspect-square object-cover"
               />
             </div>
           </div>

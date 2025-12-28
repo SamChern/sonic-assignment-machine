@@ -356,8 +356,53 @@ const Index = () => {
               </div>
             </div>
             
-            {/* Secondary radar chart image on the right */}
+            {/* Secondary radar chart image on the right with category labels */}
             <div className="relative max-w-xs flex-shrink-0 animate-float" style={{ animationDelay: '1s', marginRight: '-50%' }}>
+              {/* Category labels positioned around the circle */}
+              <div className="absolute inset-0 flex items-center justify-center" style={{ transform: 'scale(0.75)' }}>
+                {/* Emotional - Top */}
+                <span 
+                  className="absolute font-bold text-sm tracking-wide"
+                  style={{ color: '#ef4444', top: '2%', left: '50%', transform: 'translateX(-50%)' }}
+                >
+                  EMOTIONAL
+                </span>
+                {/* Cognitive - Top Right */}
+                <span 
+                  className="absolute font-bold text-sm tracking-wide"
+                  style={{ color: '#3b82f6', top: '18%', right: '5%', transform: 'rotate(0deg)' }}
+                >
+                  COGNITIVE
+                </span>
+                {/* Artistic - Bottom Right */}
+                <span 
+                  className="absolute font-bold text-sm tracking-wide"
+                  style={{ color: '#ec4899', bottom: '18%', right: '5%' }}
+                >
+                  ARTISTIC
+                </span>
+                {/* Social - Bottom */}
+                <span 
+                  className="absolute font-bold text-sm tracking-wide"
+                  style={{ color: '#22c55e', bottom: '2%', left: '50%', transform: 'translateX(-50%)' }}
+                >
+                  SOCIAL
+                </span>
+                {/* Communication - Bottom Left */}
+                <span 
+                  className="absolute font-bold text-sm tracking-wide"
+                  style={{ color: '#eab308', bottom: '18%', left: '5%' }}
+                >
+                  COMMUNICATION
+                </span>
+                {/* Contextual - Top Left */}
+                <span 
+                  className="absolute font-bold text-sm tracking-wide"
+                  style={{ color: '#a855f7', top: '18%', left: '5%' }}
+                >
+                  CONTEXTUAL
+                </span>
+              </div>
               <img 
                 src={secondaryImage} 
                 alt="Sonic fingerprint radar visualization" 

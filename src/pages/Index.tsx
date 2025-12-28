@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
 import exampleOutput from "@/assets/example-output.png";
+import secondaryImage from "@/assets/secondary-homepage-image.png";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { Badge } from "@/components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
@@ -355,9 +356,13 @@ const Index = () => {
               </div>
             </div>
             
-            {/* Placeholder for secondary image on the right */}
-            <div className="relative max-w-xs flex-shrink-0">
-              {/* Secondary image will go here */}
+            {/* Secondary radar chart image on the right */}
+            <div className="relative max-w-xs flex-shrink-0 animate-float" style={{ animationDelay: '1s' }}>
+              <img 
+                src={secondaryImage} 
+                alt="Sonic fingerprint radar visualization" 
+                className="w-full h-auto rounded-2xl opacity-90"
+              />
             </div>
           </div>
         </div>

@@ -74,6 +74,67 @@ function cachedToSourceResult(cached: CachedSource): SourceResult {
   };
 }
 
+function stripMarkdownCodeFences(text: string): string {
+  let t = text.trim();
+  if (t.startsWith('```')) {
+    // Remove opening fence like ```json or ```
+    t = t.replace(/^```[a-zA-Z]*\n?/, '');
+    // Remove trailing fence
+    t = t.replace(/```\s*$/, '');
+  }
+  return t.trim();
+}
+
+// Repairs common LLM JSON breakage: unescaped double-quotes inside string values.
+function escapeUnescapedQuotesInJsonStrings(text: string): string {
+  let out = '';
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escape) {
+      out += ch;
+      escape = false;
+      continue;
+    }
+
+    if (ch === '\\') {
+      out += ch;
+      escape = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      if (!inString) {
+        inString = true;
+        out += ch;
+        continue;
+      }
+
+      // We're inside a JSON string. Decide if this is a closing quote or an internal (unescaped) quote.
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      const next = text[j];
+
+      const isLikelyClosing = next === ':' || next === ',' || next === '}' || next === ']' || next === undefined;
+      if (isLikelyClosing) {
+        inString = false;
+        out += ch;
+      } else {
+        // Internal quote → escape it.
+        out += '\\"';
+      }
+      continue;
+    }
+
+    out += ch;
+  }
+
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -174,6 +235,7 @@ OUTPUT FORMAT:
 
 RULES:
 - Return ONLY the JSON object, no markdown
+- Do NOT include any double quotes (") inside description text; if needed, use single quotes
 - Keep descriptions SHORT (under 50 words each)
 - Each source MUST have exactly 6 categories
 - Scores are 0-100 integers
@@ -233,85 +295,92 @@ Keep descriptions brief. Scores should differ between sources to show unique ide
         // Parse JSON response with improved handling
         let analysisResult: { sources: SourceResult[] };
         try {
-          // Strip markdown code fences if present
-          let jsonText = analysisText.trim();
-          if (jsonText.startsWith('```json')) {
-            jsonText = jsonText.slice(7);
-          } else if (jsonText.startsWith('```')) {
-            jsonText = jsonText.slice(3);
+          // Normalize to plain JSON text
+          let jsonText = stripMarkdownCodeFences(analysisText);
+
+          // If the model added pre/post text, try to isolate the JSON object
+          if (!jsonText.startsWith('{')) {
+            const start = jsonText.indexOf('{');
+            const end = jsonText.lastIndexOf('}');
+            if (start !== -1 && end !== -1 && end > start) {
+              jsonText = jsonText.slice(start, end + 1);
+            }
           }
-          if (jsonText.endsWith('```')) {
-            jsonText = jsonText.slice(0, -3);
-          }
-          jsonText = jsonText.trim();
-          
+
           // Try to parse
           try {
             analysisResult = JSON.parse(jsonText);
           } catch (firstError) {
             console.log('First parse attempt failed, trying to repair JSON...');
-            
-            // Try to find and extract just the sources array
-            const sourcesMatch = jsonText.match(/"sources"\s*:\s*\[/);
-            if (sourcesMatch) {
-              // Find balanced brackets
-              let depth = 0;
-              let inString = false;
-              let escape = false;
-              let start = jsonText.indexOf('[', sourcesMatch.index);
-              let end = start;
-              
-              for (let i = start; i < jsonText.length; i++) {
-                const char = jsonText[i];
-                if (escape) {
-                  escape = false;
-                  continue;
-                }
-                if (char === '\\') {
-                  escape = true;
-                  continue;
-                }
-                if (char === '"') {
-                  inString = !inString;
-                  continue;
-                }
-                if (inString) continue;
-                
-                if (char === '[') depth++;
-                if (char === ']') {
-                  depth--;
-                  if (depth === 0) {
-                    end = i + 1;
-                    break;
+
+            // Repair common failure: unescaped quotes inside string values
+            const repairedText = escapeUnescapedQuotesInJsonStrings(jsonText);
+
+            try {
+              analysisResult = JSON.parse(repairedText);
+            } catch {
+              // Try to find and extract just the sources array
+              const sourcesMatch = repairedText.match(/"sources"\s*:\s*\[/);
+              if (sourcesMatch) {
+                // Find balanced brackets
+                let depth = 0;
+                let inString = false;
+                let escape = false;
+                const start = repairedText.indexOf('[', sourcesMatch.index);
+                let end = start;
+
+                for (let i = start; i < repairedText.length; i++) {
+                  const char = repairedText[i];
+                  if (escape) {
+                    escape = false;
+                    continue;
+                  }
+                  if (char === '\\') {
+                    escape = true;
+                    continue;
+                  }
+                  if (char === '"') {
+                    inString = !inString;
+                    continue;
+                  }
+                  if (inString) continue;
+
+                  if (char === '[') depth++;
+                  if (char === ']') {
+                    depth--;
+                    if (depth === 0) {
+                      end = i + 1;
+                      break;
+                    }
                   }
                 }
-              }
-              
-              if (depth === 0 && end > start) {
-                const sourcesArray = jsonText.slice(start, end);
-                analysisResult = JSON.parse(`{"sources":${sourcesArray}}`);
-                console.log('JSON repair successful');
+
+                if (depth === 0 && end > start) {
+                  const sourcesArray = repairedText.slice(start, end);
+                  analysisResult = JSON.parse(`{"sources":${sourcesArray}}`);
+                  console.log('JSON repair successful (sources-only)');
+                } else {
+                  throw new Error('Could not repair JSON - unbalanced brackets');
+                }
               } else {
-                throw new Error('Could not repair JSON - unbalanced brackets');
+                throw firstError;
               }
-            } else {
-              throw firstError;
             }
           }
-          
+
           if (!analysisResult.sources || !Array.isArray(analysisResult.sources)) {
             console.error('Invalid response structure - missing sources array');
             throw new Error('Invalid response structure');
           }
-          
+
           // Validate and clean up
           for (const source of analysisResult.sources) {
             source.name = source.name.replace(/\s*\((track|file)\)\s*$/i, '').trim();
-            
+
             // Ensure we have 6 categories, fill in missing ones
             const categoryNames = ['Emotional', 'Cognitive', 'Social', 'Communication', 'Contextual', 'Artistic'];
             const existingCategories = new Map(source.categories?.map(c => [c.name, c]) || []);
-            
+
             source.categories = categoryNames.map(name => {
               const existing = existingCategories.get(name);
               if (existing) {
@@ -325,15 +394,18 @@ Keep descriptions brief. Scores should differ between sources to show unique ide
         } catch (parseError) {
           console.error('Failed to parse AI response:', parseError);
           console.error('Response text (first 500 chars):', analysisText.substring(0, 500));
-          
+
           // If this is the only batch, return error; otherwise continue with other batches
           if (batches.length === 1) {
-            return new Response(JSON.stringify({ 
-              error: 'Failed to parse AI response as JSON. Please try again with fewer sources.' 
-            }), {
-              status: 500,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
+            return new Response(
+              JSON.stringify({
+                error: 'Failed to parse AI response as JSON. Please try again with fewer sources.',
+              }),
+              {
+                status: 500,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              },
+            );
           } else {
             console.log('Continuing with other batches despite parse error');
           }

@@ -322,15 +322,13 @@ const Index = () => {
           
           {/* Example Output Preview */}
           <div className="mt-8 flex justify-center">
-            <div className="relative rounded-xl overflow-hidden border border-border/50 shadow-2xl max-w-4xl">
+            <div className="relative rounded-3xl overflow-hidden max-w-4xl" style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}>
               <img 
                 src={exampleOutput} 
                 alt="Example sonic fingerprint network visualization" 
-                className="w-full h-auto"
+                className="w-full h-auto scale-115 origin-center"
+                style={{ transform: 'scale(1.15)' }}
               />
-              <div className="absolute bottom-4 left-4 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-md text-sm text-muted-foreground">
-                Example output visualization
-              </div>
             </div>
           </div>
         </div>

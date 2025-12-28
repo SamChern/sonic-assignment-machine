@@ -29,6 +29,12 @@ const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [spotifyTracks, setSpotifyTracks] = useState<any[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<{
+    total: number;
+    cached: number;
+    fresh: number;
+    status: 'idle' | 'checking-cache' | 'analyzing' | 'complete';
+  } | null>(null);
   const [results, setResults] = useState<{ sources: any[]; images: any[] } | null>(null);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
@@ -108,6 +114,12 @@ const Index = () => {
 
     setIsAnalyzing(true);
     setResults(null);
+    setAnalysisProgress({
+      total: totalItems,
+      cached: 0,
+      fresh: 0,
+      status: 'checking-cache',
+    });
 
     // Prepare sources for backend analysis (include spotify_id for caching)
     const sources = [
@@ -150,6 +162,9 @@ const Index = () => {
     try {
       console.log('Sending sources for analysis:', sources);
 
+      // Update to analyzing status
+      setAnalysisProgress(prev => prev ? { ...prev, status: 'analyzing' } : null);
+
       let data;
       try {
         data = await invokeAnalysis();
@@ -166,6 +181,15 @@ const Index = () => {
 
       console.log('Received analysis:', data);
 
+      // Update progress with cache stats from response
+      const cacheStats = data.cache_stats || { cached: 0, fresh: data.sources?.length || 0 };
+      setAnalysisProgress({
+        total: totalItems,
+        cached: cacheStats.cached,
+        fresh: cacheStats.fresh,
+        status: 'complete',
+      });
+
       // Map backend results (per-source structure)
       const resultsWithIcons = data.sources;
 
@@ -180,10 +204,14 @@ const Index = () => {
       setResults({ sources: resultsWithIcons, images: imageData });
       setIsAnalyzing(false);
       setActiveTab("network"); // Switch to network tab after analysis
-      toast.success(`Comparative semantic analysis complete for ${totalItems} source${totalItems > 1 ? 's' : ''}!`);
+      
+      // Show detailed success message
+      const cachedMsg = cacheStats.cached > 0 ? ` (${cacheStats.cached} cached, ${cacheStats.fresh} analyzed)` : '';
+      toast.success(`Semantic analysis complete for ${totalItems} source${totalItems > 1 ? 's' : ''}${cachedMsg}!`);
     } catch (error) {
       console.error('Analysis error:', error);
       setIsAnalyzing(false);
+      setAnalysisProgress(null);
       toast.error(error instanceof Error ? error.message : 'Analysis failed. Please try again.');
     }
   };
@@ -434,17 +462,46 @@ const Index = () => {
               </Collapsible>
             )}
 
-            {/* Loading State */}
-            {isAnalyzing && (
+            {/* Loading State with Progress */}
+            {isAnalyzing && analysisProgress && (
               <Card className="p-8 shadow-elegant">
                 <div className="space-y-4 text-center">
                   <div className="flex justify-center">
                     <div className="h-16 w-16 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
                   </div>
-                  <p className="text-lg font-semibold text-foreground">Processing semantic embeddings...</p>
-                  <p className="text-sm text-muted-foreground">
-                    Extracting features via hierarchical transformer and aligning modalities
-                  </p>
+                  
+                  {/* Progress Status */}
+                  <div className="space-y-2">
+                    <p className="text-lg font-semibold text-foreground">
+                      {analysisProgress.status === 'checking-cache' && 'Checking semantic cache...'}
+                      {analysisProgress.status === 'analyzing' && 'Running AI semantic analysis...'}
+                      {analysisProgress.status === 'complete' && 'Finalizing results...'}
+                    </p>
+                    
+                    {/* Progress indicators */}
+                    <div className="flex justify-center gap-4 text-sm">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary/20 rounded-full">
+                        <Activity className="h-3.5 w-3.5 text-primary animate-pulse" />
+                        <span className="text-muted-foreground">
+                          {analysisProgress.total} source{analysisProgress.total !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      
+                      {analysisProgress.status === 'analyzing' && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 rounded-full">
+                          <Sparkles className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-primary font-medium">Agent processing...</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {analysisProgress.status === 'checking-cache' && 
+                        'Looking up previously analyzed sources to speed up processing...'}
+                      {analysisProgress.status === 'analyzing' && 
+                        'Extracting semantic features via hierarchical transformer and aligning modalities'}
+                    </p>
+                  </div>
                 </div>
               </Card>
             )}

@@ -309,7 +309,7 @@ const Index = () => {
         
         <div className="relative mx-auto max-w-7xl px-6 py-16 sm:py-24">
           <div className="text-center space-y-6">
-            <h1 className="text-5xl sm:text-6xl font-bold text-foreground">
+            <h1 className="text-4xl sm:text-5xl font-bold text-foreground">
               <span className="text-primary">[S]</span>onic{" "}
               <span className="text-primary">[A]</span>ssignment{" "}
               <span className="text-primary">[M]</span>achine

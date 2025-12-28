@@ -356,58 +356,13 @@ const Index = () => {
               </div>
             </div>
             
-            {/* Secondary radar chart image on the right with category labels */}
+            {/* Secondary radar chart image on the right */}
             <div className="relative max-w-xs flex-shrink-0 animate-float" style={{ animationDelay: '1s', marginRight: '-50%' }}>
-              {/* Category labels positioned around the circle */}
-              <div className="absolute inset-0 flex items-center justify-center z-10">
-                {/* Emotional - Top */}
-                <span 
-                  className="absolute font-extrabold text-base tracking-wider drop-shadow-lg"
-                  style={{ color: '#ef4444', top: '-2%', left: '50%', transform: 'translateX(-50%)', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
-                >
-                  EMOTIONAL
-                </span>
-                {/* Cognitive - Top Right */}
-                <span 
-                  className="absolute font-extrabold text-base tracking-wider drop-shadow-lg"
-                  style={{ color: '#3b82f6', top: '12%', right: '-5%', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
-                >
-                  COGNITIVE
-                </span>
-                {/* Artistic - Bottom Right */}
-                <span 
-                  className="absolute font-extrabold text-base tracking-wider drop-shadow-lg"
-                  style={{ color: '#ec4899', bottom: '12%', right: '-2%', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
-                >
-                  ARTISTIC
-                </span>
-                {/* Social - Bottom */}
-                <span 
-                  className="absolute font-extrabold text-base tracking-wider drop-shadow-lg"
-                  style={{ color: '#22c55e', bottom: '-2%', left: '50%', transform: 'translateX(-50%)', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
-                >
-                  SOCIAL
-                </span>
-                {/* Communication - Bottom Left */}
-                <span 
-                  className="absolute font-extrabold text-base tracking-wider drop-shadow-lg"
-                  style={{ color: '#eab308', bottom: '12%', left: '-8%', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
-                >
-                  COMMUNICATION
-                </span>
-                {/* Contextual - Top Left */}
-                <span 
-                  className="absolute font-extrabold text-base tracking-wider drop-shadow-lg"
-                  style={{ color: '#a855f7', top: '12%', left: '-5%', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
-                >
-                  CONTEXTUAL
-                </span>
-              </div>
               <img 
                 src={secondaryImage} 
                 alt="Sonic fingerprint radar visualization" 
                 className="w-full h-auto rounded-full opacity-90 aspect-square object-cover"
-                style={{ transform: 'scale(1.4)', boxShadow: '0 0 30px 8px hsl(var(--primary) / 0.35)' }}
+                style={{ transform: 'scale(0.75)', boxShadow: '0 0 30px 8px hsl(var(--primary) / 0.35)' }}
               />
             </div>
           </div>

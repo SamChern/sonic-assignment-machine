@@ -10,6 +10,7 @@ import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Library, Save, Sh
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
+import exampleOutput from "@/assets/example-output.png";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { Badge } from "@/components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
@@ -323,7 +324,7 @@ const Index = () => {
           <div className="mt-8 flex justify-center">
             <div className="relative rounded-xl overflow-hidden border border-border/50 shadow-2xl max-w-4xl">
               <img 
-                src="/assets/example-output.png" 
+                src={exampleOutput} 
                 alt="Example sonic fingerprint network visualization" 
                 className="w-full h-auto"
               />

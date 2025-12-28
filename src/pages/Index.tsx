@@ -318,6 +318,14 @@ const Index = () => {
             <p className="text-base text-muted-foreground max-w-4xl mx-auto">
               Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
             </p>
+            <Button 
+              size="lg" 
+              className="mt-2"
+              onClick={() => setActiveTab("select")}
+            >
+              <Sparkles className="mr-2 h-5 w-5" />
+              Get Started
+            </Button>
           </div>
           
           {/* Example Output Preview */}

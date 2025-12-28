@@ -4,8 +4,11 @@ import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { User, Heart, Brain, Users, MessageCircle, Map, Palette, Layers, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { User, Heart, Brain, Users, MessageCircle, Map, Palette, Layers, ZoomIn, ZoomOut, RotateCcw, Maximize } from "lucide-react";
 import samLogo from "@/assets/sam-logo.png";
+
+// Store nodes reference for fit-to-view calculation
+let nodesRef: { x?: number; y?: number; radius: number }[] = [];
 
 interface UserFingerprint {
   user_id: string;
@@ -228,6 +231,50 @@ export const AggregateNetworkVisualization = ({
     }
   };
 
+  const handleFitToView = () => {
+    if (!svgRef.current || !zoomRef.current || nodesRef.length === 0) return;
+
+    const width = svgRef.current.clientWidth || 800;
+    const height = 500;
+    const padding = 60;
+
+    // Calculate bounding box of all nodes
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    nodesRef.forEach(node => {
+      const x = node.x ?? width / 2;
+      const y = node.y ?? height / 2;
+      const r = node.radius + 40; // Account for labels and rings
+      minX = Math.min(minX, x - r);
+      maxX = Math.max(maxX, x + r);
+      minY = Math.min(minY, y - r);
+      maxY = Math.max(maxY, y + r);
+    });
+
+    const boundingWidth = maxX - minX;
+    const boundingHeight = maxY - minY;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    // Calculate scale to fit all nodes with padding
+    const scale = Math.min(
+      (width - padding * 2) / boundingWidth,
+      (height - padding * 2) / boundingHeight,
+      2 // Max zoom of 2x
+    );
+
+    // Calculate translation to center the nodes
+    const translateX = width / 2 - centerX * scale;
+    const translateY = height / 2 - centerY * scale;
+
+    d3.select(svgRef.current)
+      .transition()
+      .duration(500)
+      .call(
+        zoomRef.current.transform,
+        d3.zoomIdentity.translate(translateX, translateY).scale(scale)
+      );
+  };
+
   // Compute clusters
   const clusters = useMemo(() => {
     if (fingerprints.length < 2) return [];
@@ -320,6 +367,9 @@ export const AggregateNetworkVisualization = ({
         y: height / 2 + (Math.random() - 0.5) * 200,
       };
     });
+
+    // Store nodes reference for fit-to-view
+    nodesRef = nodes;
 
     // Create links based on similarity threshold
     const links: { source: any; target: any; similarity: number; sameCluster: boolean }[] = [];
@@ -629,6 +679,15 @@ export const AggregateNetworkVisualization = ({
             title="Reset zoom"
           >
             <RotateCcw className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleFitToView}
+            title="Fit all nodes to view"
+          >
+            <Maximize className="h-4 w-4" />
           </Button>
         </div>
 

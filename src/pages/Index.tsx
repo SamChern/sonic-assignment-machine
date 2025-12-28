@@ -314,7 +314,7 @@ const Index = () => {
               <span className="text-primary">[A]</span>ssignment{" "}
               <span className="text-primary">[M]</span>achine
             </h1>
-            <p className="text-base text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-base text-muted-foreground max-w-4xl mx-auto">
               Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
             </p>
           </div>

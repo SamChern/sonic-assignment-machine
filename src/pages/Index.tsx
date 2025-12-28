@@ -319,7 +319,7 @@ const Index = () => {
           
           {/* Example Output Preview */}
           <div className="mt-8 flex justify-center">
-            <div className="relative rounded-3xl max-w-4xl animate-glow-pulse animate-float">
+            <div className="relative rounded-3xl max-w-3xl animate-glow-pulse animate-float">
               <div className="rounded-3xl overflow-hidden" style={{ maskImage: 'linear-gradient(to bottom, black 35%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 35%, transparent 100%)' }}>
                 <img 
                   src={exampleOutput} 

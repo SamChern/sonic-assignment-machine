@@ -357,7 +357,7 @@ const Index = () => {
             </div>
             
             {/* Secondary radar chart image on the right */}
-            <div className="relative max-w-xs flex-shrink-0 animate-float" style={{ animationDelay: '1s' }}>
+            <div className="relative max-w-xs flex-shrink-0 animate-float" style={{ animationDelay: '1s', marginRight: '-50%' }}>
               <img 
                 src={secondaryImage} 
                 alt="Sonic fingerprint radar visualization" 

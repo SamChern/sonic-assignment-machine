@@ -337,7 +337,7 @@ const Index = () => {
               </div>
               {/* Subtitle embedded at top */}
               <div className="absolute top-4 left-4 right-4 z-10">
-                <p className="text-lg sm:text-xl text-foreground text-center bg-background/35 backdrop-blur-md py-2 px-4 rounded-xl shadow-lg">
+                <p className="text-xl sm:text-2xl text-foreground text-center bg-background/25 backdrop-blur-md py-2 px-4 rounded-xl shadow-lg">
                   Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
                 </p>
               </div>

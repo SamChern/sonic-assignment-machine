@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Library, Save, Shield, Activity, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +42,12 @@ const Index = () => {
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("select");
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
+  const [showGetStartedDialog, setShowGetStartedDialog] = useState(false);
+
+  const handleGetStarted = () => {
+    setShowGetStartedDialog(false);
+    setActiveTab("select");
+  };
 
   const handleHealthCheck = async () => {
     const result = await checkHealth();
@@ -339,7 +346,7 @@ const Index = () => {
                 <Button 
                   size="lg" 
                   className="shadow-xl"
-                  onClick={() => setActiveTab("select")}
+                  onClick={() => setShowGetStartedDialog(true)}
                 >
                   <Sparkles className="mr-2 h-5 w-5" />
                   Get Started
@@ -712,6 +719,38 @@ const Index = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Get Started Dialog */}
+      <Dialog open={showGetStartedDialog} onOpenChange={setShowGetStartedDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Get started with the following steps</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <ol className="list-decimal list-inside space-y-3 text-foreground">
+              <li>Upload a user's playlist, audio history or any other sonic identifiers</li>
+              <li>Find the connective tissue between a user's sonic history.</li>
+              <li>Category sonic history into 6 meta categories.</li>
+              <li>Garner insights around sonic similarities and differences.</li>
+              <li className="text-muted-foreground">
+                <span className="font-medium">[Enterprise only]</span> Compare sonic fingerprints across users to create a new path to enrich your data-driven marketing, including:
+                <ol className="list-[lower-alpha] list-inside ml-6 mt-2 space-y-1">
+                  <li>Identity resolution</li>
+                  <li>Multi-modal clustering</li>
+                  <li>Contextual targeting</li>
+                  <li>Predictive analyses</li>
+                </ol>
+              </li>
+            </ol>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={handleGetStarted}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Continue
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

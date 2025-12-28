@@ -307,8 +307,8 @@ const Index = () => {
           )}
         </div>
         
-        <div className="relative mx-auto max-w-7xl px-6 py-16 sm:py-24">
-          <div className="text-center space-y-6">
+        <div className="relative mx-auto max-w-7xl px-6 py-8 sm:py-12">
+          <div className="text-center space-y-4">
             <h1 className="text-4xl sm:text-5xl font-bold text-foreground">
               <span className="text-primary">[S]</span>onic{" "}
               <span className="text-primary">[A]</span>ssignment{" "}
@@ -317,6 +317,20 @@ const Index = () => {
             <p className="text-base text-muted-foreground max-w-4xl mx-auto">
               Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
             </p>
+          </div>
+          
+          {/* Example Output Preview */}
+          <div className="mt-8 flex justify-center">
+            <div className="relative rounded-xl overflow-hidden border border-border/50 shadow-2xl max-w-4xl">
+              <img 
+                src="/assets/example-output.png" 
+                alt="Example sonic fingerprint network visualization" 
+                className="w-full h-auto"
+              />
+              <div className="absolute bottom-4 left-4 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-md text-sm text-muted-foreground">
+                Example output visualization
+              </div>
+            </div>
           </div>
         </div>
       </div>

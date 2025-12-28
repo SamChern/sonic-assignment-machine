@@ -3,7 +3,8 @@ import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { User, Heart, Brain, Users, MessageCircle, Map, Palette, Layers } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { User, Heart, Brain, Users, MessageCircle, Map, Palette, Layers, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import samLogo from "@/assets/sam-logo.png";
 
 interface UserFingerprint {
@@ -193,9 +194,39 @@ export const AggregateNetworkVisualization = ({
   onUserClick 
 }: AggregateNetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [hoveredUser, setHoveredUser] = useState<UserFingerprint | null>(null);
   const [hoveredCluster, setHoveredCluster] = useState<Cluster | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [currentZoom, setCurrentZoom] = useState(1);
+
+  // Zoom control functions
+  const handleZoomIn = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(300)
+        .call(zoomRef.current.scaleBy, 1.3);
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(300)
+        .call(zoomRef.current.scaleBy, 0.7);
+    }
+  };
+
+  const handleZoomReset = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(300)
+        .call(zoomRef.current.transform, d3.zoomIdentity);
+    }
+  };
 
   // Compute clusters
   const clusters = useMemo(() => {
@@ -261,6 +292,20 @@ export const AggregateNetworkVisualization = ({
     const height = 500;
 
     svg.attr("width", width).attr("height", height);
+
+    // Create zoom behavior
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.3, 4])
+      .on("zoom", (event) => {
+        mainGroup.attr("transform", event.transform);
+        setCurrentZoom(event.transform.k);
+      });
+
+    zoomRef.current = zoom;
+    svg.call(zoom);
+
+    // Main group for all zoomable content
+    const mainGroup = svg.append("g").attr("class", "main-group");
 
     // Create nodes from fingerprints with cluster info
     const nodes = fingerprints.map((fp, i) => {
@@ -329,17 +374,17 @@ export const AggregateNetworkVisualization = ({
       glowMerge.append("feMergeNode").attr("in", "SourceGraphic");
     });
 
-    // Background
-    svg.append("rect")
+    // Background (stays on svg, not in zoomable group)
+    svg.insert("rect", ":first-child")
       .attr("width", width)
       .attr("height", height)
       .attr("fill", "url(#aggregate-bg-gradient)");
 
     // Cluster hulls group (drawn first, behind everything)
-    const hullGroup = svg.append("g").attr("class", "hulls");
+    const hullGroup = mainGroup.append("g").attr("class", "hulls");
 
     // Draw links
-    const linkGroup = svg.append("g").attr("class", "links");
+    const linkGroup = mainGroup.append("g").attr("class", "links");
     linkGroup.selectAll("line")
       .data(links)
       .join("line")
@@ -349,7 +394,7 @@ export const AggregateNetworkVisualization = ({
       .attr("stroke-dasharray", (d) => d.sameCluster ? "none" : "4 4");
 
     // Draw nodes
-    const nodeGroup = svg.append("g").attr("class", "nodes");
+    const nodeGroup = mainGroup.append("g").attr("class", "nodes");
     const nodeElements = nodeGroup.selectAll("g")
       .data(nodes)
       .join("g")
@@ -550,6 +595,41 @@ export const AggregateNetworkVisualization = ({
               {clusters.length} cluster{clusters.length !== 1 ? 's' : ''} detected
             </p>
           </div>
+        </div>
+
+        {/* Zoom controls - bottom left */}
+        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 bg-card/95 backdrop-blur-sm rounded-lg p-2 border border-border/50 shadow-lg">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleZoomOut}
+            title="Zoom out"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <span className="text-xs text-muted-foreground min-w-[3rem] text-center font-medium">
+            {Math.round(currentZoom * 100)}%
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleZoomIn}
+            title="Zoom in"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+          <div className="w-px h-6 bg-border mx-1" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleZoomReset}
+            title="Reset zoom"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Cluster legend in top right */}

@@ -732,16 +732,25 @@ const Index = () => {
               <li>Find the connective tissue between a user's sonic history.</li>
               <li>Category sonic history into 6 meta categories.</li>
               <li>Garner insights around sonic similarities and differences.</li>
-              <li className="text-muted-foreground">
-                <span className="font-medium">[Enterprise only]</span> Compare sonic fingerprints across users to create a new path to enrich your data-driven marketing, including:
-                <ol className="list-[lower-alpha] list-inside ml-6 mt-2 space-y-1">
-                  <li>Identity resolution</li>
-                  <li>Multi-modal clustering</li>
-                  <li>Contextual targeting</li>
-                  <li>Predictive analyses</li>
-                </ol>
-              </li>
             </ol>
+            
+            {/* Enterprise Section */}
+            <div className="mt-4 p-4 rounded-lg border border-primary/30 bg-primary/5 relative overflow-hidden">
+              <div className="absolute top-0 right-0">
+                <Badge className="rounded-none rounded-bl-lg bg-primary text-primary-foreground">
+                  Enterprise
+                </Badge>
+              </div>
+              <p className="text-sm text-foreground font-medium mb-2 pr-20">
+                Compare sonic fingerprints across users to create a new path to enrich your data-driven marketing, including:
+              </p>
+              <ol className="list-[lower-alpha] list-inside ml-2 space-y-1 text-sm text-muted-foreground">
+                <li>Identity resolution</li>
+                <li>Multi-modal clustering</li>
+                <li>Contextual targeting</li>
+                <li>Predictive analyses</li>
+              </ol>
+            </div>
           </div>
           <div className="flex justify-end">
             <Button onClick={handleGetStarted}>

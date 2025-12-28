@@ -109,22 +109,19 @@ const Index = () => {
     setIsAnalyzing(true);
     setResults(null);
 
-    try {
-      // Prepare sources for backend analysis (include spotify_id for caching)
-      const sources = [
-        ...selectedFiles.map(f => ({ name: f.name, type: 'file' as const })),
-        ...spotifyTracks.map(t => ({ 
-          name: `${t.name} - ${t.artists[0].name}`, 
-          type: 'track' as const,
-          spotify_id: t.id, // Enable cache lookup by Spotify ID
-        }))
-      ];
+    // Prepare sources for backend analysis (include spotify_id for caching)
+    const sources = [
+      ...selectedFiles.map(f => ({ name: f.name, type: 'file' as const })),
+      ...spotifyTracks.map(t => ({
+        name: `${t.name} - ${t.artists[0].name}`,
+        type: 'track' as const,
+        spotify_id: t.id, // Enable cache lookup by Spotify ID
+      }))
+    ];
 
-      console.log('Sending sources for analysis:', sources);
-
-      // Call backend AI analysis
+    const invokeAnalysis = async () => {
       const { data, error } = await supabase.functions.invoke('analyze-audio', {
-        body: { 
+        body: {
           sources,
           user_id: user?.id,
           save_results: !!user,
@@ -145,6 +142,26 @@ const Index = () => {
       if (!data || !data.sources) {
         console.error('Invalid response structure:', data);
         throw new Error('Invalid analysis response - no sources returned. Please try again.');
+      }
+
+      return data;
+    };
+
+    try {
+      console.log('Sending sources for analysis:', sources);
+
+      let data;
+      try {
+        data = await invokeAnalysis();
+      } catch (firstError) {
+        // Retry once if the error looks like the JSON-parse issue
+        const errMsg = firstError instanceof Error ? firstError.message : String(firstError);
+        if (errMsg.includes('Failed to parse AI response')) {
+          toast.info('AI response was malformed — retrying automatically…');
+          data = await invokeAnalysis();
+        } else {
+          throw firstError;
+        }
       }
 
       console.log('Received analysis:', data);

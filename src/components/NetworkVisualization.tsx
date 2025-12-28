@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, ZoomIn, ZoomOut, RotateCcw, Maximize } from "lucide-react";
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import samLogo from "@/assets/sam-logo.png";
 import emotionIcon from "@/assets/emotion-sam.png";
 import socialIcon from "@/assets/social-sam.png";
@@ -65,8 +66,12 @@ interface NetworkVisualizationProps {
   sourceImages?: Array<{ name: string; imageUrl: string }>;
 }
 
+// Store nodes reference for fit-to-view calculation
+let networkNodesRef: { x?: number; y?: number; score: number }[] = [];
+
 export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [similarityMetrics, setSimilarityMetrics] = useState<SimilarityMetrics>({
@@ -75,6 +80,79 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
     sourcePairs: [],
   });
   const [showDetails, setShowDetails] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState(1);
+
+  // Zoom control functions
+  const handleZoomIn = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(300)
+        .call(zoomRef.current.scaleBy, 1.3);
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(300)
+        .call(zoomRef.current.scaleBy, 0.7);
+    }
+  };
+
+  const handleZoomReset = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(300)
+        .call(zoomRef.current.transform, d3.zoomIdentity);
+    }
+  };
+
+  const handleFitToView = () => {
+    if (!svgRef.current || !zoomRef.current || networkNodesRef.length === 0) return;
+
+    const width = svgRef.current.clientWidth;
+    const height = svgRef.current.clientHeight;
+    const padding = 80;
+
+    // Calculate bounding box of all nodes
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    networkNodesRef.forEach(node => {
+      const x = node.x ?? width / 2;
+      const y = node.y ?? height / 2;
+      const r = 10 + (node.score / 100) * 25 + 50; // Account for node size and labels
+      minX = Math.min(minX, x - r);
+      maxX = Math.max(maxX, x + r);
+      minY = Math.min(minY, y - r);
+      maxY = Math.max(maxY, y + r);
+    });
+
+    const boundingWidth = maxX - minX;
+    const boundingHeight = maxY - minY;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    // Calculate scale to fit all nodes with padding
+    const scale = Math.min(
+      (width - padding * 2) / boundingWidth,
+      (height - padding * 2) / boundingHeight,
+      2 // Max zoom of 2x
+    );
+
+    // Calculate translation to center the nodes
+    const translateX = width / 2 - centerX * scale;
+    const translateY = height / 2 - centerY * scale;
+
+    d3.select(svgRef.current)
+      .transition()
+      .duration(500)
+      .call(
+        zoomRef.current.transform,
+        d3.zoomIdentity.translate(translateX, translateY).scale(scale)
+      );
+  };
 
   useEffect(() => {
     if (!svgRef.current || !sources.length) return;
@@ -307,6 +385,23 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       .attr("width", width)
       .attr("height", height);
 
+    // Create zoom behavior
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.3, 4])
+      .on("zoom", (event) => {
+        mainGroup.attr("transform", event.transform);
+        setCurrentZoom(event.transform.k);
+      });
+
+    zoomRef.current = zoom;
+    svg.call(zoom);
+
+    // Main group for all zoomable content
+    const mainGroup = svg.append("g").attr("class", "main-group");
+
+    // Store nodes reference for fit-to-view
+    networkNodesRef = nodes;
+
     // Add gradient definitions for glow effects
     const defs = svg.append("defs");
     Object.entries(categoryColors).forEach(([category, color]) => {
@@ -370,7 +465,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       }) : null;
 
     // Draw links
-    const link = svg.append("g")
+    const link = mainGroup.append("g")
       .selectAll("line")
       .data(links)
       .join("line")
@@ -391,7 +486,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       });
 
     // Draw glow circles behind nodes
-    const glowCircles = svg.append("g")
+    const glowCircles = mainGroup.append("g")
       .selectAll("circle")
       .data(nodes)
       .join("circle")
@@ -403,7 +498,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       });
 
     // Draw nodes - SIZE REPRESENTS CATEGORY SCORE FOR THAT SOURCE
-    const node = svg.append("g")
+    const node = mainGroup.append("g")
       .selectAll("circle")
       .data(nodes)
       .join("circle")
@@ -566,6 +661,50 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             className="w-full h-full relative z-10"
             style={{ background: "transparent" }}
           />
+
+          {/* Zoom controls - Top Right */}
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-card/95 backdrop-blur-sm rounded-lg p-2 border border-border/50 shadow-lg">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleZoomOut}
+              title="Zoom out"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground min-w-[3rem] text-center font-medium">
+              {Math.round(currentZoom * 100)}%
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleZoomIn}
+              title="Zoom in"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            <div className="w-px h-6 bg-border mx-1" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleZoomReset}
+              title="Reset zoom"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleFitToView}
+              title="Fit all nodes to view"
+            >
+              <Maximize className="h-4 w-4" />
+            </Button>
+          </div>
           
           {/* Enhanced Similarity Metrics - Bottom Left */}
           <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-4 shadow-lg z-20 max-w-[400px]">

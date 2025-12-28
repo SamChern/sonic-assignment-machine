@@ -318,14 +318,6 @@ const Index = () => {
             <p className="text-base text-muted-foreground max-w-4xl mx-auto">
               Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
             </p>
-            <Button 
-              size="lg" 
-              className="mt-2"
-              onClick={() => setActiveTab("select")}
-            >
-              <Sparkles className="mr-2 h-5 w-5" />
-              Get Started
-            </Button>
           </div>
           
           {/* Example Output Preview */}
@@ -338,6 +330,17 @@ const Index = () => {
                   className="w-full h-auto"
                   style={{ transform: 'scale(1.35)' }}
                 />
+              </div>
+              {/* CTA Button embedded at bottom */}
+              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
+                <Button 
+                  size="lg" 
+                  className="shadow-xl"
+                  onClick={() => setActiveTab("select")}
+                >
+                  <Sparkles className="mr-2 h-5 w-5" />
+                  Get Started
+                </Button>
               </div>
             </div>
           </div>

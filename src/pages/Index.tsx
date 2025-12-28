@@ -315,9 +315,6 @@ const Index = () => {
               <span className="text-primary">[A]</span>ssignment{" "}
               <span className="text-primary">[M]</span>achine
             </h1>
-            <p className="text-base text-muted-foreground max-w-4xl mx-auto">
-              Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
-            </p>
           </div>
           
           {/* Example Output Preview */}
@@ -330,6 +327,12 @@ const Index = () => {
                   className="w-full h-auto"
                   style={{ transform: 'scale(1.35)' }}
                 />
+              </div>
+              {/* Subtitle embedded at top */}
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 w-full px-6">
+                <p className="text-base sm:text-lg text-foreground text-center bg-background/70 backdrop-blur-md py-2 px-4 rounded-xl max-w-2xl mx-auto shadow-lg">
+                  Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
+                </p>
               </div>
               {/* CTA Button embedded at bottom */}
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">

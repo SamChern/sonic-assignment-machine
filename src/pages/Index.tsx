@@ -328,7 +328,7 @@ const Index = () => {
                   src={exampleOutput} 
                   alt="Example sonic fingerprint network visualization" 
                   className="w-full h-auto"
-                  style={{ transform: 'scale(1.30)' }}
+                  style={{ transform: 'scale(1.35)' }}
                 />
               </div>
             </div>

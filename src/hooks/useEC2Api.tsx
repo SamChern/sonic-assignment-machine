@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { getEC2Url, EC2_CONFIG } from '@/config/ec2';
+import { supabase } from '@/integrations/supabase/client';
+import { EC2_ENDPOINTS } from '@/config/ec2';
 
 interface EC2ApiResponse<T = unknown> {
   data: T | null;
@@ -10,7 +11,6 @@ interface EC2ApiResponse<T = unknown> {
 interface EC2ApiOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   body?: Record<string, unknown>;
-  timeout?: number;
 }
 
 export const useEC2Api = () => {
@@ -20,68 +20,36 @@ export const useEC2Api = () => {
     endpoint: string,
     options: EC2ApiOptions = {}
   ): Promise<EC2ApiResponse<T>> => {
-    const { method = 'GET', body, timeout = EC2_CONFIG.timeout } = options;
+    const { method = 'GET', body } = options;
     
     setLoading(true);
     
-    // Create abort controller for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
     try {
-      const url = getEC2Url(endpoint);
-      const isHealthCheck = endpoint.includes('/health');
+      console.log(`Calling EC2 API via proxy: ${method} ${endpoint}`);
       
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      // Add API key for protected endpoints (not health check)
-      if (!isHealthCheck) {
-        headers['x-api-key'] = EC2_CONFIG.apiKey;
-      }
-      
-      const fetchOptions: RequestInit = {
-        method,
-        headers,
-        signal: controller.signal,
-      };
+      const { data, error } = await supabase.functions.invoke('aws-proxy', {
+        body: {
+          endpoint,
+          method,
+          body: body || null,
+        },
+      });
 
-      if (body && method !== 'GET') {
-        fetchOptions.body = JSON.stringify(body);
-      }
-
-      const response = await fetch(url, fetchOptions);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('EC2 API error:', response.status, errorText);
+      if (error) {
+        console.error('AWS proxy error:', error);
         return { 
           data: null, 
-          error: `HTTP ${response.status}: ${errorText || response.statusText}`, 
+          error: error.message || 'Failed to call AWS proxy', 
           loading: false 
         };
       }
 
-      const data = await response.json();
       return { data: data as T, error: null, loading: false };
     } catch (err) {
-      let errorMessage = 'Unknown error';
-      
-      if (err instanceof Error) {
-        if (err.name === 'AbortError') {
-          errorMessage = 'Request timed out';
-        } else if (err.message.includes('Failed to fetch')) {
-          errorMessage = 'Cannot connect to EC2 - check if port 80 is open in AWS Security Group';
-        } else {
-          errorMessage = err.message;
-        }
-      }
-      
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       console.error('EC2 API call failed:', errorMessage);
       return { data: null, error: errorMessage, loading: false };
     } finally {
-      clearTimeout(timeoutId);
       setLoading(false);
     }
   }, []);
@@ -101,7 +69,7 @@ export const useEC2Api = () => {
 
   // Health check helper
   const checkHealth = useCallback(async () => {
-    const result = await get<{ status: string; timestamp: string }>('/api/health');
+    const result = await get<{ status: string; timestamp: string }>(EC2_ENDPOINTS.health);
     return result;
   }, [get]);
 

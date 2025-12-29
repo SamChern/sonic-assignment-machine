@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ZoomIn, ZoomOut, RotateCcw, Maximize } from "lucide-react";
+import { Check, ZoomIn, ZoomOut, RotateCcw, Maximize, Tag, EyeOff } from "lucide-react";
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,6 +82,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
   });
   const [showDetails, setShowDetails] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(1);
+  const [showLabels, setShowLabels] = useState(true);
 
   // Zoom control functions
   const handleZoomIn = () => {
@@ -583,7 +584,10 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       });
 
     // Add node labels - category names and scores
-    const labelsGroup = mainGroup.append("g").attr("class", "labels");
+    const labelsGroup = mainGroup.append("g")
+      .attr("class", "labels")
+      .style("opacity", showLabels ? 1 : 0)
+      .style("transition", "opacity 0.3s ease");
     
     // Category label (below node)
     const categoryLabels = labelsGroup
@@ -729,7 +733,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
     return () => {
       simulation?.stop();
     };
-  }, [sources, selectedCategories, pinnedNode]);
+  }, [sources, selectedCategories, pinnedNode, showLabels]);
 
   return (
     <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
@@ -851,6 +855,16 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
               title="Fit all nodes to view"
             >
               <Maximize className="h-4 w-4" />
+            </Button>
+            <div className="w-px h-6 bg-border mx-1" />
+            <Button
+              variant={showLabels ? "ghost" : "secondary"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setShowLabels(!showLabels)}
+              title={showLabels ? "Hide labels" : "Show labels"}
+            >
+              {showLabels ? <Tag className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
             </Button>
           </div>
           

@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Library, Save, Shield, Activity, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Save, Shield, Activity, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
@@ -20,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Check, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
-import { UserLibrary } from "@/components/UserLibrary";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useEC2Api } from "@/hooks/useEC2Api";
 
@@ -360,16 +360,11 @@ const Index = () => {
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-6 py-12">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-8">
+          <TabsList className="grid w-full grid-cols-3 mb-8">
             <TabsTrigger value="select" className="flex items-center gap-2">
               <FileAudio className="h-4 w-4" />
               <span className="hidden sm:inline">Select Sources</span>
               <span className="sm:hidden">Sources</span>
-            </TabsTrigger>
-            <TabsTrigger value="library" className="flex items-center gap-2">
-              <Library className="h-4 w-4" />
-              <span className="hidden sm:inline">Browse Library</span>
-              <span className="sm:hidden">Library</span>
             </TabsTrigger>
             <TabsTrigger value="network" className="flex items-center gap-2" disabled={!results}>
               <Network className="h-4 w-4" />
@@ -417,6 +412,7 @@ const Index = () => {
                 onFileSelect={handleFileSelect} 
                 selectedFile={null}
                 onSpotifyTrack={handleSpotifyTrack}
+                onLibrarySelect={handleLibrarySelect}
               />
             </div>
             
@@ -543,20 +539,8 @@ const Index = () => {
             )}
           </TabsContent>
 
-          {/* Tab 2: Browse Library */}
-          <TabsContent value="library" className="space-y-6">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-foreground">Browse Audio Library</h2>
-                <p className="text-muted-foreground mt-1">
-                  Select sources from your library or browse public collections
-                </p>
-              </div>
-            </div>
-            <UserLibrary onSelectMultiple={handleLibrarySelect} />
-          </TabsContent>
 
-          {/* Tab 3: Ontological Identity Network */}
+          {/* Tab 2: Ontological Identity Network */}
           <TabsContent value="network" className="space-y-6">
             {/* Filter Controls */}
             {results && results.sources.length > 1 && (

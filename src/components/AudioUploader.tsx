@@ -1,17 +1,20 @@
 import { useState, useCallback } from "react";
-import { Upload, FileAudio } from "lucide-react";
+import { Upload, FileAudio, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SpotifySearch } from "./SpotifySearch";
+import { UserLibrary } from "./UserLibrary";
+import { AudioSource } from "@/hooks/useAudioSources";
 
 interface AudioUploaderProps {
   onFileSelect: (file: File) => void;
   selectedFile: File | null;
   onSpotifyTrack?: (track: any) => void;
+  onLibrarySelect?: (sources: AudioSource[]) => void;
 }
 
-export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack }: AudioUploaderProps) => {
+export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLibrarySelect }: AudioUploaderProps) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -43,9 +46,13 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack }: Au
 
   return (
     <Tabs defaultValue="upload" className="w-full">
-      <TabsList className="grid w-full grid-cols-2">
+      <TabsList className="grid w-full grid-cols-3">
         <TabsTrigger value="upload">Upload File</TabsTrigger>
         <TabsTrigger value="spotify">Spotify Search</TabsTrigger>
+        <TabsTrigger value="library">
+          <Library className="h-4 w-4 mr-1.5" />
+          Browse Library
+        </TabsTrigger>
       </TabsList>
       
       <TabsContent value="upload">
@@ -113,6 +120,12 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack }: Au
       <TabsContent value="spotify">
         <Card className="p-6">
           <SpotifySearch onTrackSelect={onSpotifyTrack || (() => {})} />
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="library">
+        <Card className="p-6">
+          <UserLibrary onSelectMultiple={onLibrarySelect} />
         </Card>
       </TabsContent>
     </Tabs>

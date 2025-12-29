@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Brain, Users, Heart, MessageSquare, Music, MapPin } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface CategoryScore {
   name: string;
@@ -19,18 +19,203 @@ interface AnalysisResultsProps {
   sourceImages?: Array<{ name: string; imageUrl: string }>;
 }
 
+// Category color mapping
+const categoryColors: Record<string, { bg: string; border: string; text: string; glow: string }> = {
+  emotional: {
+    bg: "bg-category-emotional/10",
+    border: "border-category-emotional/30 hover:border-category-emotional/60",
+    text: "text-category-emotional",
+    glow: "hover:shadow-[0_0_30px_hsl(220_90%_56%/0.3)]",
+  },
+  cognitive: {
+    bg: "bg-category-cognitive/10",
+    border: "border-category-cognitive/30 hover:border-category-cognitive/60",
+    text: "text-category-cognitive",
+    glow: "hover:shadow-[0_0_30px_hsl(142_70%_45%/0.3)]",
+  },
+  social: {
+    bg: "bg-category-social/10",
+    border: "border-category-social/30 hover:border-category-social/60",
+    text: "text-category-social",
+    glow: "hover:shadow-[0_0_30px_hsl(174_72%_40%/0.3)]",
+  },
+  communication: {
+    bg: "bg-category-communication/10",
+    border: "border-category-communication/30 hover:border-category-communication/60",
+    text: "text-category-communication",
+    glow: "hover:shadow-[0_0_30px_hsl(84_80%_44%/0.3)]",
+  },
+  contextual: {
+    bg: "bg-category-contextual/10",
+    border: "border-category-contextual/30 hover:border-category-contextual/60",
+    text: "text-category-contextual",
+    glow: "hover:shadow-[0_0_30px_hsl(200_90%_50%/0.3)]",
+  },
+  artistic: {
+    bg: "bg-category-artistic/10",
+    border: "border-category-artistic/30 hover:border-category-artistic/60",
+    text: "text-category-artistic",
+    glow: "hover:shadow-[0_0_30px_hsl(168_76%_42%/0.3)]",
+  },
+};
+
+const getCategoryStyles = (categoryName: string) => {
+  return categoryColors[categoryName.toLowerCase()] || categoryColors.emotional;
+};
+
+// Radial score visualization component
+const RadialScoreChart = ({ categories }: { categories: CategoryScore[] }) => {
+  const size = 180;
+  const center = size / 2;
+  const maxRadius = 70;
+  const minRadius = 20;
+
+  const angleStep = (2 * Math.PI) / categories.length;
+
+  const points = categories.map((cat, i) => {
+    const angle = i * angleStep - Math.PI / 2;
+    const radius = minRadius + (cat.score / 100) * (maxRadius - minRadius);
+    return {
+      x: center + radius * Math.cos(angle),
+      y: center + radius * Math.sin(angle),
+      score: cat.score,
+      name: cat.name,
+    };
+  });
+
+  const pathD = points
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+    .join(" ") + " Z";
+
+  return (
+    <svg width={size} height={size} className="drop-shadow-lg">
+      {/* Background circles */}
+      {[25, 50, 75, 100].map((pct) => (
+        <circle
+          key={pct}
+          cx={center}
+          cy={center}
+          r={minRadius + (pct / 100) * (maxRadius - minRadius)}
+          fill="none"
+          stroke="hsl(var(--border))"
+          strokeWidth="1"
+          opacity="0.3"
+        />
+      ))}
+      
+      {/* Axis lines */}
+      {categories.map((_, i) => {
+        const angle = i * angleStep - Math.PI / 2;
+        return (
+          <line
+            key={i}
+            x1={center}
+            y1={center}
+            x2={center + maxRadius * Math.cos(angle)}
+            y2={center + maxRadius * Math.sin(angle)}
+            stroke="hsl(var(--border))"
+            strokeWidth="1"
+            opacity="0.3"
+          />
+        );
+      })}
+
+      {/* Score polygon */}
+      <path
+        d={pathD}
+        fill="hsl(var(--primary) / 0.2)"
+        stroke="hsl(var(--primary))"
+        strokeWidth="2"
+        className="animate-[scale-in_0.5s_ease-out]"
+      />
+
+      {/* Score points */}
+      {points.map((p, i) => (
+        <circle
+          key={i}
+          cx={p.x}
+          cy={p.y}
+          r="4"
+          fill="hsl(var(--primary))"
+          className="animate-[scale-in_0.3s_ease-out]"
+          style={{ animationDelay: `${i * 0.1}s` }}
+        />
+      ))}
+
+      {/* Category labels */}
+      {categories.map((cat, i) => {
+        const angle = i * angleStep - Math.PI / 2;
+        const labelRadius = maxRadius + 18;
+        const x = center + labelRadius * Math.cos(angle);
+        const y = center + labelRadius * Math.sin(angle);
+        const styles = getCategoryStyles(cat.name);
+        
+        return (
+          <text
+            key={i}
+            x={x}
+            y={y}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            className={cn("text-[10px] font-medium fill-current", styles.text)}
+          >
+            {cat.name.slice(0, 4)}
+          </text>
+        );
+      })}
+    </svg>
+  );
+};
+
+// Animated score bar component
+const AnimatedScoreBar = ({ score, categoryName, delay }: { score: number; categoryName: string; delay: number }) => {
+  const styles = getCategoryStyles(categoryName);
+  
+  return (
+    <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className={cn(
+          "absolute left-0 top-0 h-full rounded-full transition-all duration-1000 ease-out",
+          styles.text.replace("text-", "bg-")
+        )}
+        style={{
+          width: `${score}%`,
+          animation: `slideIn 0.8s ease-out ${delay}s both`,
+        }}
+      />
+    </div>
+  );
+};
+
 export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: AnalysisResultsProps) => {
   if (isAnalyzing) {
     return (
-      <Card className="p-8 shadow-elegant">
-        <div className="space-y-4 text-center">
-          <div className="flex justify-center">
-            <div className="h-16 w-16 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <Card className="p-8 shadow-elegant border-primary/20">
+        <div className="space-y-6 text-center">
+          <div className="relative flex justify-center">
+            <div className="h-20 w-20 animate-spin rounded-full border-4 border-primary/30 border-t-primary"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Brain className="h-8 w-8 text-primary animate-pulse" />
+            </div>
           </div>
-          <p className="text-lg font-semibold text-foreground">Processing semantic embeddings...</p>
-          <p className="text-sm text-muted-foreground">
-            Extracting features via hierarchical transformer and aligning modalities
-          </p>
+          <div className="space-y-2">
+            <p className="text-xl font-semibold text-foreground">Analyzing Semantic Dimensions</p>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Extracting ontological features via hierarchical transformer and aligning multi-modal embeddings
+            </p>
+          </div>
+          <div className="flex justify-center gap-2">
+            {["Emotional", "Cognitive", "Social", "Communication", "Contextual", "Artistic"].map((cat, i) => (
+              <div
+                key={cat}
+                className={cn(
+                  "h-2 w-2 rounded-full animate-pulse",
+                  getCategoryStyles(cat).text.replace("text-", "bg-")
+                )}
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
         </div>
       </Card>
     );
@@ -38,66 +223,154 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: Ana
 
   if (!results || results.length === 0) return null;
 
-  return (
-    <Card className="p-8 shadow-elegant">
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Comparative Ontological Scoring</h2>
-          <p className="text-sm text-muted-foreground">
-            Showing how central each category is to each source's identity
-          </p>
-        </div>
+  const getSourceImage = (sourceName: string) => {
+    const match = sourceImages.find(img => img.name === sourceName);
+    return match?.imageUrl;
+  };
 
-        <div className="space-y-8">
-          {results.map((source, sourceIndex) => (
-            <div key={sourceIndex} className="space-y-4">
-              <div className="flex items-center gap-3 pb-2 border-b border-border">
-                <h3 className="text-xl font-bold text-primary">{source.name}</h3>
-                <span className="text-xs text-muted-foreground">Ontological Fingerprint</span>
-              </div>
-              
-              <div className="grid gap-4 md:grid-cols-2">
-                {source.categories.map((category, catIndex) => (
-                  <div
-                    key={catIndex}
-                    className="group rounded-lg border border-border bg-card p-4 transition-smooth hover:border-primary/50 hover:shadow-glow"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary transition-smooth group-hover:bg-primary/20">
-                        {getCategoryIcon(category.name)}
-                      </div>
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-semibold text-foreground">{category.name}</h4>
-                          <span className="text-sm font-medium text-primary">
-                            {category.score}%
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="text-center space-y-2">
+        <h2 className="text-3xl font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
+          Ontological Analysis
+        </h2>
+        <p className="text-muted-foreground max-w-xl mx-auto">
+          Comparative semantic scoring across six ontological dimensions for each audio source
+        </p>
+      </div>
+
+      {/* Results grid */}
+      <div className="grid gap-8">
+        {results.map((source, sourceIndex) => {
+          const imageUrl = getSourceImage(source.name);
+          
+          return (
+            <Card 
+              key={sourceIndex} 
+              className="p-6 shadow-elegant border-border/50 hover:border-primary/30 transition-all duration-300 overflow-hidden"
+              style={{ animationDelay: `${sourceIndex * 0.15}s` }}
+            >
+              <div className="flex flex-col lg:flex-row gap-6">
+                {/* Left side: Source info + radial chart */}
+                <div className="flex flex-col items-center gap-4 lg:w-64 shrink-0">
+                  {/* Album art or placeholder */}
+                  {imageUrl ? (
+                    <div className="relative group">
+                      <img
+                        src={imageUrl}
+                        alt={source.name}
+                        className="w-24 h-24 rounded-lg object-cover shadow-lg group-hover:shadow-glow transition-all duration-300"
+                      />
+                      <div className="absolute inset-0 rounded-lg bg-gradient-to-t from-background/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  ) : (
+                    <div className="w-24 h-24 rounded-lg bg-muted flex items-center justify-center">
+                      <Music className="h-10 w-10 text-muted-foreground" />
+                    </div>
+                  )}
+                  
+                  <div className="text-center">
+                    <h3 className="text-lg font-bold text-foreground line-clamp-2">{source.name}</h3>
+                    <span className="text-xs text-primary/70 font-medium">Ontological Fingerprint</span>
+                  </div>
+
+                  {/* Radial chart */}
+                  <RadialScoreChart categories={source.categories} />
+                </div>
+
+                {/* Right side: Category cards */}
+                <div className="flex-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {source.categories.map((category, catIndex) => {
+                    const styles = getCategoryStyles(category.name);
+                    
+                    return (
+                      <div
+                        key={catIndex}
+                        className={cn(
+                          "group relative rounded-xl border p-4 transition-all duration-300",
+                          styles.border,
+                          styles.glow
+                        )}
+                        style={{ 
+                          animationDelay: `${(sourceIndex * 0.1) + (catIndex * 0.05)}s`,
+                          animation: "fadeIn 0.5s ease-out both"
+                        }}
+                      >
+                        {/* Category header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className={cn(
+                              "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300",
+                              styles.bg,
+                              "group-hover:scale-110"
+                            )}>
+                              <span className={styles.text}>
+                                {getCategoryIcon(category.name)}
+                              </span>
+                            </div>
+                            <h4 className={cn("font-semibold text-sm", styles.text)}>
+                              {category.name}
+                            </h4>
+                          </div>
+                          <span className={cn(
+                            "text-2xl font-bold tabular-nums",
+                            styles.text
+                          )}>
+                            {category.score}
                           </span>
                         </div>
-                        <Progress value={category.score} className="h-2" />
-                        <p className="text-sm text-muted-foreground">{category.description}</p>
+
+                        {/* Score bar */}
+                        <AnimatedScoreBar 
+                          score={category.score} 
+                          categoryName={category.name}
+                          delay={(sourceIndex * 0.1) + (catIndex * 0.05)}
+                        />
+
+                        {/* Description */}
+                        <p className="mt-3 text-xs text-muted-foreground leading-relaxed line-clamp-3">
+                          {category.description}
+                        </p>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            </Card>
+          );
+        })}
       </div>
-    </Card>
+
+      {/* Add animation keyframes */}
+      <style>{`
+        @keyframes slideIn {
+          from { width: 0; }
+          to { width: var(--target-width); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scale-in {
+          from { transform: scale(0); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+    </div>
   );
 };
 
 // Icon mapping helper
 export const getCategoryIcon = (categoryName: string) => {
   const iconMap: Record<string, React.ReactNode> = {
-    emotional: <Heart className="h-6 w-6" />,
-    cognitive: <Brain className="h-6 w-6" />,
-    social: <Users className="h-6 w-6" />,
-    communication: <MessageSquare className="h-6 w-6" />,
-    contextual: <MapPin className="h-6 w-6" />,
-    artistic: <Music className="h-6 w-6" />,
+    emotional: <Heart className="h-4 w-4" />,
+    cognitive: <Brain className="h-4 w-4" />,
+    social: <Users className="h-4 w-4" />,
+    communication: <MessageSquare className="h-4 w-4" />,
+    contextual: <MapPin className="h-4 w-4" />,
+    artistic: <Music className="h-4 w-4" />,
   };
   
-  return iconMap[categoryName.toLowerCase()] || <Brain className="h-6 w-6" />;
+  return iconMap[categoryName.toLowerCase()] || <Brain className="h-4 w-4" />;
 };

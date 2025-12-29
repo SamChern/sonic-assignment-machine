@@ -57,6 +57,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        category: {
+          emotional: "hsl(var(--category-emotional))",
+          cognitive: "hsl(var(--category-cognitive))",
+          social: "hsl(var(--category-social))",
+          communication: "hsl(var(--category-communication))",
+          contextual: "hsl(var(--category-contextual))",
+          artistic: "hsl(var(--category-artistic))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

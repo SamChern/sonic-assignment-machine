@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.aws-proxy]
 verify_jwt = false
+
+[functions.get-api-key]
+verify_jwt = false

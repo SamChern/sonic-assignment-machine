@@ -73,6 +73,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
   const svgRef = useRef<SVGSVGElement>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [pinnedNode, setPinnedNode] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [similarityMetrics, setSimilarityMetrics] = useState<SimilarityMetrics>({
     overall: 0,
@@ -517,17 +518,21 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       .attr("stroke-width", (d) => selectedCategories.has(d.category) ? 2 : 0)
       .style("cursor", "pointer")
       .on("mouseenter", (event, d) => {
+        // Don't show hover tooltip if a node is pinned
+        if (pinnedNode) return;
+        
         // Find category description from source data
         const sourceData = sources.find(s => s.name === d.sourceName);
         const categoryData = sourceData?.categories.find(c => c.name === d.category);
         const description = categoryData?.description || '';
         
-        // Create rich tooltip content
+        // Create rich tooltip content (truncated for hover)
         const tooltipContent = {
           source: d.sourceName,
           category: d.category,
           score: d.score,
           description: description.length > 100 ? description.substring(0, 100) + '...' : description,
+          isPinned: false,
         };
         setHoveredNode(JSON.stringify(tooltipContent));
         
@@ -538,6 +543,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
           .attr("opacity", 1);
       })
       .on("mouseleave", (event, d) => {
+        if (pinnedNode) return;
         setHoveredNode(null);
         d3.select(event.currentTarget)
           .transition()
@@ -547,6 +553,33 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             if (selectedCategories.size === 0) return 0.8;
             return selectedCategories.has(d.category) ? 0.95 : 0.2;
           });
+      })
+      .on("click", (event, d) => {
+        event.stopPropagation();
+        
+        // Find category description from source data
+        const sourceData = sources.find(s => s.name === d.sourceName);
+        const categoryData = sourceData?.categories.find(c => c.name === d.category);
+        const description = categoryData?.description || '';
+        
+        const nodeId = d.id;
+        
+        if (pinnedNode === nodeId) {
+          // Clicking same node unpins it
+          setPinnedNode(null);
+          setHoveredNode(null);
+        } else {
+          // Pin new node with full description
+          setPinnedNode(nodeId);
+          const tooltipContent = {
+            source: d.sourceName,
+            category: d.category,
+            score: d.score,
+            description: description, // Full description for pinned
+            isPinned: true,
+          };
+          setHoveredNode(JSON.stringify(tooltipContent));
+        }
       });
 
     // Add node labels - category names and scores
@@ -696,7 +729,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
     return () => {
       simulation?.stop();
     };
-  }, [sources, selectedCategories]);
+  }, [sources, selectedCategories, pinnedNode]);
 
   return (
     <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
@@ -743,7 +776,16 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             </p>
           </div>
         </div>
-        <div className="relative h-[500px] rounded-lg bg-black border border-border/30 overflow-hidden">
+        <div 
+          className="relative h-[500px] rounded-lg bg-black border border-border/30 overflow-hidden"
+          onClick={() => {
+            // Click on empty area unpins the tooltip
+            if (pinnedNode) {
+              setPinnedNode(null);
+              setHoveredNode(null);
+            }
+          }}
+        >
           {/* Background images */}
           {sourceImages.length > 0 && (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -1126,15 +1168,30 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             </div>
           </div>
 
-          {/* Enhanced Hover Tooltip */}
+          {/* Enhanced Hover/Pinned Tooltip */}
           {hoveredNode && (() => {
             try {
               const tooltipData = JSON.parse(hoveredNode);
+              const isPinned = tooltipData.isPinned;
               return (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-card/98 backdrop-blur-xl border border-primary/40 rounded-xl px-5 py-4 shadow-2xl z-20 max-w-xs animate-fade-in">
+                <div 
+                  className={`absolute top-4 left-1/2 -translate-x-1/2 bg-card/98 backdrop-blur-xl border rounded-xl shadow-2xl z-30 animate-fade-in ${
+                    isPinned 
+                      ? 'border-primary/60 max-w-sm px-5 py-4' 
+                      : 'border-primary/40 max-w-xs px-5 py-4'
+                  }`}
+                  onClick={(e) => {
+                    if (isPinned) {
+                      e.stopPropagation();
+                      setPinnedNode(null);
+                      setHoveredNode(null);
+                    }
+                  }}
+                  style={{ cursor: isPinned ? 'pointer' : 'default' }}
+                >
                   <div className="flex items-start gap-3">
                     <div 
-                      className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
+                      className={`rounded-full mt-1 flex-shrink-0 ${isPinned ? 'w-4 h-4' : 'w-3 h-3'}`}
                       style={{ 
                         backgroundColor: 
                           tooltipData.category === 'Emotional' ? 'hsl(200, 85%, 55%)' :
@@ -1143,17 +1200,24 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                           tooltipData.category === 'Communication' ? 'hsl(140, 70%, 55%)' :
                           tooltipData.category === 'Contextual' ? 'hsl(220, 75%, 60%)' :
                           'hsl(170, 80%, 55%)',
-                        boxShadow: '0 0 8px currentColor',
+                        boxShadow: isPinned ? '0 0 12px currentColor' : '0 0 8px currentColor',
                       }}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs text-muted-foreground mb-0.5 truncate">{tooltipData.source}</div>
-                      <div className="font-semibold text-sm text-foreground flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs text-muted-foreground truncate">{tooltipData.source}</div>
+                        {isPinned && (
+                          <span className="text-[10px] text-primary/70 bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
+                            Click to close
+                          </span>
+                        )}
+                      </div>
+                      <div className={`font-semibold text-foreground flex items-center gap-2 ${isPinned ? 'text-base mt-1' : 'text-sm'}`}>
                         <span>{tooltipData.category}</span>
                         <span className="text-primary font-bold">{tooltipData.score}%</span>
                       </div>
                       {tooltipData.description && (
-                        <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                        <p className={`text-muted-foreground leading-relaxed ${isPinned ? 'text-sm mt-3' : 'text-xs mt-2'}`}>
                           {tooltipData.description}
                         </p>
                       )}
@@ -1164,7 +1228,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             } catch {
               // Fallback for simple string tooltip
               return (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-md border border-primary/30 rounded-lg px-4 py-2 shadow-lg z-20">
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-md border border-primary/30 rounded-lg px-4 py-2 shadow-lg z-30">
                   <div className="text-xs font-semibold text-foreground whitespace-nowrap">
                     {hoveredNode}
                   </div>

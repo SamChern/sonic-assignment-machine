@@ -82,7 +82,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
   });
   const [showDetails, setShowDetails] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(1);
-  const [showLabels, setShowLabels] = useState(true);
+  const [showLabels, setShowLabels] = useState(false);
 
   // Zoom control functions
   const handleZoomIn = () => {

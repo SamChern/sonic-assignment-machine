@@ -498,7 +498,9 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       });
 
     // Draw nodes - SIZE REPRESENTS CATEGORY SCORE FOR THAT SOURCE
-    const node = mainGroup.append("g")
+    const nodeGroup = mainGroup.append("g").attr("class", "nodes");
+    
+    const node = nodeGroup
       .selectAll("circle")
       .data(nodes)
       .join("circle")
@@ -515,7 +517,20 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       .attr("stroke-width", (d) => selectedCategories.has(d.category) ? 2 : 0)
       .style("cursor", "pointer")
       .on("mouseenter", (event, d) => {
-        setHoveredNode(`${d.sourceName} - ${d.category}: ${d.score}%`);
+        // Find category description from source data
+        const sourceData = sources.find(s => s.name === d.sourceName);
+        const categoryData = sourceData?.categories.find(c => c.name === d.category);
+        const description = categoryData?.description || '';
+        
+        // Create rich tooltip content
+        const tooltipContent = {
+          source: d.sourceName,
+          category: d.category,
+          score: d.score,
+          description: description.length > 100 ? description.substring(0, 100) + '...' : description,
+        };
+        setHoveredNode(JSON.stringify(tooltipContent));
+        
         d3.select(event.currentTarget)
           .transition()
           .duration(200)
@@ -533,6 +548,70 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             return selectedCategories.has(d.category) ? 0.95 : 0.2;
           });
       });
+
+    // Add node labels - category names and scores
+    const labelsGroup = mainGroup.append("g").attr("class", "labels");
+    
+    // Category label (below node)
+    const categoryLabels = labelsGroup
+      .selectAll(".category-label")
+      .data(nodes.filter(n => n.id !== 'center'))
+      .join("text")
+      .attr("class", "category-label")
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "hanging")
+      .attr("fill", "hsl(180, 60%, 85%)")
+      .attr("font-size", "11px")
+      .attr("font-weight", "600")
+      .attr("opacity", (d) => {
+        if (selectedCategories.size === 0) return 0.9;
+        return selectedCategories.has(d.category) ? 1 : 0.3;
+      })
+      .style("pointer-events", "none")
+      .style("text-shadow", "0 1px 3px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.6)")
+      .text((d) => d.category);
+
+    // Score badge (above node)
+    const scoreLabels = labelsGroup
+      .selectAll(".score-label")
+      .data(nodes.filter(n => n.id !== 'center'))
+      .join("text")
+      .attr("class", "score-label")
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "auto")
+      .attr("fill", "white")
+      .attr("font-size", "10px")
+      .attr("font-weight", "700")
+      .attr("opacity", (d) => {
+        if (selectedCategories.size === 0) return 0.85;
+        return selectedCategories.has(d.category) ? 1 : 0.2;
+      })
+      .style("pointer-events", "none")
+      .style("text-shadow", "0 1px 2px rgba(0,0,0,0.9)")
+      .text((d) => `${d.score}%`);
+
+    // Source name label (smaller, above category) - only for multi-source
+    const sourceLabels = !isSingleSource ? labelsGroup
+      .selectAll(".source-label")
+      .data(nodes.filter(n => n.id !== 'center'))
+      .join("text")
+      .attr("class", "source-label")
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "auto")
+      .attr("fill", "hsl(180, 50%, 70%)")
+      .attr("font-size", "9px")
+      .attr("font-weight", "400")
+      .attr("opacity", (d) => {
+        if (selectedCategories.size === 0) return 0.7;
+        return selectedCategories.has(d.category) ? 0.9 : 0.2;
+      })
+      .style("pointer-events", "none")
+      .style("text-shadow", "0 1px 2px rgba(0,0,0,0.8)")
+      .text((d) => {
+        // Truncate long source names
+        const name = d.sourceName;
+        return name.length > 20 ? name.substring(0, 18) + '...' : name;
+      }) : null;
 
     // Only add drag behavior if simulation exists (multi-source view)
     if (simulation) {
@@ -553,6 +632,9 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
         }));
     }
 
+    // Helper function to calculate label offset based on node radius
+    const getNodeRadius = (d: Node) => 10 + (d.score / 100) * 25;
+
     // Update positions on simulation tick (only if simulation exists)
     if (simulation) {
       simulation.on("tick", () => {
@@ -569,6 +651,21 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
         glowCircles
           .attr("cx", (d: any) => d.x)
           .attr("cy", (d: any) => d.y);
+
+        // Update label positions
+        categoryLabels
+          .attr("x", (d: any) => d.x)
+          .attr("y", (d: any) => d.y + getNodeRadius(d) + 8);
+
+        scoreLabels
+          .attr("x", (d: any) => d.x)
+          .attr("y", (d: any) => d.y - getNodeRadius(d) - 4);
+
+        if (sourceLabels) {
+          sourceLabels
+            .attr("x", (d: any) => d.x)
+            .attr("y", (d: any) => d.y - getNodeRadius(d) - 16);
+        }
       });
     } else {
       // For single-source (no simulation), just set positions from fixed coords
@@ -585,6 +682,15 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       glowCircles
         .attr("cx", (d: any) => d.x || 0)
         .attr("cy", (d: any) => d.y || 0);
+
+      // Set label positions for single source view
+      categoryLabels
+        .attr("x", (d: any) => d.x || 0)
+        .attr("y", (d: any) => (d.y || 0) + getNodeRadius(d) + 8);
+
+      scoreLabels
+        .attr("x", (d: any) => d.x || 0)
+        .attr("y", (d: any) => (d.y || 0) - getNodeRadius(d) - 4);
     }
 
     return () => {
@@ -1020,14 +1126,52 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             </div>
           </div>
 
-          {/* Hover Info */}
-          {hoveredNode && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-md border border-primary/30 rounded-lg px-4 py-2 shadow-lg z-20">
-              <div className="text-xs font-semibold text-foreground whitespace-nowrap">
-                {hoveredNode}
-              </div>
-            </div>
-          )}
+          {/* Enhanced Hover Tooltip */}
+          {hoveredNode && (() => {
+            try {
+              const tooltipData = JSON.parse(hoveredNode);
+              return (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-card/98 backdrop-blur-xl border border-primary/40 rounded-xl px-5 py-4 shadow-2xl z-20 max-w-xs animate-fade-in">
+                  <div className="flex items-start gap-3">
+                    <div 
+                      className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
+                      style={{ 
+                        backgroundColor: 
+                          tooltipData.category === 'Emotional' ? 'hsl(200, 85%, 55%)' :
+                          tooltipData.category === 'Cognitive' ? 'hsl(160, 75%, 50%)' :
+                          tooltipData.category === 'Social' ? 'hsl(180, 80%, 60%)' :
+                          tooltipData.category === 'Communication' ? 'hsl(140, 70%, 55%)' :
+                          tooltipData.category === 'Contextual' ? 'hsl(220, 75%, 60%)' :
+                          'hsl(170, 80%, 55%)',
+                        boxShadow: '0 0 8px currentColor',
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-muted-foreground mb-0.5 truncate">{tooltipData.source}</div>
+                      <div className="font-semibold text-sm text-foreground flex items-center gap-2">
+                        <span>{tooltipData.category}</span>
+                        <span className="text-primary font-bold">{tooltipData.score}%</span>
+                      </div>
+                      {tooltipData.description && (
+                        <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                          {tooltipData.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            } catch {
+              // Fallback for simple string tooltip
+              return (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-md border border-primary/30 rounded-lg px-4 py-2 shadow-lg z-20">
+                  <div className="text-xs font-semibold text-foreground whitespace-nowrap">
+                    {hoveredNode}
+                  </div>
+                </div>
+              );
+            }
+          })()}
         </div>
       </div>
     </Card>

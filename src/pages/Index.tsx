@@ -326,9 +326,9 @@ const Index = () => {
           </div>
           
           {/* Example Output Preview */}
-          <div className="mt-8 flex justify-center items-center gap-8">
+          <div className="mt-8 flex justify-center items-center gap-12">
             {/* Main glowing image - positioned left */}
-            <div className="relative rounded-3xl max-w-md animate-glow-pulse animate-float flex-shrink-0" style={{ marginLeft: '-45%' }}>
+            <div className="relative rounded-3xl max-w-md animate-glow-pulse animate-float flex-shrink-0">
               <div className="rounded-3xl overflow-hidden" style={{ maskImage: 'linear-gradient(to bottom, black 35%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 35%, transparent 100%)' }}>
                 <img 
                   src={exampleOutput} 
@@ -337,25 +337,22 @@ const Index = () => {
                   style={{ transform: 'scale(1.35)' }}
                 />
               </div>
-              {/* Subtitle embedded at top */}
-              <div className="absolute top-4 left-4 right-4 z-10">
-                <p className="text-xl sm:text-2xl text-foreground text-center bg-background/25 backdrop-blur-md py-2 px-4 rounded-xl shadow-lg">
-                  Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
-                </p>
-              </div>
-              {/* CTA Button embedded at bottom */}
-              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
-                <Button 
-                  size="lg" 
-                  className="shadow-xl"
-                  onClick={() => setShowGetStartedDialog(true)}
-                >
-                  <Sparkles className="mr-2 h-5 w-5" />
-                  Get Started
-                </Button>
-              </div>
             </div>
             
+            {/* Text content - positioned right */}
+            <div className="flex flex-col items-start gap-6 max-w-md">
+              <p className="text-xl sm:text-2xl text-foreground">
+                Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
+              </p>
+              <Button 
+                size="lg" 
+                className="shadow-xl"
+                onClick={() => setShowGetStartedDialog(true)}
+              >
+                <Sparkles className="mr-2 h-5 w-5" />
+                Get Started
+              </Button>
+            </div>
           </div>
         </div>
       </div>

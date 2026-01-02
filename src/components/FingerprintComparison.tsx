@@ -45,17 +45,33 @@ const userColors = [
   "#ec4899", // pink
 ];
 
-// Calculate cosine similarity
+// Calculate hybrid similarity using Euclidean distance + cosine similarity
+// This produces more differentiated scores than pure cosine (which stays 95-100%)
 function calculateSimilarity(fp1: UserFingerprint, fp2: UserFingerprint): number {
   const values1 = categories.map(c => Number(fp1[c.key as keyof UserFingerprint]) || 0);
   const values2 = categories.map(c => Number(fp2[c.key as keyof UserFingerprint]) || 0);
   
+  // Cosine similarity (direction) - ranges 0 to 1
   const dotProduct = values1.reduce((sum, v, i) => sum + v * values2[i], 0);
   const magnitude1 = Math.sqrt(values1.reduce((sum, v) => sum + v * v, 0));
   const magnitude2 = Math.sqrt(values2.reduce((sum, v) => sum + v * v, 0));
+  const cosineSim = (magnitude1 === 0 || magnitude2 === 0) ? 0 : dotProduct / (magnitude1 * magnitude2);
   
-  if (magnitude1 === 0 || magnitude2 === 0) return 0;
-  return dotProduct / (magnitude1 * magnitude2);
+  // Euclidean distance normalized to 0-1 (where 0 = identical, 1 = max different)
+  // Max possible distance with 6 categories each ranging 0-100 is sqrt(6 * 100^2) = ~245
+  const euclideanDist = Math.sqrt(values1.reduce((sum, v, i) => sum + Math.pow(v - values2[i], 2), 0));
+  const maxPossibleDist = Math.sqrt(categories.length * 100 * 100);
+  const normalizedDist = euclideanDist / maxPossibleDist;
+  
+  // Combine: weight Euclidean more heavily for better differentiation
+  // Euclidean measures absolute differences, cosine measures pattern alignment
+  const hybridSimilarity = 0.3 * cosineSim + 0.7 * (1 - normalizedDist);
+  
+  // Apply sigmoid-like transformation to spread the middle range
+  // This prevents clustering at 90-100%
+  const spread = Math.pow(hybridSimilarity, 1.5);
+  
+  return Math.max(0, Math.min(1, spread));
 }
 
 // Single radar chart that can overlay multiple fingerprints

@@ -292,6 +292,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      normalize_score_to_percentile: {
+        Args: { pop_mean: number; pop_stddev: number; raw_score: number }
+        Returns: number
+      }
+      recalculate_all_fingerprints: { Args: never; Returns: number }
       recalculate_user_fingerprint: {
         Args: { p_user_id: string }
         Returns: undefined

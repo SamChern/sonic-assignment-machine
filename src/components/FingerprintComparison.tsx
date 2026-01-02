@@ -235,6 +235,61 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
     ? similarities.reduce((sum, p) => sum + p.similarity, 0) / similarities.length
     : 0;
 
+  // Generate insights summary
+  const insightsSummary = useMemo(() => {
+    if (selectedFingerprints.length < 2) return null;
+
+    // Find category with highest variance (most distinctive)
+    const categoryStats = categories.map(cat => {
+      const values = selectedFingerprints.map(fp => 
+        Number(fp[cat.key as keyof UserFingerprint]) || 0
+      );
+      const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      const variance = values.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / values.length;
+      const max = Math.max(...values);
+      const min = Math.min(...values);
+      return { ...cat, avg, variance, max, min, range: max - min };
+    });
+
+    const mostVariant = [...categoryStats].sort((a, b) => b.variance - a.variance)[0];
+    const mostConsistent = [...categoryStats].sort((a, b) => a.variance - b.variance)[0];
+    const highestAvg = [...categoryStats].sort((a, b) => b.avg - a.avg)[0];
+    
+    // Find most similar and most different pairs
+    const mostSimilar = similarities[0];
+    const leastSimilar = similarities[similarities.length - 1];
+
+    // Build insights
+    const insights: string[] = [];
+
+    // Similarity insight
+    if (avgSimilarity > 0.95) {
+      insights.push(`These users show remarkably high alignment (${(avgSimilarity * 100).toFixed(0)}% similar), suggesting shared ontological patterns across most categories.`);
+    } else if (avgSimilarity > 0.85) {
+      insights.push(`The selected users demonstrate strong similarity (${(avgSimilarity * 100).toFixed(0)}%), with ${mostConsistent.name} being their most aligned category.`);
+    } else if (avgSimilarity > 0.7) {
+      insights.push(`These users share moderate similarity (${(avgSimilarity * 100).toFixed(0)}%), indicating overlapping but distinct ontological profiles.`);
+    } else {
+      insights.push(`The selected users show significant divergence (${(avgSimilarity * 100).toFixed(0)}% similar), reflecting distinct ontological identities.`);
+    }
+
+    // Variance insight
+    if (mostVariant.range > 30) {
+      insights.push(`${mostVariant.name} shows the widest variation (range: ${mostVariant.range.toFixed(0)} points), making it the most distinctive differentiator among these users.`);
+    } else if (mostConsistent.range < 10) {
+      insights.push(`All users align closely on ${mostConsistent.name} (within ${mostConsistent.range.toFixed(0)} points), suggesting shared values in this dimension.`);
+    } else {
+      insights.push(`${highestAvg.name} is the strongest shared trait (avg: ${highestAvg.avg.toFixed(0)}), while ${mostVariant.name} shows the most individual variation.`);
+    }
+
+    // Pair insight for 3+ users
+    if (similarities.length > 1 && mostSimilar && leastSimilar && mostSimilar !== leastSimilar) {
+      insights.push(`${mostSimilar.user1} and ${mostSimilar.user2} are most aligned (${(mostSimilar.similarity * 100).toFixed(0)}%), while ${leastSimilar.user1} and ${leastSimilar.user2} diverge most (${(leastSimilar.similarity * 100).toFixed(0)}%).`);
+    }
+
+    return insights.slice(0, 3).join(' ');
+  }, [selectedFingerprints, similarities, avgSimilarity]);
+
   if (fingerprints.length === 0) {
     return (
       <Card className="p-8 text-center">
@@ -312,6 +367,23 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
           </div>
         </ScrollArea>
       </Card>
+
+      {/* Insights Summary */}
+      {insightsSummary && (
+        <Card className="p-4 bg-gradient-to-r from-primary/5 to-secondary/5 border-primary/20">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-full bg-primary/10">
+              <Brain className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-foreground mb-1">Insights</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {insightsSummary}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Comparison View */}
       {selectedIds.length >= 2 ? (

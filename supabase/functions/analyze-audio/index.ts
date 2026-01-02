@@ -233,10 +233,25 @@ CRITICAL: Return ONLY valid JSON, no markdown code fences.
 OUTPUT FORMAT:
 {"sources":[{"name":"SOURCE NAME","categories":[{"name":"Emotional","score":75,"description":"brief analysis"},{"name":"Cognitive","score":60,"description":"brief analysis"},{"name":"Social","score":50,"description":"brief analysis"},{"name":"Communication","score":70,"description":"brief analysis"},{"name":"Contextual","score":65,"description":"brief analysis"},{"name":"Artistic","score":80,"description":"brief analysis"}]}]}
 
-RULES:
+SCORING CALIBRATION - USE THE FULL 0-100 RANGE:
+- 0-20: Minimal/absent - the category is barely relevant to this source
+- 21-40: Weak - the category has minor presence but is not defining
+- 41-60: Moderate - the category is present but not a primary characteristic
+- 61-80: Strong - the category is a notable strength of this source
+- 81-100: Exceptional - the category is a defining feature of this source
+
+CRITICAL SCORING RULES:
+- Scores MUST average around 50 across all categories for each source
+- Every source should have at least one category below 35 AND one above 65
+- If a source lacks emotional depth, give Emotional a LOW score (10-30), not 50+
+- If a source is not particularly cerebral, give Cognitive a LOW score (10-30)
+- Do NOT cluster all scores in the 60-80 range - this defeats the purpose
+- Differentiate aggressively between sources - no two sources should have similar profiles
+
+OTHER RULES:
 - Return ONLY the JSON object, no markdown
-- Do NOT include any double quotes (") inside description text; if needed, use single quotes
-- Keep descriptions SHORT (under 50 words each)
+- Do NOT include any double quotes (") inside description text; use single quotes
+- Keep descriptions SHORT (under 40 words each)
 - Each source MUST have exactly 6 categories
 - Scores are 0-100 integers
 - Use the EXACT source names provided`;
@@ -245,9 +260,12 @@ RULES:
 
 ${sourcesList}
 
-Return JSON with "sources" array. Each source needs: name (exact match), categories array with Emotional, Cognitive, Social, Communication, Contextual, Artistic (each with name, score 0-100, short description).
+For each source, determine its unique ontological profile. Be AGGRESSIVE in scoring:
+- What categories define this source? Score those 70-95.
+- What categories are weak/absent? Score those 10-35.
+- Average across all 6 categories should be near 50, not 70+.
 
-Keep descriptions brief. Scores should differ between sources to show unique identities.`;
+Return JSON with "sources" array. Each source needs: name (exact match), categories array with Emotional, Cognitive, Social, Communication, Contextual, Artistic (each with name, score 0-100, description).`;
 
         const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
           method: 'POST',

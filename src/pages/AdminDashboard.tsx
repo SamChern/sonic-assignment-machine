@@ -23,13 +23,17 @@ import {
   X,
   Check,
   Fingerprint,
-  GitCompare
+  GitCompare,
+  Clock,
+  History,
+  ShieldCheck,
 } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { AnalysisResults } from "@/components/AnalysisResults";
 import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";
 import { FingerprintComparison } from "@/components/FingerprintComparison";
 import { useFingerprints } from "@/hooks/useFingerprints";
+import { calculateSimilarity, type FingerprintMode } from "@/lib/fingerprintMath";
 
 interface UserProfile {
   id: string;
@@ -67,6 +71,8 @@ const AdminDashboard = () => {
   const [dataLoading, setDataLoading] = useState(true);
   const [filteredUserIds, setFilteredUserIds] = useState<string[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [compareMode, setCompareMode] = useState<FingerprintMode>("all");
+  const [neighborsOpenFor, setNeighborsOpenFor] = useState<string | null>(null);
 
   const displayedUsers = filteredUserIds.length > 0 
     ? users.filter(u => filteredUserIds.includes(u.user_id))

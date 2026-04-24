@@ -97,10 +97,13 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('Error in spotify-search function:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    // Return 200 with a structured error so the client can read the body
+    // (non-2xx responses get swallowed by supabase.functions.invoke as a generic FunctionsHttpError)
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: message, spotify_unavailable: true }),
       {
-        status: 500,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );

@@ -200,7 +200,7 @@ const OverlayRadarChart = ({
   );
 };
 
-export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonProps) => {
+export const FingerprintComparison = ({ fingerprints, mode = "all" }: FingerprintComparisonProps) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const toggleSelection = (userId: string) => {
@@ -215,37 +215,34 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
 
   const selectedFingerprints = fingerprints.filter(fp => selectedIds.includes(fp.user_id));
 
-  // Calculate pairwise similarities for selected users
+  // Calculate pairwise similarities for selected users (mode-aware)
   const similarities = useMemo(() => {
     if (selectedFingerprints.length < 2) return [];
-    
+
     const pairs: { user1: string; user2: string; similarity: number }[] = [];
     for (let i = 0; i < selectedFingerprints.length; i++) {
       for (let j = i + 1; j < selectedFingerprints.length; j++) {
         pairs.push({
           user1: selectedFingerprints[i].username || 'User',
           user2: selectedFingerprints[j].username || 'User',
-          similarity: calculateSimilarity(selectedFingerprints[i], selectedFingerprints[j]),
+          similarity: calculateSimilarity(selectedFingerprints[i], selectedFingerprints[j], mode),
         });
       }
     }
     return pairs.sort((a, b) => b.similarity - a.similarity);
-  }, [selectedFingerprints]);
+  }, [selectedFingerprints, mode]);
 
   // Average similarity
   const avgSimilarity = similarities.length > 0
     ? similarities.reduce((sum, p) => sum + p.similarity, 0) / similarities.length
     : 0;
 
-  // Generate insights summary
+  // Generate insights summary (mode-aware)
   const insightsSummary = useMemo(() => {
     if (selectedFingerprints.length < 2) return null;
 
-    // Find category with highest variance (most distinctive)
     const categoryStats = categories.map(cat => {
-      const values = selectedFingerprints.map(fp => 
-        Number(fp[cat.key as keyof UserFingerprint]) || 0
-      );
+      const values = selectedFingerprints.map(fp => valueFor(fp, cat, mode));
       const avg = values.reduce((a, b) => a + b, 0) / values.length;
       const variance = values.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / values.length;
       const max = Math.max(...values);
@@ -290,7 +287,7 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
     }
 
     return insights.slice(0, 3).join(' ');
-  }, [selectedFingerprints, similarities, avgSimilarity]);
+  }, [selectedFingerprints, similarities, avgSimilarity, mode]);
 
   if (fingerprints.length === 0) {
     return (
@@ -393,9 +390,10 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
           {/* Overlay Radar Chart */}
           <Card className="p-6 bg-card/80">
             <h4 className="font-semibold text-foreground mb-4">Overlaid Fingerprints</h4>
-            <OverlayRadarChart 
+            <OverlayRadarChart
               fingerprints={fingerprints}
               selectedIds={selectedIds}
+              mode={mode}
               size={380}
             />
             

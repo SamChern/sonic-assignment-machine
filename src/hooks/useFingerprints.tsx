@@ -12,6 +12,16 @@ export interface UserFingerprint {
   communication_avg: number;
   contextual_avg: number;
   artistic_avg: number;
+  // Recent (last 30 days)
+  emotional_avg_recent: number;
+  cognitive_avg_recent: number;
+  social_avg_recent: number;
+  communication_avg_recent: number;
+  contextual_avg_recent: number;
+  artistic_avg_recent: number;
+  recent_sources_analyzed: number;
+  // Confidence
+  fingerprint_confidence: number;
   total_sources_analyzed: number;
   created_at: string;
   updated_at: string;
@@ -37,6 +47,7 @@ export interface SourceAnalysis {
   communication_desc: string | null;
   contextual_desc: string | null;
   artistic_desc: string | null;
+  confidence: number;
   created_at: string;
 }
 
@@ -53,7 +64,7 @@ async function fetchMyFingerprintData(userId: string): Promise<UserFingerprint |
     throw error;
   }
 
-  return data;
+  return data as UserFingerprint | null;
 }
 
 async function fetchMyAnalysesData(userId: string): Promise<SourceAnalysis[]> {
@@ -68,11 +79,10 @@ async function fetchMyAnalysesData(userId: string): Promise<SourceAnalysis[]> {
     throw error;
   }
 
-  return data || [];
+  return (data || []) as SourceAnalysis[];
 }
 
 async function fetchAllFingerprintsData(): Promise<UserFingerprint[]> {
-  // Fetch all fingerprints (public via RLS)
   const { data: fingerprints, error: fpError } = await supabase
     .from('user_fingerprints')
     .select('*')
@@ -84,7 +94,6 @@ async function fetchAllFingerprintsData(): Promise<UserFingerprint[]> {
     throw fpError;
   }
 
-  // Fetch profiles to get usernames
   const userIds = (fingerprints || []).map(fp => fp.user_id);
   if (userIds.length === 0) {
     return [];
@@ -95,7 +104,6 @@ async function fetchAllFingerprintsData(): Promise<UserFingerprint[]> {
     .select('user_id, username, avatar_url')
     .in('user_id', userIds);
 
-  // Merge fingerprints with profile data
   const merged = (fingerprints || []).map(fp => {
     const profile = (profiles || []).find(p => p.user_id === fp.user_id);
     return {
@@ -105,14 +113,13 @@ async function fetchAllFingerprintsData(): Promise<UserFingerprint[]> {
     };
   });
 
-  return merged;
+  return merged as UserFingerprint[];
 }
 
 export function useFingerprints() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // My fingerprint query - 2 min stale time
   const {
     data: myFingerprint = null,
     isLoading: isLoadingMyFingerprint,
@@ -120,11 +127,10 @@ export function useFingerprints() {
     queryKey: ['fingerprint', user?.id],
     queryFn: () => fetchMyFingerprintData(user!.id),
     enabled: !!user,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes cache
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
-  // My analyses query - 2 min stale time
   const {
     data: myAnalyses = [],
     isLoading: isLoadingMyAnalyses,
@@ -136,21 +142,18 @@ export function useFingerprints() {
     gcTime: 10 * 60 * 1000,
   });
 
-  // All fingerprints query - 5 min stale time (cross-user network)
   const {
     data: allFingerprints = [],
     isLoading: isLoadingAllFingerprints,
   } = useQuery({
     queryKey: ['fingerprints', 'all'],
     queryFn: fetchAllFingerprintsData,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 15 * 60 * 1000, // 15 minutes cache
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 
-  // Combined loading state
   const loading = isLoadingMyFingerprint || isLoadingMyAnalyses || isLoadingAllFingerprints;
 
-  // Refresh function that invalidates all queries
   const refresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['fingerprint', user?.id] }),

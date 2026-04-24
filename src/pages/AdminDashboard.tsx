@@ -199,6 +199,17 @@ const AdminDashboard = () => {
     }
   };
 
+  // Compute top 3 closest users for a given user_id from cached fingerprints
+  const getTopNeighbors = (userId: string, limit = 3) => {
+    const target = allFingerprints.find(fp => fp.user_id === userId);
+    if (!target) return [];
+    return allFingerprints
+      .filter(fp => fp.user_id !== userId)
+      .map(fp => ({ fp, similarity: calculateSimilarity(target as any, fp as any, "all") }))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, limit);
+  };
+
   const getSourcesByUser = (userId: string) => allSources.filter(s => s.user_id === userId);
 
   if (loading || dataLoading) {

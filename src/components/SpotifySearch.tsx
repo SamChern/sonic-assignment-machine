@@ -45,6 +45,13 @@ export const SpotifySearch = ({ onTrackSelect }: SpotifySearchProps) => {
 
       if (error) throw error;
 
+      // Edge function may return a structured error (e.g., Spotify Premium required)
+      if (data?.error) {
+        toast.error(data.error);
+        setResults([]);
+        return;
+      }
+
       setResults(data.tracks?.items || []);
       if (data.tracks?.items?.length === 0) {
         toast.info("No tracks found");

@@ -52,9 +52,19 @@ async function searchSpotify(query: string, type: string, token: string) {
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    console.error('Spotify search error:', error);
-    throw new Error(`Spotify search failed: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error('Spotify search error:', response.status, errorText);
+
+    // Detect premium-required / forbidden errors and surface a user-friendly message
+    let userMessage = `Spotify search failed: ${response.statusText}`;
+    if (response.status === 403) {
+      if (errorText.toLowerCase().includes('premium')) {
+        userMessage = 'Spotify search is temporarily unavailable: the app owner needs an active Spotify Premium subscription. Please try again later or upload audio files directly.';
+      } else {
+        userMessage = 'Spotify access forbidden. Check API credentials or try again later.';
+      }
+    }
+    throw new Error(userMessage);
   }
 
   const data = await response.json();
@@ -87,10 +97,13 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('Error in spotify-search function:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    // Return 200 with a structured error so the client can read the body
+    // (non-2xx responses get swallowed by supabase.functions.invoke as a generic FunctionsHttpError)
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: message, spotify_unavailable: true }),
       {
-        status: 500,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );

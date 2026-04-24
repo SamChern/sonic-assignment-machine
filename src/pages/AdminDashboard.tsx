@@ -461,6 +461,55 @@ const AdminDashboard = () => {
                         ))}
                       </div>
                     )}
+
+                    {/* Confidence + Neighbors */}
+                    {(() => {
+                      const fp = allFingerprints.find(f => f.user_id === userProfile.user_id);
+                      if (!fp) return null;
+                      const conf = Number(fp.fingerprint_confidence) || 0;
+                      const confLabel = conf >= 0.7 ? "High" : conf >= 0.4 ? "Medium" : "Low";
+                      const isOpen = neighborsOpenFor === userProfile.user_id;
+                      const neighbors = isOpen ? getTopNeighbors(userProfile.user_id, 3) : [];
+                      return (
+                        <div className="ml-10 mt-3 flex flex-col gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="secondary" className="gap-1">
+                              <ShieldCheck className="h-3 w-3" />
+                              {confLabel} confidence • {fp.total_sources_analyzed} sources
+                            </Badge>
+                            {fp.recent_sources_analyzed > 0 && (
+                              <Badge variant="outline" className="gap-1">
+                                <Clock className="h-3 w-3" />
+                                {fp.recent_sources_analyzed} in last 30d
+                              </Badge>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => setNeighborsOpenFor(isOpen ? null : userProfile.user_id)}
+                            >
+                              {isOpen ? "Hide" : "Show"} Taste Neighbors
+                            </Button>
+                          </div>
+                          {isOpen && (
+                            <div className="flex flex-wrap gap-2">
+                              {neighbors.length === 0 ? (
+                                <span className="text-xs text-muted-foreground">No neighbors yet.</span>
+                              ) : neighbors.map(n => (
+                                <Badge key={n.fp.user_id} variant="outline" className="gap-1.5">
+                                  <Avatar className="h-4 w-4">
+                                    <AvatarImage src={n.fp.avatar_url || undefined} />
+                                    <AvatarFallback><User className="h-2 w-2" /></AvatarFallback>
+                                  </Avatar>
+                                  {n.fp.username || "Anonymous"} • {(n.similarity * 100).toFixed(0)}%
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </Card>
                 );
               })
@@ -489,18 +538,40 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="compare" className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center flex-wrap gap-3">
               <div>
                 <h3 className="text-lg font-semibold text-foreground">Compare User Fingerprints</h3>
                 <p className="text-sm text-muted-foreground">
                   Select 2 or more users to overlay their radar charts side-by-side
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={refreshFingerprints} disabled={fingerprintsLoading}>
-                {fingerprintsLoading ? 'Loading...' : 'Refresh'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <div className="inline-flex rounded-md border border-border p-0.5 bg-muted">
+                  <Button
+                    size="sm"
+                    variant={compareMode === "all" ? "default" : "ghost"}
+                    className="h-8 gap-1.5"
+                    onClick={() => setCompareMode("all")}
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    All-Time
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={compareMode === "recent" ? "default" : "ghost"}
+                    className="h-8 gap-1.5"
+                    onClick={() => setCompareMode("recent")}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    Last 30 Days
+                  </Button>
+                </div>
+                <Button variant="outline" size="sm" onClick={refreshFingerprints} disabled={fingerprintsLoading}>
+                  {fingerprintsLoading ? 'Loading...' : 'Refresh'}
+                </Button>
+              </div>
             </div>
-            <FingerprintComparison fingerprints={allFingerprints} />
+            <FingerprintComparison fingerprints={allFingerprints} mode={compareMode} />
           </TabsContent>
 
           <TabsContent value="analysis" className="space-y-6">

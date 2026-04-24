@@ -21,6 +21,7 @@ interface UserFingerprint {
   contextual_avg: number;
   artistic_avg: number;
   total_sources_analyzed: number;
+  fingerprint_confidence?: number;
 }
 
 interface AggregateNetworkVisualizationProps {
@@ -355,14 +356,19 @@ export const AggregateNetworkVisualization = ({
     const mainGroup = svg.append("g").attr("class", "main-group");
 
     // Create nodes from fingerprints with cluster info
+    // Node opacity reflects fingerprint_confidence (sparse / weak fingerprints fade)
     const nodes = fingerprints.map((fp, i) => {
       const cluster = userClusterMap.get(fp.user_id);
+      const conf = Number(fp.fingerprint_confidence) || 0;
+      // Map 0..1 confidence into 0.35..1 opacity so even low-conf nodes are visible
+      const opacity = 0.35 + Math.min(1, Math.max(0, conf)) * 0.65;
       return {
         id: fp.user_id,
         fingerprint: fp,
         radius: 20 + (fp.total_sources_analyzed * 3),
         color: cluster?.color || getDominantCategory(getVector(fp)).color,
         cluster,
+        opacity,
         x: width / 2 + (Math.random() - 0.5) * 200,
         y: height / 2 + (Math.random() - 0.5) * 200,
       };

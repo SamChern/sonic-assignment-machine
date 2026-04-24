@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Save, Shield, Activity, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Save, Shield, Activity, ChevronDown, ChevronUp, Users as UsersIcon } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
@@ -23,11 +23,14 @@ import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useEC2Api } from "@/hooks/useEC2Api";
+import { TasteNeighbors } from "@/components/TasteNeighbors";
+import { useFingerprints } from "@/hooks/useFingerprints";
 
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
   const { checkHealth, loading: ec2Loading } = useEC2Api();
+  const { myFingerprint, allFingerprints } = useFingerprints();
   
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [spotifyTracks, setSpotifyTracks] = useState<any[]>([]);
@@ -360,7 +363,7 @@ const Index = () => {
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-6 py-12">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-8">
+          <TabsList className="grid w-full grid-cols-4 mb-8">
             <TabsTrigger value="select" className="flex items-center gap-2">
               <FileAudio className="h-4 w-4" />
               <span className="hidden sm:inline">Select Sources</span>
@@ -375,6 +378,11 @@ const Index = () => {
               <ListTree className="h-4 w-4" />
               <span className="hidden sm:inline">Analysis</span>
               <span className="sm:hidden">Analysis</span>
+            </TabsTrigger>
+            <TabsTrigger value="discover" className="flex items-center gap-2" disabled={!user}>
+              <UsersIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Discover</span>
+              <span className="sm:hidden">Discover</span>
             </TabsTrigger>
           </TabsList>
 
@@ -700,6 +708,17 @@ const Index = () => {
               isAnalyzing={false}
               sourceImages={filteredImages}
             />
+          </TabsContent>
+
+          {/* Tab 4: Discover — Taste Neighbors */}
+          <TabsContent value="discover" className="space-y-6">
+            {user && (
+              <TasteNeighbors
+                currentUserId={user.id}
+                currentFingerprint={myFingerprint}
+                allFingerprints={allFingerprints}
+              />
+            )}
           </TabsContent>
         </Tabs>
       </div>

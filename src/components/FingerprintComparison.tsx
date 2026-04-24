@@ -6,6 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Heart, Brain, Users, MessageCircle, Map, Palette, User, X, GitCompare } from "lucide-react";
+import {
+  calculateSimilarity as sharedSimilarity,
+  type FingerprintMode,
+} from "@/lib/fingerprintMath";
 
 interface UserFingerprint {
   user_id: string;
@@ -17,88 +21,70 @@ interface UserFingerprint {
   communication_avg: number;
   contextual_avg: number;
   artistic_avg: number;
+  emotional_avg_recent?: number;
+  cognitive_avg_recent?: number;
+  social_avg_recent?: number;
+  communication_avg_recent?: number;
+  contextual_avg_recent?: number;
+  artistic_avg_recent?: number;
+  recent_sources_analyzed?: number;
+  fingerprint_confidence?: number;
   total_sources_analyzed: number;
 }
 
 interface FingerprintComparisonProps {
   fingerprints: UserFingerprint[];
+  mode?: FingerprintMode;
 }
 
 const categories = [
-  { key: "emotional_avg", name: "Emotional", color: "#ef4444", icon: Heart },
-  { key: "cognitive_avg", name: "Cognitive", color: "#3b82f6", icon: Brain },
-  { key: "social_avg", name: "Social", color: "#22c55e", icon: Users },
-  { key: "communication_avg", name: "Communication", color: "#eab308", icon: MessageCircle },
-  { key: "contextual_avg", name: "Contextual", color: "#a855f7", icon: Map },
-  { key: "artistic_avg", name: "Artistic", color: "#ec4899", icon: Palette },
+  { key: "emotional_avg", recentKey: "emotional_avg_recent", name: "Emotional", color: "#ef4444", icon: Heart },
+  { key: "cognitive_avg", recentKey: "cognitive_avg_recent", name: "Cognitive", color: "#3b82f6", icon: Brain },
+  { key: "social_avg", recentKey: "social_avg_recent", name: "Social", color: "#22c55e", icon: Users },
+  { key: "communication_avg", recentKey: "communication_avg_recent", name: "Communication", color: "#eab308", icon: MessageCircle },
+  { key: "contextual_avg", recentKey: "contextual_avg_recent", name: "Contextual", color: "#a855f7", icon: Map },
+  { key: "artistic_avg", recentKey: "artistic_avg_recent", name: "Artistic", color: "#ec4899", icon: Palette },
 ];
 
-// User colors for overlays
 const userColors = [
-  "#06b6d4", // cyan
-  "#f97316", // orange
-  "#84cc16", // lime
-  "#6366f1", // indigo
-  "#f43f5e", // rose
-  "#14b8a6", // teal
-  "#8b5cf6", // violet
-  "#ec4899", // pink
+  "#06b6d4", "#f97316", "#84cc16", "#6366f1",
+  "#f43f5e", "#14b8a6", "#8b5cf6", "#ec4899",
 ];
 
-// Calculate hybrid similarity using Euclidean distance + cosine similarity
-// This produces more differentiated scores than pure cosine (which stays 95-100%)
-function calculateSimilarity(fp1: UserFingerprint, fp2: UserFingerprint): number {
-  const values1 = categories.map(c => Number(fp1[c.key as keyof UserFingerprint]) || 0);
-  const values2 = categories.map(c => Number(fp2[c.key as keyof UserFingerprint]) || 0);
-  
-  // Cosine similarity (direction) - ranges 0 to 1
-  const dotProduct = values1.reduce((sum, v, i) => sum + v * values2[i], 0);
-  const magnitude1 = Math.sqrt(values1.reduce((sum, v) => sum + v * v, 0));
-  const magnitude2 = Math.sqrt(values2.reduce((sum, v) => sum + v * v, 0));
-  const cosineSim = (magnitude1 === 0 || magnitude2 === 0) ? 0 : dotProduct / (magnitude1 * magnitude2);
-  
-  // Euclidean distance normalized to 0-1 (where 0 = identical, 1 = max different)
-  // Max possible distance with 6 categories each ranging 0-100 is sqrt(6 * 100^2) = ~245
-  const euclideanDist = Math.sqrt(values1.reduce((sum, v, i) => sum + Math.pow(v - values2[i], 2), 0));
-  const maxPossibleDist = Math.sqrt(categories.length * 100 * 100);
-  const normalizedDist = euclideanDist / maxPossibleDist;
-  
-  // Combine: weight Euclidean more heavily for better differentiation
-  // Euclidean measures absolute differences, cosine measures pattern alignment
-  const hybridSimilarity = 0.3 * cosineSim + 0.7 * (1 - normalizedDist);
-  
-  // Apply sigmoid-like transformation to spread the middle range
-  // This prevents clustering at 90-100%
-  const spread = Math.pow(hybridSimilarity, 1.5);
-  
-  return Math.max(0, Math.min(1, spread));
+function valueFor(fp: UserFingerprint, cat: typeof categories[number], mode: FingerprintMode): number {
+  const key = mode === "recent" ? cat.recentKey : cat.key;
+  return Number((fp as any)[key]) || 0;
+}
+
+function calculateSimilarity(fp1: UserFingerprint, fp2: UserFingerprint, mode: FingerprintMode = "all"): number {
+  return sharedSimilarity(fp1 as any, fp2 as any, mode);
 }
 
 // Single radar chart that can overlay multiple fingerprints
-const OverlayRadarChart = ({ 
-  fingerprints, 
+const OverlayRadarChart = ({
+  fingerprints,
   selectedIds,
-  size = 400 
-}: { 
+  mode,
+  size = 400,
+}: {
   fingerprints: UserFingerprint[];
   selectedIds: string[];
+  mode: FingerprintMode;
   size?: number;
 }) => {
   const selected = fingerprints.filter(fp => selectedIds.includes(fp.user_id));
-  
+
   const centerX = size / 2;
   const centerY = size / 2;
   const maxRadius = size / 2 - 60;
   const labelOffset = 45;
 
-  // Grid circles
   const gridCircles = [20, 40, 60, 80, 100];
 
-  // Calculate points for each fingerprint
   const allPoints = selected.map((fp, fpIndex) => {
     return categories.map((cat, i) => {
       const angle = (Math.PI * 2 * i) / categories.length - Math.PI / 2;
-      const value = Number(fp[cat.key as keyof UserFingerprint]) || 0;
+      const value = valueFor(fp, cat, mode);
       const radius = (value / 100) * maxRadius;
       return {
         x: centerX + radius * Math.cos(angle),
@@ -214,7 +200,7 @@ const OverlayRadarChart = ({
   );
 };
 
-export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonProps) => {
+export const FingerprintComparison = ({ fingerprints, mode = "all" }: FingerprintComparisonProps) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const toggleSelection = (userId: string) => {
@@ -229,37 +215,34 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
 
   const selectedFingerprints = fingerprints.filter(fp => selectedIds.includes(fp.user_id));
 
-  // Calculate pairwise similarities for selected users
+  // Calculate pairwise similarities for selected users (mode-aware)
   const similarities = useMemo(() => {
     if (selectedFingerprints.length < 2) return [];
-    
+
     const pairs: { user1: string; user2: string; similarity: number }[] = [];
     for (let i = 0; i < selectedFingerprints.length; i++) {
       for (let j = i + 1; j < selectedFingerprints.length; j++) {
         pairs.push({
           user1: selectedFingerprints[i].username || 'User',
           user2: selectedFingerprints[j].username || 'User',
-          similarity: calculateSimilarity(selectedFingerprints[i], selectedFingerprints[j]),
+          similarity: calculateSimilarity(selectedFingerprints[i], selectedFingerprints[j], mode),
         });
       }
     }
     return pairs.sort((a, b) => b.similarity - a.similarity);
-  }, [selectedFingerprints]);
+  }, [selectedFingerprints, mode]);
 
   // Average similarity
   const avgSimilarity = similarities.length > 0
     ? similarities.reduce((sum, p) => sum + p.similarity, 0) / similarities.length
     : 0;
 
-  // Generate insights summary
+  // Generate insights summary (mode-aware)
   const insightsSummary = useMemo(() => {
     if (selectedFingerprints.length < 2) return null;
 
-    // Find category with highest variance (most distinctive)
     const categoryStats = categories.map(cat => {
-      const values = selectedFingerprints.map(fp => 
-        Number(fp[cat.key as keyof UserFingerprint]) || 0
-      );
+      const values = selectedFingerprints.map(fp => valueFor(fp, cat, mode));
       const avg = values.reduce((a, b) => a + b, 0) / values.length;
       const variance = values.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / values.length;
       const max = Math.max(...values);
@@ -304,7 +287,7 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
     }
 
     return insights.slice(0, 3).join(' ');
-  }, [selectedFingerprints, similarities, avgSimilarity]);
+  }, [selectedFingerprints, similarities, avgSimilarity, mode]);
 
   if (fingerprints.length === 0) {
     return (
@@ -407,9 +390,10 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
           {/* Overlay Radar Chart */}
           <Card className="p-6 bg-card/80">
             <h4 className="font-semibold text-foreground mb-4">Overlaid Fingerprints</h4>
-            <OverlayRadarChart 
+            <OverlayRadarChart
               fingerprints={fingerprints}
               selectedIds={selectedIds}
+              mode={mode}
               size={380}
             />
             
@@ -468,9 +452,7 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
             <div className="space-y-4">
               {categories.map(cat => {
                 const Icon = cat.icon;
-                const values = selectedFingerprints.map(fp => 
-                  Number(fp[cat.key as keyof UserFingerprint]) || 0
-                );
+                const values = selectedFingerprints.map(fp => valueFor(fp, cat, mode));
                 const maxVal = Math.max(...values);
                 const minVal = Math.min(...values);
                 const range = maxVal - minVal;
@@ -486,7 +468,7 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
                     </div>
                     <div className="relative h-6 bg-secondary/50 rounded-full overflow-hidden">
                       {selectedFingerprints.map((fp, index) => {
-                        const value = Number(fp[cat.key as keyof UserFingerprint]) || 0;
+                        const value = valueFor(fp, cat, mode);
                         const color = userColors[index % userColors.length];
                         return (
                           <div
@@ -504,15 +486,15 @@ export const FingerprintComparison = ({ fingerprints }: FingerprintComparisonPro
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
                       {selectedFingerprints.map((fp, index) => (
-                        <div 
+                        <div
                           key={fp.user_id}
                           className="flex items-center gap-1"
                         >
-                          <div 
+                          <div
                             className="w-2 h-2 rounded-full"
                             style={{ backgroundColor: userColors[index % userColors.length] }}
                           />
-                          <span>{(Number(fp[cat.key as keyof UserFingerprint]) || 0).toFixed(0)}</span>
+                          <span>{valueFor(fp, cat, mode).toFixed(0)}</span>
                         </div>
                       ))}
                     </div>

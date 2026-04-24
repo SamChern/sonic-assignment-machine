@@ -479,7 +479,9 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         sourceIdMap.set(s.name, s.audio_source_id);
       });
 
-      // Build batch insert data
+      // Build batch insert data — including a per-source `confidence` value
+      // derived from the variance of the 6 category scores.
+      // High variance = decisive AI scoring = high confidence (clamped 0.1–1.0).
       const insertData = allResults.map(sourceResult => {
         const categories = sourceResult.categories.reduce((acc, cat) => {
           const key = cat.name.toLowerCase();
@@ -488,10 +490,18 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
           return acc;
         }, {} as Record<string, any>);
 
+        // Compute confidence from category-score spread
+        const scores = sourceResult.categories.map(c => Number(c.score) || 0);
+        const mean = scores.reduce((s, v) => s + v, 0) / (scores.length || 1);
+        const variance = scores.reduce((s, v) => s + (v - mean) ** 2, 0) / (scores.length || 1);
+        const stddev = Math.sqrt(variance);
+        const confidence = Math.max(0.1, Math.min(1, stddev / 30));
+
         return {
           user_id,
           audio_source_id: sourceIdMap.get(sourceResult.name) || null,
           source_name: sourceResult.name,
+          confidence,
           ...categories,
         };
       });

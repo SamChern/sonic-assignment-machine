@@ -61,30 +61,30 @@ function calculateSimilarity(fp1: UserFingerprint, fp2: UserFingerprint, mode: F
 }
 
 // Single radar chart that can overlay multiple fingerprints
-const OverlayRadarChart = ({ 
-  fingerprints, 
+const OverlayRadarChart = ({
+  fingerprints,
   selectedIds,
-  size = 400 
-}: { 
+  mode,
+  size = 400,
+}: {
   fingerprints: UserFingerprint[];
   selectedIds: string[];
+  mode: FingerprintMode;
   size?: number;
 }) => {
   const selected = fingerprints.filter(fp => selectedIds.includes(fp.user_id));
-  
+
   const centerX = size / 2;
   const centerY = size / 2;
   const maxRadius = size / 2 - 60;
   const labelOffset = 45;
 
-  // Grid circles
   const gridCircles = [20, 40, 60, 80, 100];
 
-  // Calculate points for each fingerprint
   const allPoints = selected.map((fp, fpIndex) => {
     return categories.map((cat, i) => {
       const angle = (Math.PI * 2 * i) / categories.length - Math.PI / 2;
-      const value = Number(fp[cat.key as keyof UserFingerprint]) || 0;
+      const value = valueFor(fp, cat, mode);
       const radius = (value / 100) * maxRadius;
       return {
         x: centerX + radius * Math.cos(angle),

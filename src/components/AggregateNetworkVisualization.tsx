@@ -449,11 +449,12 @@ export const AggregateNetworkVisualization = ({
       .attr("stroke-width", (d) => d.sameCluster ? 2 : 1)
       .attr("stroke-dasharray", (d) => d.sameCluster ? "none" : "4 4");
 
-    // Draw nodes
+    // Draw nodes — group opacity reflects fingerprint_confidence
     const nodeGroup = mainGroup.append("g").attr("class", "nodes");
     const nodeElements = nodeGroup.selectAll("g")
       .data(nodes)
       .join("g")
+      .attr("opacity", (d: any) => d.opacity)
       .attr("cursor", "pointer")
       .call(d3.drag<any, any>()
         .on("start", (event, d) => {

@@ -98,6 +98,7 @@ export type Database = {
           cognitive_score: number
           communication_desc: string | null
           communication_score: number
+          confidence: number
           contextual_desc: string | null
           contextual_score: number
           created_at: string
@@ -117,6 +118,7 @@ export type Database = {
           cognitive_score: number
           communication_desc?: string | null
           communication_score: number
+          confidence?: number
           contextual_desc?: string | null
           contextual_score: number
           created_at?: string
@@ -136,6 +138,7 @@ export type Database = {
           cognitive_score?: number
           communication_desc?: string | null
           communication_score?: number
+          confidence?: number
           contextual_desc?: string | null
           contextual_score?: number
           created_at?: string
@@ -220,39 +223,63 @@ export type Database = {
       user_fingerprints: {
         Row: {
           artistic_avg: number
+          artistic_avg_recent: number
           cognitive_avg: number
+          cognitive_avg_recent: number
           communication_avg: number
+          communication_avg_recent: number
           contextual_avg: number
+          contextual_avg_recent: number
           created_at: string
           emotional_avg: number
+          emotional_avg_recent: number
+          fingerprint_confidence: number
           id: string
+          recent_sources_analyzed: number
           social_avg: number
+          social_avg_recent: number
           total_sources_analyzed: number
           updated_at: string
           user_id: string
         }
         Insert: {
           artistic_avg?: number
+          artistic_avg_recent?: number
           cognitive_avg?: number
+          cognitive_avg_recent?: number
           communication_avg?: number
+          communication_avg_recent?: number
           contextual_avg?: number
+          contextual_avg_recent?: number
           created_at?: string
           emotional_avg?: number
+          emotional_avg_recent?: number
+          fingerprint_confidence?: number
           id?: string
+          recent_sources_analyzed?: number
           social_avg?: number
+          social_avg_recent?: number
           total_sources_analyzed?: number
           updated_at?: string
           user_id: string
         }
         Update: {
           artistic_avg?: number
+          artistic_avg_recent?: number
           cognitive_avg?: number
+          cognitive_avg_recent?: number
           communication_avg?: number
+          communication_avg_recent?: number
           contextual_avg?: number
+          contextual_avg_recent?: number
           created_at?: string
           emotional_avg?: number
+          emotional_avg_recent?: number
+          fingerprint_confidence?: number
           id?: string
+          recent_sources_analyzed?: number
           social_avg?: number
+          social_avg_recent?: number
           total_sources_analyzed?: number
           updated_at?: string
           user_id?: string

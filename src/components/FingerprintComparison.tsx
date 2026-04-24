@@ -6,6 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Heart, Brain, Users, MessageCircle, Map, Palette, User, X, GitCompare } from "lucide-react";
+import {
+  calculateSimilarity as sharedSimilarity,
+  type FingerprintMode,
+} from "@/lib/fingerprintMath";
 
 interface UserFingerprint {
   user_id: string;
@@ -17,61 +21,43 @@ interface UserFingerprint {
   communication_avg: number;
   contextual_avg: number;
   artistic_avg: number;
+  emotional_avg_recent?: number;
+  cognitive_avg_recent?: number;
+  social_avg_recent?: number;
+  communication_avg_recent?: number;
+  contextual_avg_recent?: number;
+  artistic_avg_recent?: number;
+  recent_sources_analyzed?: number;
+  fingerprint_confidence?: number;
   total_sources_analyzed: number;
 }
 
 interface FingerprintComparisonProps {
   fingerprints: UserFingerprint[];
+  mode?: FingerprintMode;
 }
 
 const categories = [
-  { key: "emotional_avg", name: "Emotional", color: "#ef4444", icon: Heart },
-  { key: "cognitive_avg", name: "Cognitive", color: "#3b82f6", icon: Brain },
-  { key: "social_avg", name: "Social", color: "#22c55e", icon: Users },
-  { key: "communication_avg", name: "Communication", color: "#eab308", icon: MessageCircle },
-  { key: "contextual_avg", name: "Contextual", color: "#a855f7", icon: Map },
-  { key: "artistic_avg", name: "Artistic", color: "#ec4899", icon: Palette },
+  { key: "emotional_avg", recentKey: "emotional_avg_recent", name: "Emotional", color: "#ef4444", icon: Heart },
+  { key: "cognitive_avg", recentKey: "cognitive_avg_recent", name: "Cognitive", color: "#3b82f6", icon: Brain },
+  { key: "social_avg", recentKey: "social_avg_recent", name: "Social", color: "#22c55e", icon: Users },
+  { key: "communication_avg", recentKey: "communication_avg_recent", name: "Communication", color: "#eab308", icon: MessageCircle },
+  { key: "contextual_avg", recentKey: "contextual_avg_recent", name: "Contextual", color: "#a855f7", icon: Map },
+  { key: "artistic_avg", recentKey: "artistic_avg_recent", name: "Artistic", color: "#ec4899", icon: Palette },
 ];
 
-// User colors for overlays
 const userColors = [
-  "#06b6d4", // cyan
-  "#f97316", // orange
-  "#84cc16", // lime
-  "#6366f1", // indigo
-  "#f43f5e", // rose
-  "#14b8a6", // teal
-  "#8b5cf6", // violet
-  "#ec4899", // pink
+  "#06b6d4", "#f97316", "#84cc16", "#6366f1",
+  "#f43f5e", "#14b8a6", "#8b5cf6", "#ec4899",
 ];
 
-// Calculate hybrid similarity using Euclidean distance + cosine similarity
-// This produces more differentiated scores than pure cosine (which stays 95-100%)
-function calculateSimilarity(fp1: UserFingerprint, fp2: UserFingerprint): number {
-  const values1 = categories.map(c => Number(fp1[c.key as keyof UserFingerprint]) || 0);
-  const values2 = categories.map(c => Number(fp2[c.key as keyof UserFingerprint]) || 0);
-  
-  // Cosine similarity (direction) - ranges 0 to 1
-  const dotProduct = values1.reduce((sum, v, i) => sum + v * values2[i], 0);
-  const magnitude1 = Math.sqrt(values1.reduce((sum, v) => sum + v * v, 0));
-  const magnitude2 = Math.sqrt(values2.reduce((sum, v) => sum + v * v, 0));
-  const cosineSim = (magnitude1 === 0 || magnitude2 === 0) ? 0 : dotProduct / (magnitude1 * magnitude2);
-  
-  // Euclidean distance normalized to 0-1 (where 0 = identical, 1 = max different)
-  // Max possible distance with 6 categories each ranging 0-100 is sqrt(6 * 100^2) = ~245
-  const euclideanDist = Math.sqrt(values1.reduce((sum, v, i) => sum + Math.pow(v - values2[i], 2), 0));
-  const maxPossibleDist = Math.sqrt(categories.length * 100 * 100);
-  const normalizedDist = euclideanDist / maxPossibleDist;
-  
-  // Combine: weight Euclidean more heavily for better differentiation
-  // Euclidean measures absolute differences, cosine measures pattern alignment
-  const hybridSimilarity = 0.3 * cosineSim + 0.7 * (1 - normalizedDist);
-  
-  // Apply sigmoid-like transformation to spread the middle range
-  // This prevents clustering at 90-100%
-  const spread = Math.pow(hybridSimilarity, 1.5);
-  
-  return Math.max(0, Math.min(1, spread));
+function valueFor(fp: UserFingerprint, cat: typeof categories[number], mode: FingerprintMode): number {
+  const key = mode === "recent" ? cat.recentKey : cat.key;
+  return Number((fp as any)[key]) || 0;
+}
+
+function calculateSimilarity(fp1: UserFingerprint, fp2: UserFingerprint, mode: FingerprintMode = "all"): number {
+  return sharedSimilarity(fp1 as any, fp2 as any, mode);
 }
 
 // Single radar chart that can overlay multiple fingerprints

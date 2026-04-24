@@ -452,9 +452,7 @@ export const FingerprintComparison = ({ fingerprints, mode = "all" }: Fingerprin
             <div className="space-y-4">
               {categories.map(cat => {
                 const Icon = cat.icon;
-                const values = selectedFingerprints.map(fp => 
-                  Number(fp[cat.key as keyof UserFingerprint]) || 0
-                );
+                const values = selectedFingerprints.map(fp => valueFor(fp, cat, mode));
                 const maxVal = Math.max(...values);
                 const minVal = Math.min(...values);
                 const range = maxVal - minVal;
@@ -470,7 +468,7 @@ export const FingerprintComparison = ({ fingerprints, mode = "all" }: Fingerprin
                     </div>
                     <div className="relative h-6 bg-secondary/50 rounded-full overflow-hidden">
                       {selectedFingerprints.map((fp, index) => {
-                        const value = Number(fp[cat.key as keyof UserFingerprint]) || 0;
+                        const value = valueFor(fp, cat, mode);
                         const color = userColors[index % userColors.length];
                         return (
                           <div
@@ -488,15 +486,15 @@ export const FingerprintComparison = ({ fingerprints, mode = "all" }: Fingerprin
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
                       {selectedFingerprints.map((fp, index) => (
-                        <div 
+                        <div
                           key={fp.user_id}
                           className="flex items-center gap-1"
                         >
-                          <div 
+                          <div
                             className="w-2 h-2 rounded-full"
                             style={{ backgroundColor: userColors[index % userColors.length] }}
                           />
-                          <span>{(Number(fp[cat.key as keyof UserFingerprint]) || 0).toFixed(0)}</span>
+                          <span>{valueFor(fp, cat, mode).toFixed(0)}</span>
                         </div>
                       ))}
                     </div>

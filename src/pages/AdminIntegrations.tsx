@@ -435,10 +435,15 @@ function IntegrationCard({
         <Button
           variant="outline"
           onClick={handleTest}
-          disabled={testing || !configured}
+          disabled={testing || !configured || !integration.testEndpoint}
+          title={
+            !integration.testEndpoint
+              ? "No automated tester for this provider yet"
+              : undefined
+          }
         >
           {testing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Test connection
+          {integration.testEndpoint ? "Test connection" : "Test (n/a)"}
         </Button>
       </div>
     </Card>

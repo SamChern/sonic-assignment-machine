@@ -245,6 +245,12 @@ function IntegrationCard({
   };
 
   const handleTest = async () => {
+    if (!integration.testEndpoint) {
+      toast.info(
+        "No automated tester for this provider yet — credentials will be validated when first used.",
+      );
+      return;
+    }
     setTesting(true);
     const { data, error } = await supabase.functions.invoke(
       integration.testEndpoint,

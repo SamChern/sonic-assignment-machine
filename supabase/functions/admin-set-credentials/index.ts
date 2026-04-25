@@ -11,8 +11,31 @@ const corsHeaders = {
 
 // Mirror of src/config/integrations.ts allowed field keys per integration.
 // Keep in sync when adding providers.
+const MCP_FIELDS = [
+  "MCP_SERVER_URL",
+  "MCP_AUTH_SCHEME",
+  "MCP_AUTH_TOKEN",
+  "MCP_HEADERS_JSON",
+  // Per-capability toggles, one row per capability key
+  "MCP_CAP_TOOLS_READ",
+  "MCP_CAP_RESOURCES_READ",
+  "MCP_CAP_PROMPTS_READ",
+  "MCP_CAP_SAMPLING_WRITE",
+];
+
 const ALLOWED_FIELDS: Record<string, string[]> = {
   apple_music: ["APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY"],
+  spotify: ["SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET"],
+  pandora: [
+    "PANDORA_PARTNER_USERNAME",
+    "PANDORA_PARTNER_PASSWORD",
+    "PANDORA_DEVICE_ID",
+    "PANDORA_USER_EMAIL",
+    "PANDORA_USER_PASSWORD",
+  ],
+  mcp_generic: MCP_FIELDS,
+  mcp_notion: MCP_FIELDS,
+  mcp_linear: MCP_FIELDS,
 };
 
 Deno.serve(async (req) => {

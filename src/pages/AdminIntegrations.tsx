@@ -53,6 +53,7 @@ const AdminIntegrations = () => {
     Record<string, TestEntry>
   >({});
   const [statusLoading, setStatusLoading] = useState(true);
+  const [kindFilter, setKindFilter] = useState<IntegrationKind>("rest");
 
   useEffect(() => {
     if (!loading) {

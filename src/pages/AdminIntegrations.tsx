@@ -171,6 +171,9 @@ function IntegrationCard({
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
+  const capFieldKey = (capKey: string) =>
+    `MCP_CAP_${capKey.toUpperCase().replace(/\./g, "_")}`;
+
   const requiredKeys = integration.fields.filter((f) => f.required).map((f) => f.key);
   const configured = status
     ? requiredKeys.every((k) => status.fields.includes(k))

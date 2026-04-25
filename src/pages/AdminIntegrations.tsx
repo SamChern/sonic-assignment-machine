@@ -273,8 +273,15 @@ function IntegrationCard({
     <Card className="p-6 space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-lg font-semibold">{integration.name}</h2>
+            <Badge variant="outline" className="gap-1 text-xs">
+              {integration.kind === "mcp" ? (
+                <><Network className="h-3 w-3" /> MCP</>
+              ) : (
+                <><Plug className="h-3 w-3" /> REST</>
+              )}
+            </Badge>
             {statusBadge}
           </div>
           <p className="text-sm text-muted-foreground mt-1">

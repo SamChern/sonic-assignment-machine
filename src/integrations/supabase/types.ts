@@ -59,6 +59,69 @@ export type Database = {
         }
         Relationships: []
       }
+      integration_credentials: {
+        Row: {
+          created_at: string
+          field_key: string
+          field_value: string
+          id: string
+          integration_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          field_key: string
+          field_value: string
+          id?: string
+          integration_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          field_key?: string
+          field_value?: string
+          id?: string
+          integration_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      integration_test_history: {
+        Row: {
+          error_message: string | null
+          id: string
+          integration_id: string
+          latency_ms: number | null
+          response_sample: Json | null
+          success: boolean
+          tested_at: string
+          tested_by: string | null
+        }
+        Insert: {
+          error_message?: string | null
+          id?: string
+          integration_id: string
+          latency_ms?: number | null
+          response_sample?: Json | null
+          success: boolean
+          tested_at?: string
+          tested_by?: string | null
+        }
+        Update: {
+          error_message?: string | null
+          id?: string
+          integration_id?: string
+          latency_ms?: number | null
+          response_sample?: Json | null
+          success?: boolean
+          tested_at?: string
+          tested_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

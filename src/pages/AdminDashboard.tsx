@@ -27,6 +27,7 @@ import {
   Clock,
   History,
   ShieldCheck,
+  Plug,
 } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { AnalysisResults } from "@/components/AnalysisResults";

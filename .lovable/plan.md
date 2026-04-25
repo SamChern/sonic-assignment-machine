@@ -1,92 +1,145 @@
+# Plan: Admin-Only API Credentials Settings Page
 
-
-# Implement 3 Quick Wins for Smarter Fingerprints
-
-This plan adds three layered enhancements to the fingerprint system: **Confidence-Based Weighting**, **Temporal Fingerprints** (recent vs all-time), and **Collaborative Filtering** (taste neighbors / "users like you").
+A new admin-gated route that lets you manage credentials for any third-party API (Apple Music first, more later) with built-in connection testing. Designed so adding a future provider = adding one config object, no UI rewrites.
 
 ---
 
-## 1. Confidence-Based Weighting
+## Design Principles
 
-**Goal:** Fingerprints currently treat every analyzed source equally. A user with 3 songs has the same "weight" per category as one with 50. We weight averages by how confident the AI was and how many sources contributed.
-
-**What changes**
-- Add a `confidence` numeric column (0-1) to `source_analyses`, populated by the EC2 `/api/analyze-audio` route. Confidence is derived from how decisively the AI scored a source (variance across categories — flat 50/50/50 = low confidence; spread 90/20/70 = high confidence).
-- Update `recalculate_user_fingerprint` to compute a **weighted average** using `confidence` per row instead of plain `AVG()`.
-- Add a new `fingerprint_confidence` column on `user_fingerprints` representing overall trust (function of source count + average confidence). Surface this as a small badge on cards ("High confidence • 24 sources" vs "Low confidence • 3 sources").
-
-**User-visible effect**
-- Users with more and clearer-signal sources have more stable, trusted fingerprints. Sparse users no longer dominate cluster centroids.
+- **Zero impact on existing UI** — new route at `/admin/integrations`, accessed via a small "API Integrations" link inside the existing Admin Dashboard header. Nothing else changes.
+- **Admin-only** — gated by `useAuth().isAdmin`, same pattern as `/admin`. Non-admins get redirected.
+- **Provider-registry driven** — one `INTEGRATIONS` array describes each provider's fields, instructions, and test endpoint. Adding YouTube Music or Last.fm later = appending one entry.
+- **Secrets stay server-side** — credentials submitted from the UI are written to Supabase secrets via a privileged edge function, never stored in the database or exposed to the client after save.
 
 ---
 
-## 2. Temporal Fingerprints (Recent vs All-Time)
+## Architecture
 
-**Goal:** Today every source counts forever. We add a "recent taste" view (last 30 days) alongside the all-time fingerprint so you can see how a user is evolving.
+### 1. Provider Registry (`src/config/integrations.ts`) — NEW
 
-**What changes**
-- Add columns to `user_fingerprints`: `emotional_avg_recent`, `cognitive_avg_recent`, … (6 total) plus `recent_sources_analyzed`.
-- `recalculate_user_fingerprint` computes both:
-  - **All-time:** every source the user has, normalized as today.
-  - **Recent:** only `source_analyses.created_at > now() - interval '30 days'`, normalized against the same population stats.
-- Add a `useFingerprints` hook option `mode: 'all' | 'recent'`, defaulting to `'all'`.
-- In the **Admin Dashboard → Compare tab**, add a toggle: `[ All-Time | Last 30 Days ]`. The radar overlay, similarity matrix, and Insights summary all recalculate from whichever vector is selected.
-- In the existing per-user **Network Visualization**, add a small "Drift" indicator showing the Euclidean distance between a user's recent and all-time vectors (e.g., "Taste shift: 12% — trending more Cognitive").
+A single source of truth describing every third-party integration:
 
-**User-visible effect**
-- See momentum, not just history. Detect shifts ("user X used to be Artistic-heavy, now Social-heavy").
+```ts
+export interface IntegrationField {
+  key: string;              // env var name, e.g. "APPLE_TEAM_ID"
+  label: string;            // "Team ID"
+  type: "text" | "password" | "textarea";
+  placeholder: string;
+  helpText: string;         // "10-char alphanumeric, top-right of dev console"
+  required: boolean;
+}
+
+export interface Integration {
+  id: string;               // "apple_music"
+  name: string;             // "Apple Music"
+  description: string;
+  docsUrl: string;
+  setupSteps: string[];     // bullet list shown in collapsible "Setup Guide"
+  fields: IntegrationField[];
+  testEndpoint: string;     // edge function name, e.g. "apple-music-test"
+  status?: "configured" | "missing" | "unknown";  // computed at runtime
+}
+```
+
+Apple Music entry includes the 5-step guide we discussed (enroll → Team ID → Media ID → Key → .p8) and three fields: `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (textarea).
+
+### 2. New Page: `src/pages/AdminIntegrations.tsx` — NEW
+
+- Admin-gated (redirects non-admins, mirrors `AdminDashboard.tsx` auth pattern)
+- Lists all integrations from the registry as cards with:
+  - Status badge: ✅ Configured / ⚠️ Missing / ❌ Test failed
+  - "Setup Guide" collapsible (renders `setupSteps`)
+  - Form with one input per field
+  - **Save Credentials** button (writes to secrets via edge function)
+  - **Test Connection** button (calls the integration's test endpoint, shows latency + result)
+  - Last-tested timestamp + last-test outcome
+
+### 3. Two New Edge Functions
+
+**`supabase/functions/admin-set-secret/index.ts`** (generic, reusable)
+- Validates caller is admin via JWT + `has_role()` check
+- Accepts `{ secrets: Record<string, string> }`
+- Writes to Supabase secrets via the Management API using `SUPABASE_SERVICE_ROLE_KEY`
+- Allow-lists which secret names can be written (drawn from the registry — prevents arbitrary secret writes)
+- Returns success/failure per key
+
+**`supabase/functions/apple-music-test/index.ts`** (per-provider)
+- Mints an Apple Music JWT from `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` using `djwt` (ES256)
+- Calls `https://api.music.apple.com/v1/test` (or a cheap catalog search) with `Authorization: Bearer <jwt>`
+- Returns `{ success: boolean, latency_ms, error?, sample?: {...} }`
+- Future providers each get their own `*-test` function — the registry tells the page which to invoke
+
+### 4. New DB Table: `integration_test_history` (optional but useful)
+
+```sql
+CREATE TABLE public.integration_test_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  integration_id text NOT NULL,
+  tested_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  success boolean NOT NULL,
+  latency_ms integer,
+  error_message text,
+  tested_at timestamptz DEFAULT now()
+);
+ALTER TABLE public.integration_test_history ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins read test history" ON public.integration_test_history
+  FOR SELECT USING (has_role(auth.uid(), 'admin'));
+CREATE POLICY "Admins insert test history" ON public.integration_test_history
+  FOR INSERT WITH CHECK (has_role(auth.uid(), 'admin'));
+```
+
+Lets you see "last 5 test results" per integration on the page.
+
+### 5. Routing
+
+`src/App.tsx` — add one route:
+```tsx
+<Route path="/admin/integrations" element={<AdminIntegrations />} />
+```
+
+`src/pages/AdminDashboard.tsx` — add a small button in the header (next to "Back" and existing controls): **"⚙️ API Integrations"** linking to `/admin/integrations`. No layout change beyond one button.
 
 ---
 
-## 3. Collaborative Filtering ("Taste Neighbors")
+## Security
 
-**Goal:** Surface "users like you" recommendations using fingerprint similarity that already exists. No new ML — reuse the hybrid Euclidean+cosine metric.
-
-**What changes**
-- New component `TasteNeighbors.tsx` showing the **top 5 closest users** to the current viewer (or to a selected user in admin), with similarity %, avatar, top shared category, and a list of **sources they have that you don't**.
-- Backend logic (client-side in the hook, since fingerprints are already cached):
-  1. Compute similarity from current user's fingerprint to every other user's fingerprint.
-  2. Pick top 5.
-  3. For each neighbor, fetch their `audio_sources` (RLS already allows public read) and diff against the current user's sources by `spotify_id` / `name`.
-- Add a new tab on the regular user **Index** page: **"Discover"** — shows taste neighbors and suggested sources to try.
-- In the **Admin Dashboard**, add a "Neighbors" expandable panel on each user card listing their 3 closest matches.
-
-**User-visible effect**
-- Users get personalized recommendations grounded in real shared taste, not genre tags.
+- **Admin gate, twice**: client redirects non-admins; edge function rejects non-admin JWTs server-side via `has_role(auth.uid(), 'admin')` SECURITY DEFINER call.
+- **Allow-list of writable secret names** in `admin-set-secret` — only keys declared in the registry can be written. Prevents an admin (or compromised admin token) from overwriting `SUPABASE_SERVICE_ROLE_KEY`, `LOVABLE_API_KEY`, etc.
+- **Never read secrets back to the client** — UI shows masked placeholders ("•••• configured") if the secret is set; actual values stay server-side. A "Status" check endpoint returns only booleans.
+- **Audit trail** via `integration_test_history`.
+- **Input validation** with Zod on both edge functions.
 
 ---
 
-## Files Touched
+## Adding a Future Provider (Example: YouTube Music)
 
-**Database (1 migration)**
-- `supabase/migrations/<new>.sql`:
-  - `ALTER TABLE source_analyses ADD COLUMN confidence numeric DEFAULT 0.5`
-  - `ALTER TABLE user_fingerprints ADD COLUMN ... _recent` (×6) + `recent_sources_analyzed` + `fingerprint_confidence`
-  - Replace `recalculate_user_fingerprint` with version doing weighted + temporal calculation
-  - Backfill `confidence` for existing rows from category variance
-  - Run `recalculate_all_fingerprints()`
-
-**EC2 server (manual deploy by you)**
-- `/api/analyze-audio` route: include `confidence` field (variance-based) in response payload. I'll provide the snippet — you'll redeploy via PM2.
-
-**Edge function**
-- `supabase/functions/analyze-audio/index.ts`: pass `confidence` through to the `source_analyses` insert.
-
-**Frontend**
-- `src/hooks/useFingerprints.tsx`: add `recent` vectors + `confidence` to types; add helper `getTasteNeighbors(userId, limit)`.
-- `src/components/FingerprintComparison.tsx`: All-Time / Recent toggle wired into existing similarity + radar logic.
-- `src/components/AggregateNetworkVisualization.tsx`: render confidence as node opacity (low confidence = faded).
-- `src/components/TasteNeighbors.tsx` (new): neighbor cards + suggested sources.
-- `src/pages/Index.tsx`: add "Discover" tab hosting `<TasteNeighbors />`.
-- `src/pages/AdminDashboard.tsx`: add temporal toggle in Compare tab; add Neighbors panel per user.
+1. Append one entry to `INTEGRATIONS` in `src/config/integrations.ts` (fields, setup steps, test endpoint name)
+2. Add the secret names to the allow-list (auto-derived from the registry — no extra step)
+3. Create one new edge function `youtube-music-test/index.ts`
+4. Done. UI renders the new card automatically. **No changes to `AdminIntegrations.tsx` itself.**
 
 ---
 
-## Technical Notes
+## Files
 
-- Similarity reuses the existing hybrid metric in `FingerprintComparison.tsx` — extracted into `src/lib/fingerprintMath.ts` so both Compare and Discover share it.
-- Backfilling `confidence` for existing `source_analyses` uses: `confidence = LEAST(1, STDDEV of [emo, cog, soc, com, con, art] / 30)` — clamps decisive scoring to 1.0.
-- `fingerprint_confidence` formula: `LEAST(1, (sources / 10)) * AVG(source confidence)`. Caps at 10 sources for full trust.
-- Recent window (30 days) is hardcoded for v1; can become configurable later.
-- Taste neighbors are computed client-side from the already-cached `allFingerprints` query — no new network calls for the list itself.
+| File | Action |
+|---|---|
+| `src/config/integrations.ts` | CREATE — provider registry |
+| `src/pages/AdminIntegrations.tsx` | CREATE — settings page |
+| `src/App.tsx` | EDIT — add route |
+| `src/pages/AdminDashboard.tsx` | EDIT — add header link button only |
+| `supabase/functions/admin-set-secret/index.ts` | CREATE — generic secret writer |
+| `supabase/functions/apple-music-test/index.ts` | CREATE — Apple Music JWT + test call |
+| `supabase/migrations/<new>.sql` | CREATE — `integration_test_history` table |
 
+---
+
+## Open Question Before Build
+
+**Secret writing approach** — the cleanest path uses Supabase's Management API to write project secrets, which requires a `SUPABASE_ACCESS_TOKEN` (personal access token, separate from `SERVICE_ROLE_KEY`). Alternatives:
+
+- **(A) Management API** — true secret writes, persists across deploys, requires you to add one `SUPABASE_ACCESS_TOKEN` secret manually once. **Recommended.**
+- **(B) DB-backed credentials table** — encrypted credentials in a Postgres table read by edge functions at runtime. No external token needed, but encryption key still has to live somewhere.
+- **(C) Manual paste** — UI just generates a copy-paste block; you add secrets yourself via the Lovable Cloud secret tool. Simplest, least convenient.
+
+I'll ask you to pick (A/B/C) right after you approve the overall plan, before building.

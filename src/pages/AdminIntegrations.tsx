@@ -111,13 +111,28 @@ const AdminIntegrations = () => {
 
       <main className="container mx-auto px-6 py-8 max-w-3xl space-y-6">
         <p className="text-sm text-muted-foreground">
-          Manage credentials for third-party APIs. Credentials are stored
-          server-side and only readable by edge functions. Use{" "}
+          Manage credentials for third-party APIs and Model Context Protocol
+          (MCP) servers. Credentials are stored server-side and only readable
+          by edge functions. Use{" "}
           <span className="font-medium">Test Connection</span> to validate
           before relying on them in features.
         </p>
 
-        {INTEGRATIONS.map((integration) => (
+        <Tabs
+          value={kindFilter}
+          onValueChange={(v) => setKindFilter(v as IntegrationKind)}
+        >
+          <TabsList className="grid w-full max-w-sm grid-cols-2">
+            <TabsTrigger value="rest" className="gap-1">
+              <Plug className="h-3.5 w-3.5" /> REST APIs
+            </TabsTrigger>
+            <TabsTrigger value="mcp" className="gap-1">
+              <Network className="h-3.5 w-3.5" /> MCP Servers
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {INTEGRATIONS.filter((i) => i.kind === kindFilter).map((integration) => (
           <IntegrationCard
             key={integration.id}
             integration={integration}
@@ -127,6 +142,13 @@ const AdminIntegrations = () => {
             onSaved={refreshStatus}
           />
         ))}
+
+        {INTEGRATIONS.filter((i) => i.kind === kindFilter).length === 0 && (
+          <Card className="p-8 text-center text-sm text-muted-foreground">
+            No {kindFilter === "mcp" ? "MCP servers" : "REST APIs"} configured
+            in the registry yet.
+          </Card>
+        )}
       </main>
     </div>
   );

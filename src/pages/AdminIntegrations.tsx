@@ -378,6 +378,55 @@ function IntegrationCard({
         })}
       </div>
 
+      {integration.kind === "mcp" && integration.capabilities && (
+        <div className="space-y-2 pt-2 border-t border-border">
+          <Label className="text-sm font-medium">Capabilities</Label>
+          <p className="text-xs text-muted-foreground">
+            Choose which MCP capabilities this server is allowed to expose. Saved
+            with the credentials.
+          </p>
+          <div className="space-y-2">
+            {integration.capabilities.map((cap) => {
+              const fk = capFieldKey(cap.key);
+              const stored = status?.fields.includes(fk);
+              const checked =
+                values[fk] !== undefined
+                  ? values[fk] === "true"
+                  : stored ?? cap.defaultEnabled;
+              return (
+                <div
+                  key={cap.key}
+                  className="flex items-start gap-2 rounded-md border border-border p-3"
+                >
+                  <Checkbox
+                    id={`${integration.id}-${fk}`}
+                    checked={checked}
+                    onCheckedChange={(v) =>
+                      setValues((vv) => ({
+                        ...vv,
+                        [fk]: v ? "true" : "false",
+                      }))
+                    }
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5 flex-1">
+                    <Label
+                      htmlFor={`${integration.id}-${fk}`}
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      {cap.label}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {cap.description}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 pt-2">
         <Button onClick={handleSave} disabled={saving}>
           {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

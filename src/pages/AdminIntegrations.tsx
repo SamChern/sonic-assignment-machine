@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { INTEGRATIONS, type Integration } from "@/config/integrations";
+import { INTEGRATIONS, type Integration, type IntegrationKind } from "@/config/integrations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -25,6 +27,7 @@ import {
   ChevronDown,
   ShieldCheck,
   Plug,
+  Network,
 } from "lucide-react";
 
 interface StatusEntry {
@@ -50,6 +53,7 @@ const AdminIntegrations = () => {
     Record<string, TestEntry>
   >({});
   const [statusLoading, setStatusLoading] = useState(true);
+  const [kindFilter, setKindFilter] = useState<IntegrationKind>("rest");
 
   useEffect(() => {
     if (!loading) {
@@ -107,13 +111,28 @@ const AdminIntegrations = () => {
 
       <main className="container mx-auto px-6 py-8 max-w-3xl space-y-6">
         <p className="text-sm text-muted-foreground">
-          Manage credentials for third-party APIs. Credentials are stored
-          server-side and only readable by edge functions. Use{" "}
+          Manage credentials for third-party APIs and Model Context Protocol
+          (MCP) servers. Credentials are stored server-side and only readable
+          by edge functions. Use{" "}
           <span className="font-medium">Test Connection</span> to validate
           before relying on them in features.
         </p>
 
-        {INTEGRATIONS.map((integration) => (
+        <Tabs
+          value={kindFilter}
+          onValueChange={(v) => setKindFilter(v as IntegrationKind)}
+        >
+          <TabsList className="grid w-full max-w-sm grid-cols-2">
+            <TabsTrigger value="rest" className="gap-1">
+              <Plug className="h-3.5 w-3.5" /> REST APIs
+            </TabsTrigger>
+            <TabsTrigger value="mcp" className="gap-1">
+              <Network className="h-3.5 w-3.5" /> MCP Servers
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {INTEGRATIONS.filter((i) => i.kind === kindFilter).map((integration) => (
           <IntegrationCard
             key={integration.id}
             integration={integration}
@@ -123,6 +142,13 @@ const AdminIntegrations = () => {
             onSaved={refreshStatus}
           />
         ))}
+
+        {INTEGRATIONS.filter((i) => i.kind === kindFilter).length === 0 && (
+          <Card className="p-8 text-center text-sm text-muted-foreground">
+            No {kindFilter === "mcp" ? "MCP servers" : "REST APIs"} configured
+            in the registry yet.
+          </Card>
+        )}
       </main>
     </div>
   );
@@ -144,6 +170,9 @@ function IntegrationCard({
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+
+  const capFieldKey = (capKey: string) =>
+    `MCP_CAP_${capKey.toUpperCase().replace(/\./g, "_")}`;
 
   const requiredKeys = integration.fields.filter((f) => f.required).map((f) => f.key);
   const configured = status
@@ -216,6 +245,12 @@ function IntegrationCard({
   };
 
   const handleTest = async () => {
+    if (!integration.testEndpoint) {
+      toast.info(
+        "No automated tester for this provider yet — credentials will be validated when first used.",
+      );
+      return;
+    }
     setTesting(true);
     const { data, error } = await supabase.functions.invoke(
       integration.testEndpoint,
@@ -238,8 +273,15 @@ function IntegrationCard({
     <Card className="p-6 space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-lg font-semibold">{integration.name}</h2>
+            <Badge variant="outline" className="gap-1 text-xs">
+              {integration.kind === "mcp" ? (
+                <><Network className="h-3 w-3" /> MCP</>
+              ) : (
+                <><Plug className="h-3 w-3" /> REST</>
+              )}
+            </Badge>
             {statusBadge}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
@@ -336,6 +378,55 @@ function IntegrationCard({
         })}
       </div>
 
+      {integration.kind === "mcp" && integration.capabilities && (
+        <div className="space-y-2 pt-2 border-t border-border">
+          <Label className="text-sm font-medium">Capabilities</Label>
+          <p className="text-xs text-muted-foreground">
+            Choose which MCP capabilities this server is allowed to expose. Saved
+            with the credentials.
+          </p>
+          <div className="space-y-2">
+            {integration.capabilities.map((cap) => {
+              const fk = capFieldKey(cap.key);
+              const stored = status?.fields.includes(fk);
+              const checked =
+                values[fk] !== undefined
+                  ? values[fk] === "true"
+                  : stored ?? cap.defaultEnabled;
+              return (
+                <div
+                  key={cap.key}
+                  className="flex items-start gap-2 rounded-md border border-border p-3"
+                >
+                  <Checkbox
+                    id={`${integration.id}-${fk}`}
+                    checked={checked}
+                    onCheckedChange={(v) =>
+                      setValues((vv) => ({
+                        ...vv,
+                        [fk]: v ? "true" : "false",
+                      }))
+                    }
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5 flex-1">
+                    <Label
+                      htmlFor={`${integration.id}-${fk}`}
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      {cap.label}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {cap.description}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 pt-2">
         <Button onClick={handleSave} disabled={saving}>
           {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -344,10 +435,15 @@ function IntegrationCard({
         <Button
           variant="outline"
           onClick={handleTest}
-          disabled={testing || !configured}
+          disabled={testing || !configured || !integration.testEndpoint}
+          title={
+            !integration.testEndpoint
+              ? "No automated tester for this provider yet"
+              : undefined
+          }
         >
           {testing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Test connection
+          {integration.testEndpoint ? "Test connection" : "Test (n/a)"}
         </Button>
       </div>
     </Card>

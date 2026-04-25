@@ -238,16 +238,26 @@ const AdminDashboard = () => {
             </Badge>
           </div>
           
-          {selectedSourceIds.length > 0 && (
+          <div className="flex items-center gap-2">
+            {selectedSourceIds.length > 0 && (
+              <Button
+                onClick={handleAnalyzeSelected}
+                disabled={isAnalyzing}
+                className="gradient-primary"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {isAnalyzing ? "Analyzing..." : `Analyze ${selectedSourceIds.length} Sources`}
+              </Button>
+            )}
             <Button
-              onClick={handleAnalyzeSelected}
-              disabled={isAnalyzing}
-              className="gradient-primary"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/admin/integrations")}
             >
-              <Sparkles className="h-4 w-4 mr-2" />
-              {isAnalyzing ? "Analyzing..." : `Analyze ${selectedSourceIds.length} Sources`}
+              <Plug className="h-4 w-4 mr-2" />
+              API Integrations
             </Button>
-          )}
+          </div>
         </div>
       </div>
 

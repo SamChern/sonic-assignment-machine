@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ShieldCheck,
   Plug,
+  Network,
 } from "lucide-react";
 
 interface StatusEntry {

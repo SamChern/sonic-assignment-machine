@@ -25,7 +25,10 @@ async function getDeveloperToken(admin: ReturnType<typeof createClient>): Promis
     .eq("integration_id", "apple_music");
   if (error) throw new Error(`Failed to read Apple credentials: ${error.message}`);
 
-  const map = new Map((creds ?? []).map((c) => [c.field_key, c.field_value]));
+  const map = new Map<string, string>(
+    ((creds as Array<{ field_key: string; field_value: string }> | null) ?? [])
+      .map((c) => [c.field_key, c.field_value]),
+  );
   const teamId = map.get("APPLE_TEAM_ID") ?? Deno.env.get("APPLE_TEAM_ID");
   const keyId = map.get("APPLE_KEY_ID") ?? Deno.env.get("APPLE_KEY_ID");
   const privateKeyPem = map.get("APPLE_PRIVATE_KEY") ?? Deno.env.get("APPLE_PRIVATE_KEY");

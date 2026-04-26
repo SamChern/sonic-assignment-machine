@@ -254,6 +254,7 @@ function IntegrationCard({
     setTesting(true);
     const { data, error } = await supabase.functions.invoke(
       integration.testEndpoint,
+      { body: { integration_id: integration.id } },
     );
     setTesting(false);
     if (error) {

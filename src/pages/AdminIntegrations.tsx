@@ -225,6 +225,16 @@ function IntegrationCard({
       toast.error("Enter at least one field to save.");
       return;
     }
+    // Reject obvious placeholder values that won't resolve at runtime.
+    const placeholderPattern = /your-ec2-host|example\.com|<.*?>|placeholder/i;
+    for (const [k, v] of Object.entries(payload)) {
+      if (placeholderPattern.test(v)) {
+        toast.error(
+          `Field ${k} still contains a placeholder value — replace it with a real URL/token before saving.`,
+        );
+        return;
+      }
+    }
     setSaving(true);
     const { data, error } = await supabase.functions.invoke(
       "admin-set-credentials",

@@ -14,7 +14,30 @@ Plus everything from upstream (`load`, `tempo`, `mfcc`, `chroma_cqt`, `beat_trac
 
 ---
 
-## 1. One-time install on the EC2 box
+## Quick install (recommended)
+
+From your laptop, in the project root:
+
+```bash
+scp -r deploy/librosa-mcp ubuntu@<EC2_HOST>:~/
+ssh ubuntu@<EC2_HOST>
+cd ~/librosa-mcp
+sudo HOSTNAME=mcp.audio.example.com EMAIL=you@example.com ./install.sh
+```
+
+The script installs system + Python deps, drops in the extended server, generates a Bearer token, installs the systemd unit, and configures nginx with TLS via Let's Encrypt. On success it prints the **MCP Server URL** and **Auth Token** to paste into Lovable's `/admin/integrations` → MCP Servers tab.
+
+Verify from anywhere:
+
+```bash
+./smoke-test.sh https://mcp.audio.example.com <token-from-installer>
+```
+
+If you'd rather run each step yourself, the manual instructions are below.
+
+---
+
+## 1. One-time install on the EC2 box (manual)
 
 SSH in (Ubuntu 22.04+ assumed). Replace `ubuntu` with your username if different.
 

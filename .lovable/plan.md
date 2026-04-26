@@ -1,143 +1,119 @@
-# Plan: Integrate `hugohow/mcp-music-analysis` (librosa MCP)
+## Deploy the Librosa MCP bridge on EC2
 
-## 🔍 What I found in the repo
+Everything you need is already committed under **`deploy/librosa-mcp/`** (`server_extended.py`, `librosa-mcp.service`, `nginx-librosa-mcp.conf`, `README.md`). This plan is the operator runbook — no app code changes are required. After it's done, you'll paste a URL + token into the existing `/admin/integrations` MCP Servers tab.
 
-`hugohow/mcp-music-analysis` is a **Python FastMCP server using stdio transport** (launched via `uvx mcp-music-analysis`, designed for Claude Desktop). It is **not a remote HTTP/SSE server** out of the box — Claude Desktop spawns it as a local subprocess and pipes JSON-RPC over stdin/stdout.
-
-### Tools actually exposed (from `server.py`)
-| Tool | Purpose | Maps to your category |
-|---|---|---|
-| `load(file_path, offset, duration)` | Loads audio → CSV path of waveform | Utilities - array (loosely) |
-| `get_duration(y_path)` | Audio duration in seconds | Utilities - misc |
-| `tempo(y_path, ...)` | BPM estimation | Feature extraction |
-| `beat_track(y_path, ...)` | Beat positions | Temporal segmentation |
-| `chroma_cqt(y_path, ...)` | Chroma CQT → CSV | Feature extraction |
-| `mfcc(y_path)` | MFCC → CSV | Feature extraction |
-| `download_from_url(url)` | Fetch remote .mp3/.wav | Utility |
-| `download_from_youtube(url)` | YouTube → audio file | Utility |
-
-### ⚠️ Honest gaps vs. your request
-You asked for these capability buckets — here's what's actually available:
-- ✅ **Feature extraction** — `mfcc`, `chroma_cqt`, `tempo` are present
-- ⚠️ **Temporal segmentation** — only `beat_track`; no `librosa.segment.agglomerative` or onset_detect wrapper
-- ❌ **Sequential modeling** — not exposed by this server
-- ❌ **Utilities (array / matching / misc)** — `librosa.util.*` is not wrapped as MCP tools
-- ❌ **Laplacian segmentation** — `librosa.segment.recurrence_matrix` + Laplacian decomposition is not exposed
-
-To get the missing capabilities you'd need to **fork the repo and add `@mcp.tool()` wrappers** around the corresponding `librosa` functions. I can do this as a follow-up if you want. For now the plan integrates what exists today.
+> ⚠️ All commands run **on the EC2 instance**, not in Lovable. Lovable's read-only/default modes can't SSH for you. I'll prep a small helper if useful (see step 7).
 
 ---
 
-## 🚧 The transport problem (and 3 ways to solve it)
-
-Your current "Generic MCP Server" config in `src/config/integrations.ts` expects a `MCP_SERVER_URL` (Streamable HTTP / SSE). But this librosa server only speaks **stdio**. Three paths:
-
-### Option A — Run it on your existing EC2 instance behind an HTTP bridge ⭐ recommended
-You already have an EC2 deployment (per `mem://architecture/ec2-deployment-config`). Add a tiny FastAPI/Express wrapper there that:
-1. Spawns `uvx mcp-music-analysis` as a child process
-2. Exposes a `/mcp` HTTP endpoint that proxies JSON-RPC over the subprocess's stdin/stdout
-3. Or, even simpler: re-publish the same tools as plain REST endpoints (`POST /tempo`, `POST /mfcc`, etc.) and skip MCP semantics entirely on the wire
-
-The MCP spec has a community pattern called `mcp-proxy` (https://github.com/sparfenyuk/mcp-proxy) that does exactly the stdio→SSE bridge with one command. EC2 is the right home because it can persist temp files between `load` and downstream calls, which the server requires (see "state limitation" below).
-
-### Option B — Use Smithery's hosted version
-Smithery (https://smithery.ai/server/@hugohow/mcp-music-analysis) hosts this server. If they expose an HTTP endpoint with a Smithery API key, you can plug that URL straight into the existing "Generic MCP Server" UI with `Bearer <smithery-key>`. **I need to verify whether Smithery offers HTTP transport for this specific server** — I can check that during build, but if they don't, fall back to Option A.
-
-### Option C — Skip MCP, call librosa directly from a Supabase edge function via a Python microservice
-Same EC2 wrapper as Option A but expose plain REST endpoints. Cleanest if you don't actually need the MCP protocol — you only need the *capabilities*. This loses the "future MCP clients can introspect tools" benefit but is the least moving parts.
-
-**My recommendation: Option A.** It keeps the abstraction your UI already supports, lets future LLM agents auto-discover the tools, and reuses your EC2 box.
+### Prerequisites
+- Ubuntu 22.04+ EC2 instance you can SSH into (the same box that already runs your Express analyze server is fine — different port).
+- A DNS hostname pointing at the instance (e.g. `mcp.audio.yourdomain.com`). Needed for TLS via Let's Encrypt.
+- EC2 Security Group allows inbound **TCP 443** (and 80 for the cert challenge). Do **not** open 8765.
 
 ---
 
-## 📋 Build plan (assuming Option A)
-
-### 1. Add `mcp_librosa` to the integration registry
-Edit `src/config/integrations.ts` — append a new entry alongside `mcp_notion` / `mcp_linear`:
-
-```ts
-{
-  id: "mcp_librosa",
-  kind: "mcp",
-  name: "Librosa Music Analysis MCP",
-  description: "Audio feature extraction & beat tracking via the hugohow/mcp-music-analysis server (librosa under the hood).",
-  docsUrl: "https://github.com/hugohow/mcp-music-analysis",
-  setupSteps: [
-    "On your EC2 box: `pip install uv && uv tool install mcp-music-analysis`.",
-    "Install the bridge: `uv tool install mcp-proxy` (or build a tiny FastAPI wrapper).",
-    "Run: `mcp-proxy --sse-port 8765 -- uvx mcp-music-analysis` (or your wrapper on a chosen port).",
-    "Open the port (8765) in EC2 security group, ideally behind nginx + Bearer auth.",
-    "Paste the public URL (e.g. https://your-ec2-host/librosa/sse) and Bearer token below.",
-    "Click Test connection — performs a JSON-RPC `initialize` handshake.",
-  ],
-  fields: mcpFields,           // re-uses URL / scheme / token / extra-headers
-  capabilities: [               // librosa-specific capability toggles
-    { key: "feature.extract",  label: "Feature extraction", description: "tempo, mfcc, chroma_cqt", defaultEnabled: true },
-    { key: "temporal.segment", label: "Temporal segmentation", description: "beat_track (more pending upstream)", defaultEnabled: true },
-    { key: "audio.io",         label: "Audio loading & download", description: "load, download_from_url, download_from_youtube", defaultEnabled: true },
-    { key: "utility.misc",     label: "Misc utilities", description: "get_duration etc.", defaultEnabled: true },
-    // Disabled-by-default placeholders for what's NOT yet upstream:
-    { key: "sequential.model",        label: "Sequential modeling (not yet available)", description: "Requires upstream PR.", defaultEnabled: false },
-    { key: "utility.array",           label: "Array utilities (not yet available)",    description: "Requires upstream PR.", defaultEnabled: false },
-    { key: "utility.matching",        label: "Matching utilities (not yet available)", description: "Requires upstream PR.", defaultEnabled: false },
-    { key: "segment.laplacian",       label: "Laplacian segmentation (not yet available)", description: "Requires upstream PR.", defaultEnabled: false },
-  ],
-}
+### Step 1 — Copy the kit to the box
+From your laptop, in the project root:
+```bash
+scp -r deploy/librosa-mcp ubuntu@<EC2_HOST>:~/
 ```
-The disabled placeholder capabilities make the **gaps visible in your admin UI** rather than silently missing — when we fork/extend the server we just flip them on.
 
-### 2. Allow-list the new ID in `admin-set-credentials`
-Edit `supabase/functions/admin-set-credentials/index.ts` — extend `MCP_FIELDS` with the new capability keys (`MCP_CAP_FEATURE_EXTRACT`, etc.) and add `mcp_librosa: MCP_FIELDS` to `ALLOWED_FIELDS`.
+### Step 2 — Install system + Python deps (on EC2)
+```bash
+ssh ubuntu@<EC2_HOST>
+sudo apt-get update
+sudo apt-get install -y libsndfile1 ffmpeg python3-pip nginx certbot python3-certbot-nginx
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.local/bin/env
+uv tool install mcp-music-analysis   # upstream (kept for parity)
+uv tool install mcp-proxy            # stdio→SSE bridge
+```
 
-### 3. Build a real MCP test endpoint (currently `mcp_*` integrations have no tester)
-Create `supabase/functions/mcp-test/index.ts`:
-- Reads `MCP_SERVER_URL` + `MCP_AUTH_SCHEME` + `MCP_AUTH_TOKEN` for the requested integration from `integration_credentials`
-- Sends a JSON-RPC `initialize` request with required headers `Accept: application/json, text/event-stream` and `Content-Type: application/json` (per MCP Streamable HTTP spec — without these MCP servers return HTTP 406)
-- Records latency + success in `integration_test_history`
+### Step 3 — Install the extended server
+```bash
+sudo mkdir -p /opt/librosa-mcp
+sudo cp ~/librosa-mcp/server_extended.py /opt/librosa-mcp/
+sudo chown -R ubuntu:ubuntu /opt/librosa-mcp
+uv venv /opt/librosa-mcp/.venv
+/opt/librosa-mcp/.venv/bin/pip install \
+  "fastmcp==0.4.1" "librosa>=0.10" "numpy>=1.21" "scipy>=1.10" \
+  "scikit-learn>=1.0" "soundfile==0.13.1" "matplotlib>=3.5" \
+  "requests" "pytubefix==8.12.2"
+```
 
-Make it generic so it works for `mcp_librosa`, `mcp_notion`, `mcp_linear`, and `mcp_generic`. Then set `testEndpoint: "mcp-test"` on all four MCP entries in the registry. Bonus side-effect: this fixes the "Test (n/a)" state for your existing MCP entries.
+### Step 4 — Generate the Bearer token
+```bash
+TOKEN=$(openssl rand -hex 32)
+echo "$TOKEN" | sudo tee /etc/librosa-mcp.token > /dev/null
+sudo chmod 600 /etc/librosa-mcp.token
+echo "SAVE THIS — paste into Lovable admin: $TOKEN"
+```
 
-### 4. Build a runtime invoker: `supabase/functions/mcp-call/index.ts`
-A reusable edge function that:
-- Takes `{ integration_id, tool_name, arguments }` as body
-- Loads that integration's URL+auth from `integration_credentials`
-- Issues a `tools/call` JSON-RPC request
-- Returns the tool result to the client
+### Step 5 — Install + start systemd unit
+```bash
+sudo cp ~/librosa-mcp/librosa-mcp.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now librosa-mcp
+sudo systemctl status librosa-mcp     # expect: active (running)
+journalctl -u librosa-mcp -n 50 --no-pager   # expect: Uvicorn running on http://127.0.0.1:8765
+```
 
-This is what your future fingerprint pipeline will call when it wants to ask librosa for an MFCC.
+### Step 6 — Install nginx site + TLS
+```bash
+sudo cp ~/librosa-mcp/nginx-librosa-mcp.conf /etc/nginx/sites-available/librosa-mcp
+sudo ln -sf /etc/nginx/sites-available/librosa-mcp /etc/nginx/sites-enabled/librosa-mcp
 
-### 5. (Optional, follow-up) Wire librosa into the analysis pipeline
-Once the MCP is reachable, `analyze-audio` (or a sibling `analyze-audio-librosa`) can call `mcp-call` to enrich source analyses with real DSP features (tempo, chroma, MFCC) instead of relying solely on the LLM's perceptual scoring. Out of scope for this plan — flag for a separate task.
+# Edit two placeholders: YOUR_HOST (3 places) and TOKEN_GOES_HERE (1 place)
+sudo sed -i "s/YOUR_HOST/mcp.audio.yourdomain.com/g" /etc/nginx/sites-available/librosa-mcp
+sudo sed -i "s/TOKEN_GOES_HERE/$(sudo cat /etc/librosa-mcp.token)/" /etc/nginx/sites-available/librosa-mcp
+
+sudo nginx -t
+sudo certbot --nginx -d mcp.audio.yourdomain.com    # provisions cert + reloads
+```
+
+### Step 7 — Smoke-test from your laptop
+```bash
+TOKEN=<paste-from-step-4>
+curl -i https://mcp.audio.yourdomain.com/healthz
+# → 200 ok
+
+curl -N -H "Authorization: Bearer $TOKEN" \
+     -H "Accept: text/event-stream" \
+     https://mcp.audio.yourdomain.com/librosa/sse
+# → should hold open and stream "event: endpoint" within ~1s
+```
+
+If `healthz` is 200 but `/librosa/sse` returns 401 → token mismatch (re-do step 6 sed).
+If 404 → missing trailing slash on `location /librosa/`.
+If 502 → systemd service isn't up; recheck step 5 logs.
+
+### Step 8 — Wire into Lovable
+1. Navigate to `/admin/integrations` → **MCP Servers** tab → **Librosa Music Analysis MCP**.
+2. Fill:
+   - **MCP Server URL**: `https://mcp.audio.yourdomain.com/librosa/sse`
+   - **Auth Scheme**: `Bearer`
+   - **Auth Token**: the token from step 4
+   - **Extra Headers**: leave blank
+3. **Save** → **Test connection** → expect `Connection OK (NN ms)`.
+
+The placeholder validator I added last turn will block the save if you accidentally leave `your-ec2-host` in the URL.
 
 ---
 
-## ⚠️ State limitation you should know about
+### What I'll do once you approve
+This is operational work I can't run for you, but on approval I'll switch to default mode and:
+1. **Add a one-shot install script** `deploy/librosa-mcp/install.sh` that runs steps 2–6 idempotently (you scp + run; one command instead of ten).
+2. **Add `deploy/librosa-mcp/smoke-test.sh`** that runs step 7 against an arbitrary host+token.
+3. **Tighten** the nginx config with a generic `/healthz` upstream check and rate-limit the `/librosa/` location (10 req/s burst 20) so a stray client can't pin the box.
+4. *(Optional, ask first)* Wire `analyze-audio` to actually call the new MCP via the existing `mcp-call` edge function and enrich each source with real `tempo` + segment count.
 
-Every librosa tool except `load`/`download_*` requires a `path_audio_time_series_y` produced by a prior `load` call — and that file lives in **the MCP server's local `/tmp`**. So:
-- ✅ Works fine if all calls in a single analysis hit the same EC2 instance (sticky session or single replica).
-- ❌ Breaks if you ever scale horizontally without shared storage.
-- 💡 If this becomes an issue, the upstream server needs to be patched to use S3 or pass arrays inline.
+### Files this plan would touch (default mode)
+- **Create** `deploy/librosa-mcp/install.sh`
+- **Create** `deploy/librosa-mcp/smoke-test.sh`
+- **Edit**  `deploy/librosa-mcp/nginx-librosa-mcp.conf` (add rate limit + upstream healthcheck stanza)
+- *No frontend or edge function changes.* Item 4 above is a separate follow-up.
 
----
-
-## 📂 Files to touch
-
-| File | Action |
-|---|---|
-| `src/config/integrations.ts` | Add `mcp_librosa` entry; set `testEndpoint: "mcp-test"` on all MCP entries |
-| `supabase/functions/admin-set-credentials/index.ts` | Add `mcp_librosa` to `ALLOWED_FIELDS`; extend `MCP_FIELDS` with new capability keys |
-| `supabase/functions/mcp-test/index.ts` | **new** — generic MCP `initialize` handshake tester |
-| `supabase/functions/mcp-call/index.ts` | **new** — generic `tools/call` invoker for runtime use |
-| `supabase/config.toml` | Mark both new functions `verify_jwt = true` (admin/auth-gated) |
-
-No DB migrations needed — `integration_credentials` already supports the new keys, and `integration_test_history` is already in place.
-
----
-
-## ❓ Before I build, please confirm
-
-1. **Hosting**: Are you OK with running the MCP server on your existing EC2 box (Option A)? If yes, I'll write a one-liner systemd unit + nginx snippet for you alongside the code. If you'd rather try Smithery first (Option B), I'll probe their HTTP endpoint during build.
-2. **Capability gaps**: Are you OK shipping `mcp_librosa` with the 4 missing categories shown as disabled placeholders, with a follow-up task to fork the server and add them?
-3. **Auth**: For the EC2 endpoint, plain Bearer token via nginx is simplest. Want anything stronger (mTLS, IP allow-list)?
-
-Once you approve and answer those three, I'll implement everything in one pass.
+### Open questions
+1. What's the hostname you'll point at the box (so I can pre-fill it in `install.sh`)?
+2. Want item 4 (`analyze-audio` actually calling the MCP) bundled in, or keep this PR purely about the bridge?

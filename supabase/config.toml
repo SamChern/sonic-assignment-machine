@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.aws-proxy]
 verify_jwt = false
+
+[functions.list-configured-integrations]
+verify_jwt = false
+
+[functions.apple-music-search]
+verify_jwt = false

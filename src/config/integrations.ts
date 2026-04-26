@@ -282,4 +282,78 @@ export const INTEGRATIONS: Integration[] = [
     fields: mcpFields,
     capabilities: mcpCapabilities,
   },
+  {
+    id: "mcp_librosa",
+    kind: "mcp",
+    name: "Librosa Music Analysis MCP",
+    description:
+      "Audio feature extraction & beat tracking via the hugohow/mcp-music-analysis server (librosa under the hood). Requires an HTTP/SSE bridge — the upstream server is stdio-only.",
+    docsUrl: "https://github.com/hugohow/mcp-music-analysis",
+    setupSteps: [
+      "On your EC2 box: install uv → `pip install uv && uv tool install mcp-music-analysis`.",
+      "Install the stdio→SSE bridge: `uv tool install mcp-proxy` (https://github.com/sparfenyuk/mcp-proxy).",
+      "Run the bridge: `mcp-proxy --sse-port 8765 -- uvx mcp-music-analysis` (use systemd to keep it alive).",
+      "Open the chosen port in your EC2 security group, ideally behind nginx + a Bearer token.",
+      "Paste the public URL (e.g. https://your-ec2-host/librosa/sse) and Bearer token below, then Test Connection.",
+    ],
+    fields: mcpFields,
+    testEndpoint: "mcp-test",
+    capabilities: [
+      {
+        key: "feature.extract",
+        label: "Feature extraction",
+        description: "tempo, mfcc, chroma_cqt — core librosa.feature.* wrappers.",
+        defaultEnabled: true,
+      },
+      {
+        key: "temporal.segment",
+        label: "Temporal segmentation",
+        description: "beat_track. Onset detection / agglomerative segmentation pending upstream.",
+        defaultEnabled: true,
+      },
+      {
+        key: "audio.io",
+        label: "Audio loading & download",
+        description: "load, download_from_url, download_from_youtube.",
+        defaultEnabled: true,
+      },
+      {
+        key: "utility.misc",
+        label: "Misc utilities",
+        description: "get_duration and similar helpers.",
+        defaultEnabled: true,
+      },
+      {
+        key: "sequential.model",
+        label: "Sequential modeling (not yet available)",
+        description: "Requires forking the upstream MCP and adding @mcp.tool wrappers around librosa.sequence.*.",
+        defaultEnabled: false,
+      },
+      {
+        key: "utility.array",
+        label: "Array utilities (not yet available)",
+        description: "Requires upstream PR exposing librosa.util.* (frame, pad_center, normalize, ...).",
+        defaultEnabled: false,
+      },
+      {
+        key: "utility.matching",
+        label: "Matching utilities (not yet available)",
+        description: "Requires upstream PR exposing librosa.util.match_events / match_intervals.",
+        defaultEnabled: false,
+      },
+      {
+        key: "segment.laplacian",
+        label: "Laplacian segmentation (not yet available)",
+        description: "Requires upstream PR exposing recurrence_matrix + Laplacian decomposition pipeline.",
+        defaultEnabled: false,
+      },
+    ],
+  },
 ];
+
+// Wire the generic MCP tester to all MCP integrations (additive — doesn't break existing entries).
+for (const integration of INTEGRATIONS) {
+  if (integration.kind === "mcp" && !integration.testEndpoint) {
+    integration.testEndpoint = "mcp-test";
+  }
+}

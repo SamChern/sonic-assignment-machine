@@ -1,11 +1,20 @@
-import { useState, useCallback } from "react";
-import { Upload, FileAudio, Library } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Upload, FileAudio, Library, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SpotifySearch } from "./SpotifySearch";
+import { AppleMusicSearch } from "./AppleMusicSearch";
 import { UserLibrary } from "./UserLibrary";
 import { AudioSource } from "@/hooks/useAudioSources";
+import { useConfiguredIntegrations } from "@/hooks/useConfiguredIntegrations";
 
 interface AudioUploaderProps {
   onFileSelect: (file: File) => void;
@@ -16,6 +25,15 @@ interface AudioUploaderProps {
 
 export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLibrarySelect }: AudioUploaderProps) => {
   const [isDragging, setIsDragging] = useState(false);
+  const { providers, loading: providersLoading } = useConfiguredIntegrations();
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+
+  // Auto-select the first available provider once they load.
+  useEffect(() => {
+    if (!selectedProvider && providers.length > 0) {
+      setSelectedProvider(providers[0].id);
+    }
+  }, [providers, selectedProvider]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -48,7 +66,10 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLi
     <Tabs defaultValue="upload" className="w-full">
       <TabsList className="grid w-full grid-cols-3">
         <TabsTrigger value="upload">Upload File</TabsTrigger>
-        <TabsTrigger value="spotify">Spotify Search</TabsTrigger>
+        <TabsTrigger value="external">
+          <Globe className="h-4 w-4 mr-1.5" />
+          External Search
+        </TabsTrigger>
         <TabsTrigger value="library">
           <Library className="h-4 w-4 mr-1.5" />
           Browse Library
@@ -117,9 +138,52 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLi
         </Card>
       </TabsContent>
       
-      <TabsContent value="spotify">
-        <Card className="p-6">
-          <SpotifySearch onTrackSelect={onSpotifyTrack || (() => {})} />
+      <TabsContent value="external">
+        <Card className="p-6 space-y-4">
+          {providersLoading ? (
+            <p className="text-sm text-muted-foreground">Loading available services…</p>
+          ) : providers.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <Globe className="h-10 w-10 mx-auto text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">
+                No external services configured
+              </p>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                An admin can enable Apple Music, Spotify, or other providers in
+                the API Integrations dashboard.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-foreground whitespace-nowrap">
+                  Search service:
+                </span>
+                <Select
+                  value={selectedProvider ?? undefined}
+                  onValueChange={setSelectedProvider}
+                >
+                  <SelectTrigger className="w-[240px]">
+                    <SelectValue placeholder="Choose a service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {providers.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedProvider === "spotify" && (
+                <SpotifySearch onTrackSelect={onSpotifyTrack || (() => {})} />
+              )}
+              {selectedProvider === "apple_music" && (
+                <AppleMusicSearch onTrackSelect={onSpotifyTrack || (() => {})} />
+              )}
+            </>
+          )}
         </Card>
       </TabsContent>
 

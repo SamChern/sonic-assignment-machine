@@ -16,11 +16,21 @@ const MCP_FIELDS = [
   "MCP_AUTH_SCHEME",
   "MCP_AUTH_TOKEN",
   "MCP_HEADERS_JSON",
-  // Per-capability toggles, one row per capability key
+  // Per-capability toggles, one row per capability key.
+  // Generic MCP capabilities:
   "MCP_CAP_TOOLS_READ",
   "MCP_CAP_RESOURCES_READ",
   "MCP_CAP_PROMPTS_READ",
   "MCP_CAP_SAMPLING_WRITE",
+  // Librosa MCP capabilities:
+  "MCP_CAP_FEATURE_EXTRACT",
+  "MCP_CAP_TEMPORAL_SEGMENT",
+  "MCP_CAP_AUDIO_IO",
+  "MCP_CAP_UTILITY_MISC",
+  "MCP_CAP_SEQUENTIAL_MODEL",
+  "MCP_CAP_UTILITY_ARRAY",
+  "MCP_CAP_UTILITY_MATCHING",
+  "MCP_CAP_SEGMENT_LAPLACIAN",
 ];
 
 const ALLOWED_FIELDS: Record<string, string[]> = {
@@ -36,6 +46,7 @@ const ALLOWED_FIELDS: Record<string, string[]> = {
   mcp_generic: MCP_FIELDS,
   mcp_notion: MCP_FIELDS,
   mcp_linear: MCP_FIELDS,
+  mcp_librosa: MCP_FIELDS,
 };
 
 Deno.serve(async (req) => {

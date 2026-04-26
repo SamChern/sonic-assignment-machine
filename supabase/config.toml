@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.apple-music-search]
 verify_jwt = false
+
+[functions.mcp-test]
+verify_jwt = true
+
+[functions.mcp-call]
+verify_jwt = true

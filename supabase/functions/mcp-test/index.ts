@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
 });
 
 async function record(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient> | any,
   integrationId: string,
   userId: string,
   success: boolean,

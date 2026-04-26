@@ -14,7 +14,8 @@ const corsHeaders = {
 // Cache the signed JWT in memory for the lifetime of the function instance.
 let cachedJwt: { token: string; expiresAt: number } | null = null;
 
-async function getDeveloperToken(admin: ReturnType<typeof createClient>): Promise<string> {
+// deno-lint-ignore no-explicit-any
+async function getDeveloperToken(admin: any): Promise<string> {
   if (cachedJwt && cachedJwt.expiresAt > Date.now() + 60_000) {
     return cachedJwt.token;
   }

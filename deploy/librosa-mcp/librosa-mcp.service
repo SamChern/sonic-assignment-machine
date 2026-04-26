@@ -1,0 +1,44 @@
+[Unit]
+Description=Librosa MCP server (extended fork) bridged to SSE via mcp-proxy
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/librosa-mcp
+
+# uv tool installs land in ~/.local/bin
+Environment=PATH=/home/ubuntu/.local/bin:/opt/librosa-mcp/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+
+# mcp-proxy spawns our extended server as a stdio child and exposes /sse on :8765 (loopback only).
+# nginx fronts this with TLS + Bearer auth.
+ExecStart=/home/ubuntu/.local/bin/mcp-proxy \
+  --sse-host 127.0.0.1 \
+  --sse-port 8765 \
+  -- /opt/librosa-mcp/.venv/bin/python /opt/librosa-mcp/server_extended.py
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=10s
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=false
+# librosa needs /tmp for the shared y_path CSVs between calls — keep PrivateTmp off.
+ReadWritePaths=/tmp /opt/librosa-mcp
+
+# Resource caps (tune to your instance)
+MemoryMax=2G
+CPUQuota=200%
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=librosa-mcp
+
+[Install]
+WantedBy=multi-user.target

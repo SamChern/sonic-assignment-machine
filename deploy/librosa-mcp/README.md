@@ -1,4 +1,13 @@
-# Librosa MCP — EC2 deployment kit
+# Librosa MCP + REST — EC2 deployment kit
+
+Two sibling services on the same EC2 box, both backed by `server_extended.py`:
+
+| Service | Port | Use it for |
+|---|---|---|
+| **librosa-mcp** (MCP over SSE) | 8765 | Full MCP capability — agents that speak the protocol can list tools, sample, etc. |
+| **librosa-rest** (plain HTTPS) | 8766 | Quick `POST /analyze` calls from edge functions / web clients while MCP is being stabilized. Simpler, fewer moving parts. |
+
+Both share `/opt/librosa-mcp/.venv` and the same extended librosa pipeline. Install MCP first (`./install.sh`), then add REST on top (`./install-rest.sh`).
 
 A drop-in deployment for the [`hugohow/mcp-music-analysis`](https://github.com/hugohow/mcp-music-analysis) MCP server **plus our fork** (`server_extended.py`) that adds the 4 capability buckets the upstream is missing:
 

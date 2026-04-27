@@ -335,59 +335,66 @@ function IntegrationCard({
         </CollapsibleContent>
       </Collapsible>
 
-      <div className="space-y-3">
-        {integration.fields.map((field) => {
-          const isConfigured = status?.fields.includes(field.key);
-          return (
-            <div key={field.key} className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label htmlFor={`${integration.id}-${field.key}`}>
-                  {field.label}
-                  {field.required && (
-                    <span className="text-destructive ml-1">*</span>
+      {integration.fields.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+          No credentials needed for this integration — it reuses settings from
+          another card. Click <span className="font-medium">Test connection</span> to verify it's working end-to-end.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {integration.fields.map((field) => {
+            const isConfigured = status?.fields.includes(field.key);
+            return (
+              <div key={field.key} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${integration.id}-${field.key}`}>
+                    {field.label}
+                    {field.required && (
+                      <span className="text-destructive ml-1">*</span>
+                    )}
+                  </Label>
+                  {isConfigured && (
+                    <span className="text-xs text-muted-foreground">
+                      •••• stored
+                    </span>
                   )}
-                </Label>
-                {isConfigured && (
-                  <span className="text-xs text-muted-foreground">
-                    •••• stored
-                  </span>
+                </div>
+                {field.type === "textarea" ? (
+                  <Textarea
+                    id={`${integration.id}-${field.key}`}
+                    placeholder={
+                      isConfigured
+                        ? "Leave blank to keep current value"
+                        : field.placeholder
+                    }
+                    rows={6}
+                    className="font-mono text-xs"
+                    value={values[field.key] ?? ""}
+                    onChange={(e) =>
+                      setValues((v) => ({ ...v, [field.key]: e.target.value }))
+                    }
+                  />
+                ) : (
+                  <Input
+                    id={`${integration.id}-${field.key}`}
+                    type={field.type === "password" ? "password" : "text"}
+                    placeholder={
+                      isConfigured
+                        ? "Leave blank to keep current value"
+                        : field.placeholder
+                    }
+                    value={values[field.key] ?? ""}
+                    onChange={(e) =>
+                      setValues((v) => ({ ...v, [field.key]: e.target.value }))
+                    }
+                  />
                 )}
+                <p className="text-xs text-muted-foreground">{field.helpText}</p>
               </div>
-              {field.type === "textarea" ? (
-                <Textarea
-                  id={`${integration.id}-${field.key}`}
-                  placeholder={
-                    isConfigured
-                      ? "Leave blank to keep current value"
-                      : field.placeholder
-                  }
-                  rows={6}
-                  className="font-mono text-xs"
-                  value={values[field.key] ?? ""}
-                  onChange={(e) =>
-                    setValues((v) => ({ ...v, [field.key]: e.target.value }))
-                  }
-                />
-              ) : (
-                <Input
-                  id={`${integration.id}-${field.key}`}
-                  type={field.type === "password" ? "password" : "text"}
-                  placeholder={
-                    isConfigured
-                      ? "Leave blank to keep current value"
-                      : field.placeholder
-                  }
-                  value={values[field.key] ?? ""}
-                  onChange={(e) =>
-                    setValues((v) => ({ ...v, [field.key]: e.target.value }))
-                  }
-                />
-              )}
-              <p className="text-xs text-muted-foreground">{field.helpText}</p>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {integration.kind === "mcp" && integration.capabilities && (
         <div className="space-y-2 pt-2 border-t border-border">
@@ -439,14 +446,20 @@ function IntegrationCard({
       )}
 
       <div className="flex items-center gap-2 pt-2">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Save credentials
-        </Button>
+        {integration.fields.length > 0 && (
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save credentials
+          </Button>
+        )}
         <Button
           variant="outline"
           onClick={handleTest}
-          disabled={testing || !configured || !integration.testEndpoint}
+          disabled={
+            testing ||
+            !integration.testEndpoint ||
+            (integration.fields.length > 0 && !configured)
+          }
           title={
             !integration.testEndpoint
               ? "No automated tester for this provider yet"

@@ -121,22 +121,94 @@ Deno.serve(async (req) => {
       },
     };
 
+    // Detect transport: URLs ending in /sse use the legacy SSE transport
+    // (two endpoints: GET /sse for the stream, POST /messages/?session_id=...).
+    // Everything else is treated as Streamable HTTP (single endpoint, both GET+POST).
+    const isSseTransport = /\/sse\/?$/i.test(new URL(serverUrl).pathname);
+
     let resp: Response;
+    let text = "";
+    let contentType = "";
+
     try {
-      resp = await fetch(serverUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(initPayload),
-        // 15s timeout via AbortController
-        signal: AbortSignal.timeout(15_000),
-      });
+      if (isSseTransport) {
+        // Step 1: GET /sse to open the stream and read the endpoint event.
+        const sseResp = await fetch(serverUrl, {
+          method: "GET",
+          headers: { ...headers, Accept: "text/event-stream" },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!sseResp.ok || !sseResp.body) {
+          const errText = await sseResp.text().catch(() => "");
+          return await record(
+            admin, integrationId, userData.user.id, false, startedAt,
+            `SSE GET failed: HTTP ${sseResp.status}: ${errText.slice(0, 200)}`,
+          );
+        }
+
+        // Read the SSE stream until we see `event: endpoint` + `data: <path>`.
+        const reader = sseResp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let endpointPath = "";
+        const sseDeadline = Date.now() + 10_000;
+        while (Date.now() < sseDeadline && !endpointPath) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          // Parse complete events (separated by \n\n)
+          const events = buf.split("\n\n");
+          buf = events.pop() ?? "";
+          for (const ev of events) {
+            const lines = ev.split("\n");
+            const eventLine = lines.find((l) => l.startsWith("event:"))?.slice(6).trim();
+            const dataLine = lines.find((l) => l.startsWith("data:"))?.slice(5).trim();
+            if (eventLine === "endpoint" && dataLine) {
+              endpointPath = dataLine;
+              break;
+            }
+          }
+        }
+        // Don't keep the SSE stream open — we only needed the endpoint URL.
+        try { await reader.cancel(); } catch { /* noop */ }
+
+        if (!endpointPath) {
+          return await record(
+            admin, integrationId, userData.user.id, false, startedAt,
+            "SSE stream opened but no `event: endpoint` received within 10s",
+          );
+        }
+
+        // Resolve relative path against the SSE URL's origin.
+        const messagesUrl = new URL(endpointPath, serverUrl).toString();
+
+        // Step 2: POST initialize to /messages/?session_id=...
+        // Per SSE spec the response body is just `Accepted`; the actual JSON-RPC
+        // result would come back over the (now-closed) SSE stream. For a connectivity
+        // test, a 2xx Accepted is sufficient proof the handshake works.
+        resp = await fetch(messagesUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(initPayload),
+          signal: AbortSignal.timeout(10_000),
+        });
+        text = await resp.text();
+        contentType = resp.headers.get("content-type") ?? "";
+      } else {
+        // Streamable HTTP: single endpoint, POST initialize directly.
+        resp = await fetch(serverUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(initPayload),
+          signal: AbortSignal.timeout(15_000),
+        });
+        text = await resp.text();
+        contentType = resp.headers.get("content-type") ?? "";
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Network error";
       return await record(admin, integrationId, userData.user.id, false, startedAt, `Fetch failed: ${msg}`);
     }
-
-    const text = await resp.text();
-    const contentType = resp.headers.get("content-type") ?? "";
 
     if (!resp.ok) {
       return await record(
@@ -145,7 +217,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Parse — could be JSON or SSE-style "data: {...}\n\n"
+    if (isSseTransport) {
+      // 2xx on the messages endpoint is success. Body is typically just "Accepted".
+      return await record(
+        admin, integrationId, userData.user.id, true, startedAt, null,
+        { transport: "sse", status: resp.status, body: text.slice(0, 200) },
+      );
+    }
+
+    // Streamable HTTP: parse JSON or SSE-framed JSON.
     let parsed: unknown = null;
     if (contentType.includes("text/event-stream")) {
       const dataLine = text.split("\n").find((l) => l.startsWith("data:"));

@@ -177,6 +177,23 @@ export const INTEGRATIONS: Integration[] = [
     // No dedicated tester yet — credentials are validated at runtime by spotify-search.
   },
   {
+    id: "spotify_audio_features",
+    kind: "rest",
+    name: "Spotify Audio Features (Librosa fallback)",
+    description:
+      "Server-free audio analysis using Spotify's pre-computed features (tempo, key, energy, valence, danceability, etc.). Reuses the Spotify credentials configured above — no extra setup. Use this while the Librosa REST API is being deployed, or for Spotify-only catalogs.",
+    docsUrl:
+      "https://developer.spotify.com/documentation/web-api/reference/get-audio-features",
+    setupSteps: [
+      "Make sure the Spotify integration above is configured and verified.",
+      "That's it — this card uses the same credentials. No new token to paste.",
+      "Click Test Connection: it requests a fresh Spotify access token to confirm the creds are still valid and the /audio-features endpoint is reachable.",
+      "Note: Spotify deprecated /audio-features for apps registered AFTER Nov 27, 2024. If your Spotify app is newer, the test will return spotify_unavailable=true and you'll need a grandfathered app or the Librosa REST fallback.",
+    ],
+    fields: [],
+    testEndpoint: "spotify-audio-features-test",
+  },
+  {
     id: "librosa_rest",
     kind: "rest",
     name: "Librosa REST API",

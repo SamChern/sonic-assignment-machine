@@ -175,9 +175,13 @@ function IntegrationCard({
     `MCP_CAP_${capKey.toUpperCase().replace(/\./g, "_")}`;
 
   const requiredKeys = integration.fields.filter((f) => f.required).map((f) => f.key);
-  const configured = status
-    ? requiredKeys.every((k) => status.fields.includes(k))
-    : false;
+  // Integrations with no fields (e.g. those that reuse another card's creds)
+  // are considered "configured" by default — verification happens via the tester.
+  const configured = integration.fields.length === 0
+    ? true
+    : status
+      ? requiredKeys.every((k) => status.fields.includes(k))
+      : false;
 
   const statusBadge = (() => {
     if (statusLoading) {

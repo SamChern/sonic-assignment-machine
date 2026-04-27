@@ -177,6 +177,42 @@ export const INTEGRATIONS: Integration[] = [
     // No dedicated tester yet — credentials are validated at runtime by spotify-search.
   },
   {
+    id: "librosa_rest",
+    kind: "rest",
+    name: "Librosa REST API",
+    description:
+      "Plain HTTP wrapper around the librosa analysis pipeline (sibling of the MCP server). Use this while MCP is being debugged — same EC2 box, simpler API.",
+    docsUrl: "https://github.com/hugohow/mcp-music-analysis",
+    setupSteps: [
+      "On the EC2 box: cd ~/librosa-mcp && sudo ./install-rest.sh (after install.sh has already run).",
+      "The script installs FastAPI + uvicorn into the existing /opt/librosa-mcp/.venv, generates a Bearer token, and starts the librosa-rest systemd service on 127.0.0.1:8766.",
+      "Add the /librosa-rest/ location block from nginx-librosa-rest.conf to your existing nginx server (replacing TOKEN_GOES_HERE), then `sudo nginx -t && sudo systemctl reload nginx`.",
+      "Verify from your laptop: `curl -H 'Authorization: Bearer <token>' https://YOUR_HOST/librosa-rest/health` should return `{\"ok\":true,...}`.",
+      "Paste the base URL (without trailing /health) and the token below, then click Test Connection.",
+    ],
+    fields: [
+      {
+        key: "LIBROSA_REST_URL",
+        label: "Base URL",
+        type: "text",
+        placeholder: "https://your-ec2-host/librosa-rest",
+        helpText:
+          "Base URL of the REST API, without trailing slash. The tester appends /health automatically.",
+        required: true,
+      },
+      {
+        key: "LIBROSA_REST_TOKEN",
+        label: "Bearer Token",
+        type: "password",
+        placeholder: "64-char hex string from /etc/librosa-rest.token",
+        helpText:
+          "The token printed at the end of install-rest.sh. Sent as `Authorization: Bearer <token>`.",
+        required: true,
+      },
+    ],
+    testEndpoint: "librosa-rest-test",
+  },
+  {
     id: "pandora",
     kind: "rest",
     name: "Pandora",

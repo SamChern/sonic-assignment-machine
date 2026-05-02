@@ -76,10 +76,11 @@ Deno.serve(async (req) => {
     }
 
     // 1) Open SSE stream
+    // NOTE: do NOT put an AbortSignal.timeout on the SSE GET — it would kill
+    // the whole stream mid-analysis. Per-read deadlines are enforced in pump().
     const sseResp = await fetch(serverUrl, {
       method: "GET",
       headers: { ...baseHeaders, Accept: "text/event-stream" },
-      signal: AbortSignal.timeout(15_000),
     });
     if (!sseResp.ok || !sseResp.body) {
       const t = await sseResp.text().catch(() => "");

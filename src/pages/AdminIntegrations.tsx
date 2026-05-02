@@ -29,6 +29,7 @@ import {
   Plug,
   Network,
 } from "lucide-react";
+import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
 
 interface StatusEntry {
   fields: string[];

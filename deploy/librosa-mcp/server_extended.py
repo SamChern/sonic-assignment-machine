@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
+import uuid
 from typing import Optional
 
 import numpy as np
@@ -161,7 +163,11 @@ def download_from_url(url: str) -> str:
     the URL path component, not the whole string.
     """
     from urllib.parse import urlparse
-    path_only = urlparse(url).path.lower()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("URL must be http or https")
+
+    path_only = parsed.path.lower()
     if path_only.endswith(".mp3"):
         ext = "mp3"
     elif path_only.endswith(".wav"):
@@ -174,12 +180,36 @@ def download_from_url(url: str) -> str:
         ext = "m4a"
     else:
         raise ValueError(f"URL: {url} is not a recognized audio file (mp3/wav/flac/ogg/m4a)")
-    resp = requests.get(url, timeout=60)
-    if resp.status_code != 200:
-        raise ValueError(f"Failed to download {url}: HTTP {resp.status_code}")
-    path = _tmp("downloaded_file", ext)
-    with open(path, "wb") as f:
-        f.write(resp.content)
+
+    max_bytes = 25 * 1024 * 1024
+    total_deadline_s = 55
+    started = time.monotonic()
+    path = _tmp(f"downloaded_{uuid.uuid4().hex[:10]}", ext)
+    headers = {"User-Agent": "SemanticAC-Librosa-MCP/1.0"}
+
+    try:
+        with requests.get(url, stream=True, timeout=(8, 20), headers=headers) as resp:
+            if resp.status_code != 200:
+                raise ValueError(f"Failed to download audio: HTTP {resp.status_code}")
+            written = 0
+            with open(path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=64 * 1024):
+                    if not chunk:
+                        continue
+                    written += len(chunk)
+                    if written > max_bytes:
+                        raise ValueError("Audio file is too large for MCP download (max 25 MB)")
+                    if time.monotonic() - started > total_deadline_s:
+                        raise TimeoutError("Timed out downloading audio from signed URL")
+                    f.write(chunk)
+            if written == 0:
+                raise ValueError("Downloaded audio file was empty")
+    except Exception:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        raise
     return path
 
 

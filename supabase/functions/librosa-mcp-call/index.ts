@@ -195,11 +195,15 @@ Deno.serve(async (req) => {
       return json({ success: false, error: `tools/call ${callResp.status}: ${t.slice(0, 300)}` }, 502);
     }
 
-    const result = await waitFor(callId, 140_000);
+    const toolTimeoutMs = toolName === "download_from_url" ? 30_000 : toolName === "load" ? 60_000 : 120_000;
+    const result = await waitFor(callId, toolTimeoutMs);
     try { await reader.cancel(); } catch { /* noop */ }
 
     if (!result) {
-      return json({ success: false, error: "MCP did not respond within 140s (edge function timeout cap)" }, 504);
+      return json({
+        success: false,
+        error: `MCP tool '${toolName ?? "tools/list"}' did not respond within ${Math.round(toolTimeoutMs / 1000)}s`,
+      }, 504);
     }
     const r = result as { result?: unknown; error?: { message?: string } };
     if (r.error) return json({ success: false, error: r.error.message ?? "MCP error" }, 502);

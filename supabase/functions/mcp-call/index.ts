@@ -45,12 +45,13 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => null);
     const integrationId: string | undefined = body?.integration_id;
     const toolName: string | undefined = body?.tool_name;
+    const listOnly: boolean = body?.list_tools === true;
     const args = (body?.arguments ?? {}) as Record<string, unknown>;
 
     if (!integrationId || !KNOWN_MCP_INTEGRATIONS.has(integrationId)) {
       return json({ success: false, error: "Unknown or non-MCP integration" }, 400);
     }
-    if (!toolName || typeof toolName !== "string") {
+    if (!listOnly && (!toolName || typeof toolName !== "string")) {
       return json({ success: false, error: "tool_name is required" }, 400);
     }
 

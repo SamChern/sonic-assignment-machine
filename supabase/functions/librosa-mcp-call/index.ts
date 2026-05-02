@@ -100,18 +100,31 @@ Deno.serve(async (req) => {
     const pendingResults = new Map<number | string, unknown>();
     let endpointPath = "";
 
+    let streamClosed = false;
+    let streamError: string | null = null;
     const pump = async (deadlineMs: number): Promise<void> => {
+      if (streamClosed) return;
       while (Date.now() < deadlineMs) {
         const remaining = Math.max(1, deadlineMs - Date.now());
-        const r = await Promise.race([
-          reader.read(),
-          new Promise<"timeout">((res) =>
-            setTimeout(() => res("timeout"), remaining)
-          ),
-        ]);
+        let r: { value?: Uint8Array; done?: boolean } | "timeout";
+        try {
+          r = await Promise.race([
+            reader.read(),
+            new Promise<"timeout">((res) =>
+              setTimeout(() => res("timeout"), remaining)
+            ),
+          ]);
+        } catch (e) {
+          streamClosed = true;
+          streamError = e instanceof Error ? e.message : String(e);
+          return;
+        }
         if (r === "timeout") return;
         const { value, done } = r;
-        if (done) return;
+        if (done) {
+          streamClosed = true;
+          return;
+        }
         buf += decoder.decode(value, { stream: true });
         const normalized = buf.replace(/\r\n/g, "\n");
         const events = normalized.split("\n\n");
@@ -246,12 +259,15 @@ Deno.serve(async (req) => {
     } catch { /* noop */ }
 
     if (!result) {
-      return json({
-        success: false,
-        error: `MCP tool '${toolName ?? "tools/list"}' did not respond within ${
-          Math.round(toolTimeoutMs / 1000)
-        }s`,
-      }, 504);
+      const base = `MCP tool '${toolName ?? "tools/list"}' did not respond within ${
+        Math.round(toolTimeoutMs / 1000)
+      }s`;
+      const detail = streamError
+        ? `${base} (SSE stream closed: ${streamError})`
+        : streamClosed
+        ? `${base} (SSE stream closed by upstream before result)`
+        : base;
+      return json({ success: false, error: detail }, 504);
     }
     const r = result as { result?: unknown; error?: { message?: string } };
     if (r.error) {

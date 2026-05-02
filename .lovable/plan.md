@@ -1,52 +1,81 @@
-## Problem
+## Goal
 
-The user ran `curl -O` against `raw.githubusercontent.com/SamChern/sonic-assignment-machine/main/deploy/librosa-mcp/...` URLs. Those returned **404** (the GitHub repo path doesn't exist or is private), and `curl -O` saved each 404 HTML page to disk under the expected filename. So `~/sam-api/librosa-mcp/install.sh` is now a 1-line file containing literally `404: Not Found`, which is why bash errored with `./install.sh: 1: 404:: not found`.
+Push the updated `deploy/librosa-mcp/server_extended.py` (the `download_from_url` fix that accepts signed URLs with `?token=...` query strings) to your EC2 box, restart the systemd service, and verify it picked up the change.
 
-The real `install.sh` (and the other 5 files: `server_extended.py`, `librosa-mcp.service`, `nginx-librosa-mcp.conf`, `smoke-test.sh`, `README.md`) live in **this Lovable workspace** at `deploy/librosa-mcp/`, not in any public GitHub repo.
+The Python file lives on EC2 at `/opt/librosa-mcp/server_extended.py`. The systemd unit `librosa-mcp.service` runs `mcp-proxy` which spawns `python /opt/librosa-mcp/server_extended.py` as a stdio child — so a service restart re-execs the Python process with the new file.
 
-Also: the user typed `EMAIL=sam.chernoff@github` — invalid email, Let's Encrypt will reject it. They need `sam.chernoff@gmail.com` (or any real address).
+---
 
-## Plan
+## Step 1 — Copy the updated file from your laptop to EC2
 
-### 1. Verify the corrupted files on EC2 (user runs locally)
-Ask the user to confirm with `head -3 install.sh` that the file is the 404 HTML, so we know we're solving the right problem before nuking anything.
+From the project root on your machine (replace `<EC2_HOST>` with your DNS / IP, e.g. `mcp.audio.example.com` or the EC2 public IPv4):
 
-### 2. Switch to default mode and produce a single bootstrap script
-Create a new file `deploy/librosa-mcp/bootstrap-from-lovable.sh` in this workspace. This script, when run on the EC2 box, will:
-- `rm -rf ~/sam-api/librosa-mcp/*` to clear the corrupted files
-- `cat <<'EOF' > install.sh ... EOF` — inline the **full real contents** of all 6 files using heredocs (the files are small: install.sh ~120 lines, server_extended.py ~300 lines, the others <50 lines each)
-- `chmod +x install.sh smoke-test.sh`
-- Print clear next-step instructions ending with the corrected `sudo HOSTNAME=... EMAIL=... ./install.sh` command
-
-This avoids any dependency on GitHub auth, public hosting, or `scp` from the user's laptop. The user will paste **one** command on EC2 and have a working deploy kit.
-
-### 3. Deliver the bootstrap script to the user
-The single command for the user will be a `cat <<'BOOTSTRAP' > /tmp/bootstrap.sh ... BOOTSTRAP` block they paste into their EC2 SSH session, followed by `bash /tmp/bootstrap.sh`. Or — even simpler — I'll write the bootstrap script's contents directly into the chat message wrapped in one heredoc block they paste verbatim.
-
-### 4. Provide the corrected installer command
-After bootstrap succeeds, user runs:
 ```bash
-cd ~/sam-api/librosa-mcp
-sudo HOSTNAME=samc-librosa.duckdns.org EMAIL=sam.chernoff@gmail.com ./install.sh
+scp deploy/librosa-mcp/server_extended.py ubuntu@<EC2_HOST>:/tmp/server_extended.py
 ```
-(Note the corrected `gmail.com` instead of `@github`.)
 
-### 5. Pre-flight DNS check
-Before step 4, remind the user to verify `dig +short samc-librosa.duckdns.org` returns `35.94.20.4` from their laptop — otherwise certbot will fail at the TLS step.
+If you use a non-default SSH key, add `-i ~/.ssh/your-key.pem`. If your EC2 user isn't `ubuntu`, swap that too.
 
-## Files to be created
-- `deploy/librosa-mcp/bootstrap-from-lovable.sh` — self-contained bootstrap that writes all 6 real files into place on EC2, no network downloads needed.
+## Step 2 — SSH in and move it into place
 
-## Files to be read first (to inline their contents into the bootstrap)
-- `deploy/librosa-mcp/install.sh` (already partially visible in context)
-- `deploy/librosa-mcp/server_extended.py`
-- `deploy/librosa-mcp/librosa-mcp.service`
-- `deploy/librosa-mcp/nginx-librosa-mcp.conf`
-- `deploy/librosa-mcp/smoke-test.sh`
-- `deploy/librosa-mcp/README.md`
+```bash
+ssh ubuntu@<EC2_HOST>
+sudo cp /tmp/server_extended.py /opt/librosa-mcp/server_extended.py
+sudo chown ubuntu:ubuntu /opt/librosa-mcp/server_extended.py
+```
 
-## No app code changes
-This plan only adds one shell script under `deploy/librosa-mcp/`. No changes to the React app, edge functions, or database. The `/admin/integrations` UI is already in place and ready to receive the MCP URL + token once the install completes.
+Quick sanity check that the new code is on disk (should print the new error string):
 
-## Outcome
-User pastes one block into their EC2 SSH session → real files appear → re-runs `install.sh` with the corrected email → gets the success banner with MCP URL + Bearer token → pastes into `/admin/integrations` → green "Connection OK" check.
+```bash
+grep -n "is not a recognized audio file" /opt/librosa-mcp/server_extended.py
+```
+
+## Step 3 — Restart the service
+
+```bash
+sudo systemctl restart librosa-mcp
+sudo systemctl status librosa-mcp --no-pager | head -n 20
+```
+
+You want `Active: active (running)`. If it's `failed`, jump to Troubleshooting.
+
+## Step 4 — Tail the logs while you test
+
+In one terminal:
+
+```bash
+sudo journalctl -u librosa-mcp -f
+```
+
+Leave it open and trigger an upload from the Lovable admin UI (`/admin/integrations` → MCP Servers → Audio sample test). You should see the `download_from_url` call succeed and the `load` + analysis tool calls follow.
+
+## Step 5 — Retry from the app
+
+1. Open `https://id-preview--ce2afc2f-4a7a-4aa1-8bd5-f8a0db891541.lovable.app/admin/integrations`
+2. Switch to the **MCP Servers** tab.
+3. In the **Librosa MCP — Audio sample test** card, pick a small `.mp3` or `.wav` (≤ 30s is best for a first test), choose `get_duration`, and click **Send to Librosa**.
+4. You should see a result and a latency in milliseconds instead of the 504.
+
+---
+
+## Troubleshooting
+
+| Symptom | What to check / try |
+|---|---|
+| `scp: Permission denied` | Add `-i <key.pem>` and ensure your security group allows SSH (TCP 22) from your IP. |
+| `cp: cannot create … Permission denied` | You forgot `sudo` on Step 2. |
+| `systemctl status` shows `failed` | Run `sudo journalctl -u librosa-mcp -n 100 --no-pager` — most likely a Python syntax error in the new file. Restore the previous copy and re-scp. |
+| Upload still hits 504 | Confirm with `grep` in Step 2 that the new string is present. If yes, tail logs (Step 4) during the call — the MCP will now print the real error (e.g. timeout downloading the signed URL). |
+| Want to roll back fast | `sudo systemctl stop librosa-mcp` then restore from `/opt/librosa-mcp/server_extended.py.bak` if you made one before Step 2. To be safe, run `sudo cp /opt/librosa-mcp/server_extended.py /opt/librosa-mcp/server_extended.py.bak` before Step 2. |
+
+## Optional — One-liner version
+
+If you're comfortable, the whole thing collapses to:
+
+```bash
+scp deploy/librosa-mcp/server_extended.py ubuntu@<EC2_HOST>:/tmp/srv.py && \
+ssh ubuntu@<EC2_HOST> 'sudo cp /tmp/srv.py /opt/librosa-mcp/server_extended.py && \
+  sudo chown ubuntu:ubuntu /opt/librosa-mcp/server_extended.py && \
+  sudo systemctl restart librosa-mcp && \
+  sudo systemctl status librosa-mcp --no-pager | head -n 10'
+```

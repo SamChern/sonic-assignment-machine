@@ -63,7 +63,10 @@ Deno.serve(async (req) => {
     for (const r of credRows ?? []) creds[r.field_key] = r.field_value;
     const serverUrl = creds.MCP_SERVER_URL;
     if (!serverUrl) {
-      return json({ success: false, error: "MCP_SERVER_URL not configured" }, 400);
+      return json(
+        { success: false, error: "MCP_SERVER_URL not configured" },
+        400,
+      );
     }
 
     const baseHeaders: Record<string, string> = {
@@ -84,7 +87,10 @@ Deno.serve(async (req) => {
     });
     if (!sseResp.ok || !sseResp.body) {
       const t = await sseResp.text().catch(() => "");
-      return json({ success: false, error: `SSE GET ${sseResp.status}: ${t.slice(0, 200)}` }, 502);
+      return json({
+        success: false,
+        error: `SSE GET ${sseResp.status}: ${t.slice(0, 200)}`,
+      }, 502);
     }
     const reader = sseResp.body.getReader();
     const decoder = new TextDecoder();
@@ -99,7 +105,9 @@ Deno.serve(async (req) => {
         const remaining = Math.max(1, deadlineMs - Date.now());
         const r = await Promise.race([
           reader.read(),
-          new Promise<"timeout">((res) => setTimeout(() => res("timeout"), remaining)),
+          new Promise<"timeout">((res) =>
+            setTimeout(() => res("timeout"), remaining)
+          ),
         ]);
         if (r === "timeout") return;
         const { value, done } = r;
@@ -110,7 +118,8 @@ Deno.serve(async (req) => {
         buf = events.pop() ?? "";
         for (const ev of events) {
           const lines = ev.split("\n");
-          const evName = lines.find((l) => l.startsWith("event:"))?.slice(6).trim();
+          const evName = lines.find((l) => l.startsWith("event:"))?.slice(6)
+            .trim();
           const dataStr = lines
             .filter((l) => l.startsWith("data:"))
             .map((l) => l.slice(5).trim())
@@ -119,7 +128,10 @@ Deno.serve(async (req) => {
             endpointPath = dataStr;
             return; // got endpoint
           }
-          if (evName === "message" && dataStr) {
+          // SSE's default event type is "message" when the server omits an
+          // explicit `event:` line. mcp-proxy may emit JSON-RPC responses this
+          // way, so treat both `event: message` and bare `data:` as results.
+          if ((!evName || evName === "message") && dataStr) {
             try {
               const obj = JSON.parse(dataStr);
               if (obj && typeof obj === "object" && "id" in obj) {
@@ -134,8 +146,13 @@ Deno.serve(async (req) => {
     // Wait for endpoint
     await pump(Date.now() + 10_000);
     if (!endpointPath) {
-      try { await reader.cancel(); } catch { /* noop */ }
-      return json({ success: false, error: "No SSE endpoint event received" }, 502);
+      try {
+        await reader.cancel();
+      } catch { /* noop */ }
+      return json(
+        { success: false, error: "No SSE endpoint event received" },
+        502,
+      );
     }
     const messagesUrl = new URL(endpointPath, serverUrl).toString();
 
@@ -159,7 +176,9 @@ Deno.serve(async (req) => {
 
     // 2) initialize
     const initResp = await post({
-      jsonrpc: "2.0", id: 1, method: "initialize",
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
       params: {
         protocolVersion: "2024-11-05",
         capabilities: {},
@@ -167,35 +186,80 @@ Deno.serve(async (req) => {
       },
     });
     if (!initResp.ok) {
-      try { await reader.cancel(); } catch { /* noop */ }
+      try {
+        await reader.cancel();
+      } catch { /* noop */ }
       const t = await initResp.text().catch(() => "");
-      return json({ success: false, error: `initialize ${initResp.status}: ${t.slice(0, 200)}` }, 502);
+      return json({
+        success: false,
+        error: `initialize ${initResp.status}: ${t.slice(0, 200)}`,
+      }, 502);
     }
-    await waitFor(1, 10_000);
+    const initResult = await waitFor(1, 10_000);
+    if (!initResult) {
+      try {
+        await reader.cancel();
+      } catch { /* noop */ }
+      return json({
+        success: false,
+        error: "MCP initialize did not respond within 10s",
+      }, 504);
+    }
 
     // 3) initialized notification
-    await post({ jsonrpc: "2.0", method: "notifications/initialized", params: {} });
+    await post({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+      params: {},
+    });
 
     // 4) tools/call (or tools/list)
     const callId = 2;
     const rpc = listOnly
       ? { jsonrpc: "2.0", id: callId, method: "tools/list", params: {} }
-      : { jsonrpc: "2.0", id: callId, method: "tools/call", params: { name: toolName, arguments: args } };
+      : {
+        jsonrpc: "2.0",
+        id: callId,
+        method: "tools/call",
+        params: { name: toolName, arguments: args },
+      };
     const callResp = await post(rpc);
     if (!callResp.ok) {
-      try { await reader.cancel(); } catch { /* noop */ }
+      try {
+        await reader.cancel();
+      } catch { /* noop */ }
       const t = await callResp.text().catch(() => "");
-      return json({ success: false, error: `tools/call ${callResp.status}: ${t.slice(0, 300)}` }, 502);
+      return json({
+        success: false,
+        error: `tools/call ${callResp.status}: ${t.slice(0, 300)}`,
+      }, 502);
     }
 
-    const result = await waitFor(callId, 140_000);
-    try { await reader.cancel(); } catch { /* noop */ }
+    const toolTimeoutMs = toolName === "download_from_url"
+      ? 30_000
+      : toolName === "load"
+      ? 60_000
+      : 120_000;
+    const result = await waitFor(callId, toolTimeoutMs);
+    try {
+      await reader.cancel();
+    } catch { /* noop */ }
 
     if (!result) {
-      return json({ success: false, error: "MCP did not respond within 140s (edge function timeout cap)" }, 504);
+      return json({
+        success: false,
+        error: `MCP tool '${toolName ?? "tools/list"}' did not respond within ${
+          Math.round(toolTimeoutMs / 1000)
+        }s`,
+      }, 504);
     }
     const r = result as { result?: unknown; error?: { message?: string } };
-    if (r.error) return json({ success: false, error: r.error.message ?? "MCP error" }, 502);
+    if (r.error) {
+      return json(
+        { success: false, error: r.error.message ?? "MCP error" },
+        502,
+      );
+    }
     return json({ success: true, result: r.result });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown";

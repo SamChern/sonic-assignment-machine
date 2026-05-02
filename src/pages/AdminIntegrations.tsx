@@ -29,6 +29,7 @@ import {
   Plug,
   Network,
 } from "lucide-react";
+import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
 
 interface StatusEntry {
   fields: string[];
@@ -149,6 +150,8 @@ const AdminIntegrations = () => {
             in the registry yet.
           </Card>
         )}
+
+        {kindFilter === "mcp" && <LibrosaAudioTester />}
       </main>
     </div>
   );

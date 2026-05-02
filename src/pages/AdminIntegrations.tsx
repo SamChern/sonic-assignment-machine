@@ -150,6 +150,8 @@ const AdminIntegrations = () => {
             in the registry yet.
           </Card>
         )}
+
+        {kindFilter === "mcp" && <LibrosaAudioTester />}
       </main>
     </div>
   );

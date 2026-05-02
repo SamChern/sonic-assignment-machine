@@ -259,12 +259,15 @@ Deno.serve(async (req) => {
     } catch { /* noop */ }
 
     if (!result) {
-      return json({
-        success: false,
-        error: `MCP tool '${toolName ?? "tools/list"}' did not respond within ${
-          Math.round(toolTimeoutMs / 1000)
-        }s`,
-      }, 504);
+      const base = `MCP tool '${toolName ?? "tools/list"}' did not respond within ${
+        Math.round(toolTimeoutMs / 1000)
+      }s`;
+      const detail = streamError
+        ? `${base} (SSE stream closed: ${streamError})`
+        : streamClosed
+        ? `${base} (SSE stream closed by upstream before result)`
+        : base;
+      return json({ success: false, error: detail }, 504);
     }
     const r = result as { result?: unknown; error?: { message?: string } };
     if (r.error) {

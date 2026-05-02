@@ -133,11 +133,14 @@ Deno.serve(async (req) => {
     try {
       if (isSseTransport) {
         // Step 1: GET /sse to open the stream and read the endpoint event.
+        const sseController = new AbortController();
+        const sseConnectTimer = setTimeout(() => sseController.abort(), 10_000);
         const sseResp = await fetch(serverUrl, {
           method: "GET",
           headers: { ...headers, Accept: "text/event-stream" },
-          signal: AbortSignal.timeout(10_000),
+          signal: sseController.signal,
         });
+        clearTimeout(sseConnectTimer);
         if (!sseResp.ok || !sseResp.body) {
           const errText = await sseResp.text().catch(() => "");
           return await record(
@@ -153,11 +156,18 @@ Deno.serve(async (req) => {
         let endpointPath = "";
         const sseDeadline = Date.now() + 10_000;
         while (Date.now() < sseDeadline && !endpointPath) {
-          const { value, done } = await reader.read();
+          const remainingMs = Math.max(1, sseDeadline - Date.now());
+          const readResult = await Promise.race([
+            reader.read(),
+            new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), remainingMs)),
+          ]);
+          if (readResult === "timeout") break;
+          const { value, done } = readResult;
           if (done) break;
           buf += decoder.decode(value, { stream: true });
           // Parse complete events (separated by \n\n)
-          const events = buf.split("\n\n");
+          const normalized = buf.replace(/\r\n/g, "\n");
+          const events = normalized.split("\n\n");
           buf = events.pop() ?? "";
           for (const ev of events) {
             const lines = ev.split("\n");

@@ -169,10 +169,8 @@ Deno.serve(async (req) => {
             }
           }
         }
-        // Don't keep the SSE stream open — we only needed the endpoint URL.
-        try { await reader.cancel(); } catch { /* noop */ }
-
         if (!endpointPath) {
+          try { await reader.cancel(); } catch { /* noop */ }
           return await record(
             admin, integrationId, userData.user.id, false, startedAt,
             "SSE stream opened but no `event: endpoint` received within 10s",
@@ -193,6 +191,8 @@ Deno.serve(async (req) => {
           signal: AbortSignal.timeout(10_000),
         });
         text = await resp.text();
+        // Now safe to close the SSE stream — POST has been accepted.
+        try { await reader.cancel(); } catch { /* noop */ }
         contentType = resp.headers.get("content-type") ?? "";
       } else {
         // Streamable HTTP: single endpoint, POST initialize directly.

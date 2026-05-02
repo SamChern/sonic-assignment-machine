@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
     }
 
     const toolTimeoutMs = toolName === "download_from_url"
-      ? 30_000
+      ? 75_000
       : toolName === "load"
       ? 60_000
       : 120_000;

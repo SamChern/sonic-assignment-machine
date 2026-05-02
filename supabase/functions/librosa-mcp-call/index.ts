@@ -119,7 +119,10 @@ Deno.serve(async (req) => {
             endpointPath = dataStr;
             return; // got endpoint
           }
-          if (evName === "message" && dataStr) {
+          // SSE's default event type is "message" when the server omits an
+          // explicit `event:` line. mcp-proxy may emit JSON-RPC responses this
+          // way, so treat both `event: message` and bare `data:` as results.
+          if ((!evName || evName === "message") && dataStr) {
             try {
               const obj = JSON.parse(dataStr);
               if (obj && typeof obj === "object" && "id" in obj) {
@@ -171,7 +174,11 @@ Deno.serve(async (req) => {
       const t = await initResp.text().catch(() => "");
       return json({ success: false, error: `initialize ${initResp.status}: ${t.slice(0, 200)}` }, 502);
     }
-    await waitFor(1, 10_000);
+    const initResult = await waitFor(1, 10_000);
+    if (!initResult) {
+      try { await reader.cancel(); } catch { /* noop */ }
+      return json({ success: false, error: "MCP initialize did not respond within 10s" }, 504);
+    }
 
     // 3) initialized notification
     await post({ jsonrpc: "2.0", method: "notifications/initialized", params: {} });

@@ -169,10 +169,8 @@ Deno.serve(async (req) => {
             }
           }
         }
-        // Don't keep the SSE stream open — we only needed the endpoint URL.
-        try { await reader.cancel(); } catch { /* noop */ }
-
         if (!endpointPath) {
+          try { await reader.cancel(); } catch { /* noop */ }
           return await record(
             admin, integrationId, userData.user.id, false, startedAt,
             "SSE stream opened but no `event: endpoint` received within 10s",

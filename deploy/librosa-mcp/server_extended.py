@@ -155,13 +155,29 @@ def beat_track(
 
 @mcp.tool()
 def download_from_url(url: str) -> str:
-    """Download a remote .mp3/.wav to /tmp and return the local path."""
-    if not (url.endswith(".mp3") or url.endswith(".wav")):
-        raise ValueError(f"URL: {url} is not a valid audio file (need .mp3 or .wav)")
+    """Download a remote audio file to /tmp and return the local path.
+
+    Accepts signed URLs (with query strings) — the extension is detected from
+    the URL path component, not the whole string.
+    """
+    from urllib.parse import urlparse
+    path_only = urlparse(url).path.lower()
+    if path_only.endswith(".mp3"):
+        ext = "mp3"
+    elif path_only.endswith(".wav"):
+        ext = "wav"
+    elif path_only.endswith(".flac"):
+        ext = "flac"
+    elif path_only.endswith(".ogg"):
+        ext = "ogg"
+    elif path_only.endswith(".m4a") or path_only.endswith(".mp4") or path_only.endswith(".aac"):
+        ext = "m4a"
+    else:
+        raise ValueError(f"URL: {url} is not a recognized audio file (mp3/wav/flac/ogg/m4a)")
     resp = requests.get(url, timeout=60)
     if resp.status_code != 200:
         raise ValueError(f"Failed to download {url}: HTTP {resp.status_code}")
-    path = _tmp("downloaded_file", "mp3" if url.endswith(".mp3") else "wav")
+    path = _tmp("downloaded_file", ext)
     with open(path, "wb") as f:
         f.write(resp.content)
     return path

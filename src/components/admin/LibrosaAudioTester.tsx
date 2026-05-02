@@ -78,25 +78,31 @@ export function LibrosaAudioTester() {
 
     // 3) Call the MCP tool (download_from_url first → returns local path → run analysis tool)
     try {
+      // 3a) Download remote signed URL onto the MCP host
       const downloadCall = await supabase.functions.invoke("librosa-mcp-call", {
-        body: {
-          tool_name: "download_from_url",
-          arguments: { url: signed.signedUrl },
-        },
+        body: { tool_name: "download_from_url", arguments: { url: signed.signedUrl } },
       });
       if (downloadCall.error || !downloadCall.data?.success) {
         throw new Error(downloadCall.data?.error ?? downloadCall.error?.message ?? "download failed");
       }
-      const dlResult = downloadCall.data.result as ToolResult;
-      // The MCP returns the local file path inside content[0].text
-      const localPath = dlResult.content?.[0]?.text?.trim();
+      const localPath = (downloadCall.data.result as ToolResult).content?.[0]?.text?.trim();
       if (!localPath) throw new Error("MCP did not return a local file path");
 
+      // 3b) load → persist waveform CSV, returns { y_path, sr }
+      const loadCall = await supabase.functions.invoke("librosa-mcp-call", {
+        body: { tool_name: "load", arguments: { file_path: localPath } },
+      });
+      if (loadCall.error || !loadCall.data?.success) {
+        throw new Error(loadCall.data?.error ?? loadCall.error?.message ?? "load failed");
+      }
+      const loadText = (loadCall.data.result as ToolResult).content?.[0]?.text ?? "{}";
+      let yPath = "";
+      try { yPath = JSON.parse(loadText).y_path as string; } catch { /* noop */ }
+      if (!yPath) throw new Error(`load did not return y_path: ${loadText.slice(0, 200)}`);
+
+      // 3c) Run the actual analysis tool against the waveform CSV
       const analyseCall = await supabase.functions.invoke("librosa-mcp-call", {
-        body: {
-          tool_name: tool,
-          arguments: { input_file: localPath },
-        },
+        body: { tool_name: tool, arguments: { path_audio_time_series_y: yPath } },
       });
       if (analyseCall.error || !analyseCall.data?.success) {
         throw new Error(analyseCall.data?.error ?? analyseCall.error?.message ?? "tool failed");

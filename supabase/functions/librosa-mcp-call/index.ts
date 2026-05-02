@@ -188,11 +188,11 @@ Deno.serve(async (req) => {
       return json({ success: false, error: `tools/call ${callResp.status}: ${t.slice(0, 300)}` }, 502);
     }
 
-    const result = await waitFor(callId, 180_000);
+    const result = await waitFor(callId, 140_000);
     try { await reader.cancel(); } catch { /* noop */ }
 
     if (!result) {
-      return json({ success: false, error: "MCP did not respond within 180s" }, 504);
+      return json({ success: false, error: "MCP did not respond within 140s (edge function timeout cap)" }, 504);
     }
     const r = result as { result?: unknown; error?: { message?: string } };
     if (r.error) return json({ success: false, error: r.error.message ?? "MCP error" }, 502);

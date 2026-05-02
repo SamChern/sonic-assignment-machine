@@ -89,12 +89,14 @@ Deno.serve(async (req) => {
       } catch { /* ignore */ }
     }
 
-    const rpc = {
-      jsonrpc: "2.0",
-      id: Date.now(),
-      method: "tools/call",
-      params: { name: toolName, arguments: args },
-    };
+    const rpc = listOnly
+      ? { jsonrpc: "2.0", id: Date.now(), method: "tools/list", params: {} }
+      : {
+          jsonrpc: "2.0",
+          id: Date.now(),
+          method: "tools/call",
+          params: { name: toolName, arguments: args },
+        };
 
     const resp = await fetch(serverUrl, {
       method: "POST",

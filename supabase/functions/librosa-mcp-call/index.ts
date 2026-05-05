@@ -249,10 +249,10 @@ Deno.serve(async (req) => {
     }
 
     const toolTimeoutMs = toolName === "download_from_url"
-      ? 240_000
+      ? 75_000
       : toolName === "load"
-      ? 180_000
-      : 180_000;
+      ? 60_000
+      : 120_000;
     const result = await waitFor(callId, toolTimeoutMs);
     try {
       await reader.cancel();

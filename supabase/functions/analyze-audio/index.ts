@@ -24,9 +24,25 @@ function formatAcousticProfile(features: Record<string, any> | null | undefined)
   const s = features.scalars ?? {};
   if (!s || typeof s !== "object") return null;
   const round1 = (n: any) => (typeof n === "number" ? Math.round(n * 10) / 10 : n);
+  const round2 = (n: any) => (typeof n === "number" ? Math.round(n * 100) / 100 : n);
   const mfcc = Array.isArray(s.mfcc_mean) ? s.mfcc_mean.slice(0, 7).map((v: number) => round1(v)) : [];
   const contrast = Array.isArray(s.spectral_contrast_mean)
     ? s.spectral_contrast_mean.map((v: number) => round1(v))
+    : [];
+  // Chroma: 12 pitch classes (C, C#, D, D#, E, F, F#, G, G#, A, A#, B) — harmonic content distribution
+  const chroma = Array.isArray(s.chroma_mean)
+    ? s.chroma_mean.map((v: number) => round2(v))
+    : [];
+  // Tonnetz: 6-dim tonal centroid (perfect 5th x/y, minor 3rd x/y, major 3rd x/y) — harmonic relationships
+  const tonnetz = Array.isArray(s.tonnetz_mean)
+    ? s.tonnetz_mean.map((v: number) => round2(v))
+    : [];
+  // Identify dominant pitch classes (top 3) for a more digestible signal
+  const PITCH_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const dominantPitches = chroma.length === 12
+    ? [...chroma.map((v, i) => ({ v, name: PITCH_NAMES[i] }))]
+        .sort((a, b) => b.v - a.v).slice(0, 3)
+        .map(p => `${p.name}:${p.v}`)
     : [];
   const parts = [
     `tempo=${round1(s.tempo_bpm)}bpm`,
@@ -40,6 +56,9 @@ function formatAcousticProfile(features: Record<string, any> | null | undefined)
     `zcr=${round1(s.zero_crossing_rate_mean)}`,
     contrast.length ? `contrast=[${contrast.join(",")}]` : "",
     mfcc.length ? `mfcc[0..6]=[${mfcc.join(",")}]` : "",
+    dominantPitches.length ? `dominant_pitches=[${dominantPitches.join(",")}]` : "",
+    chroma.length ? `chroma=[${chroma.join(",")}]` : "",
+    tonnetz.length ? `tonnetz=[${tonnetz.join(",")}]` : "",
   ].filter(Boolean);
   return parts.join(" ");
 }
@@ -308,10 +327,16 @@ OTHER RULES:
 - When an "acoustic:" line is provided for a source, treat it as ground-truth
   measurements from librosa (tempo BPM, key/mode, beat regularity, onset rate,
   RMS energy, spectral centroid/rolloff/flatness, zero-crossing rate, spectral
-  contrast bands, MFCC[0..6]). Use them to inform Emotional (energy, RMS,
-  centroid), Cognitive (rhythmic regularity, harmonic complexity), Artistic
-  (timbre/MFCC variety, spectral contrast), and Contextual (tempo + flatness)
-  scores. Do not echo the numbers in descriptions.`;
+  contrast bands, MFCC[0..6], dominant_pitches, chroma[12], tonnetz[6]).
+  Use them to inform Emotional (energy, RMS, centroid + mode: minor/low-tonnetz-magnitude
+  → melancholy/introspective; major/bright → uplifting), Cognitive (rhythmic
+  regularity, harmonic complexity = chroma entropy + tonnetz spread; flatter
+  chroma distribution = more harmonically complex/cerebral), Artistic
+  (timbre/MFCC variety, spectral contrast, tonnetz variance = harmonic
+  sophistication), Communication (clear dominant pitches + strong key =
+  more direct/accessible), and Contextual (tempo + flatness + key stability)
+  scores. Do not echo the raw numbers in descriptions — translate them into
+  qualitative language.`;
 
         const userPrompt = `Analyze these ${batch.length} audio source${batch.length > 1 ? 's' : ''}:
 

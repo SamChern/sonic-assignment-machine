@@ -22,6 +22,7 @@ export type Database = {
           created_at: string
           file_url: string | null
           id: string
+          librosa_features: Json | null
           name: string
           preview_url: string | null
           source_type: string
@@ -36,6 +37,7 @@ export type Database = {
           created_at?: string
           file_url?: string | null
           id?: string
+          librosa_features?: Json | null
           name: string
           preview_url?: string | null
           source_type: string
@@ -50,6 +52,7 @@ export type Database = {
           created_at?: string
           file_url?: string | null
           id?: string
+          librosa_features?: Json | null
           name?: string
           preview_url?: string | null
           source_type?: string

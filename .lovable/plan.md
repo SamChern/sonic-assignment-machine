@@ -1,81 +1,83 @@
 ## Goal
 
-Push the updated `deploy/librosa-mcp/server_extended.py` (the `download_from_url` fix that accepts signed URLs with `?token=...` query strings) to your EC2 box, restart the systemd service, and verify it picked up the change.
+Make librosa do real work for SemanticAC: (1) richer numeric features feed the AI scoring model, (2) those same arrays render as interactive visuals in the Analysis tab. No new heavy dependencies on the frontend (D3 + Canvas only).
 
-The Python file lives on EC2 at `/opt/librosa-mcp/server_extended.py`. The systemd unit `librosa-mcp.service` runs `mcp-proxy` which spawns `python /opt/librosa-mcp/server_extended.py` as a stdio child — so a service restart re-execs the Python process with the new file.
+## Architecture
 
----
-
-## Step 1 — Copy the updated file from your laptop to EC2
-
-From the project root on your machine (replace `<EC2_HOST>` with your DNS / IP, e.g. `mcp.audio.example.com` or the EC2 public IPv4):
-
-```bash
-scp deploy/librosa-mcp/server_extended.py ubuntu@<EC2_HOST>:/tmp/server_extended.py
+```text
+[Audio file/URL] → EC2 librosa-rest (/analyze_full)
+        ↓ JSON: scalars + arrays (mel, mfcc, chroma, recurrence, beats)
+   ┌────┴──────────────────────────────┐
+   ↓                                   ↓
+analyze-audio edge fn          AnalysisResults UI
+(feeds AI prompt with          (D3/Canvas heatmaps,
+ spectral/rhythm/tonal         tonnetz, recurrence)
+ summary stats)
 ```
 
-If you use a non-default SSH key, add `-i ~/.ssh/your-key.pem`. If your EC2 user isn't `ubuntu`, swap that too.
+One upstream call per source. Result is cached in `audio_sources.librosa_features` (jsonb) to avoid recomputation.
 
-## Step 2 — SSH in and move it into place
+## Backend changes (EC2 — server_rest.py)
 
-```bash
-ssh ubuntu@<EC2_HOST>
-sudo cp /tmp/server_extended.py /opt/librosa-mcp/server_extended.py
-sudo chown ubuntu:ubuntu /opt/librosa-mcp/server_extended.py
-```
+Add a new `POST /analyze_full` endpoint (keeps existing `/analyze` untouched). Returns a single JSON document with:
 
-Quick sanity check that the new code is on disk (should print the new error string):
+- **Scalars (for the model):** duration, tempo_bpm, beat_regularity (1 − std/mean of inter-beat intervals), onset_rate, estimated_key, mode (major/minor via Krumhansl profile correlation), rms_mean, rms_std.
+- **Spectral set (means + stds):** centroid, rolloff, bandwidth, flatness, contrast (7 bands), zero_crossing_rate.
+- **MFCC summary:** `mfcc_mean[20]`, `mfcc_std[20]`, `delta_mfcc_mean[20]`, `delta_mfcc_std[20]`.
+- **Tonal:** `chroma_mean[12]`, `tonnetz_mean[6]`, `tonnetz_std[6]`.
+- **Arrays for visuals (downsampled to ≤300 frames to keep payload <150KB):**
+  - `mel_db[n_mels=64][T]` (log-mel spectrogram)
+  - `mfcc[20][T]`
+  - `chroma[12][T]`
+  - `onset_envelope[T]`, `beat_frames[]`, `times[T]`
+  - `recurrence[N][N]` (N≤200) — self-similarity matrix from `librosa.segment.recurrence_matrix(..., mode='affinity')`
+  - `segments[]` — boundary times from `librosa.segment.agglomerative` (k=8)
 
-```bash
-grep -n "is not a recognized audio file" /opt/librosa-mcp/server_extended.py
-```
+Helpers added to the module: `_downsample_2d(M, max_T)`, `_to_compact_list` (round to 3 decimals).
 
-## Step 3 — Restart the service
+## Backend changes (Supabase)
 
-```bash
-sudo systemctl restart librosa-mcp
-sudo systemctl status librosa-mcp --no-pager | head -n 20
-```
+1. **Migration:** add `librosa_features jsonb` column to `audio_sources` (nullable). Index on `(user_id)` already exists.
+2. **New edge function `librosa-analyze-full`:** mirrors existing `librosa-analyze` but calls `/analyze_full`, persists the result to `audio_sources.librosa_features`, and returns it. RLS-respecting, auth-gated.
+3. **`analyze-audio` edge fn:** when `librosa_features` is present on the source, inject a compact "Acoustic profile" block into the AI prompt (tempo, key, mode, spectral means, MFCC[0..6], beat regularity). This sharpens scoring without growing token cost (<400 tokens added).
 
-You want `Active: active (running)`. If it's `failed`, jump to Troubleshooting.
+## Frontend changes (hybrid visuals)
 
-## Step 4 — Tail the logs while you test
+New component `src/components/visuals/LibrosaVisuals.tsx` with three panels (lazy-rendered, only when a source has `librosa_features`):
 
-In one terminal:
+1. **MFCC heatmap + beat overlay** — Canvas (20×T cells, viridis colormap from existing `style/semantic-category-colors` palette mapped to magnitude); SVG overlay draws vertical ticks at `beat_frames` and an onset envelope sparkline above.
+2. **Chromagram + tonnetz radial** — Canvas chromagram (12×T) on the left; D3 radial 6-axis tonnetz mean plot on the right (re-uses ontological-fingerprint radial layout conventions).
+3. **Self-similarity matrix + segment boundaries** — Canvas N×N heatmap with horizontal/vertical lines at `segments[]`. Click a segment band → seeks the audio player to that timestamp.
 
-```bash
-sudo journalctl -u librosa-mcp -f
-```
+All colors come from `index.css` semantic tokens; no raw hex. Renders inside the existing **Analysis** tab under each source's `AnalysisResults` card (collapsible "Acoustic visuals" accordion — default collapsed, opt-in).
 
-Leave it open and trigger an upload from the Lovable admin UI (`/admin/integrations` → MCP Servers → Audio sample test). You should see the `download_from_url` call succeed and the `load` + analysis tool calls follow.
+New hook `src/hooks/useLibrosaFeatures.tsx` — fetches/caches `librosa_features`, calls `librosa-analyze-full` if missing.
 
-## Step 5 — Retry from the app
+## Admin tooling
 
-1. Open `https://id-preview--ce2afc2f-4a7a-4aa1-8bd5-f8a0db891541.lovable.app/admin/integrations`
-2. Switch to the **MCP Servers** tab.
-3. In the **Librosa MCP — Audio sample test** card, pick a small `.mp3` or `.wav` (≤ 30s is best for a first test), choose `get_duration`, and click **Send to Librosa**.
-4. You should see a result and a latency in milliseconds instead of the 504.
+Extend `LibrosaAudioTester` with a fourth output mode "Full analysis" that calls `librosa-analyze-full` and renders the same visuals — lets admins QA the pipeline at `/admin/integrations`.
 
----
+## Out of scope (per memory rules)
 
-## Troubleshooting
+- No "SAM-based similarity" tab, no "category legend" tab.
+- No new top-level tabs; visuals live inside existing Analysis tab.
 
-| Symptom | What to check / try |
-|---|---|
-| `scp: Permission denied` | Add `-i <key.pem>` and ensure your security group allows SSH (TCP 22) from your IP. |
-| `cp: cannot create … Permission denied` | You forgot `sudo` on Step 2. |
-| `systemctl status` shows `failed` | Run `sudo journalctl -u librosa-mcp -n 100 --no-pager` — most likely a Python syntax error in the new file. Restore the previous copy and re-scp. |
-| Upload still hits 504 | Confirm with `grep` in Step 2 that the new string is present. If yes, tail logs (Step 4) during the call — the MCP will now print the real error (e.g. timeout downloading the signed URL). |
-| Want to roll back fast | `sudo systemctl stop librosa-mcp` then restore from `/opt/librosa-mcp/server_extended.py.bak` if you made one before Step 2. To be safe, run `sudo cp /opt/librosa-mcp/server_extended.py /opt/librosa-mcp/server_extended.py.bak` before Step 2. |
+## Technical details
 
-## Optional — One-liner version
+- Payload budget: `_downsample_2d` ensures ≤300 time frames; with float32→round(3)→string, full doc stays ~120 KB gzipped.
+- Caching: `librosa_features` is computed once per source. Re-extraction triggered only by an admin "Recompute" button.
+- Auth: re-uses `integration_credentials` for `LIBROSA_REST_URL` / `LIBROSA_REST_TOKEN`.
+- Mode detection: correlate mean chroma with Krumhansl-Schmuckler major/minor profiles → take argmax.
+- Beat regularity: `1 - std(diff(beat_times)) / mean(diff(beat_times))`, clipped to [0,1].
 
-If you're comfortable, the whole thing collapses to:
+## Files touched
 
-```bash
-scp deploy/librosa-mcp/server_extended.py ubuntu@<EC2_HOST>:/tmp/srv.py && \
-ssh ubuntu@<EC2_HOST> 'sudo cp /tmp/srv.py /opt/librosa-mcp/server_extended.py && \
-  sudo chown ubuntu:ubuntu /opt/librosa-mcp/server_extended.py && \
-  sudo systemctl restart librosa-mcp && \
-  sudo systemctl status librosa-mcp --no-pager | head -n 10'
-```
+- `deploy/librosa-mcp/server_rest.py` — add `/analyze_full` + helpers
+- `public/librosa-mcp/server_rest.py` — mirror for EC2 bootstrap
+- new `supabase/functions/librosa-analyze-full/index.ts`
+- `supabase/functions/analyze-audio/index.ts` — inject acoustic profile into prompt
+- migration: `audio_sources.librosa_features jsonb`
+- new `src/hooks/useLibrosaFeatures.tsx`
+- new `src/components/visuals/LibrosaVisuals.tsx` (+ small `MfccHeatmap.tsx`, `Chromagram.tsx`, `RecurrenceMatrix.tsx`, `TonnetzRadial.tsx`)
+- `src/components/AnalysisResults.tsx` — add collapsible visuals section
+- `src/components/admin/LibrosaAudioTester.tsx` — "Full analysis" mode

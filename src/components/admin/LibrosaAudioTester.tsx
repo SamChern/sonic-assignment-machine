@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Upload, Music, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { LibrosaVisuals } from "@/components/visuals/LibrosaVisuals";
+import type { LibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 
 const BUCKET = "admin-audio-tests";
 const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
@@ -27,12 +29,14 @@ export function LibrosaAudioTester() {
   const [tool, setTool] = useState("get_duration");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ToolResult | null>(null);
+  const [fullFeatures, setFullFeatures] = useState<LibrosaFeatures | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
 
   const onFile = (f: File | null) => {
     setError(null);
     setResult(null);
+    setFullFeatures(null);
     if (!f) return setFile(null);
     if (f.size > MAX_BYTES) {
       setError(`File too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Max 20 MB.`);
@@ -50,6 +54,7 @@ export function LibrosaAudioTester() {
     setRunning(true);
     setError(null);
     setResult(null);
+    setFullFeatures(null);
     setLatencyMs(null);
     const t0 = performance.now();
 
@@ -73,6 +78,29 @@ export function LibrosaAudioTester() {
     if (signErr || !signed?.signedUrl) {
       setRunning(false);
       setError(`Could not sign URL: ${signErr?.message ?? "unknown"}`);
+      return;
+    }
+
+    // Branch: full analysis hits the librosa REST /analyze_full endpoint.
+    if (tool === "__full_analysis__") {
+      try {
+        const { data, error: invokeErr } = await supabase.functions.invoke<{
+          success: boolean; result?: LibrosaFeatures; error?: string;
+        }>("librosa-analyze-full", { body: { audio_url: signed.signedUrl } });
+        if (invokeErr || !data?.success || !data.result) {
+          throw new Error(data?.error ?? invokeErr?.message ?? "analysis failed");
+        }
+        setFullFeatures(data.result);
+        setLatencyMs(Math.round(performance.now() - t0));
+        toast.success(`Full analysis in ${Math.round(performance.now() - t0)} ms`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Unknown error";
+        setError(msg);
+        toast.error(msg);
+      } finally {
+        setRunning(false);
+        supabase.storage.from(BUCKET).remove([path]).catch(() => {});
+      }
       return;
     }
 
@@ -178,6 +206,7 @@ export function LibrosaAudioTester() {
             disabled={running}
             className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
+            <option value="__full_analysis__">Full analysis (visuals)</option>
             <option value="get_duration">get_duration</option>
             <option value="tempo">tempo (beat tracking)</option>
             <option value="beat_track">beat_track</option>
@@ -208,6 +237,7 @@ export function LibrosaAudioTester() {
         </div>
       )}
 
+      {fullFeatures && <LibrosaVisuals features={fullFeatures} />}
       {renderResult()}
     </Card>
   );

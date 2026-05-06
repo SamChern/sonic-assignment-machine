@@ -1,6 +1,10 @@
 import { Card } from "@/components/ui/card";
-import { Brain, Users, Heart, MessageSquare, Music, MapPin } from "lucide-react";
+import { Brain, Users, Heart, MessageSquare, Music, MapPin, Waves } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { LibrosaVisuals } from "@/components/visuals/LibrosaVisuals";
+import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 
 interface CategoryScore {
   name: string;
@@ -17,6 +21,7 @@ interface AnalysisResultsProps {
   results: SourceAnalysis[] | null;
   isAnalyzing: boolean;
   sourceImages?: Array<{ name: string; imageUrl: string }>;
+  sourceIds?: Array<{ name: string; id: string }>;
 }
 
 // Category color mapping
@@ -187,7 +192,7 @@ const AnimatedScoreBar = ({ score, categoryName, delay }: { score: number; categ
   );
 };
 
-export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: AnalysisResultsProps) => {
+export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourceIds = [] }: AnalysisResultsProps) => {
   if (isAnalyzing) {
     return (
       <Card className="p-8 shadow-elegant border-primary/20">
@@ -228,6 +233,11 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: Ana
     return match?.imageUrl;
   };
 
+  const getSourceId = (sourceName: string) => {
+    const match = sourceIds.find(s => s.name === sourceName);
+    return match?.id;
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -244,10 +254,11 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: Ana
       <div className="grid gap-8">
         {results.map((source, sourceIndex) => {
           const imageUrl = getSourceImage(source.name);
-          
+          const audioSourceId = getSourceId(source.name);
+
           return (
-            <Card 
-              key={sourceIndex} 
+            <Card
+              key={sourceIndex}
               className="p-6 shadow-elegant border-border/50 hover:border-primary/30 transition-all duration-300 overflow-hidden"
               style={{ animationDelay: `${sourceIndex * 0.15}s` }}
             >
@@ -337,6 +348,7 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: Ana
                   })}
                 </div>
               </div>
+              {audioSourceId && <AcousticVisualsToggle audioSourceId={audioSourceId} />}
             </Card>
           );
         })}
@@ -374,3 +386,35 @@ export const getCategoryIcon = (categoryName: string) => {
   
   return iconMap[categoryName.toLowerCase()] || <Brain className="h-4 w-4" />;
 };
+
+// Collapsible "Acoustic visuals" panel rendered under each analyzed source.
+// Only fetches the cached librosa_features blob when the user opens it.
+function AcousticVisualsToggle({ audioSourceId }: { audioSourceId: string }) {
+  const [open, setOpen] = useState(false);
+  const { features, loading } = useStoredLibrosaFeatures(open ? audioSourceId : null);
+
+  return (
+    <div className="mt-6 border-t border-border/50 pt-4">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setOpen(o => !o)}
+        className="text-muted-foreground hover:text-foreground"
+      >
+        <Waves className="h-4 w-4 mr-2" />
+        {open ? "Hide acoustic visuals" : "Show acoustic visuals"}
+      </Button>
+      {open && (
+        <div className="mt-3">
+          {loading && <p className="text-xs text-muted-foreground">Loading…</p>}
+          {!loading && !features && (
+            <p className="text-xs text-muted-foreground">
+              No librosa features cached for this source yet.
+            </p>
+          )}
+          {features && <LibrosaVisuals features={features} />}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -14,6 +14,34 @@ interface AudioSource {
   type: 'file' | 'track';
   audio_source_id?: string;
   spotify_id?: string; // For cache key lookup
+  acoustic_profile?: string; // Optional pre-formatted librosa summary
+}
+
+// Format a compact "Acoustic profile" line from a librosa_features blob,
+// suitable for injection into the LLM prompt without ballooning tokens.
+function formatAcousticProfile(features: Record<string, any> | null | undefined): string | null {
+  if (!features || typeof features !== "object") return null;
+  const s = features.scalars ?? {};
+  if (!s || typeof s !== "object") return null;
+  const round1 = (n: any) => (typeof n === "number" ? Math.round(n * 10) / 10 : n);
+  const mfcc = Array.isArray(s.mfcc_mean) ? s.mfcc_mean.slice(0, 7).map((v: number) => round1(v)) : [];
+  const contrast = Array.isArray(s.spectral_contrast_mean)
+    ? s.spectral_contrast_mean.map((v: number) => round1(v))
+    : [];
+  const parts = [
+    `tempo=${round1(s.tempo_bpm)}bpm`,
+    `key=${s.estimated_key ?? "?"}${s.mode ? ` ${s.mode}` : ""}`,
+    `beat_regularity=${round1(s.beat_regularity)}`,
+    `onset_rate=${round1(s.onset_rate_per_sec)}/s`,
+    `rms=${round1(s.rms_mean)}`,
+    `spec_centroid=${round1(s.spectral_centroid_mean)}Hz`,
+    `spec_rolloff=${round1(s.spectral_rolloff_mean)}Hz`,
+    `spec_flatness=${round1(s.spectral_flatness_mean)}`,
+    `zcr=${round1(s.zero_crossing_rate_mean)}`,
+    contrast.length ? `contrast=[${contrast.join(",")}]` : "",
+    mfcc.length ? `mfcc[0..6]=[${mfcc.join(",")}]` : "",
+  ].filter(Boolean);
+  return parts.join(" ");
 }
 
 interface AnalysisRequest {
@@ -214,6 +242,24 @@ Deno.serve(async (req) => {
     let freshResults: SourceResult[] = [];
 
     if (uncachedSources.length > 0) {
+      // Pre-fetch any cached librosa_features blobs so we can sharpen the AI's
+      // scoring with real acoustic measurements (tempo, key, spectral, MFCC).
+      if (supabaseAdmin) {
+        const ids = uncachedSources.map(s => s.audio_source_id).filter(Boolean) as string[];
+        if (ids.length > 0) {
+          const { data: featRows } = await supabaseAdmin
+            .from('audio_sources')
+            .select('id, librosa_features')
+            .in('id', ids);
+          const byId = new Map((featRows ?? []).map(r => [r.id, r.librosa_features]));
+          for (const s of uncachedSources) {
+            if (!s.audio_source_id) continue;
+            const profile = formatAcousticProfile(byId.get(s.audio_source_id) as any);
+            if (profile) s.acoustic_profile = profile;
+          }
+        }
+      }
+
       // Batch sources to avoid truncation (max 5 per batch)
       const BATCH_SIZE = 5;
       const batches: AudioSource[][] = [];
@@ -224,7 +270,11 @@ Deno.serve(async (req) => {
       console.log(`Processing ${uncachedSources.length} sources in ${batches.length} batch(es)`);
 
       for (const batch of batches) {
-        const sourcesList = batch.map(s => `- ${s.name}`).join('\n');
+        const sourcesList = batch
+          .map(s => s.acoustic_profile
+            ? `- ${s.name}\n    acoustic: ${s.acoustic_profile}`
+            : `- ${s.name}`)
+          .join('\n');
         
         const systemPrompt = `You are an expert audio semantic analyzer implementing the SemanticAC framework.
 
@@ -254,7 +304,14 @@ OTHER RULES:
 - Keep descriptions SHORT (under 40 words each)
 - Each source MUST have exactly 6 categories
 - Scores are 0-100 integers
-- Use the EXACT source names provided`;
+- Use the EXACT source names provided
+- When an "acoustic:" line is provided for a source, treat it as ground-truth
+  measurements from librosa (tempo BPM, key/mode, beat regularity, onset rate,
+  RMS energy, spectral centroid/rolloff/flatness, zero-crossing rate, spectral
+  contrast bands, MFCC[0..6]). Use them to inform Emotional (energy, RMS,
+  centroid), Cognitive (rhythmic regularity, harmonic complexity), Artistic
+  (timbre/MFCC variety, spectral contrast), and Contextual (tempo + flatness)
+  scores. Do not echo the numbers in descriptions.`;
 
         const userPrompt = `Analyze these ${batch.length} audio source${batch.length > 1 ? 's' : ''}:
 

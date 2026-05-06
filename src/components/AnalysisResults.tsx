@@ -1,6 +1,10 @@
 import { Card } from "@/components/ui/card";
-import { Brain, Users, Heart, MessageSquare, Music, MapPin } from "lucide-react";
+import { Brain, Users, Heart, MessageSquare, Music, MapPin, Waves } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { LibrosaVisuals } from "@/components/visuals/LibrosaVisuals";
+import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 
 interface CategoryScore {
   name: string;
@@ -17,6 +21,7 @@ interface AnalysisResultsProps {
   results: SourceAnalysis[] | null;
   isAnalyzing: boolean;
   sourceImages?: Array<{ name: string; imageUrl: string }>;
+  sourceIds?: Array<{ name: string; id: string }>;
 }
 
 // Category color mapping

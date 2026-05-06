@@ -254,10 +254,11 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
       <div className="grid gap-8">
         {results.map((source, sourceIndex) => {
           const imageUrl = getSourceImage(source.name);
-          
+          const audioSourceId = getSourceId(source.name);
+
           return (
-            <Card 
-              key={sourceIndex} 
+            <Card
+              key={sourceIndex}
               className="p-6 shadow-elegant border-border/50 hover:border-primary/30 transition-all duration-300 overflow-hidden"
               style={{ animationDelay: `${sourceIndex * 0.15}s` }}
             >

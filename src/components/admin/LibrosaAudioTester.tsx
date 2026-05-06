@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Upload, Music, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { LibrosaVisuals } from "@/components/visuals/LibrosaVisuals";
+import type { LibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 
 const BUCKET = "admin-audio-tests";
 const MAX_BYTES = 20 * 1024 * 1024; // 20 MB

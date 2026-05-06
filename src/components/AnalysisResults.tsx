@@ -419,3 +419,22 @@ function AcousticVisualsToggle({ audioSourceId }: { audioSourceId: string }) {
     </div>
   );
 }
+
+// Always-visible chroma heatmap + tonnetz preview rendered under each source.
+// Silently no-ops if the source has no cached librosa_features yet.
+function HarmonicPreview({ audioSourceId }: { audioSourceId: string }) {
+  const { features } = useStoredLibrosaFeatures(audioSourceId);
+  if (!features) return null;
+  return (
+    <div className="mt-6 border-t border-border/50 pt-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Waves className="h-4 w-4 text-primary" />
+        <h4 className="text-sm font-semibold">Harmonic preview</h4>
+        <span className="text-xs text-muted-foreground">
+          chroma · tonnetz
+        </span>
+      </div>
+      <ChromaTonnetzPanel features={features} />
+    </div>
+  );
+}

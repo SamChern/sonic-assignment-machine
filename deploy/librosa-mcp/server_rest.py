@@ -125,6 +125,215 @@ def _youtube_to_tmp(url: str) -> str:
     return stream.download(output_path=out_dir, filename=f"yt_{uuid.uuid4().hex[:8]}.m4a")
 
 
+# ---------------------------------------------------------------------------
+# Helpers for /analyze_full
+# ---------------------------------------------------------------------------
+
+# Krumhansl-Schmuckler key profiles (major / minor) — used for mode detection.
+_KS_MAJOR = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+_KS_MINOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+
+
+def _downsample_2d(M: np.ndarray, max_T: int) -> np.ndarray:
+    """Downsample a (rows, T) matrix along T to at most max_T columns by mean-pooling."""
+    if M.ndim != 2 or M.shape[1] <= max_T:
+        return M
+    T = M.shape[1]
+    bin_size = int(np.ceil(T / max_T))
+    pad = (bin_size - (T % bin_size)) % bin_size
+    if pad:
+        M = np.pad(M, ((0, 0), (0, pad)), mode="edge")
+    pooled = M.reshape(M.shape[0], -1, bin_size).mean(axis=2)
+    return pooled
+
+
+def _round_list(arr, ndigits: int = 3):
+    if isinstance(arr, np.ndarray):
+        return np.round(arr, ndigits).tolist()
+    return [round(float(v), ndigits) for v in arr]
+
+
+def _round_2d(M: np.ndarray, ndigits: int = 3):
+    return np.round(M, ndigits).tolist()
+
+
+def _detect_key_mode(chroma_mean: np.ndarray) -> tuple[str, str, float]:
+    """Return (key, mode, correlation) using Krumhansl profile rotation."""
+    pitch_classes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    best = ("C", "major", -1.0)
+    for i in range(12):
+        rot_major = np.roll(_KS_MAJOR, i)
+        rot_minor = np.roll(_KS_MINOR, i)
+        cm = float(np.corrcoef(chroma_mean, rot_major)[0, 1])
+        ci = float(np.corrcoef(chroma_mean, rot_minor)[0, 1])
+        if cm > best[2]:
+            best = (pitch_classes[i], "major", cm)
+        if ci > best[2]:
+            best = (pitch_classes[i], "minor", ci)
+    return best
+
+
+# ---------------------------------------------------------------------------
+# /analyze_full — rich features + arrays for client-side visuals
+# ---------------------------------------------------------------------------
+
+class AnalyzeFullRequest(AnalyzeRequest):
+    duration: float | None = Field(default=90.0, description="Max seconds to analyze.")
+    n_mfcc: int = Field(default=20, ge=1, le=40)
+    max_frames: int = Field(default=300, ge=64, le=600, description="Max time frames returned in 2D arrays.")
+    recurrence_size: int = Field(default=160, ge=64, le=240, description="Side length of the recurrence matrix.")
+
+
+@app.post("/analyze_full")
+def analyze_full(payload: AnalyzeFullRequest, request: Request) -> dict[str, Any]:
+    _require_auth(request)
+    started = time.time()
+
+    sources_provided = sum(
+        x is not None for x in (payload.audio_url, payload.audio_b64, payload.youtube_url)
+    )
+    if sources_provided != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide exactly one of: audio_url, audio_b64, youtube_url.",
+        )
+
+    try:
+        if payload.audio_url:
+            local_path = _download_to_tmp(payload.audio_url)
+        elif payload.audio_b64:
+            local_path = _b64_to_tmp(payload.audio_b64)
+        else:
+            local_path = _youtube_to_tmp(payload.youtube_url)  # type: ignore[arg-type]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch audio: {e}")
+
+    try:
+        y, sr = librosa.load(local_path, duration=payload.duration, mono=True)
+        duration_sec = float(librosa.get_duration(y=y, sr=sr))
+
+        # Rhythm
+        tempo_arr, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+        tempo_bpm = float(np.atleast_1d(tempo_arr)[0])
+        beat_times = librosa.frames_to_time(beat_frames, sr=sr).tolist()
+        if len(beat_times) > 1:
+            ibi = np.diff(beat_times)
+            ibi_mean = float(np.mean(ibi)) or 1.0
+            beat_regularity = float(max(0.0, min(1.0, 1.0 - (np.std(ibi) / ibi_mean))))
+        else:
+            beat_regularity = 0.0
+
+        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+        onsets = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr)
+        onset_rate = float(len(onsets) / max(duration_sec, 1e-6))
+
+        # Spectral
+        centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+        rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)[0]
+        bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)[0]
+        flatness = librosa.feature.spectral_flatness(y=y)[0]
+        contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
+        zcr = librosa.feature.zero_crossing_rate(y)[0]
+        rms = librosa.feature.rms(y=y)[0]
+
+        # Timbre
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=payload.n_mfcc)
+        delta = librosa.feature.delta(mfcc)
+
+        # Tonal
+        chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+        chroma_mean = chroma.mean(axis=1)
+        tonnetz = librosa.feature.tonnetz(y=librosa.effects.harmonic(y), sr=sr)
+
+        key, mode, key_corr = _detect_key_mode(chroma_mean)
+
+        # Mel spectrogram for visuals
+        mel = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64)
+        mel_db = librosa.power_to_db(mel, ref=np.max)
+
+        # Recurrence / self-similarity
+        rec_T = payload.recurrence_size
+        chroma_for_rec = _downsample_2d(chroma, rec_T)
+        rec = librosa.segment.recurrence_matrix(
+            chroma_for_rec, mode="affinity", sym=True, width=3
+        )
+        # Segment boundaries via agglomerative clustering on chroma
+        try:
+            seg_frames = librosa.segment.agglomerative(chroma, k=8)
+            seg_times = librosa.frames_to_time(seg_frames, sr=sr).tolist()
+        except Exception:
+            seg_times = []
+
+        # Times axis after downsampling
+        T_full = mel_db.shape[1]
+        max_T = payload.max_frames
+        mel_ds = _downsample_2d(mel_db, max_T)
+        mfcc_ds = _downsample_2d(mfcc, max_T)
+        chroma_ds = _downsample_2d(chroma, max_T)
+        onset_ds = _downsample_2d(onset_env.reshape(1, -1), max_T)[0]
+        T_ds = mel_ds.shape[1]
+        # Map original times to downsampled axis
+        if T_full > 0:
+            full_times = librosa.frames_to_time(np.arange(T_full), sr=sr)
+            idx = np.linspace(0, T_full - 1, T_ds).astype(int)
+            times_ds = full_times[idx].tolist()
+        else:
+            times_ds = []
+    finally:
+        try:
+            os.remove(local_path)
+        except OSError:
+            pass
+
+    result = {
+        "ok": True,
+        "elapsed_ms": int((time.time() - started) * 1000),
+        "sample_rate": int(sr),
+        "duration_sec": round(duration_sec, 3),
+
+        # ---- Scalars for the model ----------------------------------------
+        "scalars": {
+            "tempo_bpm": round(tempo_bpm, 2),
+            "beat_regularity": round(beat_regularity, 4),
+            "onset_rate_per_sec": round(onset_rate, 4),
+            "estimated_key": key,
+            "mode": mode,
+            "key_confidence": round(key_corr, 4),
+            "rms_mean": round(float(rms.mean()), 5),
+            "rms_std": round(float(rms.std()), 5),
+            "spectral_centroid_mean": round(float(centroid.mean()), 2),
+            "spectral_centroid_std": round(float(centroid.std()), 2),
+            "spectral_rolloff_mean": round(float(rolloff.mean()), 2),
+            "spectral_bandwidth_mean": round(float(bandwidth.mean()), 2),
+            "spectral_flatness_mean": round(float(flatness.mean()), 5),
+            "spectral_contrast_mean": _round_list(contrast.mean(axis=1), 3),
+            "zero_crossing_rate_mean": round(float(zcr.mean()), 5),
+            "mfcc_mean": _round_list(mfcc.mean(axis=1), 3),
+            "mfcc_std": _round_list(mfcc.std(axis=1), 3),
+            "delta_mfcc_mean": _round_list(delta.mean(axis=1), 3),
+            "delta_mfcc_std": _round_list(delta.std(axis=1), 3),
+            "chroma_mean": _round_list(chroma_mean, 4),
+            "tonnetz_mean": _round_list(tonnetz.mean(axis=1), 4),
+            "tonnetz_std": _round_list(tonnetz.std(axis=1), 4),
+        },
+
+        # ---- Arrays for visuals (downsampled) -----------------------------
+        "visuals": {
+            "times": [round(t, 3) for t in times_ds],
+            "mel_db": _round_2d(mel_ds, 2),
+            "mfcc": _round_2d(mfcc_ds, 2),
+            "chroma": _round_2d(chroma_ds, 3),
+            "onset_envelope": _round_list(onset_ds, 3),
+            "beat_times": [round(t, 3) for t in beat_times],
+            "segment_times": [round(t, 3) for t in seg_times],
+            "recurrence": _round_2d(np.asarray(rec, dtype=np.float32), 2),
+        },
+    }
+    return result
+
+
 @app.post("/analyze")
 def analyze(payload: AnalyzeRequest, request: Request) -> dict[str, Any]:
     _require_auth(request)

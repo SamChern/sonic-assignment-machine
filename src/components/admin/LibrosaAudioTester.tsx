@@ -29,12 +29,14 @@ export function LibrosaAudioTester() {
   const [tool, setTool] = useState("get_duration");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ToolResult | null>(null);
+  const [fullFeatures, setFullFeatures] = useState<LibrosaFeatures | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
 
   const onFile = (f: File | null) => {
     setError(null);
     setResult(null);
+    setFullFeatures(null);
     if (!f) return setFile(null);
     if (f.size > MAX_BYTES) {
       setError(`File too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Max 20 MB.`);

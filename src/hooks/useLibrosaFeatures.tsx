@@ -117,7 +117,7 @@ export function useStoredLibrosaFeatures(audioSourceId: string | null | undefine
         .eq("id", audioSourceId)
         .maybeSingle();
       if (cancelled) return;
-      setFeatures((data?.librosa_features as LibrosaFeatures | null) ?? null);
+      setFeatures((data?.librosa_features as unknown as LibrosaFeatures | null) ?? null);
       setLoading(false);
     }
     load();

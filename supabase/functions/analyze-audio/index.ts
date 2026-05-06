@@ -304,7 +304,14 @@ OTHER RULES:
 - Keep descriptions SHORT (under 40 words each)
 - Each source MUST have exactly 6 categories
 - Scores are 0-100 integers
-- Use the EXACT source names provided`;
+- Use the EXACT source names provided
+- When an "acoustic:" line is provided for a source, treat it as ground-truth
+  measurements from librosa (tempo BPM, key/mode, beat regularity, onset rate,
+  RMS energy, spectral centroid/rolloff/flatness, zero-crossing rate, spectral
+  contrast bands, MFCC[0..6]). Use them to inform Emotional (energy, RMS,
+  centroid), Cognitive (rhythmic regularity, harmonic complexity), Artistic
+  (timbre/MFCC variety, spectral contrast), and Contextual (tempo + flatness)
+  scores. Do not echo the numbers in descriptions.`;
 
         const userPrompt = `Analyze these ${batch.length} audio source${batch.length > 1 ? 's' : ''}:
 

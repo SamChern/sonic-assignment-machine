@@ -56,6 +56,9 @@ function formatAcousticProfile(features: Record<string, any> | null | undefined)
     `zcr=${round1(s.zero_crossing_rate_mean)}`,
     contrast.length ? `contrast=[${contrast.join(",")}]` : "",
     mfcc.length ? `mfcc[0..6]=[${mfcc.join(",")}]` : "",
+    dominantPitches.length ? `dominant_pitches=[${dominantPitches.join(",")}]` : "",
+    chroma.length ? `chroma=[${chroma.join(",")}]` : "",
+    tonnetz.length ? `tonnetz=[${tonnetz.join(",")}]` : "",
   ].filter(Boolean);
   return parts.join(" ");
 }

@@ -3,7 +3,7 @@ import { Brain, Users, Heart, MessageSquare, Music, MapPin, Waves } from "lucide
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { LibrosaVisuals } from "@/components/visuals/LibrosaVisuals";
+import { LibrosaVisuals, ChromaTonnetzPanel } from "@/components/visuals/LibrosaVisuals";
 import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 
 interface CategoryScore {
@@ -348,6 +348,7 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                   })}
                 </div>
               </div>
+              {audioSourceId && <HarmonicPreview audioSourceId={audioSourceId} />}
               {audioSourceId && <AcousticVisualsToggle audioSourceId={audioSourceId} />}
             </Card>
           );
@@ -415,6 +416,25 @@ function AcousticVisualsToggle({ audioSourceId }: { audioSourceId: string }) {
           {features && <LibrosaVisuals features={features} />}
         </div>
       )}
+    </div>
+  );
+}
+
+// Always-visible chroma heatmap + tonnetz preview rendered under each source.
+// Silently no-ops if the source has no cached librosa_features yet.
+function HarmonicPreview({ audioSourceId }: { audioSourceId: string }) {
+  const { features } = useStoredLibrosaFeatures(audioSourceId);
+  if (!features) return null;
+  return (
+    <div className="mt-6 border-t border-border/50 pt-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Waves className="h-4 w-4 text-primary" />
+        <h4 className="text-sm font-semibold">Harmonic preview</h4>
+        <span className="text-xs text-muted-foreground">
+          chroma · tonnetz
+        </span>
+      </div>
+      <ChromaTonnetzPanel features={features} />
     </div>
   );
 }

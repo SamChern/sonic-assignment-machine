@@ -327,10 +327,16 @@ OTHER RULES:
 - When an "acoustic:" line is provided for a source, treat it as ground-truth
   measurements from librosa (tempo BPM, key/mode, beat regularity, onset rate,
   RMS energy, spectral centroid/rolloff/flatness, zero-crossing rate, spectral
-  contrast bands, MFCC[0..6]). Use them to inform Emotional (energy, RMS,
-  centroid), Cognitive (rhythmic regularity, harmonic complexity), Artistic
-  (timbre/MFCC variety, spectral contrast), and Contextual (tempo + flatness)
-  scores. Do not echo the numbers in descriptions.`;
+  contrast bands, MFCC[0..6], dominant_pitches, chroma[12], tonnetz[6]).
+  Use them to inform Emotional (energy, RMS, centroid + mode: minor/low-tonnetz-magnitude
+  → melancholy/introspective; major/bright → uplifting), Cognitive (rhythmic
+  regularity, harmonic complexity = chroma entropy + tonnetz spread; flatter
+  chroma distribution = more harmonically complex/cerebral), Artistic
+  (timbre/MFCC variety, spectral contrast, tonnetz variance = harmonic
+  sophistication), Communication (clear dominant pitches + strong key =
+  more direct/accessible), and Contextual (tempo + flatness + key stability)
+  scores. Do not echo the raw numbers in descriptions — translate them into
+  qualitative language.`;
 
         const userPrompt = `Analyze these ${batch.length} audio source${batch.length > 1 ? 's' : ''}:
 

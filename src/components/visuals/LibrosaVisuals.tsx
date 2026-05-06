@@ -188,7 +188,7 @@ function MfccPanel({ features }: Props) {
 const PITCH_CLASSES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const TONNETZ_AXES = ["5th-x", "5th-y", "min3-x", "min3-y", "maj3-x", "maj3-y"];
 
-function ChromaTonnetzPanel({ features }: Props) {
+export function ChromaTonnetzPanel({ features }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { chroma } = features.visuals;
   const { tonnetz_mean, estimated_key, mode } = features.scalars;

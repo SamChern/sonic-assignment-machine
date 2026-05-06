@@ -348,6 +348,7 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                   })}
                 </div>
               </div>
+              {audioSourceId && <AcousticVisualsToggle audioSourceId={audioSourceId} />}
             </Card>
           );
         })}

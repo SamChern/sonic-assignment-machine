@@ -3,7 +3,7 @@ import { Brain, Users, Heart, MessageSquare, Music, MapPin, Waves } from "lucide
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { LibrosaVisuals } from "@/components/visuals/LibrosaVisuals";
+import { LibrosaVisuals, ChromaTonnetzPanel } from "@/components/visuals/LibrosaVisuals";
 import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 
 interface CategoryScore {

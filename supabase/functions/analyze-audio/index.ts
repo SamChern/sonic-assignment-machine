@@ -242,6 +242,24 @@ Deno.serve(async (req) => {
     let freshResults: SourceResult[] = [];
 
     if (uncachedSources.length > 0) {
+      // Pre-fetch any cached librosa_features blobs so we can sharpen the AI's
+      // scoring with real acoustic measurements (tempo, key, spectral, MFCC).
+      if (supabaseAdmin) {
+        const ids = uncachedSources.map(s => s.audio_source_id).filter(Boolean) as string[];
+        if (ids.length > 0) {
+          const { data: featRows } = await supabaseAdmin
+            .from('audio_sources')
+            .select('id, librosa_features')
+            .in('id', ids);
+          const byId = new Map((featRows ?? []).map(r => [r.id, r.librosa_features]));
+          for (const s of uncachedSources) {
+            if (!s.audio_source_id) continue;
+            const profile = formatAcousticProfile(byId.get(s.audio_source_id) as any);
+            if (profile) s.acoustic_profile = profile;
+          }
+        }
+      }
+
       // Batch sources to avoid truncation (max 5 per batch)
       const BATCH_SIZE = 5;
       const batches: AudioSource[][] = [];
@@ -252,7 +270,11 @@ Deno.serve(async (req) => {
       console.log(`Processing ${uncachedSources.length} sources in ${batches.length} batch(es)`);
 
       for (const batch of batches) {
-        const sourcesList = batch.map(s => `- ${s.name}`).join('\n');
+        const sourcesList = batch
+          .map(s => s.acoustic_profile
+            ? `- ${s.name}\n    acoustic: ${s.acoustic_profile}`
+            : `- ${s.name}`)
+          .join('\n');
         
         const systemPrompt = `You are an expert audio semantic analyzer implementing the SemanticAC framework.
 

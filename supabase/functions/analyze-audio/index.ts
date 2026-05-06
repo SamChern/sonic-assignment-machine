@@ -14,6 +14,34 @@ interface AudioSource {
   type: 'file' | 'track';
   audio_source_id?: string;
   spotify_id?: string; // For cache key lookup
+  acoustic_profile?: string; // Optional pre-formatted librosa summary
+}
+
+// Format a compact "Acoustic profile" line from a librosa_features blob,
+// suitable for injection into the LLM prompt without ballooning tokens.
+function formatAcousticProfile(features: Record<string, any> | null | undefined): string | null {
+  if (!features || typeof features !== "object") return null;
+  const s = features.scalars ?? {};
+  if (!s || typeof s !== "object") return null;
+  const round1 = (n: any) => (typeof n === "number" ? Math.round(n * 10) / 10 : n);
+  const mfcc = Array.isArray(s.mfcc_mean) ? s.mfcc_mean.slice(0, 7).map((v: number) => round1(v)) : [];
+  const contrast = Array.isArray(s.spectral_contrast_mean)
+    ? s.spectral_contrast_mean.map((v: number) => round1(v))
+    : [];
+  const parts = [
+    `tempo=${round1(s.tempo_bpm)}bpm`,
+    `key=${s.estimated_key ?? "?"}${s.mode ? ` ${s.mode}` : ""}`,
+    `beat_regularity=${round1(s.beat_regularity)}`,
+    `onset_rate=${round1(s.onset_rate_per_sec)}/s`,
+    `rms=${round1(s.rms_mean)}`,
+    `spec_centroid=${round1(s.spectral_centroid_mean)}Hz`,
+    `spec_rolloff=${round1(s.spectral_rolloff_mean)}Hz`,
+    `spec_flatness=${round1(s.spectral_flatness_mean)}`,
+    `zcr=${round1(s.zero_crossing_rate_mean)}`,
+    contrast.length ? `contrast=[${contrast.join(",")}]` : "",
+    mfcc.length ? `mfcc[0..6]=[${mfcc.join(",")}]` : "",
+  ].filter(Boolean);
+  return parts.join(" ");
 }
 
 interface AnalysisRequest {

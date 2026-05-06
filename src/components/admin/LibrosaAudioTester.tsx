@@ -206,6 +206,7 @@ export function LibrosaAudioTester() {
             disabled={running}
             className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
+            <option value="__full_analysis__">Full analysis (visuals)</option>
             <option value="get_duration">get_duration</option>
             <option value="tempo">tempo (beat tracking)</option>
             <option value="beat_track">beat_track</option>

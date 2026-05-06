@@ -237,6 +237,7 @@ export function LibrosaAudioTester() {
         </div>
       )}
 
+      {fullFeatures && <LibrosaVisuals features={fullFeatures} />}
       {renderResult()}
     </Card>
   );

@@ -54,6 +54,7 @@ export function LibrosaAudioTester() {
     setRunning(true);
     setError(null);
     setResult(null);
+    setFullFeatures(null);
     setLatencyMs(null);
     const t0 = performance.now();
 
@@ -77,6 +78,29 @@ export function LibrosaAudioTester() {
     if (signErr || !signed?.signedUrl) {
       setRunning(false);
       setError(`Could not sign URL: ${signErr?.message ?? "unknown"}`);
+      return;
+    }
+
+    // Branch: full analysis hits the librosa REST /analyze_full endpoint.
+    if (tool === "__full_analysis__") {
+      try {
+        const { data, error: invokeErr } = await supabase.functions.invoke<{
+          success: boolean; result?: LibrosaFeatures; error?: string;
+        }>("librosa-analyze-full", { body: { audio_url: signed.signedUrl } });
+        if (invokeErr || !data?.success || !data.result) {
+          throw new Error(data?.error ?? invokeErr?.message ?? "analysis failed");
+        }
+        setFullFeatures(data.result);
+        setLatencyMs(Math.round(performance.now() - t0));
+        toast.success(`Full analysis in ${Math.round(performance.now() - t0)} ms`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Unknown error";
+        setError(msg);
+        toast.error(msg);
+      } finally {
+        setRunning(false);
+        supabase.storage.from(BUCKET).remove([path]).catch(() => {});
+      }
       return;
     }
 

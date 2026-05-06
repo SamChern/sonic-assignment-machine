@@ -233,6 +233,11 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
     return match?.imageUrl;
   };
 
+  const getSourceId = (sourceName: string) => {
+    const match = sourceIds.find(s => s.name === sourceName);
+    return match?.id;
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}

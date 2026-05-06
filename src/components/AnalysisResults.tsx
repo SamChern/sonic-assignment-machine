@@ -386,3 +386,35 @@ export const getCategoryIcon = (categoryName: string) => {
   
   return iconMap[categoryName.toLowerCase()] || <Brain className="h-4 w-4" />;
 };
+
+// Collapsible "Acoustic visuals" panel rendered under each analyzed source.
+// Only fetches the cached librosa_features blob when the user opens it.
+function AcousticVisualsToggle({ audioSourceId }: { audioSourceId: string }) {
+  const [open, setOpen] = useState(false);
+  const { features, loading } = useStoredLibrosaFeatures(open ? audioSourceId : null);
+
+  return (
+    <div className="mt-6 border-t border-border/50 pt-4">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setOpen(o => !o)}
+        className="text-muted-foreground hover:text-foreground"
+      >
+        <Waves className="h-4 w-4 mr-2" />
+        {open ? "Hide acoustic visuals" : "Show acoustic visuals"}
+      </Button>
+      {open && (
+        <div className="mt-3">
+          {loading && <p className="text-xs text-muted-foreground">Loading…</p>}
+          {!loading && !features && (
+            <p className="text-xs text-muted-foreground">
+              No librosa features cached for this source yet.
+            </p>
+          )}
+          {features && <LibrosaVisuals features={features} />}
+        </div>
+      )}
+    </div>
+  );
+}

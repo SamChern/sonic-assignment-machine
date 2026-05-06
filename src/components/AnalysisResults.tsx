@@ -192,7 +192,7 @@ const AnimatedScoreBar = ({ score, categoryName, delay }: { score: number; categ
   );
 };
 
-export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [] }: AnalysisResultsProps) => {
+export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourceIds = [] }: AnalysisResultsProps) => {
   if (isAnalyzing) {
     return (
       <Card className="p-8 shadow-elegant border-primary/20">

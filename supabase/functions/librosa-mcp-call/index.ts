@@ -82,11 +82,13 @@ Deno.serve(async (req) => {
     // NOTE: do NOT put an AbortSignal.timeout on the SSE GET — it would kill
     // the whole stream mid-analysis. Per-read deadlines are enforced in pump().
     let sseResp: Response;
+    const sseController = new AbortController();
+    const sseConnectTimer = setTimeout(() => sseController.abort(), 10_000);
     try {
       sseResp = await fetch(serverUrl, {
         method: "GET",
         headers: { ...baseHeaders, Accept: "text/event-stream" },
-        signal: AbortSignal.timeout(10_000),
+        signal: sseController.signal,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -94,6 +96,8 @@ Deno.serve(async (req) => {
         ? "Librosa MCP tunnel is unreachable. Update the MCP_SERVER_URL or use Full analysis (visuals), which does not require MCP."
         : `Could not connect to Librosa MCP server: ${msg}`;
       return json({ success: false, error: friendly });
+    } finally {
+      clearTimeout(sseConnectTimer);
     }
     if (!sseResp.ok || !sseResp.body) {
       const t = await sseResp.text().catch(() => "");
@@ -185,7 +189,10 @@ Deno.serve(async (req) => {
           signal: AbortSignal.timeout(20_000),
         });
       } catch (e) {
-        throw new Error(`Librosa MCP request failed: ${e instanceof Error ? e.message : String(e)}`);
+        return new Response(
+          `Librosa MCP request failed: ${e instanceof Error ? e.message : String(e)}`,
+          { status: 502 },
+        );
       }
     };
 

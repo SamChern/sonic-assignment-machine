@@ -43,6 +43,8 @@ const ALLOWED_FIELDS: Record<string, string[]> = {
     "PANDORA_USER_EMAIL",
     "PANDORA_USER_PASSWORD",
   ],
+  librosa_rest: ["LIBROSA_REST_URL", "LIBROSA_REST_TOKEN"],
+  spotify_audio_features: [],
   mcp_generic: MCP_FIELDS,
   mcp_notion: MCP_FIELDS,
   mcp_linear: MCP_FIELDS,

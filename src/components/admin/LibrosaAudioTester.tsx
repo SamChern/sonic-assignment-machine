@@ -26,7 +26,7 @@ interface ToolResult {
 
 export function LibrosaAudioTester() {
   const [file, setFile] = useState<File | null>(null);
-  const [tool, setTool] = useState("get_duration");
+  const [tool, setTool] = useState("__full_analysis__");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ToolResult | null>(null);
   const [fullFeatures, setFullFeatures] = useState<LibrosaFeatures | null>(null);
@@ -177,9 +177,8 @@ export function LibrosaAudioTester() {
           <div>
             <h2 className="text-lg font-semibold">Librosa MCP — Audio sample test</h2>
             <p className="text-sm text-muted-foreground">
-              Upload a short audio file. It's stored privately, sent to the
-              Librosa MCP server via a signed URL, and the analysis is shown
-              below.
+              Upload a short audio file. It's stored privately, sent to Librosa
+              via a signed URL, and the analysis is shown below.
             </p>
           </div>
         </div>

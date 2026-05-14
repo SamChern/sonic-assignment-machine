@@ -81,16 +81,30 @@ Deno.serve(async (req) => {
     // 1) Open SSE stream
     // NOTE: do NOT put an AbortSignal.timeout on the SSE GET — it would kill
     // the whole stream mid-analysis. Per-read deadlines are enforced in pump().
-    const sseResp = await fetch(serverUrl, {
-      method: "GET",
-      headers: { ...baseHeaders, Accept: "text/event-stream" },
-    });
+    let sseResp: Response;
+    const sseController = new AbortController();
+    const sseConnectTimer = setTimeout(() => sseController.abort(), 10_000);
+    try {
+      sseResp = await fetch(serverUrl, {
+        method: "GET",
+        headers: { ...baseHeaders, Accept: "text/event-stream" },
+        signal: sseController.signal,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const friendly = msg.includes("dns error") || msg.includes("failed to lookup")
+        ? "Librosa MCP tunnel is unreachable. Update the MCP_SERVER_URL or use Full analysis (visuals), which does not require MCP."
+        : `Could not connect to Librosa MCP server: ${msg}`;
+      return json({ success: false, error: friendly });
+    } finally {
+      clearTimeout(sseConnectTimer);
+    }
     if (!sseResp.ok || !sseResp.body) {
       const t = await sseResp.text().catch(() => "");
       return json({
         success: false,
         error: `SSE GET ${sseResp.status}: ${t.slice(0, 200)}`,
-      }, 502);
+      });
     }
     const reader = sseResp.body.getReader();
     const decoder = new TextDecoder();
@@ -162,20 +176,24 @@ Deno.serve(async (req) => {
       try {
         await reader.cancel();
       } catch { /* noop */ }
-      return json(
-        { success: false, error: "No SSE endpoint event received" },
-        502,
-      );
+      return json({ success: false, error: "No SSE endpoint event received" });
     }
     const messagesUrl = new URL(endpointPath, serverUrl).toString();
 
     const post = async (payload: unknown) => {
-      return await fetch(messagesUrl, {
-        method: "POST",
-        headers: baseHeaders,
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(20_000),
-      });
+      try {
+        return await fetch(messagesUrl, {
+          method: "POST",
+          headers: baseHeaders,
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(20_000),
+        });
+      } catch (e) {
+        return new Response(
+          `Librosa MCP request failed: ${e instanceof Error ? e.message : String(e)}`,
+          { status: 502 },
+        );
+      }
     };
 
     const waitFor = async (id: number | string, timeoutMs: number) => {
@@ -206,7 +224,7 @@ Deno.serve(async (req) => {
       return json({
         success: false,
         error: `initialize ${initResp.status}: ${t.slice(0, 200)}`,
-      }, 502);
+      });
     }
     const initResult = await waitFor(1, 10_000);
     if (!initResult) {
@@ -216,7 +234,7 @@ Deno.serve(async (req) => {
       return json({
         success: false,
         error: "MCP initialize did not respond within 10s",
-      }, 504);
+      });
     }
 
     // 3) initialized notification
@@ -245,7 +263,7 @@ Deno.serve(async (req) => {
       return json({
         success: false,
         error: `tools/call ${callResp.status}: ${t.slice(0, 300)}`,
-      }, 502);
+      });
     }
 
     const toolTimeoutMs = toolName === "download_from_url"
@@ -267,14 +285,11 @@ Deno.serve(async (req) => {
         : streamClosed
         ? `${base} (SSE stream closed by upstream before result)`
         : base;
-      return json({ success: false, error: detail }, 504);
+      return json({ success: false, error: detail });
     }
     const r = result as { result?: unknown; error?: { message?: string } };
     if (r.error) {
-      return json(
-        { success: false, error: r.error.message ?? "MCP error" },
-        502,
-      );
+      return json({ success: false, error: r.error.message ?? "MCP error" });
     }
     return json({ success: true, result: r.result });
   } catch (e) {

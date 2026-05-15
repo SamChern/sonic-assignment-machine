@@ -1,83 +1,63 @@
-## Goal
+## Diagnosis so far
 
-Make librosa do real work for SemanticAC: (1) richer numeric features feed the AI scoring model, (2) those same arrays render as interactive visuals in the Analysis tab. No new heavy dependencies on the frontend (D3 + Canvas only).
+- `https://127.0.0.1/healthz` from the box → **200 OK** (TLS + nginx are healthy).
+- `https://samc-librosa.duckdns.org/healthz` from your Mac → TCP connects to `35.94.20.4:443`, then TLS handshake **hangs** until timeout (`SSL_ERROR_SYSCALL`).
+- DNS is correct, cert files exist, nginx config is valid, port 443 is listening.
 
-## Architecture
+When TCP completes but the TLS `ServerHello` never arrives, the usual cause is **packet drops mid-handshake** — almost always one of:
 
-```text
-[Audio file/URL] → EC2 librosa-rest (/analyze_full)
-        ↓ JSON: scalars + arrays (mel, mfcc, chroma, recurrence, beats)
-   ┌────┴──────────────────────────────┐
-   ↓                                   ↓
-analyze-audio edge fn          AnalysisResults UI
-(feeds AI prompt with          (D3/Canvas heatmaps,
- spectral/rhythm/tonal         tonnetz, recurrence)
- summary stats)
+1. **MTU / MSS mismatch** on the EC2 ENI (the ServerHello + cert chain is ~4 KB and gets fragmented; if PMTUD is broken, those packets are dropped silently).
+2. **AWS Network ACL** allowing inbound 443 SYN but blocking the ephemeral return port range (Security Groups are stateful, NACLs are not — a custom NACL is the classic cause).
+3. **fail2ban / ufw / iptables** on the box dropping outbound large packets to your Mac's IP after the SYN-ACK.
+4. A second `:443` server block (the IP-based one in your `nginx -T` output) being picked as the default for SNI-less or unexpected requests — less likely since curl sends SNI, but worth ruling out.
+
+## Plan
+
+### Step 1 — Run these on the EC2 box to localize the failure
+
+```bash
+# 1a. Curl the public hostname FROM the box itself (bypasses your Mac's network entirely)
+curl -vk --resolve samc-librosa.duckdns.org:443:35.94.20.4 \
+  https://samc-librosa.duckdns.org/healthz 2>&1 | tail -20
+
+# 1b. Check MTU on the primary interface
+ip link show | grep -E "mtu|state UP"
+
+# 1c. Check for firewall rules that might drop large packets
+sudo iptables -L -n -v | head -40
+sudo ufw status 2>/dev/null || echo "ufw not active"
+sudo systemctl status fail2ban --no-pager 2>/dev/null | head -5 || echo "no fail2ban"
+
+# 1d. Watch nginx access + error logs while your Mac retries
+sudo tail -f /var/log/nginx/access.log /var/log/nginx/error.log
+# (in another window on your Mac, run the failing curl, then Ctrl-C the tail)
 ```
 
-One upstream call per source. Result is cached in `audio_sources.librosa_features` (jsonb) to avoid recomputation.
+### Step 2 — Check AWS console
 
-## Backend changes (EC2 — server_rest.py)
+In the AWS console for instance `i-xxxx` (35.94.20.4):
 
-Add a new `POST /analyze_full` endpoint (keeps existing `/analyze` untouched). Returns a single JSON document with:
+- **Security Group → Inbound**: confirm `TCP 443` is allowed from `0.0.0.0/0` (you said this is set — re-confirm).
+- **Subnet → Network ACL → Inbound + Outbound**: confirm both directions allow `TCP 443` and the **ephemeral port range `1024-65535`**. If you're using the AWS default NACL it's wide open; if it's custom, this is very likely your problem.
 
-- **Scalars (for the model):** duration, tempo_bpm, beat_regularity (1 − std/mean of inter-beat intervals), onset_rate, estimated_key, mode (major/minor via Krumhansl profile correlation), rms_mean, rms_std.
-- **Spectral set (means + stds):** centroid, rolloff, bandwidth, flatness, contrast (7 bands), zero_crossing_rate.
-- **MFCC summary:** `mfcc_mean[20]`, `mfcc_std[20]`, `delta_mfcc_mean[20]`, `delta_mfcc_std[20]`.
-- **Tonal:** `chroma_mean[12]`, `tonnetz_mean[6]`, `tonnetz_std[6]`.
-- **Arrays for visuals (downsampled to ≤300 frames to keep payload <150KB):**
-  - `mel_db[n_mels=64][T]` (log-mel spectrogram)
-  - `mfcc[20][T]`
-  - `chroma[12][T]`
-  - `onset_envelope[T]`, `beat_frames[]`, `times[T]`
-  - `recurrence[N][N]` (N≤200) — self-similarity matrix from `librosa.segment.recurrence_matrix(..., mode='affinity')`
-  - `segments[]` — boundary times from `librosa.segment.agglomerative` (k=8)
+### Step 3 — Apply the fix based on what Step 1 + 2 reveal
 
-Helpers added to the module: `_downsample_2d(M, max_T)`, `_to_compact_list` (round to 3 decimals).
+| Finding | Fix |
+|---|---|
+| 1a works (box → its own public name OK) | Problem is between AWS and your Mac's ISP — try from a phone hotspot to confirm; if hotspot works, it's your local network/VPN. |
+| 1a also hangs | Problem is on the box itself (firewall/MTU). Lower MTU: `sudo ip link set dev ens5 mtu 1400` and retest. If that fixes it, persist via netplan. |
+| iptables shows DROP rules | Flush the offending chain or add an explicit ACCEPT for established 443. |
+| Custom NACL is missing ephemeral outbound | Add allow rule for `TCP 1024-65535` outbound to `0.0.0.0/0`. |
+| Access log shows the handshake never reached nginx | Confirms it's network-layer (NACL/MTU), not nginx. |
 
-## Backend changes (Supabase)
+### Step 4 — After the fix
 
-1. **Migration:** add `librosa_features jsonb` column to `audio_sources` (nullable). Index on `(user_id)` already exists.
-2. **New edge function `librosa-analyze-full`:** mirrors existing `librosa-analyze` but calls `/analyze_full`, persists the result to `audio_sources.librosa_features`, and returns it. RLS-respecting, auth-gated.
-3. **`analyze-audio` edge fn:** when `librosa_features` is present on the source, inject a compact "Acoustic profile" block into the AI prompt (tempo, key, mode, spectral means, MFCC[0..6], beat regularity). This sharpens scoring without growing token cost (<400 tokens added).
+Re-run from your Mac:
+```bash
+curl -v https://samc-librosa.duckdns.org/healthz
+```
+Expect a `200 ok`. Then retry the `/librosa-rest/health` call with the bearer token.
 
-## Frontend changes (hybrid visuals)
+## What I need from you
 
-New component `src/components/visuals/LibrosaVisuals.tsx` with three panels (lazy-rendered, only when a source has `librosa_features`):
-
-1. **MFCC heatmap + beat overlay** — Canvas (20×T cells, viridis colormap from existing `style/semantic-category-colors` palette mapped to magnitude); SVG overlay draws vertical ticks at `beat_frames` and an onset envelope sparkline above.
-2. **Chromagram + tonnetz radial** — Canvas chromagram (12×T) on the left; D3 radial 6-axis tonnetz mean plot on the right (re-uses ontological-fingerprint radial layout conventions).
-3. **Self-similarity matrix + segment boundaries** — Canvas N×N heatmap with horizontal/vertical lines at `segments[]`. Click a segment band → seeks the audio player to that timestamp.
-
-All colors come from `index.css` semantic tokens; no raw hex. Renders inside the existing **Analysis** tab under each source's `AnalysisResults` card (collapsible "Acoustic visuals" accordion — default collapsed, opt-in).
-
-New hook `src/hooks/useLibrosaFeatures.tsx` — fetches/caches `librosa_features`, calls `librosa-analyze-full` if missing.
-
-## Admin tooling
-
-Extend `LibrosaAudioTester` with a fourth output mode "Full analysis" that calls `librosa-analyze-full` and renders the same visuals — lets admins QA the pipeline at `/admin/integrations`.
-
-## Out of scope (per memory rules)
-
-- No "SAM-based similarity" tab, no "category legend" tab.
-- No new top-level tabs; visuals live inside existing Analysis tab.
-
-## Technical details
-
-- Payload budget: `_downsample_2d` ensures ≤300 time frames; with float32→round(3)→string, full doc stays ~120 KB gzipped.
-- Caching: `librosa_features` is computed once per source. Re-extraction triggered only by an admin "Recompute" button.
-- Auth: re-uses `integration_credentials` for `LIBROSA_REST_URL` / `LIBROSA_REST_TOKEN`.
-- Mode detection: correlate mean chroma with Krumhansl-Schmuckler major/minor profiles → take argmax.
-- Beat regularity: `1 - std(diff(beat_times)) / mean(diff(beat_times))`, clipped to [0,1].
-
-## Files touched
-
-- `deploy/librosa-mcp/server_rest.py` — add `/analyze_full` + helpers
-- `public/librosa-mcp/server_rest.py` — mirror for EC2 bootstrap
-- new `supabase/functions/librosa-analyze-full/index.ts`
-- `supabase/functions/analyze-audio/index.ts` — inject acoustic profile into prompt
-- migration: `audio_sources.librosa_features jsonb`
-- new `src/hooks/useLibrosaFeatures.tsx`
-- new `src/components/visuals/LibrosaVisuals.tsx` (+ small `MfccHeatmap.tsx`, `Chromagram.tsx`, `RecurrenceMatrix.tsx`, `TonnetzRadial.tsx`)
-- `src/components/AnalysisResults.tsx` — add collapsible visuals section
-- `src/components/admin/LibrosaAudioTester.tsx` — "Full analysis" mode
+Paste the output of **Step 1 (a–d)** and confirm what your **NACL** looks like (or screenshot it). With those I can tell you the exact one-line fix.

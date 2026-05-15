@@ -19,14 +19,15 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="/opt/librosa-mcp/.venv"
 
-if [[ ! -d "$VENV_DIR" ]]; then
-  echo "→ $VENV_DIR not found; bootstrapping REST-only librosa venv"
+if [[ ! -x "$VENV_DIR/bin/pip" ]]; then
+  echo "→ $VENV_DIR is missing or incomplete; bootstrapping REST-only librosa venv"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
   apt-get install -y libsndfile1 ffmpeg python3-venv python3-pip nginx
   mkdir -p /opt/librosa-mcp
   cp "$SCRIPT_DIR/server_extended.py" /opt/librosa-mcp/server_extended.py
   chown -R ubuntu:ubuntu /opt/librosa-mcp
+  rm -rf "$VENV_DIR"
   sudo -u ubuntu python3 -m venv "$VENV_DIR"
   "$VENV_DIR/bin/pip" install --upgrade pip
   "$VENV_DIR/bin/pip" install --quiet \

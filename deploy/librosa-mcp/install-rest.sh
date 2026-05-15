@@ -20,8 +20,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="/opt/librosa-mcp/.venv"
 
 if [[ ! -d "$VENV_DIR" ]]; then
-  echo "ERROR: $VENV_DIR not found. Run ./install.sh first." >&2
-  exit 1
+  echo "→ $VENV_DIR not found; bootstrapping REST-only librosa venv"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get install -y libsndfile1 ffmpeg python3-venv python3-pip nginx
+  mkdir -p /opt/librosa-mcp
+  cp "$SCRIPT_DIR/server_extended.py" /opt/librosa-mcp/server_extended.py
+  chown -R ubuntu:ubuntu /opt/librosa-mcp
+  sudo -u ubuntu python3 -m venv "$VENV_DIR"
+  "$VENV_DIR/bin/pip" install --upgrade pip
+  "$VENV_DIR/bin/pip" install --quiet \
+    "librosa>=0.10" "numpy>=1.21" "scipy>=1.10" \
+    "scikit-learn>=1.0" "soundfile==0.13.1" "matplotlib>=3.5" \
+    "requests" "pytubefix==8.12.2"
 fi
 
 echo "→ Installing FastAPI + uvicorn into the existing venv"

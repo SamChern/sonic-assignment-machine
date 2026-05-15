@@ -1,0 +1,48 @@
+[Unit]
+Description=Librosa REST API (sibling of librosa-mcp; plain HTTP wrapper around server_extended.py)
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/librosa-mcp
+
+# Same venv as the MCP service — server_rest.py imports server_extended.py.
+Environment=PATH=/opt/librosa-mcp/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/librosa-mcp
+
+# The Bearer token enforced inside the FastAPI app. install-rest.sh writes
+# /etc/librosa-rest.token and EnvironmentFile= reads it as LIBROSA_REST_TOKEN=...
+EnvironmentFile=/etc/librosa-rest.env
+
+# uvicorn listens on loopback only — nginx fronts with TLS + outer auth check.
+ExecStart=/opt/librosa-mcp/.venv/bin/python -m uvicorn server_rest:app \
+  --host 127.0.0.1 \
+  --port 8766 \
+  --workers 1 \
+  --timeout-keep-alive 30
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=10s
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=false
+ReadWritePaths=/tmp /opt/librosa-mcp
+
+# Resource caps
+MemoryMax=2G
+CPUQuota=200%
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=librosa-rest
+
+[Install]
+WantedBy=multi-user.target

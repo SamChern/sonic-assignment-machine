@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
 import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";
-import sonicSimLogo from "@/assets/SonicSIM_transp.png.asset.json";
+import sonicSimLogo from "@/assets/SonicSIM_transp.png";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { Badge } from "@/components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
@@ -325,7 +325,7 @@ const Index = () => {
           <div className="text-center">
             <div className="inline-block bg-background/40 backdrop-blur-md rounded-2xl px-8 py-4">
               <img
-                src={sonicSimLogo.url}
+                src={sonicSimLogo}
                 alt="SonicSIM"
                 className="mx-auto h-[115px] sm:h-[154px] md:h-48 w-auto object-contain drop-shadow-[0_0_20px_hsl(var(--primary)/0.6)] select-none"
                 draggable={false}

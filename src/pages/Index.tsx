@@ -260,7 +260,7 @@ const Index = () => {
       {/* Hero Section */}
       <div className="relative overflow-hidden border-b border-border">
         <div 
-          className="absolute inset-0 opacity-20"
+          className="absolute inset-0 opacity-15"
           style={{
             backgroundImage: `url(${heroBackground})`,
             backgroundSize: "cover",

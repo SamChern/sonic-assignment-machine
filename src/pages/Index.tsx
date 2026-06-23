@@ -265,6 +265,7 @@ const Index = () => {
             backgroundImage: `url(${heroBackground})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
+            filter: "grayscale(60%) brightness(0.7)",
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
@@ -322,12 +323,14 @@ const Index = () => {
         
         <div className="relative mx-auto max-w-7xl px-6 py-8 sm:py-12">
           <div className="text-center">
-            <img
-              src={sonicSimLogo.url}
-              alt="SonicSIM"
-              className="mx-auto h-24 sm:h-32 md:h-40 w-auto object-contain mix-blend-screen drop-shadow-[0_0_30px_hsl(var(--primary)/0.35)] select-none"
-              draggable={false}
-            />
+            <div className="inline-block bg-background/40 backdrop-blur-md rounded-2xl px-8 py-4">
+              <img
+                src={sonicSimLogo.url}
+                alt="SonicSIM"
+                className="mx-auto h-24 sm:h-32 md:h-40 w-auto object-contain drop-shadow-[0_0_20px_hsl(var(--primary)/0.6)] select-none"
+                draggable={false}
+              />
+            </div>
           </div>
 
           

@@ -105,6 +105,7 @@ export default function Auth() {
           backgroundImage: `url(${heroBackground})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
+          filter: 'grayscale(60%) brightness(0.7)',
         }}
       />
       <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />

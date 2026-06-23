@@ -270,6 +270,7 @@ const Index = () => {
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
+        <WaveformBackground />
         
         {/* Auth Controls */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-3">

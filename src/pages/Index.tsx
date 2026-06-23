@@ -260,15 +260,15 @@ const Index = () => {
       {/* Hero Section */}
       <div className="relative overflow-hidden border-b border-border">
         <div 
-          className="absolute inset-0 opacity-75"
+          className="absolute inset-0 opacity-85"
           style={{
             backgroundImage: `url(${heroBackground})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
-            filter: "grayscale(70%) brightness(0.5)",
+            filter: "grayscale(60%) brightness(0.7)",
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/98 via-background/80 to-background" />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
         
         {/* Auth Controls */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-3">
@@ -323,11 +323,11 @@ const Index = () => {
         
         <div className="relative mx-auto max-w-7xl px-6 py-8 sm:py-12">
           <div className="text-center">
-            <div className="inline-block bg-background/60 backdrop-blur-xl rounded-2xl px-10 py-5">
+            <div className="inline-block bg-background/40 backdrop-blur-md rounded-2xl px-8 py-4">
               <img
                 src={sonicSimLogo.url}
                 alt="SonicSIM"
-                className="mx-auto h-24 sm:h-32 md:h-40 w-auto object-contain brightness-125 drop-shadow-[0_0_30px_hsl(var(--primary)/0.85)] drop-shadow-[0_0_10px_hsl(var(--primary)/0.5)] select-none"
+                className="mx-auto h-24 sm:h-32 md:h-40 w-auto object-contain drop-shadow-[0_0_20px_hsl(var(--primary)/0.6)] select-none"
                 draggable={false}
               />
             </div>

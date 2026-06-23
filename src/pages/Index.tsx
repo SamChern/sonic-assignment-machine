@@ -260,7 +260,7 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <div className="relative overflow-hidden border-b border-border">
+      <div className="relative overflow-hidden">
         <div 
           className="absolute inset-0 opacity-85"
           style={{

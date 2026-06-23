@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { z } from 'zod';
 import heroBackground from '@/assets/hero-background.jpg';
+import { WaveformBackground } from '@/components/WaveformBackground';
 
 const emailSchema = z.string().email('Invalid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');

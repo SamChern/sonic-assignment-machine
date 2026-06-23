@@ -13,7 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
 import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";
-import sonicSimLogo from "@/assets/SonicSIM_transp.png";
+import sonicSimLogoAsset from "@/assets/SonicSIM_lockup.png.asset.json";
+const sonicSimLogo = sonicSimLogoAsset.url;
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { Badge } from "@/components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
@@ -324,8 +325,7 @@ const Index = () => {
         
         <div className="relative mx-auto max-w-7xl px-6 py-8 sm:py-12">
           <div className="text-center">
-            <div className="relative inline-block bg-background/40 backdrop-blur-md rounded-2xl px-8 py-4">
-              <WaveformBackground variant="lockup" />
+            <div className="relative inline-block">
               <img
                 src={sonicSimLogo}
                 alt="SonicSIM"

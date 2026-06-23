@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
 import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";
+import sonicSimLogo from "@/assets/SonicSIM_transp.png.asset.json";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { Badge } from "@/components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
@@ -320,13 +321,15 @@ const Index = () => {
         </div>
         
         <div className="relative mx-auto max-w-7xl px-6 py-8 sm:py-12">
-          <div className="text-center space-y-4">
-            <h1 className="text-4xl sm:text-5xl font-bold text-foreground">
-              <span className="text-primary">[S]</span>onic{" "}
-              <span className="text-primary">[A]</span>ssignment{" "}
-              <span className="text-primary">[M]</span>achine
-            </h1>
+          <div className="text-center">
+            <img
+              src={sonicSimLogo.url}
+              alt="SonicSIM"
+              className="mx-auto h-24 sm:h-32 md:h-40 w-auto object-contain mix-blend-screen drop-shadow-[0_0_30px_hsl(var(--primary)/0.35)] select-none"
+              draggable={false}
+            />
           </div>
+
           
           {/* Example Output Preview */}
           <div className="mt-8 flex justify-center items-center gap-12">

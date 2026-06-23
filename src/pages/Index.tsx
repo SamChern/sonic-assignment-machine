@@ -329,7 +329,7 @@ const Index = () => {
               <img
                 src={sonicSimLogo}
                 alt="SonicSIM"
-                className="relative z-10 mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain drop-shadow-[0_0_20px_hsl(var(--primary)/0.6)] select-none"
+                className="mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain select-none"
                 draggable={false}
               />
             </div>

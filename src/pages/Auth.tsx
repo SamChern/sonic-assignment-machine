@@ -100,7 +100,7 @@ export default function Auth() {
   return (
     <div className="min-h-screen relative flex items-center justify-center p-6">
       <div 
-        className="absolute inset-0 opacity-70"
+        className="absolute inset-0 opacity-85"
         style={{
           backgroundImage: `url(${heroBackground})`,
           backgroundSize: 'cover',

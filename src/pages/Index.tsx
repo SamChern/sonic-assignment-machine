@@ -270,7 +270,6 @@ const Index = () => {
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
-        <WaveformBackground />
         
         {/* Auth Controls */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-3">
@@ -325,11 +324,12 @@ const Index = () => {
         
         <div className="relative mx-auto max-w-7xl px-6 py-8 sm:py-12">
           <div className="text-center">
-            <div className="inline-block bg-background/40 backdrop-blur-md rounded-2xl px-8 py-4">
+            <div className="relative inline-block bg-background/40 backdrop-blur-md rounded-2xl px-8 py-4">
+              <WaveformBackground variant="lockup" />
               <img
                 src={sonicSimLogo}
                 alt="SonicSIM"
-                className="mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain drop-shadow-[0_0_20px_hsl(var(--primary)/0.6)] select-none"
+                className="relative z-10 mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain drop-shadow-[0_0_20px_hsl(var(--primary)/0.6)] select-none"
                 draggable={false}
               />
             </div>

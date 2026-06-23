@@ -325,7 +325,7 @@ const Index = () => {
           <div className="text-center">
             <div className="inline-block bg-background/40 backdrop-blur-md rounded-2xl px-8 py-4">
               <img
-                src={sonicSimLogo.url}
+                src={sonicSimLogo}
                 alt="SonicSIM"
                 className="mx-auto h-[115px] sm:h-[154px] md:h-48 w-auto object-contain drop-shadow-[0_0_20px_hsl(var(--primary)/0.6)] select-none"
                 draggable={false}

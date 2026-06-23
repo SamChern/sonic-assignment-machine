@@ -110,6 +110,7 @@ export default function Auth() {
         }}
       />
       <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
+      <WaveformBackground />
       
       <Card className="relative w-full max-w-md shadow-elegant bg-card/95 backdrop-blur-sm">
         <CardHeader className="text-center">

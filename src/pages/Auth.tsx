@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { z } from 'zod';
 import heroBackground from '@/assets/hero-background.jpg';
+import { WaveformBackground } from '@/components/WaveformBackground';
 
 const emailSchema = z.string().email('Invalid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
@@ -109,6 +110,7 @@ export default function Auth() {
         }}
       />
       <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
+      <WaveformBackground />
       
       <Card className="relative w-full max-w-md shadow-elegant bg-card/95 backdrop-blur-sm">
         <CardHeader className="text-center">

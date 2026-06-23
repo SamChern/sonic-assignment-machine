@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Check, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
+import { WaveformBackground } from "@/components/WaveformBackground";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useEC2Api } from "@/hooks/useEC2Api";
@@ -269,6 +270,7 @@ const Index = () => {
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
+        <WaveformBackground />
         
         {/* Auth Controls */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-3">

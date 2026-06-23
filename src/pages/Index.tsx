@@ -315,7 +315,7 @@ const Index = () => {
             </div>
           ) : (
             <Link to="/auth">
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button variant="ghost" size="sm" className="gap-2 text-foreground/80 hover:text-foreground">
                 <User className="h-4 w-4" />
                 Sign In
               </Button>

@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Check, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
+import { WaveformBackground } from "@/components/WaveformBackground";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useEC2Api } from "@/hooks/useEC2Api";

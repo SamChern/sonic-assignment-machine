@@ -100,12 +100,12 @@ export default function Auth() {
   return (
     <div className="min-h-screen relative flex items-center justify-center p-6">
       <div 
-        className="absolute inset-0 opacity-85"
+        className="absolute inset-0 opacity-75"
         style={{
           backgroundImage: `url(${heroBackground})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          filter: 'grayscale(60%) brightness(0.7)',
+          filter: 'grayscale(70%) brightness(0.5)',
         }}
       />
       <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />

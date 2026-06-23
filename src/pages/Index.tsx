@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
 import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";
-import sonicSimLogoAsset from "@/assets/SonicSIM_lockup.png.asset.json";
+import sonicSimLogoAsset from "@/assets/SonicSIM_clean.png.asset.json";
 const sonicSimLogo = sonicSimLogoAsset.url;
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { Badge } from "@/components/ui/badge";

@@ -327,7 +327,7 @@ const Index = () => {
               <img
                 src={sonicSimLogo.url}
                 alt="SonicSIM"
-                className="mx-auto h-24 sm:h-32 md:h-40 w-auto object-contain drop-shadow-[0_0_20px_hsl(var(--primary)/0.6)] select-none"
+                className="mx-auto h-[115px] sm:h-[154px] md:h-48 w-auto object-contain drop-shadow-[0_0_20px_hsl(var(--primary)/0.6)] select-none"
                 draggable={false}
               />
             </div>

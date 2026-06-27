@@ -165,6 +165,7 @@ Deno.serve(async (req) => {
 
   let success = 0, failed = 0;
   const errors: string[] = [];
+  const rowDetails: Array<Record<string, unknown>> = [];
 
   for (const row of body.rows) {
     try {
@@ -219,6 +220,7 @@ Deno.serve(async (req) => {
         `name: ${row.name}; tags: ${(row.tags ?? []).map(t => t.code).join(",")}`;
       const queryEmbedding = await embed(queryText);
       let neighborSummary = "";
+      let neighborsForDebug: any[] = [];
       if (queryEmbedding) {
         const { data: neighbors, error: knnErr } = await supabase.rpc("match_audio_profiles", {
           query_embedding: queryEmbedding,
@@ -228,6 +230,7 @@ Deno.serve(async (req) => {
         if (knnErr) {
           console.warn("kNN match failed:", knnErr.message);
         } else if (neighbors && neighbors.length) {
+          neighborsForDebug = neighbors;
           const lines = neighbors.map((n: any) =>
             `  - ${n.name} (sim=${Number(n.similarity).toFixed(2)}): ` +
             `emo=${Math.round(n.emotional_score)} cog=${Math.round(n.cognitive_score)} ` +
@@ -275,10 +278,20 @@ Deno.serve(async (req) => {
       }
 
       success++;
+      rowDetails.push({
+        name: row.name,
+        audio_source_id: audioSourceId,
+        tag_codes: (row.tags ?? []).map(t => t.code),
+        taxonomy_context,
+        neighbors: neighborsForDebug,
+        scores: scoreMap,
+        status: "ok",
+      });
     } catch (e) {
       failed++;
       const msg = e instanceof Error ? e.message : String(e);
       errors.push(`${row.name}: ${msg}`);
+      rowDetails.push({ name: row.name, status: "failed", error: msg });
       console.error("CTV row failed:", row.name, msg);
     }
   }
@@ -288,6 +301,7 @@ Deno.serve(async (req) => {
     failed_rows: failed,
     status: failed === 0 ? "completed" : (success === 0 ? "failed" : "partial"),
     error_message: errors.slice(0, 10).join("\n") || null,
+    row_details: rowDetails,
     updated_at: new Date().toISOString(),
   }).eq("id", batch.id);
 

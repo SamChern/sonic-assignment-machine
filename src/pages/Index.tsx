@@ -648,6 +648,42 @@ const Index = () => {
 
           {/* Tab 3: Per-Source Semantic Analysis */}
           <TabsContent value="analysis" className="space-y-6">
+            {/* Category Filter Chips */}
+            {results && results.sources.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold text-foreground mr-1">Filter:</span>
+                {["Emotional", "Cognitive", "Social", "Communication", "Contextual", "Artistic"].map((cat) => {
+                  const styles = getCategoryStyles(cat);
+                  const active = selectedCategories.includes(cat);
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => toggleCategory(cat)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-200",
+                        active
+                          ? [styles.bg, styles.border, styles.text, "shadow-sm"].join(" ")
+                          : "bg-muted/50 border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      {getCategoryIcon(cat)}
+                      <span>{cat}</span>
+                    </button>
+                  );
+                })}
+                {selectedCategories.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearCategoryFilters}
+                    className="text-xs h-7 px-2"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Filter Controls */}
             {results && results.sources.length > 1 && (
               <Card className="p-4 bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
@@ -722,11 +758,31 @@ const Index = () => {
               </Card>
             )}
 
-            <AnalysisResults 
-              results={filteredSources}
-              isAnalyzing={false}
-              sourceImages={filteredImages}
-            />
+            {(() => {
+              const baseSources = selectedSources.length === 0
+                ? results?.sources || []
+                : (results?.sources || []).filter((source: any) =>
+                    selectedSources.some(selected => selected.trim() === source.name.trim())
+                  );
+              const categoryFiltered = selectedCategories.length === 0
+                ? baseSources
+                : baseSources.filter((source: any) => {
+                    const top = predictCategory(source.categories);
+                    return top ? selectedCategories.includes(top.name) : false;
+                  });
+              const analysisImages = selectedSources.length === 0
+                ? results?.images || []
+                : (results?.images || []).filter((img: any) =>
+                    selectedSources.some(selected => selected.trim() === img.name.trim())
+                  );
+              return (
+                <AnalysisResults
+                  results={categoryFiltered}
+                  isAnalyzing={false}
+                  sourceImages={analysisImages}
+                />
+              );
+            })()}
           </TabsContent>
 
           {/* Tab 4: Discover — Taste Neighbors */}

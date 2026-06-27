@@ -294,7 +294,30 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                     <span className="text-xs text-primary/70 font-medium">Ontological Fingerprint</span>
                   </div>
 
+                  {/* Predicted categorical ontology label */}
+                  {(() => {
+                    const top = predictCategory(source.categories);
+                    if (!top) return null;
+                    const styles = getCategoryStyles(top.name);
+                    return (
+                      <div
+                        className={cn(
+                          "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all",
+                          styles.bg,
+                          styles.border,
+                          styles.text
+                        )}
+                        title={`Predicted human-relation category (top of 6 dimensions): ${top.name} · ${top.score}`}
+                      >
+                        <span>{getCategoryIcon(top.name)}</span>
+                        <span className="uppercase tracking-wide">{top.name}</span>
+                        <span className="opacity-70 tabular-nums">{top.score}</span>
+                      </div>
+                    );
+                  })()}
+
                   {/* Radial chart */}
+
                   <RadialScoreChart categories={source.categories} />
                 </div>
 

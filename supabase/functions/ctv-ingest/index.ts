@@ -278,10 +278,20 @@ Deno.serve(async (req) => {
       }
 
       success++;
+      rowDetails.push({
+        name: row.name,
+        audio_source_id: audioSourceId,
+        tag_codes: (row.tags ?? []).map(t => t.code),
+        taxonomy_context,
+        neighbors: neighborsForDebug,
+        scores: scoreMap,
+        status: "ok",
+      });
     } catch (e) {
       failed++;
       const msg = e instanceof Error ? e.message : String(e);
       errors.push(`${row.name}: ${msg}`);
+      rowDetails.push({ name: row.name, status: "failed", error: msg });
       console.error("CTV row failed:", row.name, msg);
     }
   }
@@ -291,6 +301,7 @@ Deno.serve(async (req) => {
     failed_rows: failed,
     status: failed === 0 ? "completed" : (success === 0 ? "failed" : "partial"),
     error_message: errors.slice(0, 10).join("\n") || null,
+    row_details: rowDetails,
     updated_at: new Date().toISOString(),
   }).eq("id", batch.id);
 

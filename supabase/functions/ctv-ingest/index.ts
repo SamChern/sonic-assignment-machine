@@ -165,6 +165,7 @@ Deno.serve(async (req) => {
 
   let success = 0, failed = 0;
   const errors: string[] = [];
+  const rowDetails: Array<Record<string, unknown>> = [];
 
   for (const row of body.rows) {
     try {

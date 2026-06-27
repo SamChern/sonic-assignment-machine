@@ -320,6 +320,15 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                   {/* Radial chart */}
 
                   <RadialScoreChart categories={source.categories} />
+
+                  {audioSourceId && (
+                    <FeedbackPopover
+                      audioSourceId={audioSourceId}
+                      currentScores={Object.fromEntries(
+                        source.categories.map(c => [c.name.toLowerCase(), c.score])
+                      )}
+                    />
+                  )}
                 </div>
 
                 {/* Right side: Category cards */}

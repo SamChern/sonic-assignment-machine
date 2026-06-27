@@ -46,6 +46,7 @@ const Index = () => {
   } | null>(null);
   const [results, setResults] = useState<{ sources: any[]; images: any[] } | null>(null);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("select");
   const [sourcesExpanded, setSourcesExpanded] = useState(true);

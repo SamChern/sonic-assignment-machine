@@ -258,6 +258,18 @@ const Index = () => {
     setSelectedSources([]);
   };
 
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev =>
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
+  };
+
+  const clearCategoryFilters = () => {
+    setSelectedCategories([]);
+  };
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}

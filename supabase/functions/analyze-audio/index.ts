@@ -292,10 +292,14 @@ Deno.serve(async (req) => {
 
       for (const batch of batches) {
         const sourcesList = batch
-          .map(s => s.acoustic_profile
-            ? `- ${s.name}\n    acoustic: ${s.acoustic_profile}`
-            : `- ${s.name}`)
+          .map(s => {
+            const lines = [`- ${s.name}`];
+            if (s.acoustic_profile) lines.push(`    acoustic: ${s.acoustic_profile}`);
+            if (s.taxonomy_context) lines.push(`    taxonomy: ${s.taxonomy_context}`);
+            return lines.join('\n');
+          })
           .join('\n');
+
         
         const systemPrompt = `You are an expert audio semantic analyzer implementing the SemanticAC framework.
 

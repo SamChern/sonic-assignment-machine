@@ -342,7 +342,13 @@ OTHER RULES:
   sophistication), Communication (clear dominant pitches + strong key =
   more direct/accessible), and Contextual (tempo + flatness + key stability)
   scores. Do not echo the raw numbers in descriptions — translate them into
-  qualitative language.`;
+  qualitative language.
+- When a "taxonomy:" line is provided, it lists CTV content tags plus prior
+  mean ± std for each of the 6 categories learned from past analyses of
+  similarly tagged sources. Treat those priors as a Bayesian anchor — your
+  scores should stay within ~1 std of the prior unless the acoustics clearly
+  contradict it. This keeps CTV scores comparable across the catalog.`;
+
 
         const userPrompt = `Analyze these ${batch.length} audio source${batch.length > 1 ? 's' : ''}:
 

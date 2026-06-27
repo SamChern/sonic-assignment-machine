@@ -325,14 +325,12 @@ const Index = () => {
         
         <div className="relative mx-auto max-w-7xl px-6 py-8 sm:py-12">
           <div className="text-center">
-            <div className="relative inline-block">
-              <img
-                src={sonicSimLogo}
-                alt="SonicSIM"
-                className="mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain select-none"
-                draggable={false}
-              />
-            </div>
+            <img
+              src={sonicSimLogo}
+              alt="SonicSIM"
+              className="mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain select-none"
+              draggable={false}
+            />
           </div>
 
           

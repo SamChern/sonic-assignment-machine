@@ -79,7 +79,7 @@ export default function AdminCTV() {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(25);
-    setBatches((data ?? []) as Batch[]);
+    setBatches((data ?? []) as unknown as Batch[]);
   };
 
   useEffect(() => { loadBatches(); }, []);

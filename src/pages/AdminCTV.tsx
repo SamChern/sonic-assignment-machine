@@ -68,6 +68,7 @@ export default function AdminCTV() {
   const [submitting, setSubmitting] = useState(false);
   const [recalibrating, setRecalibrating] = useState(false);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!loading && (!user || !isAdmin)) navigate("/");

@@ -15,7 +15,9 @@ interface AudioSource {
   audio_source_id?: string;
   spotify_id?: string; // For cache key lookup
   acoustic_profile?: string; // Optional pre-formatted librosa summary
+  taxonomy_context?: string; // Optional CTV taxonomy + calibration prior block
 }
+
 
 // Format a compact "Acoustic profile" line from a librosa_features blob,
 // suitable for injection into the LLM prompt without ballooning tokens.

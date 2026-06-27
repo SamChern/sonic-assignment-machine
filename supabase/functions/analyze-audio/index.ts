@@ -15,7 +15,9 @@ interface AudioSource {
   audio_source_id?: string;
   spotify_id?: string; // For cache key lookup
   acoustic_profile?: string; // Optional pre-formatted librosa summary
+  taxonomy_context?: string; // Optional CTV taxonomy + calibration prior block
 }
+
 
 // Format a compact "Acoustic profile" line from a librosa_features blob,
 // suitable for injection into the LLM prompt without ballooning tokens.
@@ -290,10 +292,14 @@ Deno.serve(async (req) => {
 
       for (const batch of batches) {
         const sourcesList = batch
-          .map(s => s.acoustic_profile
-            ? `- ${s.name}\n    acoustic: ${s.acoustic_profile}`
-            : `- ${s.name}`)
+          .map(s => {
+            const lines = [`- ${s.name}`];
+            if (s.acoustic_profile) lines.push(`    acoustic: ${s.acoustic_profile}`);
+            if (s.taxonomy_context) lines.push(`    taxonomy: ${s.taxonomy_context}`);
+            return lines.join('\n');
+          })
           .join('\n');
+
         
         const systemPrompt = `You are an expert audio semantic analyzer implementing the SemanticAC framework.
 
@@ -336,7 +342,13 @@ OTHER RULES:
   sophistication), Communication (clear dominant pitches + strong key =
   more direct/accessible), and Contextual (tempo + flatness + key stability)
   scores. Do not echo the raw numbers in descriptions — translate them into
-  qualitative language.`;
+  qualitative language.
+- When a "taxonomy:" line is provided, it lists CTV content tags plus prior
+  mean ± std for each of the 6 categories learned from past analyses of
+  similarly tagged sources. Treat those priors as a Bayesian anchor — your
+  scores should stay within ~1 std of the prior unless the acoustics clearly
+  contradict it. This keeps CTV scores comparable across the catalog.`;
+
 
         const userPrompt = `Analyze these ${batch.length} audio source${batch.length > 1 ? 's' : ''}:
 

@@ -14,17 +14,58 @@ export type Database = {
   }
   public: {
     Tables: {
+      audio_source_tags: {
+        Row: {
+          audio_source_id: string
+          created_at: string
+          id: string
+          node_id: string
+          weight: number
+        }
+        Insert: {
+          audio_source_id: string
+          created_at?: string
+          id?: string
+          node_id: string
+          weight?: number
+        }
+        Update: {
+          audio_source_id?: string
+          created_at?: string
+          id?: string
+          node_id?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audio_source_tags_audio_source_id_fkey"
+            columns: ["audio_source_id"]
+            isOneToOne: false
+            referencedRelation: "audio_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audio_source_tags_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "taxonomy_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audio_sources: {
         Row: {
           album_image: string | null
           album_name: string | null
           artists: string[] | null
           created_at: string
+          ctv_metadata: Json | null
           file_url: string | null
           id: string
           librosa_features: Json | null
           name: string
           preview_url: string | null
+          profile_embedding: string | null
           source_type: string
           spotify_id: string | null
           spotify_url: string | null
@@ -35,11 +76,13 @@ export type Database = {
           album_name?: string | null
           artists?: string[] | null
           created_at?: string
+          ctv_metadata?: Json | null
           file_url?: string | null
           id?: string
           librosa_features?: Json | null
           name: string
           preview_url?: string | null
+          profile_embedding?: string | null
           source_type: string
           spotify_id?: string | null
           spotify_url?: string | null
@@ -50,15 +93,141 @@ export type Database = {
           album_name?: string | null
           artists?: string[] | null
           created_at?: string
+          ctv_metadata?: Json | null
           file_url?: string | null
           id?: string
           librosa_features?: Json | null
           name?: string
           preview_url?: string | null
+          profile_embedding?: string | null
           source_type?: string
           spotify_id?: string | null
           spotify_url?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      category_calibration: {
+        Row: {
+          bias: number
+          category: string
+          id: string
+          m2: number
+          mean_score: number
+          n: number
+          taxonomy_node_id: string
+          updated_at: string
+        }
+        Insert: {
+          bias?: number
+          category: string
+          id?: string
+          m2?: number
+          mean_score?: number
+          n?: number
+          taxonomy_node_id: string
+          updated_at?: string
+        }
+        Update: {
+          bias?: number
+          category?: string
+          id?: string
+          m2?: number
+          mean_score?: number
+          n?: number
+          taxonomy_node_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "category_calibration_taxonomy_node_id_fkey"
+            columns: ["taxonomy_node_id"]
+            isOneToOne: false
+            referencedRelation: "taxonomy_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      category_feedback: {
+        Row: {
+          category: string
+          corrected_score: number | null
+          created_at: string
+          delta: number | null
+          id: string
+          note: string | null
+          rater_user_id: string | null
+          source_analysis_id: string
+        }
+        Insert: {
+          category: string
+          corrected_score?: number | null
+          created_at?: string
+          delta?: number | null
+          id?: string
+          note?: string | null
+          rater_user_id?: string | null
+          source_analysis_id: string
+        }
+        Update: {
+          category?: string
+          corrected_score?: number | null
+          created_at?: string
+          delta?: number | null
+          id?: string
+          note?: string | null
+          rater_user_id?: string | null
+          source_analysis_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "category_feedback_source_analysis_id_fkey"
+            columns: ["source_analysis_id"]
+            isOneToOne: false
+            referencedRelation: "source_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ctv_ingest_batches: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          failed_rows: number
+          feed_name: string
+          file_uri: string | null
+          id: string
+          ingested_by: string | null
+          status: string
+          success_rows: number
+          total_rows: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          failed_rows?: number
+          feed_name: string
+          file_uri?: string | null
+          id?: string
+          ingested_by?: string | null
+          status?: string
+          success_rows?: number
+          total_rows?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          failed_rows?: number
+          feed_name?: string
+          file_uri?: string | null
+          id?: string
+          ingested_by?: string | null
+          status?: string
+          success_rows?: number
+          total_rows?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -286,6 +455,39 @@ export type Database = {
           source_key?: string
           source_name?: string
           source_type?: string
+        }
+        Relationships: []
+      }
+      taxonomy_nodes: {
+        Row: {
+          code: string
+          created_at: string
+          embedding: string | null
+          id: string
+          label: string
+          parent_code: string | null
+          taxonomy_version: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          label: string
+          parent_code?: string | null
+          taxonomy_version?: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          label?: string
+          parent_code?: string | null
+          taxonomy_version?: string
+          updated_at?: string
         }
         Relationships: []
       }

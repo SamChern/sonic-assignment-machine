@@ -8,7 +8,30 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, RefreshCw, Brain } from "lucide-react";
+import { ArrowLeft, Upload, RefreshCw, Brain, ChevronDown, ChevronRight } from "lucide-react";
+
+interface NeighborRow {
+  id: string;
+  name: string;
+  similarity: number;
+  emotional_score: number;
+  cognitive_score: number;
+  social_score: number;
+  communication_score: number;
+  contextual_score: number;
+  artistic_score: number;
+}
+
+interface RowDetail {
+  name: string;
+  status: "ok" | "failed";
+  audio_source_id?: string;
+  tag_codes?: string[];
+  taxonomy_context?: string;
+  neighbors?: NeighborRow[];
+  scores?: Record<string, number>;
+  error?: string;
+}
 
 interface Batch {
   id: string;
@@ -19,6 +42,7 @@ interface Batch {
   failed_rows: number;
   created_at: string;
   error_message: string | null;
+  row_details: RowDetail[] | null;
 }
 
 const SAMPLE = JSON.stringify({

@@ -210,8 +210,34 @@ Deno.serve(async (req) => {
         );
       }
 
-      // 4. Build taxonomy context block
-      const taxonomy_context = await buildTaxonomyContext(supabase, nodeIds);
+      // 4. Build taxonomy context block (priors from calibration)
+      let taxonomy_context = await buildTaxonomyContext(supabase, nodeIds);
+
+      // 4b. kNN warm-start: embed a query profile from name+tags, find nearest
+      // historical sources, append their score summaries to the taxonomy context.
+      const queryText =
+        `name: ${row.name}; tags: ${(row.tags ?? []).map(t => t.code).join(",")}`;
+      const queryEmbedding = await embed(queryText);
+      let neighborSummary = "";
+      if (queryEmbedding) {
+        const { data: neighbors, error: knnErr } = await supabase.rpc("match_audio_profiles", {
+          query_embedding: queryEmbedding,
+          match_count: 5,
+          exclude_id: audioSourceId,
+        });
+        if (knnErr) {
+          console.warn("kNN match failed:", knnErr.message);
+        } else if (neighbors && neighbors.length) {
+          const lines = neighbors.map((n: any) =>
+            `  - ${n.name} (sim=${Number(n.similarity).toFixed(2)}): ` +
+            `emo=${Math.round(n.emotional_score)} cog=${Math.round(n.cognitive_score)} ` +
+            `soc=${Math.round(n.social_score)} com=${Math.round(n.communication_score)} ` +
+            `ctx=${Math.round(n.contextual_score)} art=${Math.round(n.artistic_score)}`
+          ).join("\n");
+          neighborSummary = `\nnearest_neighbors:\n${lines}`;
+        }
+      }
+      taxonomy_context = `${taxonomy_context}${neighborSummary}`;
 
       // 5. Invoke analyze-audio
       const { data: ana, error: anaErr } = await supabase.functions.invoke("analyze-audio", {
@@ -237,7 +263,7 @@ Deno.serve(async (req) => {
       }
       await updateCalibration(supabase, nodeIds, scoreMap);
 
-      // 7. Generate profile_embedding for kNN warm-start
+      // 7. Generate profile_embedding (post-scoring) for future kNN warm-starts
       const profileText =
         `name: ${row.name}; tags: ${(row.tags ?? []).map(t => t.code).join(",")}; ` +
         `scores: ${CATEGORIES.map(c => `${c}=${scoreMap[c] ?? "?"}`).join(",")}`;

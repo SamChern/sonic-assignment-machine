@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { LibrosaVisuals, ChromaTonnetzPanel } from "@/components/visuals/LibrosaVisuals";
 import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
+import { FeedbackPopover } from "@/components/FeedbackPopover";
 
 interface CategoryScore {
   name: string;
@@ -319,6 +320,15 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                   {/* Radial chart */}
 
                   <RadialScoreChart categories={source.categories} />
+
+                  {audioSourceId && (
+                    <FeedbackPopover
+                      audioSourceId={audioSourceId}
+                      currentScores={Object.fromEntries(
+                        source.categories.map(c => [c.name.toLowerCase(), c.score])
+                      )}
+                    />
+                  )}
                 </div>
 
                 {/* Right side: Category cards */}

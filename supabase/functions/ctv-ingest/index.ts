@@ -220,6 +220,7 @@ Deno.serve(async (req) => {
         `name: ${row.name}; tags: ${(row.tags ?? []).map(t => t.code).join(",")}`;
       const queryEmbedding = await embed(queryText);
       let neighborSummary = "";
+      let neighborsForDebug: any[] = [];
       if (queryEmbedding) {
         const { data: neighbors, error: knnErr } = await supabase.rpc("match_audio_profiles", {
           query_embedding: queryEmbedding,
@@ -229,6 +230,7 @@ Deno.serve(async (req) => {
         if (knnErr) {
           console.warn("kNN match failed:", knnErr.message);
         } else if (neighbors && neighbors.length) {
+          neighborsForDebug = neighbors;
           const lines = neighbors.map((n: any) =>
             `  - ${n.name} (sim=${Number(n.similarity).toFixed(2)}): ` +
             `emo=${Math.round(n.emotional_score)} cog=${Math.round(n.cognitive_score)} ` +

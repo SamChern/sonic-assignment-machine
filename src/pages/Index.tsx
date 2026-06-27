@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AudioUploader } from "@/components/AudioUploader";
-import { AnalysisResults } from "@/components/AnalysisResults";
+import { AnalysisResults, predictCategory, getCategoryStyles, getCategoryIcon } from "@/components/AnalysisResults";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,6 +27,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useEC2Api } from "@/hooks/useEC2Api";
 import { TasteNeighbors } from "@/components/TasteNeighbors";
 import { useFingerprints } from "@/hooks/useFingerprints";
+import { cn } from "@/lib/utils";
 
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();

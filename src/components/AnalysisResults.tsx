@@ -72,7 +72,7 @@ const categoryColors: Record<string, { bg: string; border: string; text: string;
   },
 };
 
-const getCategoryStyles = (categoryName: string) => {
+export const getCategoryStyles = (categoryName: string) => {
   return categoryColors[categoryName.toLowerCase()] || categoryColors.emotional;
 };
 

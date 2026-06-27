@@ -1,0 +1,1 @@
+ALTER TABLE public.ctv_ingest_batches ADD COLUMN IF NOT EXISTS row_details jsonb NOT NULL DEFAULT '[]'::jsonb;

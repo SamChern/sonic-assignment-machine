@@ -198,6 +198,7 @@ export type Database = {
           file_uri: string | null
           id: string
           ingested_by: string | null
+          row_details: Json
           status: string
           success_rows: number
           total_rows: number
@@ -211,6 +212,7 @@ export type Database = {
           file_uri?: string | null
           id?: string
           ingested_by?: string | null
+          row_details?: Json
           status?: string
           success_rows?: number
           total_rows?: number
@@ -224,6 +226,7 @@ export type Database = {
           file_uri?: string | null
           id?: string
           ingested_by?: string | null
+          row_details?: Json
           status?: string
           success_rows?: number
           total_rows?: number

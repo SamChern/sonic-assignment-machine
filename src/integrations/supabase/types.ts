@@ -160,6 +160,7 @@ export type Database = {
           artistic_desc: string | null
           artistic_score: number
           audio_source_id: string | null
+          category: string | null
           cognitive_desc: string | null
           cognitive_score: number
           communication_desc: string | null
@@ -180,6 +181,7 @@ export type Database = {
           artistic_desc?: string | null
           artistic_score: number
           audio_source_id?: string | null
+          category?: string | null
           cognitive_desc?: string | null
           cognitive_score: number
           communication_desc?: string | null
@@ -200,6 +202,7 @@ export type Database = {
           artistic_desc?: string | null
           artistic_score?: number
           audio_source_id?: string | null
+          category?: string | null
           cognitive_desc?: string | null
           cognitive_score?: number
           communication_desc?: string | null

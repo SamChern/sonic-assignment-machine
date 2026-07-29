@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { LibrosaVisuals, ChromaTonnetzPanel } from "@/components/visuals/LibrosaVisuals";
 import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 import { FeedbackPopover } from "@/components/FeedbackPopover";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CategoryScore {
   name: string;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { AudioUploader } from "@/components/AudioUploader";
 import { AnalysisResults, predictCategory, getCategoryStyles, getCategoryIcon } from "@/components/AnalysisResults";
@@ -51,6 +51,23 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState<string>("select");
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [showGetStartedDialog, setShowGetStartedDialog] = useState(false);
+  const logoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const fadeEnd = 280;
+      const progress = Math.min(1, Math.max(0, scrollY / fadeEnd));
+      if (logoRef.current) {
+        logoRef.current.style.setProperty('--logo-opacity', String(1 - progress * 0.92));
+        logoRef.current.style.setProperty('--logo-blur', `${progress * 3}px`);
+        logoRef.current.style.setProperty('--logo-scale', String(1 - progress * 0.04));
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleGetStarted = () => {
     setShowGetStartedDialog(false);
@@ -337,11 +354,12 @@ const Index = () => {
         </div>
         
         <div className="relative mx-auto max-w-7xl px-6 py-8 sm:py-12">
-          <div className="text-center">
+          <div className="text-center" ref={logoRef}>
             <img
               src={sonicSimLogo}
               alt="SonicSIM"
-              className="mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain select-none brightness-[1.2]"
+              className="mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain select-none transition-all duration-75 ease-out will-change-[opacity,transform,filter]"
+              style={{ opacity: 'var(--logo-opacity, 1)', filter: 'brightness(1.2) blur(var(--logo-blur, 0px))', transform: 'scale(var(--logo-scale, 1))' }}
               draggable={false}
             />
           </div>

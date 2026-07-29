@@ -157,11 +157,18 @@ export function FeedbackPopover({ audioSourceId, currentScores }: Props) {
               className="text-xs min-h-[60px]"
             />
             <div className="flex justify-end gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              <Button size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={submitting}>
                 Cancel
               </Button>
               <Button size="sm" onClick={submit} disabled={submitting}>
-                {submitting ? "Saving…" : "Submit"}
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                    Saving…
+                  </>
+                ) : (
+                  "Submit"
+                )}
               </Button>
             </div>
           </div>

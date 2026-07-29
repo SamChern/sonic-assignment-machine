@@ -17,9 +17,10 @@ type Cat = typeof CATS[number];
 interface Props {
   audioSourceId: string;
   currentScores: Record<string, number>; // keyed by lowercase category name
+  onSubmitted?: () => void | Promise<void>;
 }
 
-export function FeedbackPopover({ audioSourceId, currentScores }: Props) {
+export function FeedbackPopover({ audioSourceId, currentScores, onSubmitted }: Props) {
   const { user, isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -85,8 +86,15 @@ export function FeedbackPopover({ audioSourceId, currentScores }: Props) {
     try {
       const { error } = await supabase.from("category_feedback").insert(rows);
       if (error) throw error;
-      toast.success(`Saved ${rows.length} correction${rows.length === 1 ? "" : "s"}`);
+      // Apply the corrections to calibration so the card reflects recalibrated results
+      const { error: recalErr } = await supabase.functions.invoke("recalibrate-categories");
+      if (recalErr) {
+        toast.warning("Saved, but recalibration failed to run");
+      } else {
+        toast.success(`Saved ${rows.length} correction${rows.length === 1 ? "" : "s"}`);
+      }
       setOpen(false);
+      await onSubmitted?.();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save feedback");
     } finally {

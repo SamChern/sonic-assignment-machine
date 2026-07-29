@@ -1,11 +1,12 @@
 import { Card } from "@/components/ui/card";
 import { Brain, Users, Heart, MessageSquare, Music, MapPin, Waves } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { LibrosaVisuals, ChromaTonnetzPanel } from "@/components/visuals/LibrosaVisuals";
 import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 import { FeedbackPopover } from "@/components/FeedbackPopover";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CategoryScore {
   name: string;
@@ -202,6 +203,35 @@ const AnimatedScoreBar = ({ score, categoryName, delay }: { score: number; categ
 };
 
 export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourceIds = [] }: AnalysisResultsProps) => {
+  // Locally refreshed scores per audio source (after admin feedback submissions)
+  const [overrides, setOverrides] = useState<Record<string, CategoryScore[]>>({});
+  const [refreshKeys, setRefreshKeys] = useState<Record<string, number>>({});
+
+  const refreshSource = async (audioSourceId: string, fallback: CategoryScore[]) => {
+    const { data } = await supabase
+      .from("source_analyses")
+      .select(
+        "emotional_score,cognitive_score,social_score,communication_score,contextual_score,artistic_score,emotional_desc,cognitive_desc,social_desc,communication_desc,contextual_desc,artistic_desc"
+      )
+      .eq("audio_source_id", audioSourceId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) {
+      const next: CategoryScore[] = [
+        { name: "Emotional", score: Number(data.emotional_score), description: data.emotional_desc ?? "" },
+        { name: "Cognitive", score: Number(data.cognitive_score), description: data.cognitive_desc ?? "" },
+        { name: "Social", score: Number(data.social_score), description: data.social_desc ?? "" },
+        { name: "Communication", score: Number(data.communication_score), description: data.communication_desc ?? "" },
+        { name: "Contextual", score: Number(data.contextual_score), description: data.contextual_desc ?? "" },
+        { name: "Artistic", score: Number(data.artistic_score), description: data.artistic_desc ?? "" },
+      ].map((c, i) => ({ ...c, description: c.description || fallback[i]?.description || "" }));
+      setOverrides(s => ({ ...s, [audioSourceId]: next }));
+    }
+    setRefreshKeys(s => ({ ...s, [audioSourceId]: (s[audioSourceId] ?? 0) + 1 }));
+  };
+
   if (isAnalyzing) {
     return (
       <Card className="p-8 shadow-elegant border-primary/20">
@@ -264,6 +294,10 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
         {results.map((source, sourceIndex) => {
           const imageUrl = getSourceImage(source.name);
           const audioSourceId = getSourceId(source.name);
+          const categories =
+            (audioSourceId ? overrides[audioSourceId] : undefined) ?? source.categories;
+          const refreshKey = audioSourceId ? refreshKeys[audioSourceId] ?? 0 : 0;
+
 
           return (
             <Card
@@ -297,7 +331,7 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
 
                   {/* Predicted categorical ontology label */}
                   {(() => {
-                    const top = predictCategory(source.categories);
+                    const top = predictCategory(categories);
                     if (!top) return null;
                     const styles = getCategoryStyles(top.name);
                     return (
@@ -319,21 +353,22 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
 
                   {/* Radial chart */}
 
-                  <RadialScoreChart categories={source.categories} />
+                  <RadialScoreChart key={`radial-${refreshKey}`} categories={categories} />
 
                   {audioSourceId && (
                     <FeedbackPopover
                       audioSourceId={audioSourceId}
                       currentScores={Object.fromEntries(
-                        source.categories.map(c => [c.name.toLowerCase(), c.score])
+                        categories.map(c => [c.name.toLowerCase(), c.score])
                       )}
+                      onSubmitted={() => refreshSource(audioSourceId, categories)}
                     />
                   )}
                 </div>
 
                 {/* Right side: Category cards */}
                 <div className="flex-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {source.categories.map((category, catIndex) => {
+                  {categories.map((category, catIndex) => {
                     const styles = getCategoryStyles(category.name);
                     
                     return (
@@ -389,6 +424,9 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                   })}
                 </div>
               </div>
+              {audioSourceId && (
+                <NeighborContext audioSourceId={audioSourceId} refreshKey={refreshKey} />
+              )}
               {audioSourceId && <HarmonicPreview audioSourceId={audioSourceId} />}
               {audioSourceId && <AcousticVisualsToggle audioSourceId={audioSourceId} />}
             </Card>
@@ -476,6 +514,67 @@ function HarmonicPreview({ audioSourceId }: { audioSourceId: string }) {
         </span>
       </div>
       <ChromaTonnetzPanel features={features} />
+    </div>
+  );
+}
+
+// Nearest-neighbor context for a source: re-queried whenever refreshKey changes
+// (e.g. after admin feedback is submitted and calibration re-runs).
+function NeighborContext({ audioSourceId, refreshKey }: { audioSourceId: string; refreshKey: number }) {
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data: src } = await supabase
+        .from("audio_sources")
+        .select("profile_embedding")
+        .eq("id", audioSourceId)
+        .maybeSingle();
+      const emb = (src as any)?.profile_embedding;
+      if (!emb) {
+        if (!cancelled) { setRows(null); setLoading(false); }
+        return;
+      }
+      const { data } = await supabase.rpc("match_audio_profiles", {
+        query_embedding: emb,
+        match_count: 5,
+        exclude_id: audioSourceId,
+      });
+      if (!cancelled) {
+        setRows((data as any[]) ?? []);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [audioSourceId, refreshKey]);
+
+  if (!loading && (!rows || rows.length === 0)) return null;
+
+  return (
+    <div className="mt-6 border-t border-border/50 pt-4">
+      <h4 className="text-sm font-semibold mb-2">Neighbor context</h4>
+      {loading ? (
+        <p className="text-xs text-muted-foreground">Refreshing neighbors…</p>
+      ) : (
+        <div className="space-y-1">
+          {rows!.map((n) => (
+            <div key={n.id} className="flex items-center gap-3 text-xs">
+              <span className="flex-1 truncate">{n.name}</span>
+              <span className="tabular-nums text-muted-foreground">
+                {(Number(n.similarity) * 100).toFixed(0)}%
+              </span>
+              <span className="tabular-nums text-muted-foreground hidden sm:inline">
+                {[n.emotional_score, n.cognitive_score, n.social_score, n.communication_score, n.contextual_score, n.artistic_score]
+                  .map((s) => Math.round(Number(s)))
+                  .join(" · ")}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

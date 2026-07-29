@@ -331,7 +331,7 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
 
                   {/* Predicted categorical ontology label */}
                   {(() => {
-                    const top = predictCategory(source.categories);
+                    const top = predictCategory(categories);
                     if (!top) return null;
                     const styles = getCategoryStyles(top.name);
                     return (
@@ -353,21 +353,22 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
 
                   {/* Radial chart */}
 
-                  <RadialScoreChart categories={source.categories} />
+                  <RadialScoreChart key={`radial-${refreshKey}`} categories={categories} />
 
                   {audioSourceId && (
                     <FeedbackPopover
                       audioSourceId={audioSourceId}
                       currentScores={Object.fromEntries(
-                        source.categories.map(c => [c.name.toLowerCase(), c.score])
+                        categories.map(c => [c.name.toLowerCase(), c.score])
                       )}
+                      onSubmitted={() => refreshSource(audioSourceId, categories)}
                     />
                   )}
                 </div>
 
                 {/* Right side: Category cards */}
                 <div className="flex-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {source.categories.map((category, catIndex) => {
+                  {categories.map((category, catIndex) => {
                     const styles = getCategoryStyles(category.name);
                     
                     return (
@@ -423,6 +424,9 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                   })}
                 </div>
               </div>
+              {audioSourceId && (
+                <NeighborContext audioSourceId={audioSourceId} refreshKey={refreshKey} />
+              )}
               {audioSourceId && <HarmonicPreview audioSourceId={audioSourceId} />}
               {audioSourceId && <AcousticVisualsToggle audioSourceId={audioSourceId} />}
             </Card>

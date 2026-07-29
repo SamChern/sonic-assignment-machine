@@ -51,6 +51,23 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState<string>("select");
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [showGetStartedDialog, setShowGetStartedDialog] = useState(false);
+  const logoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const fadeEnd = 280;
+      const progress = Math.min(1, Math.max(0, scrollY / fadeEnd));
+      if (logoRef.current) {
+        logoRef.current.style.setProperty('--logo-opacity', String(1 - progress * 0.92));
+        logoRef.current.style.setProperty('--logo-blur', `${progress * 3}px`);
+        logoRef.current.style.setProperty('--logo-scale', String(1 - progress * 0.04));
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleGetStarted = () => {
     setShowGetStartedDialog(false);

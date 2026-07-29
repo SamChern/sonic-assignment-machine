@@ -52,6 +52,7 @@ const Index = () => {
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [showGetStartedDialog, setShowGetStartedDialog] = useState(false);
   const logoRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -63,6 +64,11 @@ const Index = () => {
         logoRef.current.style.setProperty('--logo-overlay-opacity', String(progress * 0.92));
         logoRef.current.style.setProperty('--logo-blur', `${progress * 3}px`);
         logoRef.current.style.setProperty('--logo-scale', String(1 - progress * 0.04));
+      }
+      if (headerRef.current) {
+        headerRef.current.style.setProperty('--header-bg-opacity', String(progress * 0.85));
+        headerRef.current.style.setProperty('--header-border-opacity', String(progress * 0.6));
+        headerRef.current.style.setProperty('--header-logo-opacity', String(progress));
       }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -290,21 +296,27 @@ const Index = () => {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden">
-        <div 
-          className="absolute inset-0 opacity-85"
-          style={{
-            backgroundImage: `url(${heroBackground})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            filter: "grayscale(60%) brightness(0.7)",
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
+      {/* Sticky Header */}
+      <header
+        ref={headerRef}
+        className="fixed top-0 left-0 right-0 z-50 px-6 py-3 flex items-center justify-between backdrop-blur-md border-b transition-all duration-150 ease-out will-change-[background-color,border-color]"
+        style={{
+          backgroundColor: 'hsl(var(--background) / var(--header-bg-opacity, 0))',
+          borderColor: 'hsl(var(--border) / var(--header-border-opacity, 0))',
+        }}
+      >
+        <div className="relative flex items-center">
+          <img
+            src={sonicSimLogo}
+            alt="SonicSIM"
+            className="h-8 sm:h-9 w-auto object-contain select-none transition-opacity duration-150 ease-out will-change-opacity"
+            style={{ opacity: 'var(--header-logo-opacity, 0)', filter: 'brightness(1.2)' }}
+            draggable={false}
+          />
+        </div>
         
         {/* Auth Controls */}
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-3">
+        <div className="flex items-center gap-3">
           {/* EC2 Health Check Button - Admin Only */}
           {isAdmin && (
             <Button 
@@ -353,8 +365,22 @@ const Index = () => {
             </Link>
           )}
         </div>
+      </header>
+
+      {/* Hero Section */}
+      <div className="relative overflow-hidden">
+        <div 
+          className="absolute inset-0 opacity-85"
+          style={{
+            backgroundImage: `url(${heroBackground})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            filter: "grayscale(60%) brightness(0.7)",
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
         
-        <div className="relative mx-auto max-w-7xl px-6 py-8 sm:py-12">
+        <div className="relative mx-auto max-w-7xl px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
           <div className="text-center" ref={logoRef}>
             <div className="relative inline-block">
               <img

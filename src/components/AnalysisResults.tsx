@@ -294,6 +294,10 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
         {results.map((source, sourceIndex) => {
           const imageUrl = getSourceImage(source.name);
           const audioSourceId = getSourceId(source.name);
+          const categories =
+            (audioSourceId ? overrides[audioSourceId] : undefined) ?? source.categories;
+          const refreshKey = audioSourceId ? refreshKeys[audioSourceId] ?? 0 : 0;
+
 
           return (
             <Card

@@ -52,6 +52,7 @@ const Index = () => {
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [showGetStartedDialog, setShowGetStartedDialog] = useState(false);
   const logoRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -63,6 +64,11 @@ const Index = () => {
         logoRef.current.style.setProperty('--logo-overlay-opacity', String(progress * 0.92));
         logoRef.current.style.setProperty('--logo-blur', `${progress * 3}px`);
         logoRef.current.style.setProperty('--logo-scale', String(1 - progress * 0.04));
+      }
+      if (headerRef.current) {
+        headerRef.current.style.setProperty('--header-bg-opacity', String(progress * 0.85));
+        headerRef.current.style.setProperty('--header-border-opacity', String(progress * 0.6));
+        headerRef.current.style.setProperty('--header-logo-opacity', String(progress));
       }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });

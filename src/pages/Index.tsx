@@ -355,13 +355,19 @@ const Index = () => {
         
         <div className="relative mx-auto max-w-7xl px-6 py-8 sm:py-12">
           <div className="text-center" ref={logoRef}>
-            <img
-              src={sonicSimLogo}
-              alt="SonicSIM"
-              className="mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain select-none transition-all duration-75 ease-out will-change-[opacity,transform,filter]"
-              style={{ opacity: 'var(--logo-opacity, 1)', filter: 'brightness(1.2) blur(var(--logo-blur, 0px))', transform: 'scale(var(--logo-scale, 1))' }}
-              draggable={false}
-            />
+            <div className="relative inline-block">
+              <img
+                src={sonicSimLogo}
+                alt="SonicSIM"
+                className="mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain select-none transition-all duration-75 ease-out will-change-[opacity,transform,filter]"
+                style={{ opacity: 'var(--logo-opacity, 1)', filter: 'brightness(1.2) blur(var(--logo-blur, 0px))', transform: 'scale(var(--logo-scale, 1))' }}
+                draggable={false}
+              />
+              <div
+                className="absolute inset-0 bg-background pointer-events-none transition-opacity duration-75 ease-out will-change-opacity"
+                style={{ opacity: 'var(--logo-overlay-opacity, 0)' }}
+              />
+            </div>
           </div>
 
           

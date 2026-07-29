@@ -202,6 +202,35 @@ const AnimatedScoreBar = ({ score, categoryName, delay }: { score: number; categ
 };
 
 export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourceIds = [] }: AnalysisResultsProps) => {
+  // Locally refreshed scores per audio source (after admin feedback submissions)
+  const [overrides, setOverrides] = useState<Record<string, CategoryScore[]>>({});
+  const [refreshKeys, setRefreshKeys] = useState<Record<string, number>>({});
+
+  const refreshSource = async (audioSourceId: string, fallback: CategoryScore[]) => {
+    const { data } = await supabase
+      .from("source_analyses")
+      .select(
+        "emotional_score,cognitive_score,social_score,communication_score,contextual_score,artistic_score,emotional_desc,cognitive_desc,social_desc,communication_desc,contextual_desc,artistic_desc"
+      )
+      .eq("audio_source_id", audioSourceId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) {
+      const next: CategoryScore[] = [
+        { name: "Emotional", score: Number(data.emotional_score), description: data.emotional_desc ?? "" },
+        { name: "Cognitive", score: Number(data.cognitive_score), description: data.cognitive_desc ?? "" },
+        { name: "Social", score: Number(data.social_score), description: data.social_desc ?? "" },
+        { name: "Communication", score: Number(data.communication_score), description: data.communication_desc ?? "" },
+        { name: "Contextual", score: Number(data.contextual_score), description: data.contextual_desc ?? "" },
+        { name: "Artistic", score: Number(data.artistic_score), description: data.artistic_desc ?? "" },
+      ].map((c, i) => ({ ...c, description: c.description || fallback[i]?.description || "" }));
+      setOverrides(s => ({ ...s, [audioSourceId]: next }));
+    }
+    setRefreshKeys(s => ({ ...s, [audioSourceId]: (s[audioSourceId] ?? 0) + 1 }));
+  };
+
   if (isAnalyzing) {
     return (
       <Card className="p-8 shadow-elegant border-primary/20">

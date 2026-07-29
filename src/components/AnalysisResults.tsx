@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Brain, Users, Heart, MessageSquare, Music, MapPin, Waves } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { LibrosaVisuals, ChromaTonnetzPanel } from "@/components/visuals/LibrosaVisuals";
 import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
@@ -514,6 +514,67 @@ function HarmonicPreview({ audioSourceId }: { audioSourceId: string }) {
         </span>
       </div>
       <ChromaTonnetzPanel features={features} />
+    </div>
+  );
+}
+
+// Nearest-neighbor context for a source: re-queried whenever refreshKey changes
+// (e.g. after admin feedback is submitted and calibration re-runs).
+function NeighborContext({ audioSourceId, refreshKey }: { audioSourceId: string; refreshKey: number }) {
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data: src } = await supabase
+        .from("audio_sources")
+        .select("profile_embedding")
+        .eq("id", audioSourceId)
+        .maybeSingle();
+      const emb = (src as any)?.profile_embedding;
+      if (!emb) {
+        if (!cancelled) { setRows(null); setLoading(false); }
+        return;
+      }
+      const { data } = await supabase.rpc("match_audio_profiles", {
+        query_embedding: emb,
+        match_count: 5,
+        exclude_id: audioSourceId,
+      });
+      if (!cancelled) {
+        setRows((data as any[]) ?? []);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [audioSourceId, refreshKey]);
+
+  if (!loading && (!rows || rows.length === 0)) return null;
+
+  return (
+    <div className="mt-6 border-t border-border/50 pt-4">
+      <h4 className="text-sm font-semibold mb-2">Neighbor context</h4>
+      {loading ? (
+        <p className="text-xs text-muted-foreground">Refreshing neighbors…</p>
+      ) : (
+        <div className="space-y-1">
+          {rows!.map((n) => (
+            <div key={n.id} className="flex items-center gap-3 text-xs">
+              <span className="flex-1 truncate">{n.name}</span>
+              <span className="tabular-nums text-muted-foreground">
+                {(Number(n.similarity) * 100).toFixed(0)}%
+              </span>
+              <span className="tabular-nums text-muted-foreground hidden sm:inline">
+                {[n.emotional_score, n.cognitive_score, n.social_score, n.communication_score, n.contextual_score, n.artistic_score]
+                  .map((s) => Math.round(Number(s)))
+                  .join(" · ")}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

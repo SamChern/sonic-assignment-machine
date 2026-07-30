@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ArrowLeft, Upload, RefreshCw, Brain, ChevronDown, ChevronRight } from "lucide-react";
+import { LibrosaHealthPanel } from "@/components/LibrosaHealthPanel";
+
 
 interface NeighborRow {
   id: string;

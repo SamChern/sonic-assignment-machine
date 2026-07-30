@@ -139,17 +139,11 @@ export async function readCache(
   if (!data) return { status: "miss" };
 
   if (data.status === "ready" && data.features) {
-    await admin.rpc("noop").catch(() => {});
-    await admin
-      .from("librosa_cache")
-      .update({ hit_count: undefined })
-      .eq("cache_key", cacheKey)
-      .then(() => {})
-      .catch(() => {});
-    // hit accounting handled by bumpHit (kept separate so a failure here can
-    // never block serving a valid cached result)
+    // Hit accounting is fire-and-forget so it can never block serving a valid
+    // cached result.
     bumpHit(admin, cacheKey);
     return { status: "ready", features: data.features as Record<string, unknown> };
+
   }
 
   if (data.status === "pending") {

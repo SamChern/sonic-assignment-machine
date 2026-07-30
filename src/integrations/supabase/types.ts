@@ -715,6 +715,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_analysis_jobs: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          audio_source_id: string | null
+          cache_key: string
+          created_at: string
+          finished_at: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          params: Json
+          priority: number
+          started_at: string | null
+          status: string
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "analysis_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

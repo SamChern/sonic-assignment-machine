@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      analysis_jobs: {
+        Row: {
+          attempts: number
+          audio_source_id: string | null
+          cache_key: string
+          created_at: string
+          finished_at: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          params: Json
+          priority: number
+          started_at: string | null
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          audio_source_id?: string | null
+          cache_key: string
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          last_error?: string | null
+          params?: Json
+          priority?: number
+          started_at?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          audio_source_id?: string | null
+          cache_key?: string
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          last_error?: string | null
+          params?: Json
+          priority?: number
+          started_at?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       audio_source_tags: {
         Row: {
           audio_source_id: string
@@ -57,6 +105,8 @@ export type Database = {
         Row: {
           album_image: string | null
           album_name: string | null
+          analysis_error: string | null
+          analysis_status: string
           artists: string[] | null
           created_at: string
           ctv_metadata: Json | null
@@ -74,6 +124,8 @@ export type Database = {
         Insert: {
           album_image?: string | null
           album_name?: string | null
+          analysis_error?: string | null
+          analysis_status?: string
           artists?: string[] | null
           created_at?: string
           ctv_metadata?: Json | null
@@ -91,6 +143,8 @@ export type Database = {
         Update: {
           album_image?: string | null
           album_name?: string | null
+          analysis_error?: string | null
+          analysis_status?: string
           artists?: string[] | null
           created_at?: string
           ctv_metadata?: Json | null
@@ -294,6 +348,81 @@ export type Database = {
           success?: boolean
           tested_at?: string
           tested_by?: string | null
+        }
+        Relationships: []
+      }
+      librosa_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          error_message: string | null
+          features: Json | null
+          hit_count: number
+          last_hit_at: string | null
+          params: Json
+          ready_at: string | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          error_message?: string | null
+          features?: Json | null
+          hit_count?: number
+          last_hit_at?: string | null
+          params?: Json
+          ready_at?: string | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          error_message?: string | null
+          features?: Json | null
+          hit_count?: number
+          last_hit_at?: string | null
+          params?: Json
+          ready_at?: string | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      librosa_call_log: {
+        Row: {
+          audio_source_id: string | null
+          cache_hit: boolean
+          cache_key: string | null
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          http_status: number | null
+          id: string
+          outcome: string
+        }
+        Insert: {
+          audio_source_id?: string | null
+          cache_hit?: boolean
+          cache_key?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          outcome: string
+        }
+        Update: {
+          audio_source_id?: string | null
+          cache_hit?: boolean
+          cache_key?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          outcome?: string
         }
         Relationships: []
       }
@@ -586,6 +715,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_analysis_jobs: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          audio_source_id: string | null
+          cache_key: string
+          created_at: string
+          finished_at: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          params: Json
+          priority: number
+          started_at: string | null
+          status: string
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "analysis_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

@@ -471,7 +471,16 @@ export const getCategoryIcon = (categoryName: string) => {
 // Only fetches the cached librosa_features blob when the user opens it.
 function AcousticVisualsToggle({ audioSourceId }: { audioSourceId: string }) {
   const [open, setOpen] = useState(false);
-  const { features, loading } = useStoredLibrosaFeatures(open ? audioSourceId : null);
+  const { features, loading, status } = useStoredLibrosaFeatures(open ? audioSourceId : null);
+
+  const statusLabel =
+    status === "queued"
+      ? "Queued for analysis…"
+      : status === "processing"
+        ? "Analyzing audio…"
+        : status === "failed"
+          ? "Analysis failed for this source."
+          : null;
 
   return (
     <div className="mt-6 border-t border-border/50 pt-4">
@@ -487,12 +496,22 @@ function AcousticVisualsToggle({ audioSourceId }: { audioSourceId: string }) {
       {open && (
         <div className="mt-3">
           {loading && <p className="text-xs text-muted-foreground">Loading…</p>}
-          {!loading && !features && (
+          {!loading && !features && statusLabel && (
+            <p
+              className={`text-xs ${
+                status === "failed" ? "text-destructive" : "text-muted-foreground"
+              }`}
+            >
+              {statusLabel}
+            </p>
+          )}
+          {!loading && !features && !statusLabel && (
             <p className="text-xs text-muted-foreground">
-              No librosa features cached for this source yet.
+              No acoustic features cached for this source yet.
             </p>
           )}
           {features && <LibrosaVisuals features={features} />}
+
         </div>
       )}
     </div>

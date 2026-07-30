@@ -1,18 +1,33 @@
-// Proxy to the Librosa REST /analyze_full endpoint, with optional persistence
-// of the resulting feature blob into audio_sources.librosa_features.
+// Proxy to the Librosa REST /analyze_full endpoint, wrapped in a caching,
+// single-flight, concurrency-capped, circuit-broken layer.
 //
-// Body: { audio_url?: string, audio_b64?: string, youtube_url?: string,
-//         audio_source_id?: string, duration?: number,
-//         n_mfcc?: number, max_frames?: number, recurrence_size?: number }
+// The upstream contract is UNCHANGED: same host, same port, same endpoint. All
+// of the machinery here exists to send that service fewer and smaller requests.
+//
+// Body: { audio_url? | audio_b64? | youtube_url?, audio_source_id?,
+//         identity?, profile?: "fast" | "full", async?: boolean,
+//         duration?, n_mfcc?, max_frames?, recurrence_size? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  breakerOpen,
+  callUpstream,
+  claimFlight,
+  computeCacheKey,
+  failFlight,
+  finishFlight,
+  getUpstreamCreds,
+  inflightCount,
+  logCall,
+  MAX_INFLIGHT,
+  readCache,
+  resolveParams,
+} from "../_shared/librosa.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
-
-const INTEGRATION_ID = "librosa_rest";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -43,114 +58,270 @@ Deno.serve(async (req) => {
       return json({ success: false, error: "Body must be JSON" }, 400);
     }
 
-    const sources = ["audio_url", "audio_b64", "youtube_url"].filter(
-      (k) => typeof (body as Record<string, unknown>)[k] === "string" &&
-             ((body as Record<string, string>)[k] ?? "").length > 0,
+    const provided = ["audio_url", "audio_b64", "youtube_url"].filter(
+      (k) =>
+        typeof (body as Record<string, unknown>)[k] === "string" &&
+        ((body as Record<string, string>)[k] ?? "").length > 0,
     );
-    if (sources.length !== 1) {
+    if (provided.length !== 1) {
       return json(
-        { success: false, error: "Provide exactly one of audio_url, audio_b64, youtube_url." },
+        {
+          success: false,
+          error: "Provide exactly one of audio_url, audio_b64, youtube_url.",
+        },
         400,
       );
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // If the caller passed an audio_source_id and we already have a cached
-    // librosa_features blob, return it without hitting EC2.
-    const audioSourceId = typeof body.audio_source_id === "string" ? body.audio_source_id : null;
+    const audioSourceId =
+      typeof body.audio_source_id === "string" ? body.audio_source_id : null;
+    const identity = typeof body.identity === "string" ? body.identity : null;
+    const profile = body.profile === "full" ? "full" : "fast";
+    const wantAsync = body.async === true;
+
+    const params = resolveParams(body as Record<string, unknown>, profile);
+    const input = {
+      audio_url: typeof body.audio_url === "string" ? body.audio_url : undefined,
+      audio_b64: typeof body.audio_b64 === "string" ? body.audio_b64 : undefined,
+      youtube_url:
+        typeof body.youtube_url === "string" ? body.youtube_url : undefined,
+    };
+    const cacheKey = await computeCacheKey(input, params, identity);
+
+    // ---- 1.1 content-addressed cache -------------------------------------
+    const cached = await readCache(admin, cacheKey);
+    if (cached.status === "ready") {
+      logCall(admin, {
+        cache_key: cacheKey,
+        audio_source_id: audioSourceId,
+        outcome: "hit",
+        cache_hit: true,
+      });
+      await persist(admin, audioSourceId, userId, cached.features, "ready");
+      return json({
+        success: true,
+        cached: true,
+        cache_key: cacheKey,
+        result: cached.features,
+      });
+    }
+
+    // Legacy per-row cache: still honour an existing librosa_features blob.
     if (audioSourceId) {
       const { data: existing } = await admin
         .from("audio_sources")
-        .select("librosa_features, user_id")
+        .select("librosa_features")
         .eq("id", audioSourceId)
         .maybeSingle();
       if (existing?.librosa_features) {
-        return json({ success: true, cached: true, result: existing.librosa_features });
+        logCall(admin, {
+          cache_key: cacheKey,
+          audio_source_id: audioSourceId,
+          outcome: "hit",
+          cache_hit: true,
+        });
+        return json({
+          success: true,
+          cached: true,
+          cache_key: cacheKey,
+          result: existing.librosa_features,
+        });
       }
     }
 
-    const { data: credRows, error: credErr } = await admin
-      .from("integration_credentials")
-      .select("field_key, field_value")
-      .eq("integration_id", INTEGRATION_ID);
-    if (credErr) return json({ success: false, error: credErr.message }, 500);
+    // ---- 1.7 circuit breaker ---------------------------------------------
+    if (await breakerOpen(admin)) {
+      logCall(admin, {
+        cache_key: cacheKey,
+        audio_source_id: audioSourceId,
+        outcome: "breaker_open",
+      });
+      const jobId = await enqueue(admin, {
+        cacheKey,
+        audioSourceId,
+        userId,
+        params,
+        input,
+        identity,
+      });
+      await persist(admin, audioSourceId, userId, null, "pending");
+      return json(
+        {
+          success: true,
+          queued: true,
+          degraded: true,
+          job_id: jobId,
+          cache_key: cacheKey,
+          message:
+            "Audio analysis service is unavailable; the job is queued and will run automatically.",
+        },
+        202,
+      );
+    }
 
-    const creds: Record<string, string> = {};
-    for (const r of credRows ?? []) creds[r.field_key] = r.field_value;
+    // ---- 1.2 single flight + 1.3 concurrency cap + 1.4 queue -------------
+    const alreadyRunning = cached.status === "pending";
+    const overCap = (await inflightCount(admin)) >= MAX_INFLIGHT;
 
-    const baseUrl = (creds.LIBROSA_REST_URL || "").replace(/\/+$/, "");
-    const token = creds.LIBROSA_REST_TOKEN;
-    if (!baseUrl || !token) {
+    if (wantAsync || alreadyRunning || overCap) {
+      const jobId = await enqueue(admin, {
+        cacheKey,
+        audioSourceId,
+        userId,
+        params,
+        input,
+        identity,
+      });
+      logCall(admin, {
+        cache_key: cacheKey,
+        audio_source_id: audioSourceId,
+        outcome: alreadyRunning || overCap ? "throttled" : "queued",
+      });
+      await persist(admin, audioSourceId, userId, null, "pending");
+      return json(
+        {
+          success: true,
+          queued: true,
+          job_id: jobId,
+          cache_key: cacheKey,
+          message: alreadyRunning
+            ? "This audio is already being analyzed; results will appear shortly."
+            : "Analysis queued.",
+        },
+        202,
+      );
+    }
+
+    const won = await claimFlight(admin, cacheKey, params);
+    if (!won) {
+      const jobId = await enqueue(admin, {
+        cacheKey,
+        audioSourceId,
+        userId,
+        params,
+        input,
+        identity,
+      });
+      await persist(admin, audioSourceId, userId, null, "pending");
+      return json(
+        { success: true, queued: true, job_id: jobId, cache_key: cacheKey },
+        202,
+      );
+    }
+
+    // ---- upstream call (unchanged endpoint) -------------------------------
+    const creds = await getUpstreamCreds(admin);
+    if (!creds) {
+      await failFlight(admin, cacheKey, "Librosa REST API not configured");
       return json(
         { success: false, error: "Librosa REST API not configured by admin" },
         503,
       );
     }
 
-    // Forward only the fields the upstream expects.
-    const upstreamBody: Record<string, unknown> = {};
-    for (const k of [
-      "audio_url",
-      "audio_b64",
-      "youtube_url",
-      "duration",
-      "n_mfcc",
-      "max_frames",
-      "recurrence_size",
-    ]) {
-      if (k in body) upstreamBody[k] = (body as Record<string, unknown>)[k];
+    await persist(admin, audioSourceId, userId, null, "processing");
+
+    const upstreamBody: Record<string, unknown> = { ...input, ...params };
+    for (const k of Object.keys(upstreamBody)) {
+      if (upstreamBody[k] === undefined) delete upstreamBody[k];
     }
 
-    let resp: Response;
-    let text = "";
-    try {
-      resp = await fetch(`${baseUrl}/analyze_full`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(upstreamBody),
-        signal: AbortSignal.timeout(180_000),
+    const res = await callUpstream(creds, "/analyze_full", upstreamBody);
+
+    if (!res.ok || !res.parsed) {
+      await failFlight(admin, cacheKey, res.error ?? "Upstream failed");
+      logCall(admin, {
+        cache_key: cacheKey,
+        audio_source_id: audioSourceId,
+        outcome: "error",
+        duration_ms: res.durationMs,
+        http_status: res.status ?? null,
+        error_message: res.error ?? null,
       });
-      text = await resp.text();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Network error";
-      return json({ success: false, error: `Upstream fetch failed: ${msg}` }, 502);
+      await persist(admin, audioSourceId, userId, null, "failed", res.error);
+      return json({ success: false, error: res.error ?? "Upstream failed" }, 502);
     }
 
-    if (!resp.ok) {
-      return json(
-        { success: false, error: `Upstream HTTP ${resp.status}: ${text.slice(0, 500)}` },
-        502,
-      );
-    }
+    await finishFlight(admin, cacheKey, res.parsed);
+    logCall(admin, {
+      cache_key: cacheKey,
+      audio_source_id: audioSourceId,
+      outcome: "ok",
+      duration_ms: res.durationMs,
+      http_status: res.status ?? null,
+    });
+    await persist(admin, audioSourceId, userId, res.parsed, "ready");
 
-    let parsed: Record<string, unknown> | null = null;
-    try { parsed = JSON.parse(text); } catch {
-      return json({ success: false, error: `Unparseable upstream response: ${text.slice(0, 300)}` }, 502);
-    }
-
-    // Persist back to the audio_sources row if requested and the caller owns it.
-    if (audioSourceId && parsed) {
-      const { error: updErr } = await admin
-        .from("audio_sources")
-        .update({ librosa_features: parsed })
-        .eq("id", audioSourceId)
-        .eq("user_id", userId);
-      if (updErr) {
-        console.warn("Failed to persist librosa_features:", updErr.message);
-      }
-    }
-
-    return json({ success: true, cached: false, result: parsed });
+    return json({
+      success: true,
+      cached: false,
+      cache_key: cacheKey,
+      result: res.parsed,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown";
     return json({ success: false, error: msg }, 500);
   }
 });
+
+// deno-lint-ignore no-explicit-any
+async function enqueue(admin: any, args: {
+  cacheKey: string;
+  audioSourceId: string | null;
+  userId: string;
+  params: Record<string, unknown>;
+  input: Record<string, unknown>;
+  identity: string | null;
+}): Promise<string | null> {
+  // Don't stack duplicate jobs for the same cache key.
+  const { data: existing } = await admin
+    .from("analysis_jobs")
+    .select("id")
+    .eq("cache_key", args.cacheKey)
+    .in("status", ["pending", "processing"])
+    .maybeSingle();
+  if (existing?.id) return existing.id as string;
+
+  const { data, error } = await admin
+    .from("analysis_jobs")
+    .insert({
+      cache_key: args.cacheKey,
+      audio_source_id: args.audioSourceId,
+      user_id: args.userId,
+      kind: "librosa_full",
+      params: { ...args.params, ...args.input, identity: args.identity },
+      status: "pending",
+    })
+    .select("id")
+    .maybeSingle();
+  if (error) console.warn("enqueue failed:", error.message);
+  return (data?.id as string) ?? null;
+}
+
+// deno-lint-ignore no-explicit-any
+async function persist(
+  admin: any,
+  audioSourceId: string | null,
+  userId: string,
+  features: Record<string, unknown> | null,
+  status: string,
+  error?: string | null,
+) {
+  if (!audioSourceId) return;
+  const patch: Record<string, unknown> = {
+    analysis_status: status,
+    analysis_error: error ? error.slice(0, 500) : null,
+  };
+  if (features) patch.librosa_features = features;
+  const { error: updErr } = await admin
+    .from("audio_sources")
+    .update(patch)
+    .eq("id", audioSourceId)
+    .eq("user_id", userId);
+  if (updErr) console.warn("persist failed:", updErr.message);
+}
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {

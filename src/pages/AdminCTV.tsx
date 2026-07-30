@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ArrowLeft, Upload, RefreshCw, Brain, ChevronDown, ChevronRight } from "lucide-react";
+import { LibrosaHealthPanel } from "@/components/LibrosaHealthPanel";
+
 
 interface NeighborRow {
   id: string;
@@ -129,6 +131,12 @@ export default function AdminCTV() {
         the ontology with prior calibration from past runs, embedded, and stored alongside
         Spotify/Apple-derived sources.
       </p>
+
+      <div className="mb-6">
+        <LibrosaHealthPanel />
+      </div>
+
+
 
       <Card className="p-4 mb-6 space-y-3">
         <Input

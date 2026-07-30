@@ -130,6 +130,12 @@ export default function AdminCTV() {
         Spotify/Apple-derived sources.
       </p>
 
+      <div className="mb-6">
+        <LibrosaHealthPanel />
+      </div>
+
+
+
       <Card className="p-4 mb-6 space-y-3">
         <Input
           placeholder="Feed name (overrides payload.feed_name)"

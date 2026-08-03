@@ -750,10 +750,10 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             <img
               src={sonicSimLogo}
               alt="SonicSIM"
-              className="h-12 md:h-14 w-auto shrink-0 select-none pointer-events-none"
+              className="h-10 md:h-12 w-auto shrink-0 select-none pointer-events-none object-contain"
               style={{
-                mixBlendMode: "screen",
-                filter: "brightness(1.05) contrast(1.1)",
+                mixBlendMode: "var(--logo-blend)" as React.CSSProperties["mixBlendMode"],
+                filter: "var(--logo-filter)",
               }}
             />
             <div>

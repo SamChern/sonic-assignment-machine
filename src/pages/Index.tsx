@@ -311,8 +311,8 @@ const Index = () => {
           <img
             src={sonicSimLogo}
             alt="SonicSIM"
-            className="h-8 sm:h-9 w-auto object-contain select-none transition-opacity duration-150 ease-out will-change-opacity"
-            style={{ opacity: 'var(--header-logo-opacity, 0)', filter: 'brightness(1.2)' }}
+            className="h-9 sm:h-10 w-auto object-contain select-none transition-opacity duration-150 ease-out will-change-opacity"
+            style={{ opacity: 'var(--header-logo-opacity, 0)', filter: 'var(--logo-filter)', mixBlendMode: 'var(--logo-blend)' as React.CSSProperties['mixBlendMode'] }}
             draggable={false}
           />
         </div>
@@ -388,8 +388,8 @@ const Index = () => {
               <img
                 src={sonicSimLogo}
                 alt="SonicSIM"
-                className="mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain select-none transition-all duration-75 ease-out will-change-[opacity,transform,filter]"
-                style={{ opacity: 'var(--logo-opacity, 1)', filter: 'brightness(1.2) blur(var(--logo-blur, 0px))', transform: 'scale(var(--logo-scale, 1))' }}
+                className="mx-auto h-[120px] sm:h-[160px] md:h-[200px] w-auto object-contain select-none transition-all duration-75 ease-out will-change-[opacity,transform,filter]"
+                style={{ opacity: 'var(--logo-opacity, 1)', filter: 'var(--logo-filter) blur(var(--logo-blur, 0px))', mixBlendMode: 'var(--logo-blend)' as React.CSSProperties['mixBlendMode'], transform: 'scale(var(--logo-scale, 1))' }}
                 draggable={false}
               />
               <div

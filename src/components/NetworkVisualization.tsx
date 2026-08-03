@@ -765,7 +765,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
                   ? 'Radial view showing category centrality to source identity • Line thickness = score strength'
                   : 'Natural clustering shows category proximity • Node size = category prevalence strength • Blue-green spectrum'}
               </p>
-
+            </div>
           </div>
         </div>
         <div 

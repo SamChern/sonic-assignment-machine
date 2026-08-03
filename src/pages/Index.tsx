@@ -311,8 +311,8 @@ const Index = () => {
           <img
             src={sonicSimLogo}
             alt="SonicSIM"
-            className="h-8 sm:h-9 w-auto object-contain select-none transition-opacity duration-150 ease-out will-change-opacity"
-            style={{ opacity: 'var(--header-logo-opacity, 0)', filter: 'brightness(1.2)' }}
+            className="h-9 sm:h-10 w-auto object-contain select-none transition-opacity duration-150 ease-out will-change-opacity"
+            style={{ opacity: 'var(--header-logo-opacity, 0)', filter: 'var(--logo-filter)', mixBlendMode: 'var(--logo-blend)' as React.CSSProperties['mixBlendMode'] }}
             draggable={false}
           />
         </div>

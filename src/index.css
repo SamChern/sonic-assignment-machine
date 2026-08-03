@@ -8,110 +8,154 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 5%;
-    --foreground: 0 0% 95%;
+    --background: 175 58% 4%;
+    --foreground: 172 34% 87%;
 
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 95%;
+    --card: 171 39% 7%;
+    --card-foreground: 172 34% 87%;
 
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 171 39% 7%;
+    --popover-foreground: 172 34% 87%;
 
-    --primary: 180 100% 50%;
-    --primary-foreground: 0 0% 10%;
-    --primary-glow: 180 100% 60%;
+    --primary: 332 100% 58%;
+    --primary-foreground: 171 57% 5%;
+    --primary-glow: 332 100% 68%;
 
-    --secondary: 270 80% 65%;
-    --secondary-foreground: 0 0% 100%;
-    --secondary-glow: 270 80% 75%;
+    --secondary: 172 41% 11%;
+    --secondary-foreground: 172 34% 87%;
+    --secondary-glow: 172 41% 20%;
 
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 172 41% 11%;
+    --muted-foreground: 171 9% 57%;
 
-    --accent: 120 100% 50%;
-    --accent-foreground: 0 0% 10%;
+    --accent: 332 100% 58%;
+    --accent-foreground: 160 37% 97%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 100% 60%;
+    --destructive-foreground: 160 37% 97%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 180 100% 50%;
+    --border: 170 30% 16%;
+    --input: 172 41% 11%;
+    --ring: 332 100% 58%;
 
     --radius: 0.75rem;
 
+    /* Sidebar */
+    --sidebar-background: 175 46% 5%;
+    --sidebar-foreground: 172 34% 87%;
+    --sidebar-primary: 332 100% 58%;
+    --sidebar-primary-foreground: 171 57% 5%;
+    --sidebar-accent: 172 41% 11%;
+    --sidebar-accent-foreground: 172 34% 87%;
+    --sidebar-border: 170 30% 16%;
+    --sidebar-ring: 332 100% 58%;
+
+    /* Functional graphics */
+    --success: 190 100% 63%;
+    --success-foreground: 171 57% 5%;
+    --gold: 42 100% 70%;
+    --gold-foreground: 171 57% 5%;
+
+    --chart-1: 332 100% 58%;
+    --chart-2: 190 100% 63%;
+    --chart-3: 168 71% 41%;
+    --chart-4: 42 100% 70%;
+    --chart-5: 0 73% 55%;
+
     /* Semantic category colors */
-    --category-emotional: 220 90% 56%;
-    --category-cognitive: 142 70% 45%;
-    --category-social: 174 72% 40%;
-    --category-communication: 84 80% 44%;
-    --category-contextual: 200 90% 50%;
-    --category-artistic: 168 76% 42%;
+    --category-emotional: 332 100% 58%;
+    --category-cognitive: 190 100% 63%;
+    --category-social: 168 71% 41%;
+    --category-communication: 42 100% 70%;
+    --category-contextual: 180 70% 48%;
+    --category-artistic: 0 73% 55%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(180 100% 50%) 0%, hsl(330 100% 60%) 100%);
-    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 5%) 0%, hsl(0 0% 8%) 100%);
-    --gradient-emotional: linear-gradient(135deg, hsl(220 90% 56%) 0%, hsl(260 80% 60%) 100%);
-    --gradient-cognitive: linear-gradient(135deg, hsl(142 70% 45%) 0%, hsl(160 60% 50%) 100%);
-    --gradient-social: linear-gradient(135deg, hsl(174 72% 40%) 0%, hsl(190 70% 45%) 100%);
-    --gradient-communication: linear-gradient(135deg, hsl(84 80% 44%) 0%, hsl(100 70% 50%) 100%);
-    --gradient-contextual: linear-gradient(135deg, hsl(200 90% 50%) 0%, hsl(220 85% 55%) 100%);
-    --gradient-artistic: linear-gradient(135deg, hsl(168 76% 42%) 0%, hsl(180 70% 48%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(168 76% 42%) 0%, hsl(180 70% 48%) 100%);
+    --gradient-brand: linear-gradient(135deg, hsl(168 76% 42%) 0%, hsl(180 70% 48%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(175 58% 4%) 0%, hsl(171 39% 7%) 100%);
+    --gradient-emotional: linear-gradient(135deg, hsl(332 100% 58%) 0%, hsl(310 90% 60%) 100%);
+    --gradient-cognitive: linear-gradient(135deg, hsl(190 100% 63%) 0%, hsl(180 70% 48%) 100%);
+    --gradient-social: linear-gradient(135deg, hsl(168 71% 41%) 0%, hsl(180 70% 48%) 100%);
+    --gradient-communication: linear-gradient(135deg, hsl(42 100% 70%) 0%, hsl(30 90% 60%) 100%);
+    --gradient-contextual: linear-gradient(135deg, hsl(180 70% 48%) 0%, hsl(190 100% 63%) 100%);
+    --gradient-artistic: linear-gradient(135deg, hsl(0 73% 55%) 0%, hsl(332 100% 58%) 100%);
 
-    --shadow-elegant: 0 10px 40px -10px hsl(180 100% 50% / 0.3);
-    --shadow-glow: 0 0 60px hsl(180 100% 50% / 0.4);
+    --shadow-elegant: 0 10px 40px -10px hsl(168 76% 42% / 0.35);
+    --shadow-glow: 0 0 60px hsl(332 100% 58% / 0.35);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .dark {
-    --background: 0 0% 5%;
-    --foreground: 0 0% 95%;
+    --background: 175 58% 4%;
+    --foreground: 172 34% 87%;
 
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 95%;
+    --card: 171 39% 7%;
+    --card-foreground: 172 34% 87%;
 
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 171 39% 7%;
+    --popover-foreground: 172 34% 87%;
 
-    --primary: 180 100% 50%;
-    --primary-foreground: 0 0% 10%;
-    --primary-glow: 180 100% 60%;
+    --primary: 332 100% 58%;
+    --primary-foreground: 171 57% 5%;
+    --primary-glow: 332 100% 68%;
 
-    --secondary: 270 80% 65%;
-    --secondary-foreground: 0 0% 100%;
-    --secondary-glow: 270 80% 75%;
+    --secondary: 172 41% 11%;
+    --secondary-foreground: 172 34% 87%;
+    --secondary-glow: 172 41% 20%;
 
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 172 41% 11%;
+    --muted-foreground: 171 9% 57%;
 
-    --accent: 120 100% 50%;
-    --accent-foreground: 0 0% 10%;
+    --accent: 332 100% 58%;
+    --accent-foreground: 160 37% 97%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 100% 60%;
+    --destructive-foreground: 160 37% 97%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 180 100% 50%;
+    --border: 170 30% 16%;
+    --input: 172 41% 11%;
+    --ring: 332 100% 58%;
+
+    --sidebar-background: 175 46% 5%;
+    --sidebar-foreground: 172 34% 87%;
+    --sidebar-primary: 332 100% 58%;
+    --sidebar-primary-foreground: 171 57% 5%;
+    --sidebar-accent: 172 41% 11%;
+    --sidebar-accent-foreground: 172 34% 87%;
+    --sidebar-border: 170 30% 16%;
+    --sidebar-ring: 332 100% 58%;
+
+    --success: 190 100% 63%;
+    --success-foreground: 171 57% 5%;
+    --gold: 42 100% 70%;
+    --gold-foreground: 171 57% 5%;
+
+    --chart-1: 332 100% 58%;
+    --chart-2: 190 100% 63%;
+    --chart-3: 168 71% 41%;
+    --chart-4: 42 100% 70%;
+    --chart-5: 0 73% 55%;
 
     /* Semantic category colors (dark mode) */
-    --category-emotional: 220 90% 56%;
-    --category-cognitive: 142 70% 45%;
-    --category-social: 174 72% 40%;
-    --category-communication: 84 80% 44%;
-    --category-contextual: 200 90% 50%;
-    --category-artistic: 168 76% 42%;
+    --category-emotional: 332 100% 58%;
+    --category-cognitive: 190 100% 63%;
+    --category-social: 168 71% 41%;
+    --category-communication: 42 100% 70%;
+    --category-contextual: 180 70% 48%;
+    --category-artistic: 0 73% 55%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(180 100% 50%) 0%, hsl(330 100% 60%) 100%);
-    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 5%) 0%, hsl(0 0% 8%) 100%);
-    --gradient-emotional: linear-gradient(135deg, hsl(220 90% 56%) 0%, hsl(260 80% 60%) 100%);
-    --gradient-cognitive: linear-gradient(135deg, hsl(142 70% 45%) 0%, hsl(160 60% 50%) 100%);
-    --gradient-social: linear-gradient(135deg, hsl(174 72% 40%) 0%, hsl(190 70% 45%) 100%);
-    --gradient-communication: linear-gradient(135deg, hsl(84 80% 44%) 0%, hsl(100 70% 50%) 100%);
-    --gradient-contextual: linear-gradient(135deg, hsl(200 90% 50%) 0%, hsl(220 85% 55%) 100%);
-    --gradient-artistic: linear-gradient(135deg, hsl(168 76% 42%) 0%, hsl(180 70% 48%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(168 76% 42%) 0%, hsl(180 70% 48%) 100%);
+    --gradient-brand: linear-gradient(135deg, hsl(168 76% 42%) 0%, hsl(180 70% 48%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(175 58% 4%) 0%, hsl(171 39% 7%) 100%);
+    --gradient-emotional: linear-gradient(135deg, hsl(332 100% 58%) 0%, hsl(310 90% 60%) 100%);
+    --gradient-cognitive: linear-gradient(135deg, hsl(190 100% 63%) 0%, hsl(180 70% 48%) 100%);
+    --gradient-social: linear-gradient(135deg, hsl(168 71% 41%) 0%, hsl(180 70% 48%) 100%);
+    --gradient-communication: linear-gradient(135deg, hsl(42 100% 70%) 0%, hsl(30 90% 60%) 100%);
+    --gradient-contextual: linear-gradient(135deg, hsl(180 70% 48%) 0%, hsl(190 100% 63%) 100%);
+    --gradient-artistic: linear-gradient(135deg, hsl(0 73% 55%) 0%, hsl(332 100% 58%) 100%);
 
-    --shadow-elegant: 0 10px 40px -10px hsl(180 100% 50% / 0.3);
-    --shadow-glow: 0 0 60px hsl(180 100% 50% / 0.4);
+    --shadow-elegant: 0 10px 40px -10px hsl(168 76% 42% / 0.35);
+    --shadow-glow: 0 0 60px hsl(332 100% 58% / 0.35);
   }
 }
 
@@ -133,6 +177,10 @@ All colors MUST be HSL.
 @layer utilities {
   .gradient-primary {
     background: var(--gradient-primary);
+  }
+
+  .gradient-brand {
+    background: var(--gradient-brand);
   }
   
   .gradient-subtle {

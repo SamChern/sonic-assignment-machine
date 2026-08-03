@@ -705,12 +705,18 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
         }
       });
     } else {
-      // For single-source (no simulation), just set positions from fixed coords
+      // For single-source (no simulation), resolve link endpoints (which are
+      // still node IDs, since no forceLink ran) and set positions from the
+      // fixed radial coords so connection strength lines actually render.
+      const nodeById = new Map(nodes.map((n) => [n.id, n]));
+      const endpoint = (v: any): Node | undefined =>
+        typeof v === "string" ? nodeById.get(v) : (v as Node);
+
       link
-        .attr("x1", (d: any) => d.source.x || 0)
-        .attr("y1", (d: any) => d.source.y || 0)
-        .attr("x2", (d: any) => d.target.x || 0)
-        .attr("y2", (d: any) => d.target.y || 0);
+        .attr("x1", (d: any) => endpoint(d.source)?.x ?? 0)
+        .attr("y1", (d: any) => endpoint(d.source)?.y ?? 0)
+        .attr("x2", (d: any) => endpoint(d.target)?.x ?? 0)
+        .attr("y2", (d: any) => endpoint(d.target)?.y ?? 0);
 
       node
         .attr("cx", (d: any) => d.x || 0)

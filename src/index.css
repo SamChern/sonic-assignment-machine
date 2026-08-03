@@ -88,7 +88,12 @@ All colors MUST be HSL.
     --shadow-elegant: 0 10px 40px -10px hsl(168 76% 42% / 0.35);
     --shadow-glow: 0 0 60px hsl(186 14% 74% / 0.35);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Logo rendering (light mode: darken the light lockup so it reads on light bg) */
+    --logo-filter: invert(1) brightness(0.35) contrast(1.15) saturate(0.9);
+    --logo-blend: normal;
   }
+
 
   .dark {
     --background: 175 58% 4%;

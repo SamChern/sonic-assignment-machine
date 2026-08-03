@@ -768,6 +768,14 @@ export type Database = {
         Args: { pop_mean: number; pop_stddev: number; raw_score: number }
         Returns: number
       }
+      prune_analysis_telemetry: {
+        Args: {
+          p_cache_idle_days?: number
+          p_job_days?: number
+          p_log_days?: number
+        }
+        Returns: Json
+      }
       recalculate_all_fingerprints: { Args: never; Returns: number }
       recalculate_user_fingerprint: {
         Args: { p_user_id: string }

@@ -171,7 +171,12 @@ All colors MUST be HSL.
 
     --shadow-elegant: 0 10px 40px -10px hsl(168 76% 42% / 0.35);
     --shadow-glow: 0 0 60px hsl(186 14% 74% / 0.35);
+
+    /* Logo rendering (dark mode: light lockup blends into dark bg) */
+    --logo-filter: brightness(1.2);
+    --logo-blend: screen;
   }
+
 }
 
 @layer base {

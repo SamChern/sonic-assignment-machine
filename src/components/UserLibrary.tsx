@@ -212,11 +212,13 @@ export function UserLibrary({ onSelectSource, onSelectMultiple }: UserLibraryPro
                 </p>
               </Card>
             ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {mySources.map(source => (
+              <LazySourceGrid
+                sources={mySources}
+                renderItem={(source) => (
                   <SourceCard key={source.id} source={source} showDelete />
-                ))}
-              </div>
+                )}
+              />
+
             )}
           </TabsContent>
         )}
@@ -247,15 +249,17 @@ export function UserLibrary({ onSelectSource, onSelectMultiple }: UserLibraryPro
                     {sources.length} source{sources.length !== 1 ? 's' : ''}
                   </Badge>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {sources.map(source => (
-                    <SourceCard 
-                      key={source.id} 
-                      source={source} 
-                      showDelete={user?.id === source.user_id} 
+                <LazySourceGrid
+                  sources={sources}
+                  renderItem={(source) => (
+                    <SourceCard
+                      key={source.id}
+                      source={source}
+                      showDelete={user?.id === source.user_id}
                     />
-                  ))}
-                </div>
+                  )}
+                />
+
               </Card>
             ))
           )}

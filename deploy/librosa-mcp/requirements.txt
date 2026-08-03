@@ -1,0 +1,15 @@
+# Pinned runtime for the containerized librosa REST worker (Phase 5).
+# Keep in sync with the venv installed by install-rest.sh on the EC2 box.
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+gunicorn==23.0.0
+pydantic==2.10.4
+requests==2.32.3
+librosa==0.10.2.post1
+soundfile==0.12.1
+numpy==1.26.4
+scipy==1.14.1
+scikit-learn==1.5.2
+numba==0.60.0
+matplotlib==3.9.2
+yt-dlp==2024.12.13

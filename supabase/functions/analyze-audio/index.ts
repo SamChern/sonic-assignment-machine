@@ -338,23 +338,34 @@ OTHER RULES:
 - Scores are 0-100 integers
 - Use the EXACT source names provided
 - When an "acoustic:" line is provided for a source, treat it as ground-truth
-  measurements from librosa (tempo BPM, key/mode, beat regularity, onset rate,
-  RMS energy, spectral centroid/rolloff/flatness, zero-crossing rate, spectral
-  contrast bands, MFCC[0..6], dominant_pitches, chroma[12], tonnetz[6]).
-  Use them to inform Emotional (energy, RMS, centroid + mode: minor/low-tonnetz-magnitude
-  → melancholy/introspective; major/bright → uplifting), Cognitive (rhythmic
-  regularity, harmonic complexity = chroma entropy + tonnetz spread; flatter
-  chroma distribution = more harmonically complex/cerebral), Artistic
-  (timbre/MFCC variety, spectral contrast, tonnetz variance = harmonic
-  sophistication), Communication (clear dominant pitches + strong key =
-  more direct/accessible), and Contextual (tempo + flatness + key stability)
-  scores. Do not echo the raw numbers in descriptions — translate them into
-  qualitative language.
+  measurement. It starts with source=librosa (tempo BPM, key/mode, beat
+  regularity, onset rate, RMS energy, spectral centroid/rolloff/flatness,
+  zero-crossing rate, spectral contrast bands, MFCC[0..6], dominant_pitches,
+  chroma[12], tonnetz[6]) or source=spotify (tempo, key/mode, time signature,
+  energy, valence, danceability, acousticness, instrumentalness, liveness,
+  speechiness, loudness). Both are valid evidence — reason from whichever
+  fields are present and never assume missing fields.
+  Use them to inform Emotional (energy/valence, RMS, centroid + mode:
+  minor/low-tonnetz-magnitude → melancholy/introspective; major/bright →
+  uplifting), Cognitive (rhythmic regularity, harmonic complexity = chroma
+  entropy + tonnetz spread; flatter chroma distribution = more harmonically
+  complex/cerebral; low danceability + high instrumentalness = more cerebral),
+  Artistic (timbre/MFCC variety, spectral contrast, tonnetz variance,
+  acousticness), Communication (clear dominant pitches + strong key, or high
+  speechiness = more direct/accessible), Social (danceability, liveness), and
+  Contextual (tempo + flatness + key stability) scores. Do not echo the raw
+  numbers in descriptions — translate them into qualitative language.
 - When a "taxonomy:" line is provided, it lists CTV content tags plus prior
   mean ± std for each of the 6 categories learned from past analyses of
-  similarly tagged sources. Treat those priors as a Bayesian anchor — your
-  scores should stay within ~1 std of the prior unless the acoustics clearly
-  contradict it. This keeps CTV scores comparable across the catalog.`;
+  similarly tagged sources, and/or a "prior[...]" block derived from the
+  nearest already-analyzed sources (nearest_neighbors / avg_similarity).
+  Treat those priors as a Bayesian anchor — your scores should stay within
+  ~1 std of the prior unless the acoustics clearly contradict it. This keeps
+  scores comparable across the catalog.
+- If a source has neither an "acoustic:" nor a "taxonomy:" line, score it from
+  its name and genre knowledge alone and stay closer to moderate values; the
+  system records lower confidence for those.`;
+
 
 
         const userPrompt = `Analyze these ${batch.length} audio source${batch.length > 1 ? 's' : ''}:

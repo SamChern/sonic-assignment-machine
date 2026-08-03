@@ -227,9 +227,12 @@ Deno.serve(async (req) => {
     let freshResults: SourceResult[] = [];
 
     if (uncachedSources.length > 0) {
-      // Pre-fetch any cached librosa_features blobs so we can sharpen the AI's
-      // scoring with real acoustic measurements (tempo, key, spectral, MFCC).
+      // === PHASE 2: resolve the best available acoustic evidence ===
+      // Librosa is an enrichment, not a dependency. Tiers, best first:
+      // librosa (cached measurements) -> provider audio features (Spotify) ->
+      // nearest-neighbour prior over profile_embedding -> metadata only.
       if (supabaseAdmin) {
+        // Tier 1 — cached librosa features.
         const ids = uncachedSources.map(s => s.audio_source_id).filter(Boolean) as string[];
         if (ids.length > 0) {
           const { data: featRows } = await supabaseAdmin
@@ -239,11 +242,51 @@ Deno.serve(async (req) => {
           const byId = new Map((featRows ?? []).map(r => [r.id, r.librosa_features]));
           for (const s of uncachedSources) {
             if (!s.audio_source_id) continue;
-            const profile = formatAcousticProfile(byId.get(s.audio_source_id) as any);
-            if (profile) s.acoustic_profile = profile;
+            const profile = formatLibrosaProfile(byId.get(s.audio_source_id));
+            if (profile) {
+              s.acoustic_profile = profile;
+              s.evidence = 'librosa';
+            }
           }
         }
+
+        // Tier 2 — provider-supplied audio features (never touches EC2).
+        const needProvider = uncachedSources.filter(s => !s.acoustic_profile && s.spotify_id);
+        if (needProvider.length > 0) {
+          const providerMap = await fetchProviderFeatures(
+            needProvider.map(s => s.spotify_id!) as string[],
+          );
+          for (const s of needProvider) {
+            const f = s.spotify_id ? providerMap.get(s.spotify_id) : undefined;
+            if (f) {
+              s.acoustic_profile = formatProviderProfile(f);
+              s.evidence = 'provider';
+            }
+          }
+        }
+
+        // Tier 3 — borrow the character of the nearest analyzed neighbours.
+        const needNeighbors = uncachedSources.filter(
+          s => !s.acoustic_profile && s.audio_source_id,
+        );
+        for (const s of needNeighbors) {
+          const prior = await neighborPrior(supabaseAdmin, s.audio_source_id!);
+          if (prior) {
+            s.taxonomy_context = [s.taxonomy_context, prior.text].filter(Boolean).join(' ');
+            s.evidence = 'neighbors';
+          }
+        }
+
+        for (const s of uncachedSources) if (!s.evidence) s.evidence = 'none';
+        console.log(
+          'Evidence tiers:',
+          uncachedSources.reduce((acc, s) => {
+            acc[s.evidence!] = (acc[s.evidence!] ?? 0) + 1;
+            return acc;
+          }, {} as Record<string, number>),
+        );
       }
+
 
       // Batch sources to avoid truncation (max 5 per batch)
       const BATCH_SIZE = 5;

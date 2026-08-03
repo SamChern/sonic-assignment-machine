@@ -3,7 +3,7 @@ import { Check, ZoomIn, ZoomOut, RotateCcw, Maximize, Tag, EyeOff } from "lucide
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import samLogo from "@/assets/sam-logo.png";
+import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 import emotionIcon from "@/assets/emotion-sam.png";
 import socialIcon from "@/assets/social-sam.png";
 import contextIcon from "@/assets/context-sam.png";

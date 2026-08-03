@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Activity, RefreshCw, Play } from "lucide-react";
+import { Activity, RefreshCw, Play, Layers } from "lucide-react";
 
 interface Metrics {
   total: number;
@@ -42,6 +42,8 @@ export function LibrosaHealthPanel() {
   const [metrics, setMetrics] = useState<Metrics>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [draining, setDraining] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,6 +124,28 @@ export function LibrosaHealthPanel() {
     load();
   };
 
+  // Phase 2 — warm the shared cache at a trickle rate so future requests hit
+  // the cache instead of the analysis service.
+  const backfill = async () => {
+    setBackfilling(true);
+    const { data, error } = await supabase.functions.invoke<{
+      success: boolean;
+      queued?: number;
+      already_cached?: number;
+      skipped?: number;
+      error?: string;
+    }>("librosa-backfill", { body: { limit: 25 } });
+    setBackfilling(false);
+    if (error || !data?.success) {
+      toast.error(data?.error ?? error?.message ?? "Backfill failed");
+    } else {
+      toast.success(
+        `Queued ${data.queued ?? 0} • attached from cache ${data.already_cached ?? 0} • skipped ${data.skipped ?? 0}`,
+      );
+    }
+    load();
+  };
+
   const hitRate = metrics.total > 0 ? Math.round((metrics.hits / metrics.total) * 100) : 0;
   const errorRate =
     metrics.total > 0 ? Math.round((metrics.errors / metrics.total) * 100) : 0;
@@ -138,12 +162,17 @@ export function LibrosaHealthPanel() {
           <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
+          <Button variant="outline" size="sm" onClick={backfill} disabled={backfilling}>
+            <Layers className="h-3.5 w-3.5 mr-1" />
+            {backfilling ? "Warming…" : "Warm cache"}
+          </Button>
           <Button variant="outline" size="sm" onClick={drain} disabled={draining}>
             <Play className="h-3.5 w-3.5 mr-1" />
             {draining ? "Running…" : "Run queue"}
           </Button>
         </div>
       </div>
+
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Metric label="Cache hit rate" value={`${hitRate}%`} accent={hitRate >= 50} />

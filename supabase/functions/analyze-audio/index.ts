@@ -1,4 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  blendConfidence,
+  fetchProviderFeatures,
+  formatLibrosaProfile,
+  formatProviderProfile,
+  neighborPrior,
+  type EvidenceKind,
+} from '../_shared/evidence.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,56 +22,12 @@ interface AudioSource {
   type: 'file' | 'track';
   audio_source_id?: string;
   spotify_id?: string; // For cache key lookup
-  acoustic_profile?: string; // Optional pre-formatted librosa summary
+  acoustic_profile?: string; // Optional pre-formatted acoustic summary
   taxonomy_context?: string; // Optional CTV taxonomy + calibration prior block
+  /** Phase 2 — which evidence tier produced `acoustic_profile`. */
+  evidence?: EvidenceKind;
 }
 
-
-// Format a compact "Acoustic profile" line from a librosa_features blob,
-// suitable for injection into the LLM prompt without ballooning tokens.
-function formatAcousticProfile(features: Record<string, any> | null | undefined): string | null {
-  if (!features || typeof features !== "object") return null;
-  const s = features.scalars ?? {};
-  if (!s || typeof s !== "object") return null;
-  const round1 = (n: any) => (typeof n === "number" ? Math.round(n * 10) / 10 : n);
-  const round2 = (n: any) => (typeof n === "number" ? Math.round(n * 100) / 100 : n);
-  const mfcc = Array.isArray(s.mfcc_mean) ? s.mfcc_mean.slice(0, 7).map((v: number) => round1(v)) : [];
-  const contrast = Array.isArray(s.spectral_contrast_mean)
-    ? s.spectral_contrast_mean.map((v: number) => round1(v))
-    : [];
-  // Chroma: 12 pitch classes (C, C#, D, D#, E, F, F#, G, G#, A, A#, B) — harmonic content distribution
-  const chroma = Array.isArray(s.chroma_mean)
-    ? s.chroma_mean.map((v: number) => round2(v))
-    : [];
-  // Tonnetz: 6-dim tonal centroid (perfect 5th x/y, minor 3rd x/y, major 3rd x/y) — harmonic relationships
-  const tonnetz = Array.isArray(s.tonnetz_mean)
-    ? s.tonnetz_mean.map((v: number) => round2(v))
-    : [];
-  // Identify dominant pitch classes (top 3) for a more digestible signal
-  const PITCH_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-  const dominantPitches = chroma.length === 12
-    ? [...chroma.map((v, i) => ({ v, name: PITCH_NAMES[i] }))]
-        .sort((a, b) => b.v - a.v).slice(0, 3)
-        .map(p => `${p.name}:${p.v}`)
-    : [];
-  const parts = [
-    `tempo=${round1(s.tempo_bpm)}bpm`,
-    `key=${s.estimated_key ?? "?"}${s.mode ? ` ${s.mode}` : ""}`,
-    `beat_regularity=${round1(s.beat_regularity)}`,
-    `onset_rate=${round1(s.onset_rate_per_sec)}/s`,
-    `rms=${round1(s.rms_mean)}`,
-    `spec_centroid=${round1(s.spectral_centroid_mean)}Hz`,
-    `spec_rolloff=${round1(s.spectral_rolloff_mean)}Hz`,
-    `spec_flatness=${round1(s.spectral_flatness_mean)}`,
-    `zcr=${round1(s.zero_crossing_rate_mean)}`,
-    contrast.length ? `contrast=[${contrast.join(",")}]` : "",
-    mfcc.length ? `mfcc[0..6]=[${mfcc.join(",")}]` : "",
-    dominantPitches.length ? `dominant_pitches=[${dominantPitches.join(",")}]` : "",
-    chroma.length ? `chroma=[${chroma.join(",")}]` : "",
-    tonnetz.length ? `tonnetz=[${tonnetz.join(",")}]` : "",
-  ].filter(Boolean);
-  return parts.join(" ");
-}
 
 interface AnalysisRequest {
   sources: AudioSource[];
@@ -263,9 +227,12 @@ Deno.serve(async (req) => {
     let freshResults: SourceResult[] = [];
 
     if (uncachedSources.length > 0) {
-      // Pre-fetch any cached librosa_features blobs so we can sharpen the AI's
-      // scoring with real acoustic measurements (tempo, key, spectral, MFCC).
+      // === PHASE 2: resolve the best available acoustic evidence ===
+      // Librosa is an enrichment, not a dependency. Tiers, best first:
+      // librosa (cached measurements) -> provider audio features (Spotify) ->
+      // nearest-neighbour prior over profile_embedding -> metadata only.
       if (supabaseAdmin) {
+        // Tier 1 — cached librosa features.
         const ids = uncachedSources.map(s => s.audio_source_id).filter(Boolean) as string[];
         if (ids.length > 0) {
           const { data: featRows } = await supabaseAdmin
@@ -275,11 +242,51 @@ Deno.serve(async (req) => {
           const byId = new Map((featRows ?? []).map(r => [r.id, r.librosa_features]));
           for (const s of uncachedSources) {
             if (!s.audio_source_id) continue;
-            const profile = formatAcousticProfile(byId.get(s.audio_source_id) as any);
-            if (profile) s.acoustic_profile = profile;
+            const profile = formatLibrosaProfile(byId.get(s.audio_source_id));
+            if (profile) {
+              s.acoustic_profile = profile;
+              s.evidence = 'librosa';
+            }
           }
         }
+
+        // Tier 2 — provider-supplied audio features (never touches EC2).
+        const needProvider = uncachedSources.filter(s => !s.acoustic_profile && s.spotify_id);
+        if (needProvider.length > 0) {
+          const providerMap = await fetchProviderFeatures(
+            needProvider.map(s => s.spotify_id!) as string[],
+          );
+          for (const s of needProvider) {
+            const f = s.spotify_id ? providerMap.get(s.spotify_id) : undefined;
+            if (f) {
+              s.acoustic_profile = formatProviderProfile(f);
+              s.evidence = 'provider';
+            }
+          }
+        }
+
+        // Tier 3 — borrow the character of the nearest analyzed neighbours.
+        const needNeighbors = uncachedSources.filter(
+          s => !s.acoustic_profile && s.audio_source_id,
+        );
+        for (const s of needNeighbors) {
+          const prior = await neighborPrior(supabaseAdmin, s.audio_source_id!);
+          if (prior) {
+            s.taxonomy_context = [s.taxonomy_context, prior.text].filter(Boolean).join(' ');
+            s.evidence = 'neighbors';
+          }
+        }
+
+        for (const s of uncachedSources) if (!s.evidence) s.evidence = 'none';
+        console.log(
+          'Evidence tiers:',
+          uncachedSources.reduce((acc, s) => {
+            acc[s.evidence!] = (acc[s.evidence!] ?? 0) + 1;
+            return acc;
+          }, {} as Record<string, number>),
+        );
       }
+
 
       // Batch sources to avoid truncation (max 5 per batch)
       const BATCH_SIZE = 5;
@@ -331,23 +338,34 @@ OTHER RULES:
 - Scores are 0-100 integers
 - Use the EXACT source names provided
 - When an "acoustic:" line is provided for a source, treat it as ground-truth
-  measurements from librosa (tempo BPM, key/mode, beat regularity, onset rate,
-  RMS energy, spectral centroid/rolloff/flatness, zero-crossing rate, spectral
-  contrast bands, MFCC[0..6], dominant_pitches, chroma[12], tonnetz[6]).
-  Use them to inform Emotional (energy, RMS, centroid + mode: minor/low-tonnetz-magnitude
-  → melancholy/introspective; major/bright → uplifting), Cognitive (rhythmic
-  regularity, harmonic complexity = chroma entropy + tonnetz spread; flatter
-  chroma distribution = more harmonically complex/cerebral), Artistic
-  (timbre/MFCC variety, spectral contrast, tonnetz variance = harmonic
-  sophistication), Communication (clear dominant pitches + strong key =
-  more direct/accessible), and Contextual (tempo + flatness + key stability)
-  scores. Do not echo the raw numbers in descriptions — translate them into
-  qualitative language.
+  measurement. It starts with source=librosa (tempo BPM, key/mode, beat
+  regularity, onset rate, RMS energy, spectral centroid/rolloff/flatness,
+  zero-crossing rate, spectral contrast bands, MFCC[0..6], dominant_pitches,
+  chroma[12], tonnetz[6]) or source=spotify (tempo, key/mode, time signature,
+  energy, valence, danceability, acousticness, instrumentalness, liveness,
+  speechiness, loudness). Both are valid evidence — reason from whichever
+  fields are present and never assume missing fields.
+  Use them to inform Emotional (energy/valence, RMS, centroid + mode:
+  minor/low-tonnetz-magnitude → melancholy/introspective; major/bright →
+  uplifting), Cognitive (rhythmic regularity, harmonic complexity = chroma
+  entropy + tonnetz spread; flatter chroma distribution = more harmonically
+  complex/cerebral; low danceability + high instrumentalness = more cerebral),
+  Artistic (timbre/MFCC variety, spectral contrast, tonnetz variance,
+  acousticness), Communication (clear dominant pitches + strong key, or high
+  speechiness = more direct/accessible), Social (danceability, liveness), and
+  Contextual (tempo + flatness + key stability) scores. Do not echo the raw
+  numbers in descriptions — translate them into qualitative language.
 - When a "taxonomy:" line is provided, it lists CTV content tags plus prior
   mean ± std for each of the 6 categories learned from past analyses of
-  similarly tagged sources. Treat those priors as a Bayesian anchor — your
-  scores should stay within ~1 std of the prior unless the acoustics clearly
-  contradict it. This keeps CTV scores comparable across the catalog.`;
+  similarly tagged sources, and/or a "prior[...]" block derived from the
+  nearest already-analyzed sources (nearest_neighbors / avg_similarity).
+  Treat those priors as a Bayesian anchor — your scores should stay within
+  ~1 std of the prior unless the acoustics clearly contradict it. This keeps
+  scores comparable across the catalog.
+- If a source has neither an "acoustic:" nor a "taxonomy:" line, score it from
+  its name and genre knowledge alone and stay closer to moderate values; the
+  system records lower confidence for those.`;
+
 
 
         const userPrompt = `Analyze these ${batch.length} audio source${batch.length > 1 ? 's' : ''}:
@@ -589,7 +607,14 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         const mean = scores.reduce((s, v) => s + v, 0) / (scores.length || 1);
         const variance = scores.reduce((s, v) => s + (v - mean) ** 2, 0) / (scores.length || 1);
         const stddev = Math.sqrt(variance);
-        const confidence = Math.max(0.1, Math.min(1, stddev / 30));
+        const spread = Math.max(0.1, Math.min(1, stddev / 30));
+        // Phase 2 — weight confidence by the acoustic evidence tier that was
+        // actually available (librosa > provider > neighbours > metadata).
+        const evidence =
+          uncachedSources.find(s => s.name === sourceResult.name)?.evidence ??
+          'librosa'; // cached analyses were scored with their own evidence
+        const confidence = blendConfidence(spread, evidence);
+
 
         return {
           user_id,
@@ -638,6 +663,12 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         cached: cachedResults.length,
         fresh: freshResults.length,
       },
+      evidence_stats: uncachedSources.reduce((acc, s) => {
+        const k = s.evidence ?? 'none';
+        acc[k] = (acc[k] ?? 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

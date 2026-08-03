@@ -3,7 +3,7 @@ import { Check, ZoomIn, ZoomOut, RotateCcw, Maximize, Tag, EyeOff } from "lucide
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import samLogo from "@/assets/sam-logo.png";
+import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 import emotionIcon from "@/assets/emotion-sam.png";
 import socialIcon from "@/assets/social-sam.png";
 import contextIcon from "@/assets/context-sam.png";
@@ -745,45 +745,27 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
     <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
       <div className="p-6">
         <div className="mb-4 relative">
-          {/* SAM Logo - Top Left Corner */}
-          <div className="absolute -top-6 -left-6 w-28 h-28 z-10 pointer-events-none">
-            <div
-              className="relative w-full h-full rounded-full p-[2px]"
+          {/* SonicSIM logo — blended, sized for the card headline */}
+          <div className="flex items-center gap-4">
+            <img
+              src={sonicSimLogo}
+              alt="SonicSIM"
+              className="h-12 md:h-14 w-auto shrink-0 select-none pointer-events-none"
               style={{
-                background:
-                  "linear-gradient(135deg, hsl(200 85% 55%), hsl(180 80% 60%), hsl(160 75% 50%))",
-                boxShadow:
-                  "0 0 16px hsl(180 80% 60% / 0.9), 0 0 36px hsl(180 80% 60% / 0.45)",
+                mixBlendMode: "screen",
+                filter: "brightness(1.05) contrast(1.1)",
               }}
-            >
-              <div className="w-full h-full rounded-full overflow-hidden relative"
-                   style={{ backgroundColor: 'rgba(0, 0, 0, 0.85)' }}>
-                <img
-                  src={samLogo}
-                  alt="SAM - Sonic Assignment Machine"
-                  className="w-full h-full object-contain rounded-full"
-                  style={{
-                    mixBlendMode: "screen",
-                    filter: "brightness(1.1) contrast(1.15)",
-                    WebkitMaskImage:
-                      "radial-gradient(circle at center, rgba(0,0,0,1) 72%, rgba(0,0,0,0) 100%)",
-                    maskImage:
-                      "radial-gradient(circle at center, rgba(0,0,0,1) 72%, rgba(0,0,0,0) 100%)",
-                  }}
-                />
-              </div>
+            />
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">
+                {sources.length === 1 ? 'Ontological Fingerprint' : 'Ontological Identity Network'}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {sources.length === 1 
+                  ? 'Radial view showing category centrality to source identity • Line thickness = score strength'
+                  : 'Natural clustering shows category proximity • Node size = category prevalence strength • Blue-green spectrum'}
+              </p>
             </div>
-          </div>
-
-          <div className="ml-24">
-            <h3 className="text-lg font-semibold text-foreground">
-              {sources.length === 1 ? 'Ontological Fingerprint' : 'Ontological Identity Network'}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {sources.length === 1 
-                ? 'Radial view showing category centrality to source identity • Line thickness = score strength'
-                : 'Natural clustering shows category proximity • Node size = category prevalence strength • Blue-green spectrum'}
-            </p>
           </div>
         </div>
         <div 

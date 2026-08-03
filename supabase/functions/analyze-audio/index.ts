@@ -663,6 +663,12 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         cached: cachedResults.length,
         fresh: freshResults.length,
       },
+      evidence_stats: uncachedSources.reduce((acc, s) => {
+        const k = s.evidence ?? 'none';
+        acc[k] = (acc[k] ?? 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -518,7 +518,11 @@ function AcousticVisualsToggle({ audioSourceId }: { audioSourceId: string }) {
               No acoustic features cached for this source yet.
             </p>
           )}
-          {features && <LibrosaVisuals features={features} />}
+          {features && (
+            <Suspense fallback={<VisualsFallback />}>
+              <LibrosaVisuals features={features} />
+            </Suspense>
+          )}
 
         </div>
       )}
@@ -540,7 +544,9 @@ function HarmonicPreview({ audioSourceId }: { audioSourceId: string }) {
           chroma · tonnetz
         </span>
       </div>
-      <ChromaTonnetzPanel features={features} />
+      <Suspense fallback={<VisualsFallback />}>
+        <ChromaTonnetzPanel features={features} />
+      </Suspense>
     </div>
   );
 }

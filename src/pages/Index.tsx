@@ -696,7 +696,15 @@ const Index = () => {
               </Card>
             )}
 
-            <NetworkVisualization sources={filteredSources} sourceImages={filteredImages} />
+            <Suspense
+              fallback={
+                <div className="flex h-[400px] items-center justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                </div>
+              }
+            >
+              <NetworkVisualization sources={filteredSources} sourceImages={filteredImages} />
+            </Suspense>
           </TabsContent>
 
           {/* Tab 3: Per-Source Semantic Analysis */}

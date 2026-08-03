@@ -1,4 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  blendConfidence,
+  fetchProviderFeatures,
+  formatLibrosaProfile,
+  formatProviderProfile,
+  neighborPrior,
+  type EvidenceKind,
+} from '../_shared/evidence.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,56 +22,12 @@ interface AudioSource {
   type: 'file' | 'track';
   audio_source_id?: string;
   spotify_id?: string; // For cache key lookup
-  acoustic_profile?: string; // Optional pre-formatted librosa summary
+  acoustic_profile?: string; // Optional pre-formatted acoustic summary
   taxonomy_context?: string; // Optional CTV taxonomy + calibration prior block
+  /** Phase 2 — which evidence tier produced `acoustic_profile`. */
+  evidence?: EvidenceKind;
 }
 
-
-// Format a compact "Acoustic profile" line from a librosa_features blob,
-// suitable for injection into the LLM prompt without ballooning tokens.
-function formatAcousticProfile(features: Record<string, any> | null | undefined): string | null {
-  if (!features || typeof features !== "object") return null;
-  const s = features.scalars ?? {};
-  if (!s || typeof s !== "object") return null;
-  const round1 = (n: any) => (typeof n === "number" ? Math.round(n * 10) / 10 : n);
-  const round2 = (n: any) => (typeof n === "number" ? Math.round(n * 100) / 100 : n);
-  const mfcc = Array.isArray(s.mfcc_mean) ? s.mfcc_mean.slice(0, 7).map((v: number) => round1(v)) : [];
-  const contrast = Array.isArray(s.spectral_contrast_mean)
-    ? s.spectral_contrast_mean.map((v: number) => round1(v))
-    : [];
-  // Chroma: 12 pitch classes (C, C#, D, D#, E, F, F#, G, G#, A, A#, B) — harmonic content distribution
-  const chroma = Array.isArray(s.chroma_mean)
-    ? s.chroma_mean.map((v: number) => round2(v))
-    : [];
-  // Tonnetz: 6-dim tonal centroid (perfect 5th x/y, minor 3rd x/y, major 3rd x/y) — harmonic relationships
-  const tonnetz = Array.isArray(s.tonnetz_mean)
-    ? s.tonnetz_mean.map((v: number) => round2(v))
-    : [];
-  // Identify dominant pitch classes (top 3) for a more digestible signal
-  const PITCH_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-  const dominantPitches = chroma.length === 12
-    ? [...chroma.map((v, i) => ({ v, name: PITCH_NAMES[i] }))]
-        .sort((a, b) => b.v - a.v).slice(0, 3)
-        .map(p => `${p.name}:${p.v}`)
-    : [];
-  const parts = [
-    `tempo=${round1(s.tempo_bpm)}bpm`,
-    `key=${s.estimated_key ?? "?"}${s.mode ? ` ${s.mode}` : ""}`,
-    `beat_regularity=${round1(s.beat_regularity)}`,
-    `onset_rate=${round1(s.onset_rate_per_sec)}/s`,
-    `rms=${round1(s.rms_mean)}`,
-    `spec_centroid=${round1(s.spectral_centroid_mean)}Hz`,
-    `spec_rolloff=${round1(s.spectral_rolloff_mean)}Hz`,
-    `spec_flatness=${round1(s.spectral_flatness_mean)}`,
-    `zcr=${round1(s.zero_crossing_rate_mean)}`,
-    contrast.length ? `contrast=[${contrast.join(",")}]` : "",
-    mfcc.length ? `mfcc[0..6]=[${mfcc.join(",")}]` : "",
-    dominantPitches.length ? `dominant_pitches=[${dominantPitches.join(",")}]` : "",
-    chroma.length ? `chroma=[${chroma.join(",")}]` : "",
-    tonnetz.length ? `tonnetz=[${tonnetz.join(",")}]` : "",
-  ].filter(Boolean);
-  return parts.join(" ");
-}
 
 interface AnalysisRequest {
   sources: AudioSource[];

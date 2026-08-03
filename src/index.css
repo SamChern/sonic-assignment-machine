@@ -201,6 +201,11 @@ All colors MUST be HSL.
   .gradient-subtle {
     background: var(--gradient-subtle);
   }
+
+  .gradient-app {
+    background-image: var(--gradient-app);
+  }
+
   
   .shadow-elegant {
     box-shadow: var(--shadow-elegant);

@@ -42,6 +42,8 @@ export function LibrosaHealthPanel() {
   const [metrics, setMetrics] = useState<Metrics>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [draining, setDraining] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+
 
   const load = useCallback(async () => {
     setLoading(true);

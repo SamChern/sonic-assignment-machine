@@ -176,8 +176,13 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    background-image: var(--gradient-app);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    background-size: cover;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight;

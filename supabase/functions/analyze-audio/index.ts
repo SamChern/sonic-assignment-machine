@@ -607,7 +607,14 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         const mean = scores.reduce((s, v) => s + v, 0) / (scores.length || 1);
         const variance = scores.reduce((s, v) => s + (v - mean) ** 2, 0) / (scores.length || 1);
         const stddev = Math.sqrt(variance);
-        const confidence = Math.max(0.1, Math.min(1, stddev / 30));
+        const spread = Math.max(0.1, Math.min(1, stddev / 30));
+        // Phase 2 — weight confidence by the acoustic evidence tier that was
+        // actually available (librosa > provider > neighbours > metadata).
+        const evidence =
+          uncachedSources.find(s => s.name === sourceResult.name)?.evidence ??
+          'librosa'; // cached analyses were scored with their own evidence
+        const confidence = blendConfidence(spread, evidence);
+
 
         return {
           user_id,

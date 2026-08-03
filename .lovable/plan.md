@@ -92,14 +92,13 @@ Goal: the pipeline stays fully functional and scalable even if the librosa servi
 
 ---
 
-## Phase 3 — Database and backend scaling (independent of EC2)
+## Phase 3 — Database and backend scaling (independent of EC2) — DONE
 
-- Tune the pgvector index on `audio_sources.profile_embedding` (`hnsw` with appropriate `m`/`ef_construction`, or `ivfflat` with `lists` scaled to row count). Re-tune as rows pass 100k and 1M.
-- Add covering indexes for the hot read paths: `source_analyses(user_id, created_at desc)`, `audio_sources(user_id, source_type)`, `librosa_cache(cache_key)`, `analysis_jobs(status, created_at)`.
-- Use `supabase--slow_queries` and `EXPLAIN (ANALYZE, BUFFERS)` to find the real offenders before adding indexes.
-- Move large arrays (mel spectrograms, recurrence matrices) out of row-inline `jsonb` into a separate table or Lovable Cloud storage, keeping only scalars hot.
-- Archive `librosa_call_log`, failed jobs, and superseded feature blobs on a retention schedule.
-- Watch `db_health`; scale Lovable Cloud compute only when the saturated metric is actually memory or connections.
+- [x] Partial HNSW index on `audio_sources.profile_embedding` (`m=16`, `ef_construction=96`, `WHERE profile_embedding IS NOT NULL`) matching the `match_audio_profiles` predicate.
+- [x] Covering indexes for hot reads: `source_analyses(audio_source_id, created_at desc)`, `source_analyses(category)`, `audio_sources(spotify_id)`, partial indexes on `analysis_status` and `librosa_features IS NULL`, `taxonomy_nodes(code)`, `librosa_cache(last_hit_at)`.
+- [x] Retention: `prune_analysis_telemetry(log_days, job_days, cache_idle_days)` — service-role only — trims `librosa_call_log`, finished `analysis_jobs`, and failed cache rows.
+- Remaining/optional at higher scale: move large arrays (mel spectrograms, recurrence matrices) out of row-inline `jsonb` into a side table or storage; schedule `prune_analysis_telemetry` on pg_cron; re-tune the HNSW index as rows pass 1M; watch `db_health` before scaling compute.
+
 
 ---
 

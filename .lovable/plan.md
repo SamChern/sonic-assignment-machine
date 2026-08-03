@@ -97,18 +97,20 @@ Goal: the pipeline stays fully functional and scalable even if the librosa servi
 - [x] Partial HNSW index on `audio_sources.profile_embedding` (`m=16`, `ef_construction=96`, `WHERE profile_embedding IS NOT NULL`) matching the `match_audio_profiles` predicate.
 - [x] Covering indexes for hot reads: `source_analyses(audio_source_id, created_at desc)`, `source_analyses(category)`, `audio_sources(spotify_id)`, partial indexes on `analysis_status` and `librosa_features IS NULL`, `taxonomy_nodes(code)`, `librosa_cache(last_hit_at)`.
 - [x] Retention: `prune_analysis_telemetry(log_days, job_days, cache_idle_days)` — service-role only — trims `librosa_call_log`, finished `analysis_jobs`, and failed cache rows.
-- Remaining/optional at higher scale: move large arrays (mel spectrograms, recurrence matrices) out of row-inline `jsonb` into a side table or storage; schedule `prune_analysis_telemetry` on pg_cron; re-tune the HNSW index as rows pass 1M; watch `db_health` before scaling compute.
+- [x] `prune_analysis_telemetry(30, 7, 14)` scheduled nightly on pg_cron (`prune-analysis-telemetry-daily`, 04:17 UTC).
+- Remaining/optional at higher scale: move large arrays (mel spectrograms, recurrence matrices) out of row-inline `jsonb` into a side table or storage; re-tune the HNSW index as rows pass 1M; watch `db_health` before scaling compute.
 
 
 ---
 
-## Phase 4 — Frontend efficiency
+## Phase 4 — Frontend efficiency — DONE
 
-- Lazy-load `LibrosaVisuals`, the D3 network, and admin bundles with `React.lazy` so first paint doesn't ship the heavy visualization code.
-- Virtualize long source lists in `UserLibrary` / Select Sources.
-- Memoize the network layout and fingerprint math; recompute only on actual data change.
-- Debounce search inputs against Spotify/Apple endpoints.
-- Cache read queries client-side with React Query stale times so tab switches don't re-fetch.
+- [x] Route-level code splitting: `Auth`, all admin pages, and `NotFound` load via `React.lazy` + `Suspense`.
+- [x] `LibrosaVisuals` and `ChromaTonnetzPanel` lazy-loaded per source card; D3 `NetworkVisualization` lazy-loaded behind a spinner.
+- [x] Windowed source lists in `UserLibrary` (40-item chunks grown by an IntersectionObserver sentinel).
+- [x] Global React Query defaults (2 min stale, 10 min gc, no refetch-on-focus, single retry) so tab switches don't re-fetch.
+- Remaining/optional: memoize network layout math, debounce provider search inputs.
+
 
 ---
 

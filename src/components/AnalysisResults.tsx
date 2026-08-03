@@ -1,9 +1,17 @@
 import { Card } from "@/components/ui/card";
 import { Brain, Users, Heart, MessageSquare, Music, MapPin, Waves } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { Button } from "@/components/ui/button";
-import { LibrosaVisuals, ChromaTonnetzPanel } from "@/components/visuals/LibrosaVisuals";
+const LibrosaVisuals = lazy(() =>
+  import("@/components/visuals/LibrosaVisuals").then((m) => ({ default: m.LibrosaVisuals }))
+);
+const ChromaTonnetzPanel = lazy(() =>
+  import("@/components/visuals/LibrosaVisuals").then((m) => ({ default: m.ChromaTonnetzPanel }))
+);
+const VisualsFallback = () => (
+  <div className="h-24 animate-pulse rounded-md bg-secondary/30" />
+);
 import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 import { FeedbackPopover } from "@/components/FeedbackPopover";
 import { supabase } from "@/integrations/supabase/client";
@@ -510,7 +518,11 @@ function AcousticVisualsToggle({ audioSourceId }: { audioSourceId: string }) {
               No acoustic features cached for this source yet.
             </p>
           )}
-          {features && <LibrosaVisuals features={features} />}
+          {features && (
+            <Suspense fallback={<VisualsFallback />}>
+              <LibrosaVisuals features={features} />
+            </Suspense>
+          )}
 
         </div>
       )}
@@ -532,7 +544,9 @@ function HarmonicPreview({ audioSourceId }: { audioSourceId: string }) {
           chroma · tonnetz
         </span>
       </div>
-      <ChromaTonnetzPanel features={features} />
+      <Suspense fallback={<VisualsFallback />}>
+        <ChromaTonnetzPanel features={features} />
+      </Suspense>
     </div>
   );
 }

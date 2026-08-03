@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,50 @@ import { Music, FileAudio, Trash2, User, Globe, Library, Plus, ExternalLink } fr
 interface UserLibraryProps {
   onSelectSource?: (source: AudioSource) => void;
   onSelectMultiple?: (sources: AudioSource[]) => void;
+}
+
+const PAGE_SIZE = 40;
+
+// Windowed grid: renders sources in chunks and grows as the sentinel scrolls
+// into view, so libraries with thousands of items stay cheap to render.
+function LazySourceGrid({
+  sources,
+  renderItem,
+}: {
+  sources: AudioSource[];
+  renderItem: (source: AudioSource) => ReactNode;
+}) {
+  const [visible, setVisible] = useState(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setVisible(PAGE_SIZE);
+  }, [sources.length]);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || visible >= sources.length) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some(e => e.isIntersecting)) {
+        setVisible(v => Math.min(v + PAGE_SIZE, sources.length));
+      }
+    }, { rootMargin: '300px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visible, sources.length]);
+
+  return (
+    <>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {sources.slice(0, visible).map(renderItem)}
+      </div>
+      {visible < sources.length && (
+        <div ref={sentinelRef} className="py-3 text-center text-xs text-muted-foreground">
+          Loading more… ({visible} of {sources.length})
+        </div>
+      )}
+    </>
+  );
 }
 
 export function UserLibrary({ onSelectSource, onSelectMultiple }: UserLibraryProps) {
@@ -168,11 +212,13 @@ export function UserLibrary({ onSelectSource, onSelectMultiple }: UserLibraryPro
                 </p>
               </Card>
             ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {mySources.map(source => (
+              <LazySourceGrid
+                sources={mySources}
+                renderItem={(source) => (
                   <SourceCard key={source.id} source={source} showDelete />
-                ))}
-              </div>
+                )}
+              />
+
             )}
           </TabsContent>
         )}
@@ -203,15 +249,17 @@ export function UserLibrary({ onSelectSource, onSelectMultiple }: UserLibraryPro
                     {sources.length} source{sources.length !== 1 ? 's' : ''}
                   </Badge>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {sources.map(source => (
-                    <SourceCard 
-                      key={source.id} 
-                      source={source} 
-                      showDelete={user?.id === source.user_id} 
+                <LazySourceGrid
+                  sources={sources}
+                  renderItem={(source) => (
+                    <SourceCard
+                      key={source.id}
+                      source={source}
+                      showDelete={user?.id === source.user_id}
                     />
-                  ))}
-                </div>
+                  )}
+                />
+
               </Card>
             ))
           )}

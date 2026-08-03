@@ -114,16 +114,19 @@ Goal: the pipeline stays fully functional and scalable even if the librosa servi
 
 ---
 
-## Phase 5 — When you regain EC2 control (parked, not required)
+## Phase 5 — EC2 / infrastructure scaling — ARTIFACTS READY (apply when you control the box)
 
-Keep this as a backlog, explicitly not a dependency for anything above:
+Prepared in `deploy/librosa-mcp/`, nothing applied to the live instance:
 
-- Multiple uvicorn/gunicorn workers, `/tmp` on tmpfs, thread/process pool for the CPU-bound analysis.
-- Containerize the worker, publish to ECR, put it behind an auto-scaling group driven by the queue depth you'll already be measuring from Phase 1.
-- Move ingress to an ALB and workers to a private subnet.
-- Spot instances for the bulk of analysis compute.
+- [x] `PHASE5-RUNBOOK.md` — ordered, reversible steps with rollback and verification per step.
+- [x] `librosa-rest-tuning.conf` — systemd drop-in: gunicorn multi-worker (one per core minus one), tmpfs scratch (`PrivateTmp`, `MPLCONFIGDIR`, `NUMBA_CACHE_DIR`), BLAS thread pinning, raised memory/file limits. Keeps the current loopback port — no nginx or AWS change.
+- [x] `gunicorn.conf.py` — worker sizing, 300 s timeout, worker recycling (`max_requests`), no preload (numba JIT is not fork-safe).
+- [x] `Dockerfile` + `requirements.txt` — containerized worker with ffmpeg/libsndfile, non-root, healthcheck, identical HTTP contract; ECR tag-by-commit instructions in the runbook.
+- [x] `publish-queue-depth.sh` — publishes `analysis_jobs` backlog to CloudWatch as `PendingJobsPerWorker` for ASG target tracking (target 3), with spot/mixed-instances and graceful-drain guidance.
+- [x] Cutover design: internal ALB + private-subnet workers; the only switch is `LIBROSA_REST_URL` in admin integrations — no code deploy.
 
-Because Phase 1 already introduces a real queue, a content-addressed cache, and status-driven UI, this future migration becomes a drop-in change to a single edge function — the frontend and database never learn that anything moved.
+Guardrails: raise edge `MAX_INFLIGHT` only after worker capacity exists; keep the circuit breaker; secrets via SSM/Secrets Manager, never baked into images.
+
 
 ---
 

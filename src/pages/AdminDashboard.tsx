@@ -253,6 +253,14 @@ const AdminDashboard = () => {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => navigate("/admin/pipeline")}
+            >
+              <Activity className="h-4 w-4 mr-2" />
+              Integration Status
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigate("/admin/integrations")}
             >
               <Plug className="h-4 w-4 mr-2" />

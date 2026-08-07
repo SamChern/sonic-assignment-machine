@@ -28,6 +28,7 @@ import {
   History,
   ShieldCheck,
   Plug,
+  Activity,
 } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { AnalysisResults } from "@/components/AnalysisResults";

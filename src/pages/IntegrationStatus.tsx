@@ -182,7 +182,7 @@ const IntegrationStatus = () => {
       timestamp: b.updated_at ?? b.created_at,
       status: (b.failed_rows ?? 0) > 0 ? "partial" : b.status,
       meta: `${b.failed_rows ?? 0} rejected rows`,
-      error: b.error_message ?? null,
+      error: (b as { error_message?: string | null }).error_message ?? null,
     }));
 
     const jobDetails: DetailRow[] = jobRows.slice(0, 15).map((j) => ({

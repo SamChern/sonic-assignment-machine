@@ -28,6 +28,7 @@ import {
   History,
   ShieldCheck,
   Plug,
+  Activity,
 } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { AnalysisResults } from "@/components/AnalysisResults";
@@ -250,6 +251,14 @@ const AdminDashboard = () => {
                 {isAnalyzing ? "Analyzing..." : `Analyze ${selectedSourceIds.length} Sources`}
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/admin/pipeline")}
+            >
+              <Activity className="h-4 w-4 mr-2" />
+              Integration Status
+            </Button>
             <Button
               variant="outline"
               size="sm"

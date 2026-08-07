@@ -14,9 +14,19 @@ import {
   XCircle,
   CircleDashed,
   Activity,
+  ChevronDown,
 } from "lucide-react";
 
 type Health = "ok" | "warn" | "error" | "idle";
+
+interface DetailRow {
+  id: string;
+  title: string;
+  timestamp: string | null;
+  status?: string;
+  meta?: string;
+  error?: string | null;
+}
 
 interface Stage {
   key: string;
@@ -26,7 +36,10 @@ interface Stage {
   lastRunAt: string | null;
   metrics: { label: string; value: string }[];
   note?: string;
+  detailsLabel: string;
+  details: DetailRow[];
 }
+
 
 const HEALTH_META: Record<
   Health,
@@ -61,6 +74,10 @@ const IntegrationStatus = () => {
   const [stages, setStages] = useState<Stage[]>([]);
   const [refreshing, setRefreshing] = useState(true);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggle = (key: string) =>
+    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
 
   useEffect(() => {
     if (!loading) {
@@ -148,6 +165,72 @@ const IntegrationStatus = () => {
     const readyCache = cacheRows.filter((c) => c.status === "ready").length;
     const lastLog = logRows[0] ?? null;
 
+    const batchDetails: DetailRow[] = batchRows.slice(0, 10).map((b) => ({
+      id: b.id,
+      title: b.feed_name ?? "unnamed feed",
+      timestamp: b.created_at,
+      status: b.status,
+      meta: `${b.total_rows ?? 0} rows · ${b.success_rows ?? 0} ok · ${b.failed_rows ?? 0} failed`,
+    }));
+
+    const s3Details: DetailRow[] = batchRows.slice(0, 10).map((b) => ({
+      id: b.id,
+      title: b.file_uri ?? "manual upload (no object URI)",
+      timestamp: b.created_at,
+      status: b.file_uri ? b.status : "manual",
+      meta: b.feed_name ?? undefined,
+    }));
+
+    const normalizerDetails: DetailRow[] = batchRows.slice(0, 10).map((b) => ({
+      id: b.id,
+      title: `${b.feed_name ?? "batch"} — ${b.success_rows ?? 0}/${b.total_rows ?? 0} resolved`,
+      timestamp: b.updated_at ?? b.created_at,
+      status: (b.failed_rows ?? 0) > 0 ? "partial" : b.status,
+      meta: `${b.failed_rows ?? 0} rejected rows`,
+      error: (b as { error_message?: string | null }).error_message ?? null,
+    }));
+
+    const jobDetails: DetailRow[] = jobRows.slice(0, 15).map((j) => ({
+      id: j.id,
+      title: j.id,
+      timestamp: j.finished_at ?? j.started_at ?? j.created_at,
+      status: j.status,
+      meta: `attempts ${j.attempts ?? 0}`,
+      error: j.last_error ?? null,
+    }));
+
+    const librosaDetails: DetailRow[] = logRows.slice(0, 15).map((l) => ({
+      id: l.id,
+      title: l.cache_hit ? "cache hit" : "upstream call",
+      timestamp: l.created_at,
+      status: l.outcome,
+      meta: l.duration_ms != null ? `${l.duration_ms} ms` : undefined,
+      error: (l as { error_message?: string | null }).error_message ?? null,
+    }));
+
+    const taxonomyDetails: DetailRow[] = nodeRows.slice(0, 15).map((n) => ({
+      id: n.id,
+      title: n.id,
+      timestamp: n.updated_at,
+      status: n.embedding ? "embedded" : "missing embedding",
+    }));
+
+    const analyzeDetails: DetailRow[] = analysisRows.slice(0, 15).map((a) => ({
+      id: a.id,
+      title: a.id,
+      timestamp: a.created_at,
+      status: a.category ?? "uncategorized",
+      meta: `confidence ${Number(a.confidence ?? 0).toFixed(2)}`,
+    }));
+
+    const calibrationDetails: DetailRow[] = calibrationRows.slice(0, 15).map((c) => ({
+      id: c.id,
+      title: c.category,
+      timestamp: c.updated_at,
+      status: `n=${c.n ?? 0}`,
+      meta: `bias ${Number(c.bias ?? 0).toFixed(3)}`,
+    }));
+
     const next: Stage[] = [
       {
         key: "intuizi",
@@ -163,6 +246,8 @@ const IntegrationStatus = () => {
         note: lastBatch
           ? undefined
           : "No delivery recorded yet — the first console export will appear here.",
+        detailsLabel: "Latest batches",
+        details: batchDetails,
       },
       {
         key: "s3",
@@ -182,6 +267,8 @@ const IntegrationStatus = () => {
           lastBatch && !lastBatch.file_uri
             ? "Latest batch arrived by manual upload rather than an S3 object."
             : undefined,
+        detailsLabel: "Recent objects",
+        details: s3Details,
       },
       {
         key: "normalizer",
@@ -203,6 +290,8 @@ const IntegrationStatus = () => {
             value: inboundRows ? `${Math.round((successRows / inboundRows) * 100)}%` : "—",
           },
         ],
+        detailsLabel: "Per-batch resolution",
+        details: normalizerDetails,
       },
       {
         key: "analysis_jobs",
@@ -223,6 +312,8 @@ const IntegrationStatus = () => {
           { label: "Failed", value: String(failedJobs) },
         ],
         note: lastJob?.last_error ? `Last error: ${lastJob.last_error}` : undefined,
+        detailsLabel: "Latest jobs",
+        details: jobDetails,
       },
       {
         key: "librosa",
@@ -244,6 +335,8 @@ const IntegrationStatus = () => {
           },
           { label: "Errors (last 200)", value: String(logErrors) },
         ],
+        detailsLabel: "Recent calls",
+        details: librosaDetails,
       },
       {
         key: "taxonomy",
@@ -259,6 +352,8 @@ const IntegrationStatus = () => {
             value: nodeRows.length ? `${Math.round((embedded / nodeRows.length) * 100)}%` : "—",
           },
         ],
+        detailsLabel: "Recently updated nodes",
+        details: taxonomyDetails,
       },
       {
         key: "analyze",
@@ -271,6 +366,8 @@ const IntegrationStatus = () => {
           { label: "Categorized", value: String(categorized) },
           { label: "Avg confidence", value: analysisRows.length ? avgConfidence.toFixed(2) : "—" },
         ],
+        detailsLabel: "Latest analyses",
+        details: analyzeDetails,
       },
       {
         key: "calibration",
@@ -285,6 +382,8 @@ const IntegrationStatus = () => {
         note: lastCalibration
           ? undefined
           : "Run recalibration from the CTV console to seed calibration anchors.",
+        detailsLabel: "Calibration anchors",
+        details: calibrationDetails,
       },
       {
         key: "outbound",
@@ -297,8 +396,11 @@ const IntegrationStatus = () => {
           { label: "Monthly target", value: "10,000 users" },
         ],
         note: "Activation export is not wired yet — cohorts are staged locally until the outbound job is enabled.",
+        detailsLabel: "Export runs",
+        details: [],
       },
     ];
+
 
     setStages(next);
     setFetchedAt(new Date());
@@ -401,7 +503,68 @@ const IntegrationStatus = () => {
                       {stage.note}
                     </p>
                   )}
+
+                  <div className="border-t border-border pt-2">
+                    <button
+                      type="button"
+                      onClick={() => toggle(stage.key)}
+                      aria-expanded={!!expanded[stage.key]}
+                      className="flex w-full items-center justify-between gap-2 text-sm font-medium text-primary hover:underline"
+                    >
+                      <span>
+                        {stage.detailsLabel}
+                        {stage.details.length ? ` (${stage.details.length})` : ""}
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${expanded[stage.key] ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {expanded[stage.key] && (
+                      <div className="mt-3 space-y-2">
+                        {stage.details.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            No runs recorded for this stage yet.
+                          </p>
+                        ) : (
+                          stage.details.map((row) => (
+                            <div
+                              key={row.id}
+                              className="rounded-md border border-border bg-muted/30 p-3 space-y-1"
+                            >
+                              <div className="flex items-start justify-between gap-3 flex-wrap">
+                                <p className="text-xs font-mono break-all">{row.title}</p>
+                                {row.status && (
+                                  <Badge variant="outline" className="text-xs shrink-0">
+                                    {row.status}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+                                <span
+                                  title={
+                                    row.timestamp
+                                      ? new Date(row.timestamp).toLocaleString()
+                                      : undefined
+                                  }
+                                >
+                                  {relative(row.timestamp)}
+                                </span>
+                                {row.meta && <span>{row.meta}</span>}
+                              </div>
+                              {row.error && (
+                                <p className="text-xs text-destructive break-all font-mono">
+                                  {row.error}
+                                </p>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </Card>
+
               </li>
             );
           })}

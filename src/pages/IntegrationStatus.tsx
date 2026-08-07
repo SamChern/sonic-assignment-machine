@@ -18,6 +18,15 @@ import {
 
 type Health = "ok" | "warn" | "error" | "idle";
 
+interface DetailRow {
+  id: string;
+  title: string;
+  timestamp: string | null;
+  status?: string;
+  meta?: string;
+  error?: string | null;
+}
+
 interface Stage {
   key: string;
   title: string;
@@ -26,7 +35,10 @@ interface Stage {
   lastRunAt: string | null;
   metrics: { label: string; value: string }[];
   note?: string;
+  detailsLabel: string;
+  details: DetailRow[];
 }
+
 
 const HEALTH_META: Record<
   Health,

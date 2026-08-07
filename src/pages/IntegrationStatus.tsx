@@ -14,6 +14,7 @@ import {
   XCircle,
   CircleDashed,
   Activity,
+  ChevronDown,
 } from "lucide-react";
 
 type Health = "ok" | "warn" | "error" | "idle";
@@ -73,6 +74,10 @@ const IntegrationStatus = () => {
   const [stages, setStages] = useState<Stage[]>([]);
   const [refreshing, setRefreshing] = useState(true);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggle = (key: string) =>
+    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
 
   useEffect(() => {
     if (!loading) {

@@ -498,7 +498,68 @@ const IntegrationStatus = () => {
                       {stage.note}
                     </p>
                   )}
+
+                  <div className="border-t border-border pt-2">
+                    <button
+                      type="button"
+                      onClick={() => toggle(stage.key)}
+                      aria-expanded={!!expanded[stage.key]}
+                      className="flex w-full items-center justify-between gap-2 text-sm font-medium text-primary hover:underline"
+                    >
+                      <span>
+                        {stage.detailsLabel}
+                        {stage.details.length ? ` (${stage.details.length})` : ""}
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${expanded[stage.key] ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {expanded[stage.key] && (
+                      <div className="mt-3 space-y-2">
+                        {stage.details.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            No runs recorded for this stage yet.
+                          </p>
+                        ) : (
+                          stage.details.map((row) => (
+                            <div
+                              key={row.id}
+                              className="rounded-md border border-border bg-muted/30 p-3 space-y-1"
+                            >
+                              <div className="flex items-start justify-between gap-3 flex-wrap">
+                                <p className="text-xs font-mono break-all">{row.title}</p>
+                                {row.status && (
+                                  <Badge variant="outline" className="text-xs shrink-0">
+                                    {row.status}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+                                <span
+                                  title={
+                                    row.timestamp
+                                      ? new Date(row.timestamp).toLocaleString()
+                                      : undefined
+                                  }
+                                >
+                                  {relative(row.timestamp)}
+                                </span>
+                                {row.meta && <span>{row.meta}</span>}
+                              </div>
+                              {row.error && (
+                                <p className="text-xs text-destructive break-all font-mono">
+                                  {row.error}
+                                </p>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </Card>
+
               </li>
             );
           })}

@@ -46,6 +46,8 @@ const App = () => (
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/integrations" element={<AdminIntegrations />} />
               <Route path="/admin/ctv" element={<AdminCTV />} />
+              <Route path="/admin/pipeline" element={<IntegrationStatus />} />
+
               <Route path="/demo" element={<Demo />} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

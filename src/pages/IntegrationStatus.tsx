@@ -88,7 +88,7 @@ const IntegrationStatus = () => {
 
   const load = useCallback(async () => {
     setRefreshing(true);
-    const [batches, jobs, nodes, analyses, calibration, callLog, cache] =
+    const [batches, jobs, nodes, analyses, calibration, callLog, cache, ingestFiles, ingestState] =
       await Promise.all([
         supabase
           .from("ctv_ingest_batches")
@@ -125,6 +125,18 @@ const IntegrationStatus = () => {
           .select("cache_key, status, hit_count, ready_at, created_at")
           .order("created_at", { ascending: false })
           .limit(200),
+        supabase
+          .from("intuizi_ingest_files")
+          .select(
+            "id, object_key, report_type, status, total_rows, processed_rows, failed_rows, partition_date, error_message, discovered_at, started_at, finished_at",
+          )
+          .order("discovered_at", { ascending: false })
+          .limit(25),
+        supabase
+          .from("intuizi_ingest_state")
+          .select("paused, pause_reason, parked_until, last_run_at, last_error, last_run_summary")
+          .eq("id", "singleton")
+          .maybeSingle(),
       ]);
 
     const batchRows = batches.data ?? [];
@@ -134,6 +146,14 @@ const IntegrationStatus = () => {
     const calibrationRows = calibration.data ?? [];
     const logRows = callLog.data ?? [];
     const cacheRows = cache.data ?? [];
+    const fileRows = ingestFiles.data ?? [];
+    const ingestStateRow = ingestState.data ?? null;
+    setIngestState(ingestStateRow);
+
+    const lastFile = fileRows[0] ?? null;
+    const doneFiles = fileRows.filter((f) => f.status === "done").length;
+    const failedFiles = fileRows.filter((f) => f.status === "failed").length;
+    const objectRowsSeen = fileRows.reduce((a, f) => a + (f.total_rows ?? 0), 0);
 
     const lastBatch = batchRows[0] ?? null;
     const failedBatches = batchRows.filter((b) => b.status === "failed").length;

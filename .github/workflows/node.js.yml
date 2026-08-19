@@ -1,6 +1,8 @@
 # CI for this Vite + React + TypeScript app (managed via Lovable).
-# Installs deps, lints, and builds on Node 20. No publish step — this is a
-# private app, not an npm package.
+# Installs deps, lints, builds, and tests across a Node version matrix so a
+# runner/Node deprecation (e.g. Node 20 EOL on GitHub runners) surfaces as a
+# single matrix leg failing instead of breaking every build at once.
+# No publish step — this is a private app, not an npm package.
 # Docs: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
 
 name: Node.js CI
@@ -15,13 +17,30 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    strategy:
+      # Keep every leg running so one Node version failing still reports the
+      # others — that's how we spot version-specific breakage early.
+      fail-fast: false
+      matrix:
+        # 22.x = current LTS floor, 24.x = active LTS / the runner default.
+        node-version: [22.x, 24.x]
+        include:
+          # Next-major early warning. Allowed to fail so upstream churn on a
+          # pre-release Node doesn't block merges.
+          - node-version: 25.x
+            experimental: true
+
+    continue-on-error: ${{ matrix.experimental || false }}
+
+    name: build (Node ${{ matrix.node-version }})
+
     steps:
       - uses: actions/checkout@v5
 
-      - name: Use Node.js 24.x
+      - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v5
         with:
-          node-version: 24.x
+          node-version: ${{ matrix.node-version }}
           cache: "npm"
 
       - name: Install dependencies

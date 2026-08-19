@@ -75,6 +75,14 @@ const IntegrationStatus = () => {
   const [refreshing, setRefreshing] = useState(true);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [ingestState, setIngestState] = useState<{
+    paused: boolean | null;
+    pause_reason: string | null;
+    parked_until: string | null;
+    last_run_at: string | null;
+    last_error: string | null;
+  } | null>(null);
+  const [running, setRunning] = useState(false);
 
   const toggle = (key: string) =>
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));

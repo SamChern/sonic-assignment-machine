@@ -450,6 +450,39 @@ const IntegrationStatus = () => {
     if (isAdmin) load();
   }, [isAdmin, load]);
 
+  const invokeIngest = useCallback(
+    async (action: "run_now" | "resume") => {
+      setRunning(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("intuizi-ingest", {
+          body: { action },
+        });
+        if (error) {
+          const details =
+            "context" in error && error.context
+              ? await (error.context as Response).text().catch(() => error.message)
+              : error.message;
+          toast({ title: "Ingest run failed", description: details, variant: "destructive" });
+        } else if (data?.error) {
+          toast({ title: "Ingest blocked", description: String(data.error), variant: "destructive" });
+        } else if (action === "resume") {
+          toast({ title: "Ingest resumed", description: "The next run will process a full batch." });
+        } else {
+          toast({
+            title: data?.idle ? "Nothing new to ingest" : "Ingest run complete",
+            description: data?.idle
+              ? "No unprocessed objects found in the inbound bucket."
+              : `${data?.files_processed ?? 0} object(s), ${data?.identifiers_scored ?? 0} identifier(s) scored.`,
+          });
+        }
+      } finally {
+        setRunning(false);
+        load();
+      }
+    },
+    [load],
+  );
+
   if (loading || !isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">

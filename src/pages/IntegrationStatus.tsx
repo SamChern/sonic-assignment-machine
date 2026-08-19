@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
   RefreshCw,
@@ -15,6 +16,7 @@ import {
   CircleDashed,
   Activity,
   ChevronDown,
+  PlayCircle,
 } from "lucide-react";
 
 type Health = "ok" | "warn" | "error" | "idle";
@@ -505,6 +507,17 @@ const IntegrationStatus = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {ingestState?.paused ? (
+              <Button variant="default" size="sm" onClick={() => invokeIngest("resume")} disabled={running}>
+                {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-2" />}
+                Resume ingest
+              </Button>
+            ) : (
+              <Button variant="secondary" size="sm" onClick={() => invokeIngest("run_now")} disabled={running}>
+                {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-2" />}
+                Run ingest
+              </Button>
+            )}
             <span className="text-xs text-muted-foreground hidden sm:inline">
               {fetchedAt ? `Updated ${fetchedAt.toLocaleTimeString()}` : "Loading…"}
             </span>

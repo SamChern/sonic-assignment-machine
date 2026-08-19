@@ -193,12 +193,14 @@ const IntegrationStatus = () => {
       meta: `${b.total_rows ?? 0} rows · ${b.success_rows ?? 0} ok · ${b.failed_rows ?? 0} failed`,
     }));
 
-    const s3Details: DetailRow[] = batchRows.slice(0, 10).map((b) => ({
-      id: b.id,
-      title: b.file_uri ?? "manual upload (no object URI)",
-      timestamp: b.created_at,
-      status: b.file_uri ? b.status : "manual",
-      meta: b.feed_name ?? undefined,
+    const fileDetails: DetailRow[] = fileRows.slice(0, 12).map((f) => ({
+      id: f.id,
+      title: f.object_key,
+      timestamp: f.finished_at ?? f.started_at ?? f.discovered_at,
+      status: f.status,
+      meta: `${f.report_type}${f.partition_date ? ` · ${f.partition_date}` : ""} · ` +
+        `${f.processed_rows ?? 0}/${f.total_rows ?? 0} scored · ${f.failed_rows ?? 0} failed`,
+      error: f.error_message ?? null,
     }));
 
     const normalizerDetails: DetailRow[] = batchRows.slice(0, 10).map((b) => ({
@@ -272,23 +274,32 @@ const IntegrationStatus = () => {
       {
         key: "s3",
         title: "S3 inbound drop",
-        subtitle: "Nightly object landing in the shared inbound bucket",
-        health: lastBatch
-          ? lastBatch.file_uri
-            ? staleness(lastBatch.created_at, 48)
-            : "warn"
-          : "idle",
-        lastRunAt: lastBatch?.created_at ?? null,
+        subtitle: "Objects landing in the Intuizi inbound bucket and picked up by the ingest worker",
+        health: ingestStateRow?.paused
+          ? "error"
+          : !lastFile
+            ? "idle"
+            : failedFiles > doneFiles
+              ? "error"
+              : failedFiles > 0
+                ? "warn"
+                : staleness(ingestStateRow?.last_run_at ?? lastFile.discovered_at, 36),
+        lastRunAt: ingestStateRow?.last_run_at ?? lastFile?.discovered_at ?? null,
         metrics: [
-          { label: "Latest object", value: lastBatch?.file_uri ?? "manual upload" },
-          { label: "Failed deliveries", value: String(failedBatches) },
+          { label: "Latest object", value: lastFile?.object_key ?? "none seen yet" },
+          { label: "Objects processed", value: `${doneFiles}/${fileRows.length}` },
+          { label: "Rows read", value: String(objectRowsSeen) },
+          { label: "Failed objects", value: String(failedFiles) },
         ],
-        note:
-          lastBatch && !lastBatch.file_uri
-            ? "Latest batch arrived by manual upload rather than an S3 object."
-            : undefined,
+        note: ingestStateRow?.paused
+          ? `Ingest is paused: ${ingestStateRow.pause_reason ?? "unknown reason"} — resume it once the cause is cleared.`
+          : ingestStateRow?.parked_until && new Date(ingestStateRow.parked_until) > new Date()
+            ? "Parked after repeated rate limits — the next scheduled run retries automatically."
+            : !lastFile
+              ? "No S3 objects seen yet. Once Intuizi drops files under ctv/, apps/, visitation/, demographics/ or origin/, the worker picks them up."
+              : ingestStateRow?.last_error ?? undefined,
         detailsLabel: "Recent objects",
-        details: s3Details,
+        details: fileDetails,
       },
       {
         key: "normalizer",

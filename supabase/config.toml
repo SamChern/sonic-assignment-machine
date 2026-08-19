@@ -25,3 +25,6 @@ verify_jwt = true
 
 [functions.recalibrate-categories]
 verify_jwt = true
+
+[functions.intuizi-ingest]
+verify_jwt = false

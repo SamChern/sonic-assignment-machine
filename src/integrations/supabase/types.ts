@@ -351,6 +351,170 @@ export type Database = {
         }
         Relationships: []
       }
+      intuizi_identifiers: {
+        Row: {
+          apps_signals: Json
+          audio_source_id: string | null
+          created_at: string
+          ctv_signals: Json
+          demographics_signals: Json
+          id: string
+          last_seen_at: string | null
+          observation_count: number
+          origin_signals: Json
+          primary_identifier: string
+          tag_codes: string[]
+          updated_at: string
+          visitation_signals: Json
+        }
+        Insert: {
+          apps_signals?: Json
+          audio_source_id?: string | null
+          created_at?: string
+          ctv_signals?: Json
+          demographics_signals?: Json
+          id?: string
+          last_seen_at?: string | null
+          observation_count?: number
+          origin_signals?: Json
+          primary_identifier: string
+          tag_codes?: string[]
+          updated_at?: string
+          visitation_signals?: Json
+        }
+        Update: {
+          apps_signals?: Json
+          audio_source_id?: string | null
+          created_at?: string
+          ctv_signals?: Json
+          demographics_signals?: Json
+          id?: string
+          last_seen_at?: string | null
+          observation_count?: number
+          origin_signals?: Json
+          primary_identifier?: string
+          tag_codes?: string[]
+          updated_at?: string
+          visitation_signals?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intuizi_identifiers_audio_source_id_fkey"
+            columns: ["audio_source_id"]
+            isOneToOne: false
+            referencedRelation: "audio_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intuizi_ingest_files: {
+        Row: {
+          created_at: string
+          cursor_offset: number
+          discovered_at: string
+          error_message: string | null
+          etag: string | null
+          failed_rows: number
+          finished_at: string | null
+          id: string
+          object_key: string
+          partition_date: string | null
+          processed_rows: number
+          report_type: string
+          size_bytes: number | null
+          started_at: string | null
+          status: string
+          total_rows: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cursor_offset?: number
+          discovered_at?: string
+          error_message?: string | null
+          etag?: string | null
+          failed_rows?: number
+          finished_at?: string | null
+          id?: string
+          object_key: string
+          partition_date?: string | null
+          processed_rows?: number
+          report_type: string
+          size_bytes?: number | null
+          started_at?: string | null
+          status?: string
+          total_rows?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cursor_offset?: number
+          discovered_at?: string
+          error_message?: string | null
+          etag?: string | null
+          failed_rows?: number
+          finished_at?: string | null
+          id?: string
+          object_key?: string
+          partition_date?: string | null
+          processed_rows?: number
+          report_type?: string
+          size_bytes?: number | null
+          started_at?: string | null
+          status?: string
+          total_rows?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      intuizi_ingest_state: {
+        Row: {
+          consecutive_rate_limits: number
+          created_at: string
+          id: string
+          last_error: string | null
+          last_run_at: string | null
+          last_run_summary: Json
+          lease_owner: string | null
+          lease_until: string | null
+          parked_until: string | null
+          pause_reason: string | null
+          paused: boolean
+          paused_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          consecutive_rate_limits?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_run_at?: string | null
+          last_run_summary?: Json
+          lease_owner?: string | null
+          lease_until?: string | null
+          parked_until?: string | null
+          pause_reason?: string | null
+          paused?: boolean
+          paused_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          consecutive_rate_limits?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_run_at?: string | null
+          last_run_summary?: Json
+          lease_owner?: string | null
+          lease_until?: string | null
+          parked_until?: string | null
+          pause_reason?: string | null
+          paused?: boolean
+          paused_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       librosa_cache: {
         Row: {
           cache_key: string
@@ -715,6 +879,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acquire_intuizi_lease: {
+        Args: { p_owner: string; p_seconds?: number }
+        Returns: boolean
+      }
       claim_analysis_jobs: {
         Args: { p_limit?: number }
         Returns: {
@@ -781,6 +949,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      release_intuizi_lease: { Args: { p_owner: string }; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"

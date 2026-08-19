@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
   RefreshCw,
@@ -15,6 +16,7 @@ import {
   CircleDashed,
   Activity,
   ChevronDown,
+  PlayCircle,
 } from "lucide-react";
 
 type Health = "ok" | "warn" | "error" | "idle";
@@ -75,6 +77,14 @@ const IntegrationStatus = () => {
   const [refreshing, setRefreshing] = useState(true);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [ingestState, setIngestState] = useState<{
+    paused: boolean | null;
+    pause_reason: string | null;
+    parked_until: string | null;
+    last_run_at: string | null;
+    last_error: string | null;
+  } | null>(null);
+  const [running, setRunning] = useState(false);
 
   const toggle = (key: string) =>
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -88,7 +98,7 @@ const IntegrationStatus = () => {
 
   const load = useCallback(async () => {
     setRefreshing(true);
-    const [batches, jobs, nodes, analyses, calibration, callLog, cache] =
+    const [batches, jobs, nodes, analyses, calibration, callLog, cache, ingestFiles, ingestState] =
       await Promise.all([
         supabase
           .from("ctv_ingest_batches")
@@ -125,6 +135,18 @@ const IntegrationStatus = () => {
           .select("cache_key, status, hit_count, ready_at, created_at")
           .order("created_at", { ascending: false })
           .limit(200),
+        supabase
+          .from("intuizi_ingest_files")
+          .select(
+            "id, object_key, report_type, status, total_rows, processed_rows, failed_rows, partition_date, error_message, discovered_at, started_at, finished_at",
+          )
+          .order("discovered_at", { ascending: false })
+          .limit(25),
+        supabase
+          .from("intuizi_ingest_state")
+          .select("paused, pause_reason, parked_until, last_run_at, last_error, last_run_summary")
+          .eq("id", "singleton")
+          .maybeSingle(),
       ]);
 
     const batchRows = batches.data ?? [];
@@ -134,6 +156,14 @@ const IntegrationStatus = () => {
     const calibrationRows = calibration.data ?? [];
     const logRows = callLog.data ?? [];
     const cacheRows = cache.data ?? [];
+    const fileRows = ingestFiles.data ?? [];
+    const ingestStateRow = ingestState.data ?? null;
+    setIngestState(ingestStateRow);
+
+    const lastFile = fileRows[0] ?? null;
+    const doneFiles = fileRows.filter((f) => f.status === "done").length;
+    const failedFiles = fileRows.filter((f) => f.status === "failed").length;
+    const objectRowsSeen = fileRows.reduce((a, f) => a + (f.total_rows ?? 0), 0);
 
     const lastBatch = batchRows[0] ?? null;
     const failedBatches = batchRows.filter((b) => b.status === "failed").length;
@@ -173,12 +203,14 @@ const IntegrationStatus = () => {
       meta: `${b.total_rows ?? 0} rows · ${b.success_rows ?? 0} ok · ${b.failed_rows ?? 0} failed`,
     }));
 
-    const s3Details: DetailRow[] = batchRows.slice(0, 10).map((b) => ({
-      id: b.id,
-      title: b.file_uri ?? "manual upload (no object URI)",
-      timestamp: b.created_at,
-      status: b.file_uri ? b.status : "manual",
-      meta: b.feed_name ?? undefined,
+    const fileDetails: DetailRow[] = fileRows.slice(0, 12).map((f) => ({
+      id: f.id,
+      title: f.object_key,
+      timestamp: f.finished_at ?? f.started_at ?? f.discovered_at,
+      status: f.status,
+      meta: `${f.report_type}${f.partition_date ? ` · ${f.partition_date}` : ""} · ` +
+        `${f.processed_rows ?? 0}/${f.total_rows ?? 0} scored · ${f.failed_rows ?? 0} failed`,
+      error: f.error_message ?? null,
     }));
 
     const normalizerDetails: DetailRow[] = batchRows.slice(0, 10).map((b) => ({
@@ -252,23 +284,32 @@ const IntegrationStatus = () => {
       {
         key: "s3",
         title: "S3 inbound drop",
-        subtitle: "Nightly object landing in the shared inbound bucket",
-        health: lastBatch
-          ? lastBatch.file_uri
-            ? staleness(lastBatch.created_at, 48)
-            : "warn"
-          : "idle",
-        lastRunAt: lastBatch?.created_at ?? null,
+        subtitle: "Objects landing in the Intuizi inbound bucket and picked up by the ingest worker",
+        health: ingestStateRow?.paused
+          ? "error"
+          : !lastFile
+            ? "idle"
+            : failedFiles > doneFiles
+              ? "error"
+              : failedFiles > 0
+                ? "warn"
+                : staleness(ingestStateRow?.last_run_at ?? lastFile.discovered_at, 36),
+        lastRunAt: ingestStateRow?.last_run_at ?? lastFile?.discovered_at ?? null,
         metrics: [
-          { label: "Latest object", value: lastBatch?.file_uri ?? "manual upload" },
-          { label: "Failed deliveries", value: String(failedBatches) },
+          { label: "Latest object", value: lastFile?.object_key ?? "none seen yet" },
+          { label: "Objects processed", value: `${doneFiles}/${fileRows.length}` },
+          { label: "Rows read", value: String(objectRowsSeen) },
+          { label: "Failed objects", value: String(failedFiles) },
         ],
-        note:
-          lastBatch && !lastBatch.file_uri
-            ? "Latest batch arrived by manual upload rather than an S3 object."
-            : undefined,
+        note: ingestStateRow?.paused
+          ? `Ingest is paused: ${ingestStateRow.pause_reason ?? "unknown reason"} — resume it once the cause is cleared.`
+          : ingestStateRow?.parked_until && new Date(ingestStateRow.parked_until) > new Date()
+            ? "Parked after repeated rate limits — the next scheduled run retries automatically."
+            : !lastFile
+              ? "No S3 objects seen yet. Once Intuizi drops files under ctv/, apps/, visitation/, demographics/ or origin/, the worker picks them up."
+              : ingestStateRow?.last_error ?? undefined,
         detailsLabel: "Recent objects",
-        details: s3Details,
+        details: fileDetails,
       },
       {
         key: "normalizer",
@@ -411,6 +452,39 @@ const IntegrationStatus = () => {
     if (isAdmin) load();
   }, [isAdmin, load]);
 
+  const invokeIngest = useCallback(
+    async (action: "run_now" | "resume") => {
+      setRunning(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("intuizi-ingest", {
+          body: { action },
+        });
+        if (error) {
+          const details =
+            "context" in error && error.context
+              ? await (error.context as Response).text().catch(() => error.message)
+              : error.message;
+          toast({ title: "Ingest run failed", description: details, variant: "destructive" });
+        } else if (data?.error) {
+          toast({ title: "Ingest blocked", description: String(data.error), variant: "destructive" });
+        } else if (action === "resume") {
+          toast({ title: "Ingest resumed", description: "The next run will process a full batch." });
+        } else {
+          toast({
+            title: data?.idle ? "Nothing new to ingest" : "Ingest run complete",
+            description: data?.idle
+              ? "No unprocessed objects found in the inbound bucket."
+              : `${data?.files_processed ?? 0} object(s), ${data?.identifiers_scored ?? 0} identifier(s) scored.`,
+          });
+        }
+      } finally {
+        setRunning(false);
+        load();
+      }
+    },
+    [load],
+  );
+
   if (loading || !isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -433,6 +507,17 @@ const IntegrationStatus = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {ingestState?.paused ? (
+              <Button variant="default" size="sm" onClick={() => invokeIngest("resume")} disabled={running}>
+                {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-2" />}
+                Resume ingest
+              </Button>
+            ) : (
+              <Button variant="secondary" size="sm" onClick={() => invokeIngest("run_now")} disabled={running}>
+                {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-2" />}
+                Run ingest
+              </Button>
+            )}
             <span className="text-xs text-muted-foreground hidden sm:inline">
               {fetchedAt ? `Updated ${fetchedAt.toLocaleTimeString()}` : "Loading…"}
             </span>

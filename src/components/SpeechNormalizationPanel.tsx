@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Mic, RotateCcw, Save, Scale, Sparkles } from "lucide-react";
+import { Loader2, Mic, RotateCcw, Save, Scale, Sparkles, Wand2 } from "lucide-react";
 
 /* ------------------------------------------------------------------ shared */
 
@@ -195,7 +195,103 @@ const SCOPES: { value: string; label: string; hint: string }[] = [
   { value: "global", label: "Global default", hint: "Fallback for music / file uploads" },
 ];
 
+/* -------------------------------------------------------------- auto-tune */
+
+const SOURCE_TYPES_BY_SCOPE: Record<string, string[] | null> = {
+  intuizi: ["intuizi"],
+  ctv: ["ctv"],
+  global: null, // everything else (music / uploads)
+};
+
+const round05 = (n: number) => Math.round(n / 0.05) * 0.05;
+const clampRange = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+
+export interface AutoTuneResult {
+  sampleSize: number;
+  usedRaw: number;
+  means: Record<Category, number>;
+  /** Recommended settings. */
+  speech_bias: number;
+  gains: Record<string, number>;
+  /** Category means after applying the recommendation. */
+  tuned: Record<Category, number>;
+  notes: string[];
+}
+
+/**
+ * Recommends speech_bias + per-category gains from recent ingests in a scope.
+ * Bias comes from how far Communication over-indexes vs the other categories
+ * (divided by its speech load); gains nudge each category halfway toward the
+ * post-damping average so no single dimension dominates the learned profile.
+ */
+export function computeAutoTune(
+  samples: { scores: Record<Category, number>; isRaw: boolean }[],
+  redistribute: boolean,
+): AutoTuneResult | null {
+  if (samples.length === 0) return null;
+
+  const means = {} as Record<Category, number>;
+  for (const c of CATEGORIES) {
+    means[c] = samples.reduce((sum, s) => sum + (s.scores[c] ?? 0), 0) / samples.length;
+  }
+
+  const notes: string[] = [];
+  const comm = means.communication;
+  const others = CATEGORIES.filter((c) => c !== "communication");
+  const otherMean = others.reduce((a, c) => a + means[c], 0) / others.length;
+
+  let bias = 0;
+  if (comm > 0 && comm > otherMean) {
+    const excessShare = (comm - otherMean) / comm;
+    bias = clampRange(round05(excessShare / SPEECH_LOAD.communication), 0, 1);
+  }
+  if (bias === 0) {
+    notes.push("Communication does not over-index in this scope — damping stays near zero.");
+  }
+
+  const damped = normalizeScores(means, {
+    enabled: true,
+    speech_bias: bias,
+    redistribute,
+    gains: { ...DEFAULT_GAINS },
+  });
+
+  const dampedMean =
+    CATEGORIES.reduce((a, c) => a + (damped[c] ?? 0), 0) / CATEGORIES.length;
+
+  const gains: Record<string, number> = {};
+  for (const c of CATEGORIES) {
+    const v = damped[c] ?? 0;
+    if (v <= 0 || dampedMean <= 0) {
+      gains[c] = 1;
+      continue;
+    }
+    // Blend halfway toward flat so real signal differences survive.
+    gains[c] = clampRange(round05(1 + 0.5 * (dampedMean / v - 1)), 0.5, 1.5);
+  }
+
+  const tuned = normalizeScores(means, {
+    enabled: true,
+    speech_bias: bias,
+    redistribute,
+    gains,
+  });
+
+  const usedRaw = samples.filter((s) => s.isRaw).length;
+  if (usedRaw === 0) {
+    notes.push(
+      "No raw pre-normalization scores stored yet — recommendation is based on already-stored profiles, so re-run after new ingests for a tighter fit.",
+    );
+  }
+  if (samples.length < 5) {
+    notes.push(`Only ${samples.length} recent analysis(es) in scope — treat this as a rough start.`);
+  }
+
+  return { sampleSize: samples.length, usedRaw, means, speech_bias: bias, gains, tuned, notes };
+}
+
 /* --------------------------------------------------------------- component */
+
 
 interface Props {
   /** Optional live sample (e.g. the selected activation's current scores). */
@@ -208,6 +304,58 @@ const SpeechNormalizationPanel = ({ sample, sampleLabel }: Props) => {
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tuning, setTuning] = useState(false);
+  const [tune, setTune] = useState<AutoTuneResult | null>(null);
+
+  const runAutoTune = useCallback(async () => {
+    setTuning(true);
+    setTune(null);
+    const types = SOURCE_TYPES_BY_SCOPE[scope];
+    const { data, error } = await supabase
+      .from("source_analyses")
+      .select(
+        "raw_scores,emotional_score,cognitive_score,social_score,communication_score,contextual_score,artistic_score,created_at,audio_sources!inner(source_type)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(300);
+    setTuning(false);
+    if (error) {
+      toast({ title: "Auto-tune failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    const rows = (data ?? []).filter((r: any) => {
+      const t = r.audio_sources?.source_type as string | undefined;
+      if (!t) return false;
+      return types ? types.includes(t) : !["intuizi", "ctv"].includes(t);
+    });
+    const samples = rows.map((r: any) => {
+      const rawObj = r.raw_scores as Record<string, number> | null;
+      const hasRaw =
+        !!rawObj && CATEGORIES.some((c) => typeof rawObj[c] === "number");
+      const scores = {} as Record<Category, number>;
+      for (const c of CATEGORIES) {
+        scores[c] = hasRaw
+          ? Number(rawObj?.[c] ?? 0)
+          : Number(r[`${c}_score`] ?? 0);
+      }
+      return { scores, isRaw: hasRaw };
+    });
+    const result = computeAutoTune(samples, cfg?.redistribute !== false);
+    if (!result) {
+      toast({
+        title: "Nothing to tune yet",
+        description: `No recent analyses found for the "${scope}" scope.`,
+      });
+      return;
+    }
+    setTune(result);
+  }, [scope, cfg?.redistribute]);
+
+  useEffect(() => {
+    setTune(null);
+  }, [scope]);
+
+
 
   const load = useCallback(async (s: string) => {
     setLoading(true);
@@ -435,8 +583,77 @@ const SpeechNormalizationPanel = ({ sample, sampleLabel }: Props) => {
                 <Button size="sm" variant="ghost" onClick={() => load(scope)}>
                   Revert
                 </Button>
+                <Button size="sm" variant="outline" onClick={runAutoTune} disabled={tuning}>
+                  {tuning ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Wand2 className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Auto-tune
+                </Button>
               </div>
+
+              {tune && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="text-xs font-medium">Recommendation</span>
+                    <Badge variant="outline" className="font-mono">
+                      {tune.sampleSize} recent analyses
+                    </Badge>
+                    <Badge variant="outline" className="font-mono">
+                      {tune.usedRaw > 0 ? `${tune.usedRaw} with raw scores` : "stored profiles only"}
+                    </Badge>
+                    <span className="ml-auto font-mono text-primary">
+                      strength {tune.speech_bias.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] sm:grid-cols-3">
+                    {CATEGORIES.map((c) => (
+                      <div key={c} className="flex items-center justify-between gap-2">
+                        <span className="capitalize text-muted-foreground">{c}</span>
+                        <span className="font-mono">
+                          {Math.round(tune.means[c])} → {Math.round(tune.tuned[c] ?? 0)}
+                          <span className="ml-1 text-primary">
+                            {(tune.gains[c] ?? 1).toFixed(2)}×
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {tune.notes.map((n) => (
+                    <p key={n} className="mt-1.5 text-[11px] text-muted-foreground">
+                      {n}
+                    </p>
+                  ))}
+
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        setCfg({
+                          ...cfg,
+                          enabled: true,
+                          speech_bias: tune.speech_bias,
+                          gains: { ...cfg.gains, ...tune.gains },
+                        })
+                      }
+                    >
+                      Apply recommendation
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setTune(null)}>
+                      Dismiss
+                    </Button>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Applying only fills the controls — press “Save settings” to persist it for this
+                    scope.
+                  </p>
+                </div>
+              )}
             </div>
+
 
             {/* live preview */}
             <div className="rounded-lg border border-border bg-background/40 p-4">

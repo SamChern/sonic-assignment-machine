@@ -46,12 +46,29 @@ export async function readParquetRows(
     );
   }
 
+  // Footer first: gives the column list and row count without decoding pages,
+  // so an empty or mis-shaped delivery fails with a readable message.
+  const metadata = await parquetMetadataAsync(file);
+  const columns = (metadata.schema ?? [])
+    .filter((s: { num_children?: number; name: string }) => !s.num_children)
+    .map((s: { name: string }) => s.name);
+  const numRows = Number(metadata.num_rows ?? 0);
+  console.log(`parquet footer: rows=${numRows} columns=[${columns.join(", ")}]`);
+
+  if (numRows === 0) {
+    throw new Error(
+      `parquet has a schema but 0 rows — columns: ${columns.join(", ") || "none"}`,
+    );
+  }
+
   const rows = await parquetReadObjects({
     file,
+    metadata,
     compressors,
     rowStart: 0,
-    rowEnd: maxRows,
+    rowEnd: Math.min(maxRows, numRows),
   });
+
 
   return (rows as Record<string, unknown>[]).map((row) => {
     const out: Record<string, unknown> = {};

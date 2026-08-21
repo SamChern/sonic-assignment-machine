@@ -343,17 +343,12 @@ Deno.serve(async (req) => {
       });
     }
   }
+  if (!anyPrefixOk) return finish({ backend, discovered_objects: 0 });
+
+  // Object-store-only runs stop after reachability; contract checks belong to intuizi.
+  if (!wants("intuizi")) return finish({ backend, discovered_objects: discovered.length });
 
 
-  if (!anyPrefixOk) {
-    return json({
-      ran_at: new Date().toISOString(),
-      duration_ms: Date.now() - startedAt,
-      summary: summarize(checks),
-      checks,
-      objects_sampled: [],
-    });
-  }
 
   // ------------------------------------------------------ 3. metadata contracts
   const unsupported = discovered.filter((o) => !isSupported(o.key));

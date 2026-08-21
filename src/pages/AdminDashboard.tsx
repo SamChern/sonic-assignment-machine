@@ -791,18 +791,25 @@ const AdminDashboard = () => {
                 <p className="text-sm text-muted-foreground">
                   Each bubble represents a user's combined ontological fingerprint
                 </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Scope: {activeFilterCount > 0
+                    ? `${entityMode === "user" ? "users" : "signal providers"} filter • ${scopedFingerprints.length} of ${allFingerprints.length} fingerprints`
+                    : `all ${allFingerprints.length} fingerprints`}
+                </p>
               </div>
               <Button variant="outline" size="sm" onClick={refreshFingerprints} disabled={fingerprintsLoading}>
                 {fingerprintsLoading ? 'Loading...' : 'Refresh'}
               </Button>
             </div>
             <AggregateNetworkVisualization 
-              fingerprints={allFingerprints}
+              fingerprints={scopedFingerprints}
               onUserClick={(userId) => {
+                setEntityMode("user");
                 setFilteredUserIds([userId]);
                 setActiveTab("users");
               }}
             />
+
           </TabsContent>
 
           <TabsContent value="compare" className="space-y-6">

@@ -20,6 +20,8 @@ import PostIngestionWizard from "@/components/PostIngestionWizard";
 import ConfidenceBreakdownPanel from "@/components/ConfidenceBreakdownPanel";
 import SpeechNormalizationPanel from "@/components/SpeechNormalizationPanel";
 import CategoryFlipTrendWidget from "@/components/CategoryFlipTrendWidget";
+import PerfMetricsBadge from "@/components/PerfMetricsBadge";
+import { measurePerfSync, recordPageLoad, recordPerf } from "@/lib/perfMetrics";
 
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 
@@ -222,6 +224,7 @@ const SemanticAnalysis = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
+    const queryStart = performance.now();
     const { data: ids, error } = await supabase
       .from("intuizi_identifiers")
       .select(
@@ -241,6 +244,7 @@ const SemanticAnalysis = () => {
     }
 
     const identifiers = (ids ?? []) as unknown as IdentifierRow[];
+    recordPerf("identifier.query", performance.now() - queryStart, identifiers.length);
     setRows(identifiers);
 
     const sourceIds = identifiers
@@ -299,11 +303,16 @@ const SemanticAnalysis = () => {
 
   const filtered = useMemo(
     () =>
-      rows.filter(
-        (r) =>
-          stageOf(r).includes(stage) &&
-          matchesTags(r.tag_codes, filter.tags) &&
-          matchesText([r.primary_identifier, ...(r.tag_codes ?? [])], filter.text),
+      measurePerfSync(
+        "identifier.filter",
+        () =>
+          rows.filter(
+            (r) =>
+              stageOf(r).includes(stage) &&
+              matchesTags(r.tag_codes, filter.tags) &&
+              matchesText([r.primary_identifier, ...(r.tag_codes ?? [])], filter.text),
+          ),
+        (result) => result.length,
       ),
     [rows, stage, filter, stageOf],
   );
@@ -319,6 +328,22 @@ const SemanticAnalysis = () => {
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
+
+  // Render cost of the virtualized window: measured from the start of this
+  // render pass to the browser's next paint-adjacent frame.
+  const renderStart = performance.now();
+  useEffect(() => {
+    if (!filtered.length) return;
+    const frame = requestAnimationFrame(() => {
+      recordPerf("identifier.render", performance.now() - renderStart, virtualRows.length);
+    });
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, virtualRows.length, expanded]);
+
+  useEffect(() => {
+    recordPageLoad();
+  }, []);
 
   useEffect(() => {
     rowVirtualizer.measure();

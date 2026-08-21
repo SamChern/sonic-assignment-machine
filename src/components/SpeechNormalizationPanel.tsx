@@ -487,7 +487,9 @@ const SpeechNormalizationPanel = ({ sample, sampleLabel }: Props) => {
                   <span className="text-primary">label flips under these settings</span>
                 )}
               </div>
+            </div>
           </div>
+
 
           {/* impact breakdown */}
           <div className="mt-4 rounded-lg border border-border bg-background/40 p-4">

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Contrast } from "lucide-react";
+import { ArrowLeft, Contrast, Download, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
+import highlightVideo from "@/assets/sonicsim-highlight.mp4.asset.json";
+
 
 type CaptionStyle = "high-contrast" | "minimal";
 
@@ -56,13 +58,48 @@ const Demo = () => {
 
       <h1 className="text-3xl font-semibold tracking-tight">Product demo</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
-        A walkthrough of semantic analysis and admin comparative analysis, with
-        step-by-step captions. Caption timing and wording are identical in both
-        styles — only the visual treatment changes.
+        A 50-second highlight reel of the live app, plus the full walkthrough
+        with step-by-step captions.
       </p>
 
-      <Card className="mt-6 overflow-hidden border-border/60 bg-card/60 p-3">
+      <Card className="mt-6 overflow-hidden border-primary/30 bg-card/60 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-primary" aria-hidden="true" />
+            <h2 className="text-sm font-semibold tracking-tight">
+              Highlight reel — the sonic semantic layer in 50 seconds
+            </h2>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <a href={highlightVideo.url} download="sonicsim-highlight.mp4">
+              <Download />
+              <span>Download MP4</span>
+            </a>
+          </Button>
+        </div>
         <div className="aspect-video overflow-hidden rounded-md bg-background">
+          <video
+            className="size-full"
+            controls
+            playsInline
+            preload="metadata"
+            src={highlightVideo.url}
+            aria-label="SonicSIM highlight reel with on-screen supers"
+          />
+        </div>
+      </Card>
+
+      <h2 className="mt-10 text-lg font-semibold tracking-tight">
+        Full walkthrough
+      </h2>
+      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+        Caption timing and wording are identical in both styles — only the
+        visual treatment changes.
+      </p>
+
+      <Card className="mt-4 overflow-hidden border-border/60 bg-card/60 p-3">
+        <div className="aspect-video overflow-hidden rounded-md bg-background">
+
           <video
             ref={videoRef}
             className="size-full"

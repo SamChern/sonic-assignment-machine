@@ -21,7 +21,16 @@ const EC2_URL = (Deno.env.get("EC2_INFERENCE_URL") ?? "").replace(/\/+$/, "");
 const EC2_KEY = Deno.env.get("EC2_INFERENCE_API_KEY") ?? Deno.env.get("AWS_API_KEY") ?? "";
 const EC2_CHAT_MODEL = Deno.env.get("EC2_INFERENCE_MODEL") ?? "";
 const EC2_EMBED_MODEL = Deno.env.get("EC2_EMBEDDING_MODEL") ?? "";
+/**
+ * Native dimensionality of EC2_EMBEDDING_MODEL. Most CPU-friendly local
+ * embedders are 768/1024-dim; vectors are zero-padded up to EMBEDDING_DIMS so
+ * they fit the pgvector columns. Padding is distance-preserving, but vectors
+ * from different models are NOT comparable — that is why cache rows and any
+ * re-embedding are keyed by model id.
+ */
+const EC2_EMBED_DIMS = Number(Deno.env.get("EC2_EMBEDDING_DIMS") ?? "0") || 0;
 const EC2_REQUIRED = (Deno.env.get("EC2_INFERENCE_REQUIRED") ?? "").toLowerCase() === "true";
+
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 export const GATEWAY_CHAT_MODEL = "google/gemini-2.5-flash";
@@ -172,6 +181,23 @@ function canonicalJson(value: unknown): string {
 }
 
 /**
+ * Identifier of the embedding space currently in use. Cache rows are keyed by
+ * this so vectors produced by different models are never mixed or compared.
+ */
+export function activeEmbeddingSpace(): string {
+  if (EC2_URL && EC2_EMBED_MODEL) return `ec2:${EC2_EMBED_MODEL}`;
+  return `gateway:${GATEWAY_EMBED_MODEL}`;
+}
+
+/** Zero-pad a shorter vector up to the pgvector column width. */
+function padTo(v: number[], dims: number): number[] {
+  if (v.length === dims) return v;
+  const out = new Array<number>(dims).fill(0);
+  for (let i = 0; i < Math.min(v.length, dims); i++) out[i] = v[i];
+  return out;
+}
+
+/**
  * Embed a text string. Order: EC2 server -> Lovable gateway.
  * Returns null on non-terminal failure (embeddings are enrichment, never fatal).
  * Terminal gateway denials (402/403/429) are thrown so callers can trip a breaker.
@@ -188,18 +214,24 @@ export async function embedText(text: string): Promise<number[] | null> {
       if (!r.ok) throw new Error(`ec2 ${r.status}`);
       const j = await r.json();
       const v = j?.data?.[0]?.embedding;
-      if (Array.isArray(v) && v.length === EMBEDDING_DIMS) {
-        noteEc2Success();
-        return v as number[];
+      if (!Array.isArray(v) || v.length === 0) throw new Error("empty ec2 embedding");
+      const expected = EC2_EMBED_DIMS || v.length;
+      if (v.length !== expected) {
+        throw new Error(`ec2 embedding dim ${v.length} != declared ${expected}`);
       }
-      throw new Error(
-        `ec2 embedding dim ${Array.isArray(v) ? v.length : "n/a"} != ${EMBEDDING_DIMS}`,
-      );
+      if (v.length > EMBEDDING_DIMS) {
+        throw new Error(
+          `ec2 embedding dim ${v.length} exceeds column width ${EMBEDDING_DIMS}`,
+        );
+      }
+      noteEc2Success();
+      return padTo(v as number[], EMBEDDING_DIMS);
     } catch (e) {
       noteEc2Failure(e);
       if (EC2_REQUIRED) return null;
     }
   }
+
 
   if (!LOVABLE_API_KEY) return null;
   try {
@@ -228,8 +260,9 @@ export async function embedText(text: string): Promise<number[] | null> {
 
 /**
  * Embed with a persistent cache in `public.embedding_cache`, keyed by the hash
- * of the input text. Identical taxonomy labels / profile strings never pay for
- * a second embedding call.
+ * of the input text *and* the embedding model. Identical taxonomy labels /
+ * profile strings never pay for a second embedding call, and switching models
+ * simply misses the cache instead of returning vectors from another space.
  */
 export async function embedCached(
   // deno-lint-disable-next-line no-explicit-any
@@ -238,11 +271,13 @@ export async function embedCached(
 ): Promise<number[] | null> {
   if (!supabase) return await embedText(text);
   const hash = await stableHash(text);
+  const model = activeEmbeddingSpace();
   try {
     const { data } = await supabase
       .from("embedding_cache")
       .select("embedding")
       .eq("text_hash", hash)
+      .eq("model", model)
       .maybeSingle();
     if (data?.embedding) {
       const v = typeof data.embedding === "string" ? JSON.parse(data.embedding) : data.embedding;
@@ -257,7 +292,7 @@ export async function embedCached(
     try {
       await supabase
         .from("embedding_cache")
-        .upsert({ text_hash: hash, embedding: vec }, { onConflict: "text_hash" });
+        .upsert({ text_hash: hash, model, embedding: vec }, { onConflict: "text_hash,model" });
     } catch (e) {
       console.warn("embedding_cache write failed:", e instanceof Error ? e.message : e);
     }
@@ -265,12 +300,15 @@ export async function embedCached(
   return vec;
 }
 
+
 /** Describes the active routing, for admin diagnostics. */
 export function inferenceStatus() {
   return {
     ec2_configured: Boolean(EC2_URL),
     ec2_chat_model: EC2_CHAT_MODEL || null,
     ec2_embedding_model: EC2_EMBED_MODEL || null,
+    ec2_embedding_dims: EC2_EMBED_DIMS || null,
+    embedding_space: activeEmbeddingSpace(),
     ec2_required: EC2_REQUIRED,
     ec2_breaker_open: Date.now() < ec2OpenUntil,
     gateway_fallback: !EC2_REQUIRED,

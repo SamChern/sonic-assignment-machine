@@ -81,7 +81,7 @@ function json(payload: unknown, status = 200) {
 function statusOf(e: unknown): number | undefined {
   const s = (e as { status?: number })?.status;
   if (s) return s;
-  const msg = e instanceof Error ? e.message : String(e);
+  const msg = errMsg(e);
   const m = msg.match(/gateway (\d{3})|\[(\d{3})\]/);
   return m ? Number(m[1] ?? m[2]) : undefined;
 }
@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
         try {
           objects = await listObjects(prefix, 100);
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg = errMsg(e);
           summary.errors.push(`list ${prefix}: ${msg}`);
           continue;
         }
@@ -553,7 +553,7 @@ Deno.serve(async (req) => {
             }
           } catch (e) {
             const st = statusOf(e);
-            const msg = e instanceof Error ? e.message : String(e);
+            const msg = errMsg(e);
             failedInFile++;
             summary.errors.push(`${identifier}: ${msg}`);
 
@@ -604,7 +604,7 @@ Deno.serve(async (req) => {
         summary.files_processed++;
       } catch (e) {
         const st = statusOf(e);
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errMsg(e);
         await admin.from("intuizi_ingest_files").update({
           status: "failed",
           error_message: msg.slice(0, 2000),
@@ -634,7 +634,7 @@ Deno.serve(async (req) => {
 
     return json(summary);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errMsg(e);
     console.error("intuizi-ingest failed:", msg);
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),

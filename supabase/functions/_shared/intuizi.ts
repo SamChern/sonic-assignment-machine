@@ -59,22 +59,24 @@ export function parseCsv(text: string): Record<string, string>[] {
   return rows;
 }
 
-/** Fetch an object and decode it to raw rows. Handles .csv, .csv.gz, .json(l). */
+/**
+ * Fetch an object and decode it to raw rows.
+ * Handles .csv, .csv.gz, .json(l) and .parquet (snappy/gzip/zstd/brotli).
+ */
 export async function fetchObjectRows(
   url: string,
   objectKey: string,
-): Promise<Record<string, string>[]> {
+  maxRows = 5000,
+): Promise<Record<string, unknown>[]> {
+  const lower = objectKey.toLowerCase();
+
+  if (lower.endsWith(".parquet") || lower.endsWith(".pq")) {
+    return await readParquetRows(url, maxRows);
+  }
+
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`object fetch failed [${res.status}]: ${await res.text()}`);
-  }
-  const lower = objectKey.toLowerCase();
-
-  if (lower.endsWith(".parquet")) {
-    throw new Error(
-      "Parquet delivery is not supported by the backend-only ingest path — " +
-      "configure Intuizi to deliver CSV or gzipped CSV.",
-    );
   }
 
   let text: string;
@@ -95,6 +97,7 @@ export async function fetchObjectRows(
   }
   return parseCsv(text);
 }
+
 
 /* ------------------------------------------------------------------ helpers */
 

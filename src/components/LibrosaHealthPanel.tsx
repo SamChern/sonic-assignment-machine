@@ -41,15 +41,21 @@ function percentile(sorted: number[], p: number): number | null {
 }
 
 export function LibrosaHealthPanel() {
+  const { user, isAdmin } = useAuth();
   const [metrics, setMetrics] = useState<Metrics>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [draining, setDraining] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
-
+  const canRead = !!user && isAdmin;
+  const canReadRef = useRef(canRead);
+  canReadRef.current = canRead;
 
   const load = useCallback(async () => {
+    // These tables are admin-only under RLS — never spend a round trip otherwise.
+    if (!canReadRef.current) return;
     setLoading(true);
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+
 
     const [logs, jobsPending, jobsFailed, cacheReady, cachePending] = await Promise.all([
       supabase

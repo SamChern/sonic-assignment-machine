@@ -127,6 +127,93 @@ Deno.serve(async (req) => {
   if (action === "status") {
     return json({ state, s3_configured: s3Configured(), s3: s3BackendInfo() });
   }
+
+  // ---- Activation discovery (guided wizard) --------------------------------
+  // Groups every inbound object by the `activation_id<N>` token in its name so
+  // the wizard can offer a pick-list before running the semantic stages.
+  if (action === "activations") {
+    if (!s3Configured()) {
+      return json({ error: "Amazon S3 is not connected for this project yet.", activations: [] }, 400);
+    }
+    type FileEntry = {
+      object_key: string;
+      report_type: ReportType | null;
+      size: number;
+      prefix: string;
+      status: string | null;
+      total_rows: number | null;
+      processed_rows: number | null;
+      finished_at: string | null;
+      error_message: string | null;
+    };
+    const byActivation = new Map<string, FileEntry[]>();
+    const listErrors: string[] = [];
+
+    for (const { prefix, report_type } of INGEST_PREFIXES) {
+      let objects: Awaited<ReturnType<typeof listObjects>> = [];
+      try {
+        objects = await listObjects(prefix, 200);
+      } catch (e) {
+        listErrors.push(`list ${prefix}: ${errMsg(e)}`);
+        continue;
+      }
+      for (const o of objects) {
+        if (o.key.endsWith("/")) continue;
+        const activation = activationIdFromKey(o.key) ?? "unassigned";
+        const list = byActivation.get(activation) ?? [];
+        list.push({
+          object_key: o.key,
+          report_type: report_type ?? reportTypeFromKey(o.key),
+          size: o.size,
+          prefix,
+          status: null,
+          total_rows: null,
+          processed_rows: null,
+          finished_at: null,
+          error_message: null,
+        });
+        byActivation.set(activation, list);
+      }
+    }
+
+    const allKeys = [...byActivation.values()].flat().map((f) => f.object_key);
+    if (allKeys.length) {
+      const { data: ledger } = await admin
+        .from("intuizi_ingest_files")
+        .select("object_key,status,total_rows,processed_rows,finished_at,error_message")
+        .in("object_key", allKeys);
+      const ledgerMap = new Map((ledger ?? []).map((l) => [l.object_key, l]));
+      for (const files of byActivation.values()) {
+        for (const f of files) {
+          const l = ledgerMap.get(f.object_key);
+          if (!l) continue;
+          f.status = l.status;
+          f.total_rows = l.total_rows;
+          f.processed_rows = l.processed_rows;
+          f.finished_at = l.finished_at;
+          f.error_message = l.error_message;
+        }
+      }
+    }
+
+    const activations = [...byActivation.entries()]
+      .map(([activation_id, files]) => ({
+        activation_id,
+        // Summary reports carry the taxonomy rollup and must be ingested first —
+        // roster files then link their device ids to that scored profile.
+        files: files.sort((a, b) =>
+          Number(b.prefix.includes("summary")) - Number(a.prefix.includes("summary")) ||
+          a.object_key.localeCompare(b.object_key)
+        ),
+        empty_files: files.filter((f) => f.size <= 64).length,
+        total_bytes: files.reduce((n, f) => n + f.size, 0),
+        done_files: files.filter((f) => f.status === "done").length,
+      }))
+      .sort((a, b) => b.activation_id.localeCompare(a.activation_id));
+
+    return json({ activations, errors: listErrors, s3: s3BackendInfo() });
+  }
+
   if (action === "resume" || action === "pause") {
     if (isCron) return json({ error: `${action} requires an admin` }, 403);
     const paused = action === "pause";

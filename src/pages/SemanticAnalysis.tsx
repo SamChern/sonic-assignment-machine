@@ -247,16 +247,37 @@ const SemanticAnalysis = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
+    <div className="relative min-h-screen gradient-app">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-72 opacity-40 blur-3xl"
+        style={{ background: "var(--gradient-brand)" }}
+      />
+      <header className="sticky top-0 z-20 border-b border-border/60 bg-background/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4">
           <Button variant="ghost" size="sm" onClick={() => navigate("/admin/pipeline")}>
             <ArrowLeft className="mr-1 h-4 w-4" />
             Pipeline
           </Button>
+          <img
+            src={sonicSimLogo}
+            alt="SonicSIM"
+            className="h-7 w-auto opacity-90"
+            loading="lazy"
+          />
           <div className="flex items-center gap-2">
-            <Layers className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-semibold">Post-ingestion semantic analysis</h1>
+            <span
+              className="flex h-8 w-8 items-center justify-center rounded-lg shadow-elegant"
+              style={{ background: "var(--gradient-brand)" }}
+            >
+              <Layers className="h-4 w-4 text-primary-foreground" />
+            </span>
+            <h1
+              className="bg-clip-text text-lg font-semibold text-transparent"
+              style={{ backgroundImage: "var(--gradient-brand)" }}
+            >
+              Post-ingestion semantic analysis
+            </h1>
           </div>
           <Button
             variant="outline"
@@ -275,17 +296,30 @@ const SemanticAnalysis = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="relative mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-3 sm:grid-cols-4">
-          {[
-            ["Identifiers", totals.total],
-            ["Normalized", totals.normalized],
-            ["Sources created", totals.created],
-            ["Scored", totals.scored],
-          ].map(([label, value]) => (
-            <Card key={String(label)} className="p-4">
+          {([
+            ["Identifiers", totals.total, "var(--gradient-cognitive)"],
+            ["Normalized", totals.normalized, "var(--gradient-contextual)"],
+            ["Sources created", totals.created, "var(--gradient-social)"],
+            ["Scored", totals.scored, "var(--gradient-artistic)"],
+          ] as const).map(([label, value, gradient]) => (
+            <Card
+              key={label}
+              className="relative overflow-hidden border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth hover:shadow-elegant"
+            >
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-1"
+                style={{ background: gradient }}
+              />
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="text-2xl font-semibold">{value as number}</p>
+              <p
+                className="bg-clip-text text-3xl font-semibold text-transparent"
+                style={{ backgroundImage: gradient }}
+              >
+                {value}
+              </p>
             </Card>
           ))}
         </div>
@@ -302,18 +336,15 @@ const SemanticAnalysis = () => {
           <InspectMappingPanel />
         </div>
 
-
-
-
-
         <div className="mt-6">
           <Input
             placeholder="Filter by identifier or tag code…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="max-w-sm"
+            className="max-w-sm bg-card/60 backdrop-blur-sm"
           />
         </div>
+
 
         <div className="mt-4 space-y-3">
           {loading && rows.length === 0 && (

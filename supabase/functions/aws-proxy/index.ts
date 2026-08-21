@@ -15,6 +15,9 @@ const corsHeaders = {
 
 // Only these upstream paths may be reached through the proxy.
 const ALLOWED_ENDPOINTS = new Set([
+  '/api/health',
+  '/api/analyze-audio',
+  '/api/calculate-network',
   '/health',
   '/status',
   '/metrics',

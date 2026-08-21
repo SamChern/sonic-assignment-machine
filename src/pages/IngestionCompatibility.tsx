@@ -6,7 +6,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
+
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 import {

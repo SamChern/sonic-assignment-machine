@@ -1120,12 +1120,31 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                             {side.rows.slice(0, 10).map((r, i) => {
                               const sup = rowSupport(r.share, side.factor);
                               const flg = sup < threshold;
+                              const rank = rowMovers.top.get(rowKey(r));
                               return (
-                              <tr key={i} className={"border-b border-border/50 " + (flg ? "bg-destructive/5" : "")}>
+                              <tr
+                                key={i}
+                                className={
+                                  "border-b border-border/50 " +
+                                  (rank
+                                    ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
+                                    : flg
+                                      ? "bg-destructive/5"
+                                      : "")
+                                }
+                              >
                                 <td className="py-1 pr-2 text-muted-foreground">{r.feed}</td>
                                 <td className="py-1 pr-2">
                                   {r.TaxonomyName || r.CategoryName || "—"}
                                   {flg && <span className="ml-1 text-destructive">⚑</span>}
+                                  {rank && (
+                                    <Badge
+                                      variant="outline"
+                                      className="ml-1 h-4 border-primary/50 px-1 font-mono text-[10px] text-primary"
+                                    >
+                                      mover #{rank}
+                                    </Badge>
+                                  )}
                                 </td>
                                 <td className="py-1 pr-2 font-mono">
                                   {r.share != null ? `${(Number(r.share) * 100).toFixed(0)}%` : "—"}
@@ -1134,6 +1153,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                               </tr>
                               );
                             })}
+
                           </tbody>
                         </table>
                       </div>

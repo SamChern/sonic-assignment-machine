@@ -23,6 +23,10 @@ import {
   updateCalibration,
 } from "../_shared/ontology.ts";
 import {
+  applyNormalizationToAnalysis,
+  loadNormalization,
+} from "../_shared/normalization.ts";
+import {
   activationIdFromKey,
   fetchObjectRows,
   identifierOf,
@@ -594,6 +598,16 @@ Deno.serve(async (req) => {
             for (const c of sourceOut.categories ?? []) {
               scoreMap[(c.name ?? "").toLowerCase() as Category] = Number(c.score) || 0;
             }
+
+            // 4b. Speech-skew normalization: Intuizi CTV / audio-app feeds skew
+            // toward vocal + spoken-word signals, which inflates Communication.
+            // Rewrite the saved analysis with the corrected profile (raw scores
+            // retained for audit) before learning from it.
+            const normCfg = await loadNormalization(admin, "intuizi");
+            const normScores = await applyNormalizationToAnalysis(
+              admin, audioSourceId!, scoreMap, normCfg,
+            );
+            for (const c of CATEGORIES) scoreMap[c] = normScores[c] ?? scoreMap[c];
 
             // 5. Continuous learning: calibration + profile embedding
             await updateCalibration(admin, nodeIds, scoreMap);

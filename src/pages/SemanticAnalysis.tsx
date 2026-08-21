@@ -10,6 +10,8 @@ import { toast } from "@/hooks/use-toast";
 import InspectMappingPanel from "@/components/InspectMappingPanel";
 import PostIngestionWizard from "@/components/PostIngestionWizard";
 import ConfidenceBreakdownPanel from "@/components/ConfidenceBreakdownPanel";
+import SpeechNormalizationPanel from "@/components/SpeechNormalizationPanel";
+
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 
 
@@ -248,6 +250,32 @@ const SemanticAnalysis = () => {
     return { normalized, created, scored, total: rows.length };
   }, [rows, analyses]);
 
+  /** Average of the loaded analyses — the live baseline for the preview panel. */
+  const normalizationSample = useMemo(() => {
+    const list = Object.values(analyses);
+    if (!list.length) return { scores: null as null, label: undefined as string | undefined };
+    const keys = [
+      "emotional",
+      "cognitive",
+      "social",
+      "communication",
+      "contextual",
+      "artistic",
+    ] as const;
+    const scores = {} as Record<(typeof keys)[number], number>;
+    for (const k of keys) {
+      scores[k] =
+        list.reduce((s, a) => s + (Number(a[`${k}_score` as keyof AnalysisRow]) || 0), 0) /
+        list.length;
+    }
+    return {
+      scores,
+      label: `avg of ${list.length} ingested analysis${list.length === 1 ? "" : "es"}`,
+    };
+  }, [analyses]);
+
+
+
   if (authLoading || !isAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -341,6 +369,14 @@ const SemanticAnalysis = () => {
         <div className="mt-6">
           <ConfidenceBreakdownPanel defaultActivation="5498" />
         </div>
+
+        <div className="mt-6">
+          <SpeechNormalizationPanel
+            sample={normalizationSample.scores}
+            sampleLabel={normalizationSample.label}
+          />
+        </div>
+
 
         <div className="mt-6">
           <InspectMappingPanel />

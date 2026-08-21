@@ -3,6 +3,10 @@
 // links taxonomy tags, generates embeddings, and updates calibration stats.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
+import {
+  applyNormalizationToAnalysis,
+  loadNormalization,
+} from "../_shared/normalization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -263,6 +267,15 @@ Deno.serve(async (req) => {
       for (const c of sourceOut.categories ?? []) {
         scoreMap[(c.name ?? "").toLowerCase() as Category] = Number(c.score) || 0;
       }
+      // 6b. Speech-skew normalization (dialogue-heavy CTV) — rewrites the saved
+      // analysis, keeps raw scores for audit, and feeds calibration the
+      // corrected profile so continuous learning does not relearn the bias.
+      const normCfg = await loadNormalization(supabase, "ctv");
+      const normScores = await applyNormalizationToAnalysis(
+        supabase, audioSourceId, scoreMap as Record<Category, number>, normCfg,
+      );
+      for (const c of CATEGORIES) scoreMap[c] = normScores[c] ?? scoreMap[c];
+
       await updateCalibration(supabase, nodeIds, scoreMap);
 
       // 7. Generate profile_embedding (post-scoring) for future kNN warm-starts
@@ -284,6 +297,7 @@ Deno.serve(async (req) => {
         taxonomy_context,
         neighbors: neighborsForDebug,
         scores: scoreMap,
+        normalization: normCfg.enabled ? normCfg : null,
         status: "ok",
       });
     } catch (e) {

@@ -620,6 +620,45 @@ export type Database = {
         }
         Relationships: []
       }
+      semantic_normalization: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          gains: Json
+          id: string
+          notes: string | null
+          redistribute: boolean
+          scope: string
+          speech_bias: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          gains?: Json
+          id?: string
+          notes?: string | null
+          redistribute?: boolean
+          scope: string
+          speech_bias?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          gains?: Json
+          id?: string
+          notes?: string | null
+          redistribute?: boolean
+          scope?: string
+          speech_bias?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       source_analyses: {
         Row: {
           artistic_desc: string | null
@@ -637,6 +676,8 @@ export type Database = {
           emotional_desc: string | null
           emotional_score: number
           id: string
+          normalization: Json | null
+          raw_scores: Json | null
           social_desc: string | null
           social_score: number
           source_name: string
@@ -658,6 +699,8 @@ export type Database = {
           emotional_desc?: string | null
           emotional_score: number
           id?: string
+          normalization?: Json | null
+          raw_scores?: Json | null
           social_desc?: string | null
           social_score: number
           source_name: string
@@ -679,6 +722,8 @@ export type Database = {
           emotional_desc?: string | null
           emotional_score?: number
           id?: string
+          normalization?: Json | null
+          raw_scores?: Json | null
           social_desc?: string | null
           social_score?: number
           source_name?: string

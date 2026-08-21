@@ -373,7 +373,44 @@ const IngestionCompatibility = () => {
         </Card>
 
         <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-          <h2 className="mb-3 text-sm font-semibold">Per-source tests</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Per-source tests</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setSelected(
+                    selected.length === SOURCES.length ? [] : SOURCES.map((s) => s.scope),
+                  )
+                }
+                disabled={running}
+              >
+                {selected.length === SOURCES.length ? "Clear all" : "Select all"}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => runSelected(false)}
+                disabled={running || selected.length === 0}
+              >
+                {running && runningScopes.length > 0 ? (
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Layers className="mr-2 h-3.5 w-3.5" />
+                )}
+                Run selected in parallel ({selected.length})
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runSelected(true)}
+                disabled={running || selected.length === 0}
+              >
+                <Bug className="mr-2 h-3.5 w-3.5 text-primary" />
+                Debug selected
+              </Button>
+            </div>
+          </div>
           <ul className="space-y-2">
             {SOURCES.map((src) => {
               const feedChecks = report?.checks.filter((c) => c.feed === src.feed) ?? [];
@@ -383,13 +420,28 @@ const IngestionCompatibility = () => {
                   ) ?? null
                 : null;
               const last = lastRun[src.feed];
-              const busy = running && runningScope === src.scope;
+              const busy =
+                running && (runningScope === src.scope || runningScopes.includes(src.scope));
+              const isSelected = selected.includes(src.scope);
               return (
                 <li
                   key={src.scope}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 p-3"
                 >
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Checkbox
+                      id={`sel-${src.scope}`}
+                      className="mt-0.5"
+                      checked={isSelected}
+                      disabled={running}
+                      onCheckedChange={(v) =>
+                        setSelected((prev) =>
+                          v ? [...prev, src.scope] : prev.filter((s) => s !== src.scope),
+                        )
+                      }
+                    />
+                    <div className="min-w-0">
+
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium">{src.label}</span>
                       {worst && (

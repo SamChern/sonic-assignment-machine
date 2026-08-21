@@ -292,16 +292,19 @@ export type Database = {
         Row: {
           created_at: string
           embedding: string
+          model: string
           text_hash: string
         }
         Insert: {
           created_at?: string
           embedding: string
+          model?: string
           text_hash: string
         }
         Update: {
           created_at?: string
           embedding?: string
+          model?: string
           text_hash?: string
         }
         Relationships: []

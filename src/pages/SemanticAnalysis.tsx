@@ -343,6 +343,14 @@ const SemanticAnalysis = () => {
         </div>
 
         <div className="mt-6">
+          <SpeechNormalizationPanel
+            sample={normalizationSample.scores}
+            sampleLabel={normalizationSample.label}
+          />
+        </div>
+
+
+        <div className="mt-6">
           <InspectMappingPanel />
         </div>
 

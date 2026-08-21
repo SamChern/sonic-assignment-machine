@@ -432,47 +432,53 @@ For each source, determine its unique ontological profile. Be AGGRESSIVE in scor
 
 Return JSON with "sources" array. Each source needs: name (exact match), categories array with Emotional, Cognitive, Social, Communication, Contextual, Artistic (each with name, score 0-100, description).`;
 
-        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
-            messages: [
+        let analysisText = '';
+        try {
+          const completion = await chatCompletion(
+            [
               { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
+              { role: 'user', content: userPrompt },
             ],
-            temperature: 0.2,
-            max_tokens: 4000, // Ensure we get complete responses
-          }),
-        });
-
-        if (!response.ok) {
-          if (response.status === 429) {
-            return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }), {
-              status: 429,
+            { temperature: 0.2, maxTokens: 4000 },
+          );
+          analysisText = completion.text;
+          console.log(`Scored batch via ${completion.provider} (${completion.model})`);
+        } catch (e) {
+          if (e instanceof GatewayError) {
+            if (e.status === 429) {
+              return new Response(
+                JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
+                { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
+            if (e.status === 402 || e.status === 403) {
+              return new Response(
+                JSON.stringify({
+                  error:
+                    e.status === 402
+                      ? 'Payment required. Please add credits to your workspace.'
+                      : 'AI access is blocked by workspace policy.',
+                  details: e.message,
+                }),
+                { status: e.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
+            console.error('AI gateway error:', e.status, e.message);
+            return new Response(JSON.stringify({ error: 'AI analysis failed', details: e.message }), {
+              status: 502,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
           }
-          if (response.status === 402) {
-            return new Response(JSON.stringify({ error: 'Payment required. Please add credits to your workspace.' }), {
-              status: 402,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-          }
-          const errorText = await response.text();
-          console.error('AI gateway error:', response.status, errorText);
-          return new Response(JSON.stringify({ error: `AI gateway error: ${response.statusText}` }), {
-            status: response.status,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          console.error('Inference error:', e);
+          return new Response(
+            JSON.stringify({
+              error: 'AI analysis failed',
+              details: e instanceof Error ? e.message : String(e),
+            }),
+            { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
         }
 
-        const data = await response.json();
-        const analysisText = data.choices[0].message.content;
-        
         console.log('Raw AI response length:', analysisText.length);
 
         // Parse JSON response with improved handling

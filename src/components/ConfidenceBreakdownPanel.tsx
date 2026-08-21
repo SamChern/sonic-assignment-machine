@@ -540,13 +540,14 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
             </div>
             <div className="rounded-md border border-border p-3">
               <p className="text-xs text-muted-foreground">Dominant category</p>
-              <p className="mt-1">
+              <div className="mt-1">
                 {analysis?.category ? (
                   <Badge>{String(analysis.category)}</Badge>
                 ) : (
                   <span className="text-sm text-muted-foreground">not scored</span>
                 )}
-              </p>
+              </div>
+
               <p className="mt-2 text-[11px] text-muted-foreground">
                 {tags.length} taxonomy node{tags.length === 1 ? "" : "s"} ·{" "}
                 {driverRows.length} driver row{driverRows.length === 1 ? "" : "s"}

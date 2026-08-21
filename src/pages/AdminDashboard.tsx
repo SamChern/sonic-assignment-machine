@@ -367,6 +367,17 @@ const AdminDashboard = () => {
           </div>
           
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
+              onClick={handleHealthCheck}
+              disabled={ec2Loading}
+            >
+              <Activity className={`h-4 w-4 ${ec2Loading ? "animate-pulse" : ""}`} />
+              <span className="hidden sm:inline">{ec2Loading ? "Checking..." : "EC2 Health"}</span>
+            </Button>
+
             {selectedSourceIds.length > 0 && (
               <Button
                 onClick={handleAnalyzeSelected}

@@ -18,7 +18,10 @@ import {
   Users,
   GitCompare,
   X,
+  SlidersHorizontal,
+  Flag,
 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -219,6 +222,14 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
   const [compareId, setCompareId] = useState<string>("");
   const [compare, setCompare] = useState<Bundle | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [threshold, setThreshold] = useState<number>(() => {
+    const saved = Number(localStorage.getItem("sonicsim.lowConfidenceThreshold"));
+    return Number.isFinite(saved) && saved > 0 ? saved : 0.15;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("sonicsim.lowConfidenceThreshold", String(threshold));
+  }, [threshold]);
 
 
   const load = useCallback(async (id: string) => {
@@ -357,6 +368,16 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
   );
 
   const math = useMemo(() => computeMath(analysis), [analysis]);
+
+  /** Per-row support = row share x evidence factor. Rows below the threshold are flagged. */
+  const rowSupport = useCallback(
+    (share: unknown, factor?: number) => (Number(share) || 0) * (factor ?? math?.tier.factor ?? 0),
+    [math],
+  );
+  const flaggedCount = useMemo(
+    () => driverRows.filter((r) => rowSupport(r.share) < threshold).length,
+    [driverRows, rowSupport, threshold],
+  );
 
   const reasons = useMemo(() => {
     const list: string[] = [];
@@ -506,6 +527,58 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
             </div>
           )}
 
+          {/* low-confidence threshold */}
+          <div className="mt-4 rounded-md border border-border bg-card/60 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4 text-primary" />
+              <p className="text-xs font-medium">Low-confidence threshold</p>
+              <span className="ml-auto font-mono text-xs">{threshold.toFixed(2)}</span>
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <Slider
+                value={[threshold]}
+                min={0.01}
+                max={0.8}
+                step={0.01}
+                onValueChange={(v) => setThreshold(v[0])}
+                className="flex-1"
+                aria-label="Low-confidence threshold"
+              />
+              <Input
+                type="number"
+                min={0.01}
+                max={0.8}
+                step={0.01}
+                value={threshold}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v)) setThreshold(Math.min(0.8, Math.max(0.01, v)));
+                }}
+                className="h-8 w-20 font-mono text-xs"
+                aria-label="Low-confidence threshold value"
+              />
+              <Button size="sm" variant="ghost" onClick={() => setThreshold(0.15)}>
+                Reset
+              </Button>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              A driver row is flagged when share × evidence factor (
+              {math ? math.tier.factor.toFixed(1) : "—"}) falls below the threshold.{" "}
+              <span className={flaggedCount ? "text-destructive" : "text-primary"}>
+                {flaggedCount} of {driverRows.length} row{driverRows.length === 1 ? "" : "s"} flagged
+              </span>
+              {math && (
+                <>
+                  {" · overall confidence "}
+                  <span className={math.confidence < threshold ? "text-destructive" : "text-primary"}>
+                    {math.confidence.toFixed(3)} {math.confidence < threshold ? "below" : "above"} threshold
+                  </span>
+                </>
+              )}
+              .
+            </p>
+          </div>
+
           {/* driver rows */}
           <div className="mt-5">
             <p className="text-xs font-medium">Taxonomy rows that drove the score</p>
@@ -537,10 +610,15 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                       const rawEntries = Object.entries(r).filter(
                         ([k]) => k !== "feed" && k !== "object_key",
                       );
+                      const support = rowSupport(r.share);
+                      const flagged = support < threshold;
                       return (
                         <Fragment key={i}>
                           <tr
-                            className="cursor-pointer border-b border-border/50 transition-smooth hover:bg-muted/40"
+                            className={
+                              "cursor-pointer border-b border-border/50 transition-smooth hover:bg-muted/40 " +
+                              (flagged ? "bg-destructive/5" : "")
+                            }
                             onClick={() => loadDrill(i, r)}
                           >
                             <td className="py-1.5 pr-3">
@@ -558,7 +636,19 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                               </span>
                             </td>
                             <td className="py-1.5 pr-3">
-                              {[r.TaxonomyName, r.CategoryName].filter(Boolean).join(" · ") || "—"}
+                              <span className="flex flex-wrap items-center gap-1.5">
+                                {[r.TaxonomyName, r.CategoryName].filter(Boolean).join(" · ") || "—"}
+                                {flagged && (
+                                  <Badge
+                                    variant="destructive"
+                                    className="gap-1 text-[10px]"
+                                    title={`support ${support.toFixed(3)} < threshold ${threshold.toFixed(2)}`}
+                                  >
+                                    <Flag className="h-2.5 w-2.5" />
+                                    low {support.toFixed(2)}
+                                  </Badge>
+                                )}
+                              </span>
                             </td>
                             <td className="py-1.5 pr-3">{r.uniques ?? "—"}</td>
                             <td className="py-1.5 pr-3">{r.signals ?? "—"}</td>
@@ -879,8 +969,8 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                   {/* driver rows side by side */}
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">
                     {[
-                      { id: activation.trim(), rows: driverRows, cat: analysis?.category, nodes: tags.length },
-                      { id: compareId, rows: compareDriverRows, cat: compare.analysis?.category, nodes: compare.tags.length },
+                      { id: activation.trim(), rows: driverRows, cat: analysis?.category, nodes: tags.length, factor: math?.tier.factor },
+                      { id: compareId, rows: compareDriverRows, cat: compare.analysis?.category, nodes: compare.tags.length, factor: compareMath?.tier.factor },
                     ].map((side) => (
                       <div key={side.id} className="rounded-md border border-border bg-card/60 p-3">
                         <div className="flex flex-wrap items-center gap-2">
@@ -912,16 +1002,23 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                                 </td>
                               </tr>
                             )}
-                            {side.rows.slice(0, 10).map((r, i) => (
-                              <tr key={i} className="border-b border-border/50">
+                            {side.rows.slice(0, 10).map((r, i) => {
+                              const sup = rowSupport(r.share, side.factor);
+                              const flg = sup < threshold;
+                              return (
+                              <tr key={i} className={"border-b border-border/50 " + (flg ? "bg-destructive/5" : "")}>
                                 <td className="py-1 pr-2 text-muted-foreground">{r.feed}</td>
-                                <td className="py-1 pr-2">{r.TaxonomyName || r.CategoryName || "—"}</td>
+                                <td className="py-1 pr-2">
+                                  {r.TaxonomyName || r.CategoryName || "—"}
+                                  {flg && <span className="ml-1 text-destructive">⚑</span>}
+                                </td>
                                 <td className="py-1 pr-2 font-mono">
                                   {r.share != null ? `${(Number(r.share) * 100).toFixed(0)}%` : "—"}
                                 </td>
                                 <td className="py-1 font-mono">{Number(r.uniques) || 0}</td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>

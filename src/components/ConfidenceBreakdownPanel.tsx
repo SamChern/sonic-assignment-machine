@@ -113,6 +113,87 @@ const EVIDENCE_TIERS = [
   { factor: 0.4, kind: "none", detail: "taxonomy metadata only — no audio was analysed" },
 ];
 
+
+/* --------------------------------------------------------------- helpers */
+
+type DriverRow = SummaryRow & { feed: string; object_key?: string | null };
+
+const computeDriverRows = (identifier: Record<string, unknown> | null): DriverRow[] => {
+  if (!identifier) return [];
+  const out: DriverRow[] = [];
+  for (const [col, label] of SIGNAL_COLUMNS) {
+    const block = (identifier[col] ?? null) as SignalBlock | null;
+    if (!block?.rows?.length) continue;
+    for (const r of block.rows) out.push({ ...r, feed: label, object_key: block.object_key });
+  }
+  return out.sort((a, b) => (Number(b.uniques) || 0) - (Number(a.uniques) || 0));
+};
+
+const computeMath = (analysis: Record<string, number | string | null> | null) => {
+  if (!analysis) return null;
+  const scores = SCORE_KEYS.map(([k]) => Number(analysis[k]) || 0);
+  const mean = scores.reduce((s, v) => s + v, 0) / scores.length;
+  const stddev = Math.sqrt(scores.reduce((s, v) => s + (v - mean) ** 2, 0) / scores.length);
+  const spread = Math.max(0.1, Math.min(1, stddev / 30));
+  const confidence = Number(analysis.confidence) || 0;
+  const factor = spread > 0 ? confidence / spread : 0;
+  const tier = EVIDENCE_TIERS.reduce(
+    (best, t) => (Math.abs(t.factor - factor) < Math.abs(best.factor - factor) ? t : best),
+    EVIDENCE_TIERS[0],
+  );
+  return { scores, mean, stddev, spread, confidence, factor, tier };
+};
+
+interface Bundle {
+  id: string;
+  identifier: Record<string, unknown> | null;
+  analysis: Record<string, number | string | null> | null;
+  tags: TagRow[];
+}
+
+const fetchBundle = async (id: string): Promise<{ bundle: Bundle | null; error?: string }> => {
+  const { data, error } = await supabase
+    .from("intuizi_identifiers")
+    .select(
+      "primary_identifier, ctv_signals, apps_signals, visitation_signals, demographics_signals, origin_signals, tag_codes, audio_source_id, observation_count, updated_at",
+    )
+    .eq("primary_identifier", `activation:${id.trim()}`)
+    .maybeSingle();
+
+  if (error) return { bundle: null, error: error.message };
+  if (!data) return { bundle: null };
+
+  const identifier = data as unknown as Record<string, unknown>;
+  const sourceId = (data as { audio_source_id: string | null }).audio_source_id;
+  if (!sourceId) return { bundle: { id, identifier, analysis: null, tags: [] } };
+
+  const [anaRes, tagRes] = await Promise.all([
+    supabase
+      .from("source_analyses")
+      .select(
+        "confidence, category, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
+      )
+      .eq("audio_source_id", sourceId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("audio_source_tags")
+      .select("weight, taxonomy_nodes(code, label, parent_code)")
+      .eq("audio_source_id", sourceId)
+      .order("weight", { ascending: false }),
+  ]);
+
+  return {
+    bundle: {
+      id,
+      identifier,
+      analysis: (anaRes.data ?? null) as unknown as Record<string, number | string | null> | null,
+      tags: (tagRes.data ?? []) as unknown as TagRow[],
+    },
+  };
+};
+
 /* ------------------------------------------------------------------ panel */
 
 const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActivation?: string }) => {
@@ -132,20 +213,13 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
     setNotFound(false);
     setOpenRow(null);
     setDrill({});
-    const { data, error } = await supabase
-      .from("intuizi_identifiers")
-      .select(
-        "primary_identifier, ctv_signals, apps_signals, visitation_signals, demographics_signals, origin_signals, tag_codes, audio_source_id, observation_count, updated_at",
-      )
-      .eq("primary_identifier", `activation:${id.trim()}`)
-      .maybeSingle();
-
+    const { bundle, error } = await fetchBundle(id);
     if (error) {
-      toast({ title: "Could not load activation", description: error.message, variant: "destructive" });
+      toast({ title: "Could not load activation", description: error, variant: "destructive" });
       setLoading(false);
       return;
     }
-    if (!data) {
+    if (!bundle) {
       setIdentifier(null);
       setAnalysis(null);
       setTags([]);
@@ -153,33 +227,9 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
       setLoading(false);
       return;
     }
-
-    setIdentifier(data as unknown as Record<string, unknown>);
-    const sourceId = (data as { audio_source_id: string | null }).audio_source_id;
-
-    if (sourceId) {
-      const [anaRes, tagRes] = await Promise.all([
-        supabase
-          .from("source_analyses")
-          .select(
-            "confidence, category, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
-          )
-          .eq("audio_source_id", sourceId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from("audio_source_tags")
-          .select("weight, taxonomy_nodes(code, label, parent_code)")
-          .eq("audio_source_id", sourceId)
-          .order("weight", { ascending: false }),
-      ]);
-      setAnalysis((anaRes.data ?? null) as unknown as Record<string, number | string | null> | null);
-      setTags((tagRes.data ?? []) as unknown as TagRow[]);
-    } else {
-      setAnalysis(null);
-      setTags([]);
-    }
+    setIdentifier(bundle.identifier);
+    setAnalysis(bundle.analysis);
+    setTags(bundle.tags);
     setLoading(false);
   }, []);
 
@@ -189,24 +239,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
 
   /* ---------------------------------------------------------- derivations */
 
-  const blocks = useMemo(() => {
-    if (!identifier) return [] as { label: string; block: SignalBlock }[];
-    return SIGNAL_COLUMNS.map(([col, label]) => ({
-      label: label as string,
-      block: (identifier[col] ?? null) as SignalBlock | null,
-    }))
-      .filter((b) => !!b.block && !!b.block.rows?.length)
-      .map((b) => ({ label: b.label, block: b.block as SignalBlock }));
-
-  }, [identifier]);
-
-  const driverRows = useMemo(() => {
-    const out: (SummaryRow & { feed: string; object_key?: string | null })[] = [];
-    for (const { label, block } of blocks) {
-      for (const r of block.rows ?? []) out.push({ ...r, feed: label, object_key: block.object_key });
-    }
-    return out.sort((a, b) => (Number(b.uniques) || 0) - (Number(a.uniques) || 0));
-  }, [blocks]);
+  const driverRows = useMemo(() => computeDriverRows(identifier), [identifier]);
 
   const loadDrill = useCallback(
     async (index: number, row: SummaryRow & { feed: string; object_key?: string | null }) => {
@@ -272,21 +305,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
     [openRow, drill, identifier, tags, activation],
   );
 
-  const math = useMemo(() => {
-    if (!analysis) return null;
-    const scores = SCORE_KEYS.map(([k]) => Number(analysis[k]) || 0);
-    const mean = scores.reduce((s, v) => s + v, 0) / scores.length;
-    const stddev = Math.sqrt(scores.reduce((s, v) => s + (v - mean) ** 2, 0) / scores.length);
-    const spread = Math.max(0.1, Math.min(1, stddev / 30));
-    const confidence = Number(analysis.confidence) || 0;
-    const factor = spread > 0 ? confidence / spread : 0;
-    const tier =
-      EVIDENCE_TIERS.reduce(
-        (best, t) => (Math.abs(t.factor - factor) < Math.abs(best.factor - factor) ? t : best),
-        EVIDENCE_TIERS[0],
-      );
-    return { scores, mean, stddev, spread, confidence, factor, tier };
-  }, [analysis]);
+  const math = useMemo(() => computeMath(analysis), [analysis]);
 
   const reasons = useMemo(() => {
     const list: string[] = [];

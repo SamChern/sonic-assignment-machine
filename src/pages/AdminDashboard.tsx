@@ -290,6 +290,56 @@ const AdminDashboard = () => {
 
   const getSourcesByUser = (userId: string) => allSources.filter(s => s.user_id === userId);
 
+  const getSourcesByProvider = (provider: string) =>
+    allSources.filter(s => s.source_type === provider);
+
+  const selectAllProviderSources = (provider: string) => {
+    const ids = getSourcesByProvider(provider).map(s => s.id);
+    setSelectedSourceIds(prev => {
+      const others = prev.filter(id => !ids.includes(id));
+      const hasAll = ids.every(id => prev.includes(id));
+      return hasAll ? others : [...new Set([...prev, ...ids])];
+    });
+  };
+
+  const renderSourceRow = (source: AudioSourceWithProfile, showOwner = false) => (
+    <div
+      key={source.id}
+      className={`flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
+        selectedSourceIds.includes(source.id)
+          ? 'bg-primary/10 border-primary/30'
+          : 'bg-secondary/20 border-secondary/30 hover:bg-secondary/30'
+      }`}
+      onClick={() => toggleSourceSelection(source.id)}
+    >
+      <Checkbox
+        checked={selectedSourceIds.includes(source.id)}
+        onCheckedChange={() => toggleSourceSelection(source.id)}
+      />
+      {source.album_image ? (
+        <img src={source.album_image} alt={source.name} className="w-10 h-10 rounded" />
+      ) : (
+        <FileAudio className="w-10 h-10 text-muted-foreground p-2" />
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-foreground truncate">{source.name}</p>
+        {source.artists && (
+          <p className="text-sm text-muted-foreground truncate">{source.artists.join(', ')}</p>
+        )}
+        {showOwner && (
+          <p className="text-xs text-muted-foreground truncate">
+            {source.profile?.username || 'Anonymous'}
+            {signalCounts[source.id] ? ` • ${signalCounts[source.id]} identifiers` : ''}
+          </p>
+        )}
+      </div>
+      <Badge variant="outline" className="text-xs">
+        {source.source_type}
+      </Badge>
+    </div>
+  );
+
+
   if (loading || dataLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">

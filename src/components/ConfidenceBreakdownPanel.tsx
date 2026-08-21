@@ -379,6 +379,54 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
     [driverRows, rowSupport, threshold],
   );
 
+  /* -------------------------------------------------- fastest-moving deltas */
+
+  const rowKey = (r: SummaryRow) =>
+    String(r.TaxonomyName || r.CategoryName || "—").trim().toLowerCase();
+
+  /** Driver rows ranked by |support delta| between the two activations. */
+  const rowMovers = useMemo(() => {
+    if (!compare) return { ranked: [] as { key: string; label: string; a: number; b: number; delta: number }[], top: new Map<string, number>() };
+    const fa = math?.tier.factor ?? 0;
+    const fb = compareMath?.tier.factor ?? 0;
+    const acc = new Map<string, { label: string; a: number; b: number }>();
+    for (const r of driverRows) {
+      const k = rowKey(r);
+      const e = acc.get(k) ?? { label: String(r.TaxonomyName || r.CategoryName || "—"), a: 0, b: 0 };
+      e.a += (Number(r.share) || 0) * fa;
+      acc.set(k, e);
+    }
+    for (const r of compareDriverRows) {
+      const k = rowKey(r);
+      const e = acc.get(k) ?? { label: String(r.TaxonomyName || r.CategoryName || "—"), a: 0, b: 0 };
+      e.b += (Number(r.share) || 0) * fb;
+      acc.set(k, e);
+    }
+    const ranked = Array.from(acc.entries())
+      .map(([key, v]) => ({ key, label: v.label, a: v.a, b: v.b, delta: v.b - v.a }))
+      .filter((v) => Math.abs(v.delta) > 0.0001)
+      .sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+    const top = new Map<string, number>();
+    ranked.slice(0, 3).forEach((v, i) => top.set(v.key, i + 1));
+    return { ranked, top };
+  }, [compare, compareDriverRows, driverRows, math, compareMath]);
+
+  /** Category scores ranked by |delta|; top 2 get highlighted. */
+  const scoreMovers = useMemo(() => {
+    if (!compare) return { ranked: [] as { k: string; label: string; a: number; b: number; delta: number }[], top: new Map<string, number>() };
+    const ranked = SCORE_KEYS.map(([k, label]) => {
+      const a = Number(analysis?.[k]) || 0;
+      const b = Number(compare.analysis?.[k]) || 0;
+      return { k: String(k), label: String(label), a, b, delta: b - a };
+    })
+      .filter((v) => Math.abs(v.delta) >= 1)
+      .sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+    const top = new Map<string, number>();
+    ranked.slice(0, 2).forEach((v, i) => top.set(v.k, i + 1));
+    return { ranked, top };
+  }, [compare, analysis]);
+
+
   const reasons = useMemo(() => {
     const list: string[] = [];
     if (!math) return list;

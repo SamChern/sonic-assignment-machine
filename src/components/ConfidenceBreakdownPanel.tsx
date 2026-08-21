@@ -1014,7 +1014,74 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                     </table>
                   </div>
 
+                  {/* fastest movers */}
+                  {(rowMovers.ranked.length > 0 || scoreMovers.ranked.length > 0) && (
+                    <div className="mt-4 rounded-md border border-primary/40 bg-primary/10 p-3">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold">
+                        <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                        Fastest movers ({activation.trim()} → {compareId})
+                      </div>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Driver rows by support shift
+                          </p>
+                          <ul className="mt-1 space-y-1">
+                            {rowMovers.ranked.length === 0 && (
+                              <li className="text-[11px] text-muted-foreground">No row-level shift.</li>
+                            )}
+                            {rowMovers.ranked.slice(0, 3).map((m, i) => (
+                              <li key={m.key} className="flex items-center gap-2 text-[11px]">
+                                <Badge variant="outline" className="h-4 px-1 font-mono text-[10px]">
+                                  #{i + 1}
+                                </Badge>
+                                <span className="truncate">{m.label}</span>
+                                <span
+                                  className={
+                                    "ml-auto font-mono " +
+                                    (m.delta > 0 ? "text-primary" : "text-destructive")
+                                  }
+                                >
+                                  {m.a.toFixed(2)} → {m.b.toFixed(2)} ({m.delta > 0 ? "+" : ""}
+                                  {m.delta.toFixed(2)})
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Category scores by point shift
+                          </p>
+                          <ul className="mt-1 space-y-1">
+                            {scoreMovers.ranked.length === 0 && (
+                              <li className="text-[11px] text-muted-foreground">No category shift ≥ 1 point.</li>
+                            )}
+                            {scoreMovers.ranked.slice(0, 3).map((m, i) => (
+                              <li key={m.k} className="flex items-center gap-2 text-[11px]">
+                                <Badge variant="outline" className="h-4 px-1 font-mono text-[10px]">
+                                  #{i + 1}
+                                </Badge>
+                                <span className="truncate">{m.label}</span>
+                                <span
+                                  className={
+                                    "ml-auto font-mono " +
+                                    (m.delta > 0 ? "text-primary" : "text-destructive")
+                                  }
+                                >
+                                  {Math.round(m.a)} → {Math.round(m.b)} ({m.delta > 0 ? "+" : ""}
+                                  {Math.round(m.delta)})
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* driver rows side by side */}
+
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">
                     {[
                       { id: activation.trim(), rows: driverRows, cat: analysis?.category, nodes: tags.length, factor: math?.tier.factor },

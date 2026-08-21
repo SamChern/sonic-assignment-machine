@@ -268,8 +268,13 @@ const SemanticAnalysis = () => {
         </div>
 
         <div className="mt-6">
+          <ConfidenceBreakdownPanel defaultActivation="5498" />
+        </div>
+
+        <div className="mt-6">
           <InspectMappingPanel />
         </div>
+
 
 
 

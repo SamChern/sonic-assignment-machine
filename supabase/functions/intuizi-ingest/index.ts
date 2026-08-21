@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
 
   // ---- Owner controls -----------------------------------------------------
   if (action === "status") {
-    return json({ state, s3_configured: s3Configured() });
+    return json({ state, s3_configured: s3Configured(), s3: s3BackendInfo() });
   }
   if (action === "resume" || action === "pause") {
     if (isCron) return json({ error: `${action} requires an admin` }, 403);
@@ -118,10 +118,13 @@ Deno.serve(async (req) => {
   }
 
   if (!s3Configured()) {
+    const info = s3BackendInfo();
     return json({
-      error:
-        "Amazon S3 is not connected for this project yet — link the inbound bucket connection, then run again.",
+      error: info.placeholder
+        ? "The enterprise S3 ingestion path is selected (S3_BACKEND=enterprise) but not configured yet — set S3_ENTERPRISE_BASE_URL and S3_ENTERPRISE_API_KEY, or unset S3_BACKEND to use the connector gateway."
+        : "Amazon S3 is not connected for this project yet — link the inbound bucket connection, then run again.",
       s3_configured: false,
+      s3: info,
     }, 400);
   }
 

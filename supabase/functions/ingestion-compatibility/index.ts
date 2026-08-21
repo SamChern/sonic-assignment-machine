@@ -139,44 +139,90 @@ Deno.serve(async (req) => {
   };
   log("start", { scope, maxObjects, maxRows });
 
+  const finish = (extra: Record<string, unknown> = {}) =>
+    json({
+      ran_at: new Date().toISOString(),
+      duration_ms: Date.now() - startedAt,
+      scope,
+      debug,
+      summary: summarize(checks),
+      checks,
+      objects_sampled: [],
+      ...extra,
+      ...(debug ? { trace } : {}),
+    });
+
   // ---------------------------------------------------------------- 1. config
   const backend = s3BackendInfo();
-  add({
-    id: "config.object_store",
-    feed: "object store",
-    title: "Object store backend configured",
-    status: backend.configured ? (backend.placeholder ? "warn" : "pass") : "fail",
-    detail: backend.placeholder
-      ? `Active backend "${backend.backend}" is a placeholder implementation.`
-      : `Active backend: ${backend.backend}.`,
-    expected: "a configured, implemented backend driver",
-    actual: `${backend.backend} (configured=${backend.configured})`,
-    remediation: backend.configured
-      ? (backend.placeholder
-        ? "Unset S3_BACKEND to use the connector gateway, or implement the enterprise driver in supabase/functions/_shared/s3.ts."
-        : undefined)
-      : "Link the Amazon S3 connection to this project (or set S3_ENTERPRISE_BASE_URL / S3_ENTERPRISE_API_KEY for the enterprise backend), then re-run these tests.",
-  });
+  if (wantsStoreReads) {
+    add({
+      id: "config.object_store",
+      feed: "object store",
+      title: "Object store backend configured",
+      status: backend.configured ? (backend.placeholder ? "warn" : "pass") : "fail",
+      detail: backend.placeholder
+        ? `Active backend "${backend.backend}" is a placeholder implementation.`
+        : `Active backend: ${backend.backend}.`,
+      expected: "a configured, implemented backend driver",
+      actual: `${backend.backend} (configured=${backend.configured})`,
+      remediation: backend.configured
+        ? (backend.placeholder
+          ? "Unset S3_BACKEND to use the connector gateway, or implement the enterprise driver in supabase/functions/_shared/s3.ts."
+          : undefined)
+        : "Link the Amazon S3 connection to this project (or set S3_ENTERPRISE_BASE_URL / S3_ENTERPRISE_API_KEY for the enterprise backend), then re-run these tests.",
+      debug: {
+        backend,
+        env_present: {
+          LOVABLE_API_KEY: !!Deno.env.get("LOVABLE_API_KEY"),
+          AWS_S3_API_KEY: !!Deno.env.get("AWS_S3_API_KEY"),
+          S3_BACKEND: Deno.env.get("S3_BACKEND") ?? null,
+          S3_ENTERPRISE_BASE_URL: !!Deno.env.get("S3_ENTERPRISE_BASE_URL"),
+        },
+      },
+    });
 
-  add({
-    id: "config.gateway_keys",
-    feed: "object store",
-    title: "Gateway credentials present",
-    status: backend.backend !== "connector_gateway"
-      ? "skip"
-      : (Deno.env.get("LOVABLE_API_KEY") && Deno.env.get("AWS_S3_API_KEY") ? "pass" : "fail"),
-    detail: backend.backend !== "connector_gateway"
-      ? "Not applicable for the current backend."
-      : "LOVABLE_API_KEY + AWS_S3_API_KEY are required for listing and signed reads.",
-    remediation:
-      "Link the Amazon S3 connection so AWS_S3_API_KEY is injected; LOVABLE_API_KEY is provided by the platform.",
-  });
+    add({
+      id: "config.gateway_keys",
+      feed: "object store",
+      title: "Gateway credentials present",
+      status: backend.backend !== "connector_gateway"
+        ? "skip"
+        : (Deno.env.get("LOVABLE_API_KEY") && Deno.env.get("AWS_S3_API_KEY") ? "pass" : "fail"),
+      detail: backend.backend !== "connector_gateway"
+        ? "Not applicable for the current backend."
+        : "LOVABLE_API_KEY + AWS_S3_API_KEY are required for listing and signed reads.",
+      remediation:
+        "Link the Amazon S3 connection so AWS_S3_API_KEY is injected; LOVABLE_API_KEY is provided by the platform.",
+    });
+  }
 
-  const altFeeds: { id: string; label: string; env: string[] }[] = [
-    { id: "ec2_analysis", label: "EC2 analysis API", env: ["AWS_API_URL", "AWS_API_KEY"] },
-    { id: "librosa_rest", label: "Librosa REST", env: ["LIBROSA_REST_URL"] },
+  const altFeeds: {
+    id: Exclude<Scope, "all">;
+    label: string;
+    env: string[];
+    urlEnv: string;
+    healthPath: string;
+    authEnv?: string;
+  }[] = [
+    {
+      id: "ec2_analysis",
+      label: "EC2 analysis API",
+      env: ["AWS_API_URL", "AWS_API_KEY"],
+      urlEnv: "AWS_API_URL",
+      healthPath: "/health",
+      authEnv: "AWS_API_KEY",
+    },
+    {
+      id: "librosa_rest",
+      label: "Librosa REST",
+      env: ["LIBROSA_REST_URL"],
+      urlEnv: "LIBROSA_REST_URL",
+      healthPath: "/health",
+      authEnv: "LIBROSA_REST_TOKEN",
+    },
   ];
   for (const f of altFeeds) {
+    if (!wants(f.id)) continue;
     const missing = f.env.filter((k) => !Deno.env.get(k));
     add({
       id: `config.${f.id}`,
@@ -189,18 +235,62 @@ Deno.serve(async (req) => {
       remediation: missing.length
         ? `Add ${missing.join(" and ")} in the backend secrets if this feed should be active.`
         : undefined,
+      debug: { required: f.env, missing },
     });
+
+    // Live reachability probe — only when the feed is explicitly in scope.
+    const base = Deno.env.get(f.urlEnv);
+    if (!base) continue;
+    const target = `${base.replace(/\/+$/, "")}${f.healthPath}`;
+    const t0 = Date.now();
+    try {
+      const token = f.authEnv ? Deno.env.get(f.authEnv) : undefined;
+      const res = await fetch(target, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: AbortSignal.timeout(8000),
+      });
+      const text = (await res.text()).slice(0, 400);
+      log(`probe.${f.id}`, { status: res.status, ms: Date.now() - t0 });
+      add({
+        id: `reach.${f.id}`,
+        feed: f.label,
+        title: `${f.label} reachable`,
+        status: res.ok ? "pass" : "fail",
+        detail: res.ok
+          ? `Health endpoint answered ${res.status} in ${Date.now() - t0}ms.`
+          : `Health endpoint answered ${res.status}.`,
+        expected: "HTTP 200 from the feed health endpoint",
+        actual: `HTTP ${res.status}`,
+        remediation: res.ok
+          ? undefined
+          : res.status === 401 || res.status === 403
+          ? `Credentials rejected. Rotate ${f.authEnv ?? "the feed token"} and confirm the service expects a bearer token.`
+          : "Confirm the service is running behind its reverse proxy and the URL points at the health route.",
+        debug: { url: target, status: res.status, latency_ms: Date.now() - t0, body: text },
+      });
+    } catch (e) {
+      const msg = errMsg(e);
+      log(`probe.${f.id}.error`, msg);
+      add({
+        id: `reach.${f.id}`,
+        feed: f.label,
+        title: `${f.label} reachable`,
+        status: "fail",
+        detail: msg,
+        expected: "HTTP 200 from the feed health endpoint",
+        actual: msg,
+        remediation: /timed out|timeout|abort/i.test(msg)
+          ? "The host did not answer within 8s — check the security group, Nginx upstream and the service unit."
+          : "Verify the configured URL is publicly resolvable from the backend runtime.",
+        debug: { url: target, latency_ms: Date.now() - t0 },
+      });
+    }
   }
 
-  if (!s3Configured()) {
-    return json({
-      ran_at: new Date().toISOString(),
-      duration_ms: Date.now() - startedAt,
-      summary: summarize(checks),
-      checks,
-      objects_sampled: [],
-    });
-  }
+  if (!wantsStoreReads) return finish({ backend });
+
+  if (!s3Configured()) return finish();
+
 
   // ----------------------------------------------------- 2. prefix reachability
   clearS3Cache();

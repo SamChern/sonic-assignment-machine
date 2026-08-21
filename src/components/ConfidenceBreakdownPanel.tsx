@@ -20,6 +20,8 @@ import {
   X,
   SlidersHorizontal,
   Flag,
+  TrendingUp,
+
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import {

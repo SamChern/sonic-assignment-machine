@@ -5,6 +5,8 @@
 // precise geo/device values are carried as metadata and never used as features.
 
 import type { OntologyTag } from "./ontology.ts";
+import { readParquetRows } from "./parquet.ts";
+
 
 export const REPORT_TYPES = [
   "ctv",
@@ -59,22 +61,24 @@ export function parseCsv(text: string): Record<string, string>[] {
   return rows;
 }
 
-/** Fetch an object and decode it to raw rows. Handles .csv, .csv.gz, .json(l). */
+/**
+ * Fetch an object and decode it to raw rows.
+ * Handles .csv, .csv.gz, .json(l) and .parquet (snappy/gzip/zstd/brotli).
+ */
 export async function fetchObjectRows(
   url: string,
   objectKey: string,
-): Promise<Record<string, string>[]> {
+  maxRows = 5000,
+): Promise<Record<string, unknown>[]> {
+  const lower = objectKey.toLowerCase();
+
+  if (lower.endsWith(".parquet") || lower.endsWith(".pq")) {
+    return await readParquetRows(url, maxRows);
+  }
+
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`object fetch failed [${res.status}]: ${await res.text()}`);
-  }
-  const lower = objectKey.toLowerCase();
-
-  if (lower.endsWith(".parquet")) {
-    throw new Error(
-      "Parquet delivery is not supported by the backend-only ingest path — " +
-      "configure Intuizi to deliver CSV or gzipped CSV.",
-    );
   }
 
   let text: string;
@@ -95,6 +99,7 @@ export async function fetchObjectRows(
   }
   return parseCsv(text);
 }
+
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -220,13 +225,54 @@ export function normalizeRow(
   return { primary_identifier: id, report_type: reportType, tags, signals, confidence, label };
 }
 
+/* ------------------------------------------------------- prefixes & routing */
+
+/**
+ * S3 prefixes the scheduled ingest scans.
+ *
+ * `report_type: null` means the prefix is mixed-content (Intuizi activation
+ * exports land there with the report kind encoded in the filename), so the type
+ * is resolved per object with `reportTypeFromKey`.
+ */
+export const INGEST_PREFIXES: { prefix: string; report_type: ReportType | null }[] = [
+  ...REPORT_TYPES.map((t) => ({ prefix: `${t}/`, report_type: t })),
+  { prefix: "Activations/", report_type: null },
+];
+
+/** Filename tokens that identify a report type in activation exports. */
+const TYPE_TOKENS: { type: ReportType; tokens: string[] }[] = [
+  { type: "ctv", tokens: ["ctv", "connectedtv", "connected-tv", "streaming", "soundtracksignals"] },
+  { type: "apps", tokens: ["apps", "app", "appaffinity", "mobileapp", "appusage"] },
+  { type: "visitation", tokens: ["visitation", "visits", "visit", "footfall", "poi"] },
+  { type: "demographics", tokens: ["demographics", "demographic", "demos", "audienceprofile"] },
+  { type: "origin", tokens: ["origin", "origins", "homeorigin", "geoorigin", "travel"] },
+];
+
+/**
+ * Resolve the report type for an object key.
+ * Directory prefixes win; otherwise the filename is tokenized (Intuizi activation
+ * names such as `..._ctv_-_sonicsim_activation_id5493_uniquedevices.parquet`).
+ */
 export function reportTypeFromKey(key: string): ReportType | null {
   const lower = key.toLowerCase();
+
   for (const t of REPORT_TYPES) {
-    if (lower.startsWith(`${t}/`) || lower.includes(`/${t}/`) || lower.includes(`${t}_`)) return t;
+    if (lower.startsWith(`${t}/`) || lower.includes(`/${t}/`)) return t;
+  }
+
+  const name = lower.split("/").pop() ?? lower;
+  const parts = name.replace(/\.[a-z0-9]+$/, "").split(/[^a-z0-9]+/).filter(Boolean);
+  for (const { type, tokens } of TYPE_TOKENS) {
+    if (parts.some((p) => tokens.includes(p))) return type;
+  }
+  // Compact names without separators (e.g. `ctvsignals20260821`).
+  const squashed = parts.join("");
+  for (const { type, tokens } of TYPE_TOKENS) {
+    if (tokens.some((tok) => tok.length > 3 && squashed.includes(tok))) return type;
   }
   return null;
 }
+
 
 export function partitionDateFromKey(key: string): string | null {
   const m = key.match(/dt=(\d{4}-\d{2}-\d{2})/) ?? key.match(/(\d{4}-\d{2}-\d{2})/);

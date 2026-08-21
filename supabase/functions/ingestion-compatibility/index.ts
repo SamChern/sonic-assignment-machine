@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
       label: "EC2 analysis API",
       env: ["AWS_API_URL", "AWS_API_KEY"],
       urlEnv: "AWS_API_URL",
-      healthPath: "/health",
+      healthPath: "/api/health",
       authEnv: "AWS_API_KEY",
     },
     {

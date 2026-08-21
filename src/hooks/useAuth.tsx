@@ -32,14 +32,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    // Tracks which user id already has profile/role hydrated, so repeated auth
-    // events (INITIAL_SESSION, TOKEN_REFRESHED, tab focus) don't refetch.
+    // Tracks the in-flight/completed hydration per user id, so repeated auth
+    // events (INITIAL_SESSION, TOKEN_REFRESHED, tab focus) don't refetch — and
+    // so a second caller awaits the first fetch instead of resolving instantly
+    // (which would flip `loading` to false while isAdmin was still stale).
     let hydratedFor: string | null = null;
+    let hydration: Promise<unknown> | null = null;
 
-    const hydrate = async (userId: string) => {
-      if (hydratedFor === userId) return;
+    const hydrate = (userId: string) => {
+      if (hydratedFor === userId && hydration) return hydration;
       hydratedFor = userId;
-      await Promise.all([fetchProfile(userId), checkAdminRole(userId)]);
+      hydration = Promise.all([fetchProfile(userId), checkAdminRole(userId)]);
+      return hydration;
     };
 
     // Set up auth state listener FIRST
@@ -54,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTimeout(() => { void hydrate(uid); }, 0);
         } else {
           hydratedFor = null;
+          hydration = null;
           setProfile(null);
           setIsAdmin(false);
         }

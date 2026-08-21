@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +32,7 @@ import {
   Radio,
   ChevronDown,
   ChevronRight,
+  Layers,
 
 } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
@@ -41,6 +42,16 @@ import { FingerprintComparison } from "@/components/FingerprintComparison";
 import { useFingerprints } from "@/hooks/useFingerprints";
 import { useEC2Api } from "@/hooks/useEC2Api";
 import { calculateSimilarity, type FingerprintMode } from "@/lib/fingerprintMath";
+import { SignalCohortPanel } from "@/components/SignalCohortPanel";
+import {
+  buildSignalPoints,
+  clusterSignals,
+  cohortFingerprint,
+  metaFingerprint,
+  suggestedK,
+  type IdentifierRow,
+  type SourceBaseline,
+} from "@/lib/identifierSignals";
 
 interface UserProfile {
   id: string;
@@ -64,7 +75,7 @@ interface AudioSourceWithProfile {
   profile?: UserProfile | null;
 }
 
-type EntityMode = "user" | "provider";
+type EntityMode = "user" | "provider" | "signal";
 
 const PROVIDER_META: Record<string, { label: string; description: string }> = {
   spotify: { label: "Spotify", description: "Music streaming catalog" },
@@ -107,6 +118,34 @@ const AdminDashboard = () => {
   const [compareMode, setCompareMode] = useState<FingerprintMode>("all");
   const [neighborsOpenFor, setNeighborsOpenFor] = useState<string | null>(null);
 
+  // Identifier-level (Intuizi) signal state. Loaded lazily the first time the
+  // admin switches into signal mode — it is by far the largest table here.
+  const [identifierRows, setIdentifierRows] = useState<IdentifierRow[] | null>(null);
+  const [sourceBaselines, setSourceBaselines] = useState<Record<string, SourceBaseline>>({});
+  const [signalsLoading, setSignalsLoading] = useState(false);
+  const [cohortCount, setCohortCount] = useState(4);
+  const [cohortCountTouched, setCohortCountTouched] = useState(false);
+  const [selectedCohortKeys, setSelectedCohortKeys] = useState<string[]>([]);
+
+  const signalPoints = useMemo(
+    () => (identifierRows ? buildSignalPoints(identifierRows, sourceBaselines) : []),
+    [identifierRows, sourceBaselines],
+  );
+  const cohorts = useMemo(() => clusterSignals(signalPoints, cohortCount), [signalPoints, cohortCount]);
+  const meta = useMemo(
+    () => metaFingerprint(cohorts, "All Intuizi identifiers"),
+    [cohorts],
+  );
+  const cohortFingerprints = useMemo(() => {
+    const scoped = selectedCohortKeys.length
+      ? cohorts.filter(c => selectedCohortKeys.includes(c.key))
+      : cohorts;
+    const list = scoped.map(cohortFingerprint);
+    // Include the meta rollup alongside cohorts so aggregate/compare views can
+    // show each cohort against the population-level fingerprint.
+    return meta && scoped.length > 1 ? [...list, meta as any] : list;
+  }, [cohorts, selectedCohortKeys, meta]);
+
   const displayedUsers = filteredUserIds.length > 0 
     ? users.filter(u => filteredUserIds.includes(u.user_id))
     : users;
@@ -125,7 +164,9 @@ const AdminDashboard = () => {
     )
   );
 
-  const scopedFingerprints = entityMode === "user"
+  const scopedFingerprints = entityMode === "signal"
+    ? (cohortFingerprints as any[])
+    : entityMode === "user"
     ? (filteredUserIds.length > 0
         ? allFingerprints.filter(fp => filteredUserIds.includes(fp.user_id))
         : allFingerprints)
@@ -133,7 +174,11 @@ const AdminDashboard = () => {
         ? allFingerprints.filter(fp => providerScopedUserIds.includes(fp.user_id))
         : allFingerprints);
 
-  const activeFilterCount = entityMode === "user" ? filteredUserIds.length : filteredProviders.length;
+  const activeFilterCount = entityMode === "signal"
+    ? selectedCohortKeys.length
+    : entityMode === "user"
+      ? filteredUserIds.length
+      : filteredProviders.length;
 
   const toggleUserFilter = (userId: string) => {
     setFilteredUserIds(prev =>
@@ -157,10 +202,86 @@ const AdminDashboard = () => {
     );
   };
 
+  const toggleCohortFilter = (key: string) => {
+    setSelectedCohortKeys(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
   const clearFilters = () => {
     setFilteredUserIds([]);
     setFilteredProviders([]);
+    setSelectedCohortKeys([]);
   };
+
+  // Fetch identifier-level signals + their linked source baselines on demand.
+  const fetchSignalData = async () => {
+    setSignalsLoading(true);
+    try {
+      const PAGE = 1000;
+      const rows: IdentifierRow[] = [];
+      for (let from = 0; from < 20000; from += PAGE) {
+        const { data, error } = await supabase
+          .from("intuizi_identifiers")
+          .select(
+            "id, primary_identifier, tag_codes, observation_count, last_seen_at, audio_source_id, ctv_signals, apps_signals, visitation_signals, demographics_signals, origin_signals"
+          )
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        rows.push(...((data || []) as unknown as IdentifierRow[]));
+        if (!data || data.length < PAGE) break;
+      }
+      setIdentifierRows(rows);
+
+      const sourceIds = Array.from(
+        new Set(rows.map(r => r.audio_source_id).filter((v): v is string => !!v))
+      );
+      const baselines: Record<string, SourceBaseline> = {};
+      if (sourceIds.length) {
+        const { data: analyses } = await supabase
+          .from("source_analyses")
+          .select(
+            "audio_source_id, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score, confidence, created_at"
+          )
+          .in("audio_source_id", sourceIds)
+          .order("created_at", { ascending: false });
+        // Most recent analysis wins per source.
+        (analyses || []).forEach(a => {
+          if (!a.audio_source_id || baselines[a.audio_source_id]) return;
+          baselines[a.audio_source_id] = {
+            emotional: Number(a.emotional_score) || 0,
+            cognitive: Number(a.cognitive_score) || 0,
+            social: Number(a.social_score) || 0,
+            communication: Number(a.communication_score) || 0,
+            contextual: Number(a.contextual_score) || 0,
+            artistic: Number(a.artistic_score) || 0,
+            confidence: Number(a.confidence) || 0.5,
+          };
+        });
+      }
+      setSourceBaselines(baselines);
+    } catch (err) {
+      console.error("Failed to load identifier signals", err);
+      toast.error("Could not load identifier-level signals");
+      setIdentifierRows([]);
+    } finally {
+      setSignalsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (entityMode === "signal" && isAdmin && identifierRows === null && !signalsLoading) {
+      fetchSignalData();
+    }
+  }, [entityMode, isAdmin, identifierRows, signalsLoading]);
+
+  // Default cohort count follows population size until the admin overrides it.
+  useEffect(() => {
+    if (!cohortCountTouched && signalPoints.length) {
+      setCohortCount(suggestedK(signalPoints.length));
+    }
+  }, [signalPoints.length, cohortCountTouched]);
 
 
   useEffect(() => {
@@ -475,6 +596,15 @@ const AdminDashboard = () => {
                   <Radio className="h-3.5 w-3.5" />
                   Signal Provider
                 </Button>
+                <Button
+                  size="sm"
+                  variant={entityMode === "signal" ? "default" : "ghost"}
+                  className="h-8 gap-1.5"
+                  onClick={() => setEntityMode("signal")}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  Identifier Signals
+                </Button>
               </div>
             </div>
 
@@ -494,11 +624,21 @@ const AdminDashboard = () => {
                 <PopoverContent className="w-72 p-0 bg-popover" align="start">
                   <Command>
                     <CommandInput
-                      placeholder={entityMode === "user" ? "Search users..." : "Search signal providers..."}
+                      placeholder={
+                        entityMode === "user"
+                          ? "Search users..."
+                          : entityMode === "provider"
+                            ? "Search signal providers..."
+                            : "Search cohorts..."
+                      }
                     />
                     <CommandList>
                       <CommandEmpty>
-                        {entityMode === "user" ? "No users found." : "No signal providers found."}
+                        {entityMode === "user"
+                          ? "No users found."
+                          : entityMode === "provider"
+                            ? "No signal providers found."
+                            : "No cohorts yet."}
                       </CommandEmpty>
                       <CommandGroup>
                         {entityMode === "user"
@@ -514,6 +654,23 @@ const AdminDashboard = () => {
                                 </Avatar>
                                 <span className="flex-1">{u.username || 'Anonymous'}</span>
                                 {filteredUserIds.includes(u.user_id) && (
+                                  <Check className="h-4 w-4 text-primary" />
+                                )}
+                              </CommandItem>
+                            ))
+                          : entityMode === "signal"
+                          ? cohorts.map(c => (
+                              <CommandItem
+                                key={c.key}
+                                onSelect={() => toggleCohortFilter(c.key)}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <Layers className="h-4 w-4 text-primary" />
+                                <span className="flex-1">{c.label}</span>
+                                <span className="text-xs text-muted-foreground mr-1">
+                                  {c.members.length}
+                                </span>
+                                {selectedCohortKeys.includes(c.key) && (
                                   <Check className="h-4 w-4 text-primary" />
                                 )}
                               </CommandItem>
@@ -558,6 +715,23 @@ const AdminDashboard = () => {
                       </Badge>
                     );
                   })
+                : entityMode === "signal"
+                ? selectedCohortKeys.map(key => {
+                    const c = cohorts.find(co => co.key === key);
+                    if (!c) return null;
+                    return (
+                      <Badge key={key} variant="secondary" className="gap-1 pr-1">
+                        {c.label}
+                        <button
+                          onClick={() => toggleCohortFilter(key)}
+                          className="ml-1 hover:bg-muted rounded-full p-0.5"
+                          aria-label={`Remove ${c.label} filter`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })
                 : filteredProviders.map(p => (
                     <Badge key={p} variant="secondary" className="gap-1 pr-1">
                       {providerMeta(p).label}
@@ -584,7 +758,11 @@ const AdminDashboard = () => {
           <TabsList className="mb-6">
             <TabsTrigger value="users" className="gap-2">
               <Users className="h-4 w-4" />
-              {entityMode === "user" ? "Users & Sources" : "Providers & Signals"}
+              {entityMode === "user"
+                ? "Users & Sources"
+                : entityMode === "provider"
+                  ? "Providers & Signals"
+                  : "Cohorts & Identifiers"}
             </TabsTrigger>
             <TabsTrigger value="fingerprints" className="gap-2">
               <Fingerprint className="h-4 w-4" />
@@ -601,7 +779,21 @@ const AdminDashboard = () => {
           </TabsList>
 
           <TabsContent value="users" className="space-y-4">
-            {entityMode === "user" ? (
+            {entityMode === "signal" ? (
+              <SignalCohortPanel
+                points={signalPoints}
+                cohorts={cohorts}
+                meta={meta}
+                cohortCount={cohortCount}
+                onCohortCountChange={(k) => {
+                  setCohortCountTouched(true);
+                  setCohortCount(k);
+                }}
+                selectedCohortKeys={selectedCohortKeys}
+                onToggleCohort={toggleCohortFilter}
+                loading={signalsLoading}
+              />
+            ) : entityMode === "user" ? (
               displayedUsers.length === 0 ? (
                 <Card className="p-8 text-center">
                   <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -809,14 +1001,20 @@ const AdminDashboard = () => {
           <TabsContent value="fingerprints" className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-semibold text-foreground">Aggregate User Fingerprints</h3>
+                <h3 className="text-lg font-semibold text-foreground">
+                  {entityMode === "signal" ? "Aggregate Cohort Fingerprints" : "Aggregate User Fingerprints"}
+                </h3>
                 <p className="text-sm text-muted-foreground">
-                  Each bubble represents a user's combined ontological fingerprint
+                  {entityMode === "signal"
+                    ? "Each bubble represents a pseudonymized identifier cohort rolled up from Intuizi signals"
+                    : "Each bubble represents a user's combined ontological fingerprint"}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Scope: {activeFilterCount > 0
-                    ? `${entityMode === "user" ? "users" : "signal providers"} filter • ${scopedFingerprints.length} of ${allFingerprints.length} fingerprints`
-                    : `all ${allFingerprints.length} fingerprints`}
+                  Scope: {entityMode === "signal"
+                    ? `identifier cohorts • ${scopedFingerprints.length} cohort fingerprint${scopedFingerprints.length !== 1 ? "s" : ""} from ${signalPoints.length.toLocaleString()} identifiers`
+                    : activeFilterCount > 0
+                      ? `${entityMode === "user" ? "users" : "signal providers"} filter • ${scopedFingerprints.length} of ${allFingerprints.length} fingerprints`
+                      : `all ${allFingerprints.length} fingerprints`}
                 </p>
               </div>
               <Button variant="outline" size="sm" onClick={refreshFingerprints} disabled={fingerprintsLoading}>
@@ -826,6 +1024,11 @@ const AdminDashboard = () => {
             <AggregateNetworkVisualization 
               fingerprints={scopedFingerprints}
               onUserClick={(userId) => {
+                if (userId.startsWith("cohort:") || userId.startsWith("meta:")) {
+                  setSelectedCohortKeys(userId.startsWith("cohort:") ? [userId] : []);
+                  setActiveTab("users");
+                  return;
+                }
                 setEntityMode("user");
                 setFilteredUserIds([userId]);
                 setActiveTab("users");
@@ -837,14 +1040,20 @@ const AdminDashboard = () => {
           <TabsContent value="compare" className="space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-foreground">Compare User Fingerprints</h3>
+                <h3 className="text-lg font-semibold text-foreground">
+                  {entityMode === "signal" ? "Compare Cohort Fingerprints" : "Compare User Fingerprints"}
+                </h3>
                 <p className="text-sm text-muted-foreground">
-                  Select 2 or more users to overlay their radar charts side-by-side
+                  {entityMode === "signal"
+                    ? "Overlay identifier cohorts against each other and the meta rollup"
+                    : "Select 2 or more users to overlay their radar charts side-by-side"}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Scope: {activeFilterCount > 0
-                    ? `${entityMode === "user" ? "users" : "signal providers"} filter • ${scopedFingerprints.length} of ${allFingerprints.length} fingerprints`
-                    : `all ${allFingerprints.length} fingerprints`}
+                  Scope: {entityMode === "signal"
+                    ? `identifier cohorts • ${scopedFingerprints.length} cohort fingerprint${scopedFingerprints.length !== 1 ? "s" : ""} from ${signalPoints.length.toLocaleString()} identifiers`
+                    : activeFilterCount > 0
+                      ? `${entityMode === "user" ? "users" : "signal providers"} filter • ${scopedFingerprints.length} of ${allFingerprints.length} fingerprints`
+                      : `all ${allFingerprints.length} fingerprints`}
 
                 </p>
               </div>

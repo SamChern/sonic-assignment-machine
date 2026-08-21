@@ -7,6 +7,7 @@ import {
   neighborPrior,
   type EvidenceKind,
 } from '../_shared/evidence.ts';
+import { chatCompletion, GatewayError, stableHash } from '../_shared/inference.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,6 +27,8 @@ interface AudioSource {
   taxonomy_context?: string; // Optional CTV taxonomy + calibration prior block
   /** Phase 2 — which evidence tier produced `acoustic_profile`. */
   evidence?: EvidenceKind;
+  /** Hash of the acoustic/taxonomy evidence actually used for scoring. */
+  feature_hash?: string;
 }
 
 
@@ -160,8 +163,10 @@ Deno.serve(async (req) => {
       throw new Error('No audio sources provided');
     }
 
+    // Not fatal on its own: when an EC2 inference server is configured the
+    // gateway key is only used as a fallback.
     if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
+      console.warn('LOVABLE_API_KEY is not set — relying on the EC2 inference server');
     }
 
     console.log(`Analyzing ${sources.length} audio source(s):`, sources);
@@ -288,14 +293,64 @@ Deno.serve(async (req) => {
       }
 
 
+      // === Semantic score cache keyed by ACOUSTIC FEATURE HASH ===
+      // Two different names with identical measured evidence produce the same
+      // semantic profile, so we never pay for a second model call. This is what
+      // stops re-analysis from re-prompting the LLM.
+      for (const s of uncachedSources) {
+        s.feature_hash = await stableHash({
+          v: 1,
+          evidence: s.evidence ?? 'none',
+          acoustic: s.acoustic_profile ?? null,
+          taxonomy: s.taxonomy_context ?? null,
+        });
+      }
+
+      let toAnalyze = uncachedSources;
+      if (supabaseAdmin) {
+        // Only evidence-backed hashes are trustworthy; a metadata-only source is
+        // identified by its name alone and must not borrow another's score.
+        const hashable = uncachedSources.filter(
+          s => s.feature_hash && s.evidence && s.evidence !== 'none',
+        );
+        if (hashable.length > 0) {
+          const { data: featCache } = await supabaseAdmin
+            .from('source_cache')
+            .select('*')
+            .in('feature_hash', hashable.map(s => s.feature_hash!));
+          const byHash = new Map(
+            (featCache ?? []).map((row: CachedSource & { feature_hash: string }) => [
+              row.feature_hash,
+              row,
+            ]),
+          );
+          if (byHash.size > 0) {
+            const stillNeeded: AudioSource[] = [];
+            for (const src of uncachedSources) {
+              const hit = src.feature_hash ? byHash.get(src.feature_hash) : undefined;
+              if (hit && src.evidence && src.evidence !== 'none') {
+                // Reuse the scores, but keep the requested source's own name.
+                cachedResults.push({ ...cachedToSourceResult(hit as CachedSource), name: src.name });
+              } else {
+                stillNeeded.push(src);
+              }
+            }
+            console.log(
+              `Feature-hash cache hits: ${uncachedSources.length - stillNeeded.length}`,
+            );
+            toAnalyze = stillNeeded;
+          }
+        }
+      }
+
       // Batch sources to avoid truncation (max 5 per batch)
       const BATCH_SIZE = 5;
       const batches: AudioSource[][] = [];
-      for (let i = 0; i < uncachedSources.length; i += BATCH_SIZE) {
-        batches.push(uncachedSources.slice(i, i + BATCH_SIZE));
+      for (let i = 0; i < toAnalyze.length; i += BATCH_SIZE) {
+        batches.push(toAnalyze.slice(i, i + BATCH_SIZE));
       }
 
-      console.log(`Processing ${uncachedSources.length} sources in ${batches.length} batch(es)`);
+      console.log(`Processing ${toAnalyze.length} sources in ${batches.length} batch(es)`);
 
       for (const batch of batches) {
         const sourcesList = batch
@@ -379,47 +434,53 @@ For each source, determine its unique ontological profile. Be AGGRESSIVE in scor
 
 Return JSON with "sources" array. Each source needs: name (exact match), categories array with Emotional, Cognitive, Social, Communication, Contextual, Artistic (each with name, score 0-100, description).`;
 
-        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
-            messages: [
+        let analysisText = '';
+        try {
+          const completion = await chatCompletion(
+            [
               { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
+              { role: 'user', content: userPrompt },
             ],
-            temperature: 0.2,
-            max_tokens: 4000, // Ensure we get complete responses
-          }),
-        });
-
-        if (!response.ok) {
-          if (response.status === 429) {
-            return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }), {
-              status: 429,
+            { temperature: 0.2, maxTokens: 4000 },
+          );
+          analysisText = completion.text;
+          console.log(`Scored batch via ${completion.provider} (${completion.model})`);
+        } catch (e) {
+          if (e instanceof GatewayError) {
+            if (e.status === 429) {
+              return new Response(
+                JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
+                { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
+            if (e.status === 402 || e.status === 403) {
+              return new Response(
+                JSON.stringify({
+                  error:
+                    e.status === 402
+                      ? 'Payment required. Please add credits to your workspace.'
+                      : 'AI access is blocked by workspace policy.',
+                  details: e.message,
+                }),
+                { status: e.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
+            console.error('AI gateway error:', e.status, e.message);
+            return new Response(JSON.stringify({ error: 'AI analysis failed', details: e.message }), {
+              status: 502,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
           }
-          if (response.status === 402) {
-            return new Response(JSON.stringify({ error: 'Payment required. Please add credits to your workspace.' }), {
-              status: 402,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-          }
-          const errorText = await response.text();
-          console.error('AI gateway error:', response.status, errorText);
-          return new Response(JSON.stringify({ error: `AI gateway error: ${response.statusText}` }), {
-            status: response.status,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          console.error('Inference error:', e);
+          return new Response(
+            JSON.stringify({
+              error: 'AI analysis failed',
+              details: e instanceof Error ? e.message : String(e),
+            }),
+            { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
         }
 
-        const data = await response.json();
-        const analysisText = data.choices[0].message.content;
-        
         console.log('Raw AI response length:', analysisText.length);
 
         // Parse JSON response with improved handling
@@ -560,6 +621,7 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
             source_key: cacheKey,
             source_type: sourceType,
             source_name: result.name,
+            feature_hash: originalSource?.feature_hash ?? null,
             ...categories,
           };
         });

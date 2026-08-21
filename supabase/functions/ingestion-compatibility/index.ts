@@ -39,9 +39,9 @@ const corsHeaders = {
 type Status = "pass" | "warn" | "fail" | "skip";
 
 /** Per-source scopes so a single feed can be retested without a full sweep. */
-type Scope = "all" | "object_store" | "intuizi" | "ec2_analysis" | "librosa_rest";
+type Scope = "all" | "object_store" | "intuizi" | "ec2_analysis" | "librosa_rest" | "ec2_inference";
 
-const SCOPES: Scope[] = ["all", "object_store", "intuizi", "ec2_analysis", "librosa_rest"];
+const SCOPES: Scope[] = ["all", "object_store", "intuizi", "ec2_analysis", "librosa_rest", "ec2_inference"];
 
 interface Check {
   id: string;
@@ -211,6 +211,14 @@ Deno.serve(async (req) => {
       urlEnv: "AWS_API_URL",
       healthPath: "/health",
       authEnv: "AWS_API_KEY",
+    },
+    {
+      id: "ec2_inference",
+      label: "EC2 inference server",
+      env: ["EC2_INFERENCE_URL", "EC2_INFERENCE_MODEL"],
+      urlEnv: "EC2_INFERENCE_URL",
+      healthPath: "/v1/models",
+      authEnv: "EC2_INFERENCE_API_KEY",
     },
     {
       id: "librosa_rest",

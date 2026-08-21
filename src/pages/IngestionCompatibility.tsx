@@ -20,6 +20,8 @@ import {
   ShieldCheck,
   ChevronDown,
   Wrench,
+  Bug,
+  PlayCircle,
 } from "lucide-react";
 
 type Status = "pass" | "warn" | "fail" | "skip";
@@ -34,7 +36,21 @@ interface Check {
   actual?: string;
   remediation?: string;
   evidence?: Record<string, unknown>;
+  debug?: Record<string, unknown>;
 }
+
+type Scope = "all" | "object_store" | "intuizi" | "ec2_analysis" | "librosa_rest";
+
+/** Per-source test targets — feed labels come back from the function verbatim. */
+const SOURCES: { scope: Exclude<Scope, "all">; label: string; feed: string }[] = [
+  { scope: "object_store", label: "S3 object store", feed: "object store" },
+  { scope: "intuizi", label: "Intuizi deliveries", feed: "intuizi" },
+  { scope: "ec2_analysis", label: "EC2 analysis API", feed: "EC2 analysis API" },
+  { scope: "librosa_rest", label: "Librosa REST", feed: "Librosa REST" },
+];
+
+const scopeForFeed = (feed: string): Exclude<Scope, "all"> =>
+  SOURCES.find((s) => s.feed === feed)?.scope ?? "intuizi";
 
 interface SampledObject {
   key: string;
@@ -52,6 +68,9 @@ interface SampledObject {
 interface Report {
   ran_at: string;
   duration_ms: number;
+  scope?: Scope;
+  debug?: boolean;
+  trace?: { at: number; step: string; detail?: unknown }[];
   backend?: { backend: string; configured: boolean; placeholder: boolean };
   discovered_objects?: number;
   summary: { pass: number; warn: number; fail: number; skip: number; total: number; verdict: string };
@@ -74,10 +93,33 @@ const VERDICT_COPY: Record<string, string> = {
 
 const ORDER: Status[] = ["fail", "warn", "pass", "skip"];
 
+/** Replace only the checks/samples belonging to the feeds a scoped run covered. */
+function mergeReport(prev: Report, next: Report): Report {
+  const feeds = new Set(next.checks.map((c) => c.feed));
+  const kept = prev.checks.filter((c) => !feeds.has(c.feed));
+  const checks = [...kept, ...next.checks];
+  const summary = checks.reduce(
+    (acc, c) => ({ ...acc, [c.status]: acc[c.status] + 1, total: acc.total + 1 }),
+    { pass: 0, warn: 0, fail: 0, skip: 0, total: 0 } as Report["summary"],
+  );
+  summary.verdict = summary.fail > 0 ? "incompatible" : summary.warn > 0 ? "degraded" : "compatible";
+  const sampled = next.objects_sampled.length ? next.objects_sampled : prev.objects_sampled;
+  return {
+    ...prev,
+    ...next,
+    summary,
+    checks,
+    objects_sampled: sampled,
+    trace: next.trace ?? prev.trace,
+  };
+}
+
 const IngestionCompatibility = () => {
   const { isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const [running, setRunning] = useState(false);
+  const [runningScope, setRunningScope] = useState<Scope | null>(null);
+  const [lastRun, setLastRun] = useState<Record<string, { at: string; debug: boolean; ms: number }>>({});
   const [report, setReport] = useState<Report | null>(null);
   const [maxObjects, setMaxObjects] = useState(3);
   const [maxRows, setMaxRows] = useState(300);
@@ -88,31 +130,50 @@ const IngestionCompatibility = () => {
     if (!loading && !isAdmin) navigate("/");
   }, [loading, isAdmin, navigate]);
 
-  const run = useCallback(async () => {
-    setRunning(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("ingestion-compatibility", {
-        body: { maxObjects, maxRowsPerObject: maxRows },
-      });
-      if (error) {
-        const details =
-          error instanceof FunctionsHttpError ? await error.context.text() : error.message;
-        throw new Error(details);
+  const run = useCallback(
+    async (scope: Scope = "all", debug = false) => {
+      setRunning(true);
+      setRunningScope(scope);
+      try {
+        const { data, error } = await supabase.functions.invoke("ingestion-compatibility", {
+          body: { maxObjects, maxRowsPerObject: maxRows, scope, debug },
+        });
+        if (error) {
+          const details =
+            error instanceof FunctionsHttpError ? await error.context.text() : error.message;
+          throw new Error(details);
+        }
+        const next = data as Report;
+        setReport((prev) => (scope === "all" || !prev ? next : mergeReport(prev, next)));
+        const feeds = [...new Set(next.checks.map((c) => c.feed))];
+        setLastRun((prev) => {
+          const stamped = { at: next.ran_at, debug, ms: next.duration_ms };
+          const merged = { ...prev };
+          for (const f of feeds) merged[f] = stamped;
+          return merged;
+        });
+        if (scope !== "all") {
+          toast({
+            title: debug ? "Debug rerun complete" : "Tests complete",
+            description: `${next.summary.pass} pass · ${next.summary.warn} mismatch · ${next.summary.fail} blocking (${next.duration_ms}ms)`,
+          });
+        }
+      } catch (e) {
+        toast({
+          title: "Compatibility run failed",
+          description: e instanceof Error ? e.message : "Unknown error",
+          variant: "destructive",
+        });
+      } finally {
+        setRunning(false);
+        setRunningScope(null);
       }
-      setReport(data as Report);
-    } catch (e) {
-      toast({
-        title: "Compatibility run failed",
-        description: e instanceof Error ? e.message : "Unknown error",
-        variant: "destructive",
-      });
-    } finally {
-      setRunning(false);
-    }
-  }, [maxObjects, maxRows]);
+    },
+    [maxObjects, maxRows],
+  );
 
   useEffect(() => {
-    if (isAdmin) void run();
+    if (isAdmin) void run("all");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
@@ -165,7 +226,7 @@ const IngestionCompatibility = () => {
                 {report.summary.verdict}
               </Badge>
             )}
-            <Button size="sm" onClick={run} disabled={running}>
+            <Button size="sm" onClick={() => run("all")} disabled={running}>
               {running ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -216,6 +277,72 @@ const IngestionCompatibility = () => {
           </div>
         </Card>
 
+        <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
+          <h2 className="mb-3 text-sm font-semibold">Per-source tests</h2>
+          <ul className="space-y-2">
+            {SOURCES.map((src) => {
+              const feedChecks = report?.checks.filter((c) => c.feed === src.feed) ?? [];
+              const worst: Status | null = feedChecks.length
+                ? (["fail", "warn", "pass", "skip"] as Status[]).find((s) =>
+                    feedChecks.some((c) => c.status === s),
+                  ) ?? null
+                : null;
+              const last = lastRun[src.feed];
+              const busy = running && runningScope === src.scope;
+              return (
+                <li
+                  key={src.scope}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">{src.label}</span>
+                      {worst && (
+                        <Badge variant="outline" className={`text-[10px] ${STATUS_META[worst].className}`}>
+                          {STATUS_META[worst].label}
+                        </Badge>
+                      )}
+                      {last?.debug && (
+                        <Badge variant="outline" className="text-[10px]">debug</Badge>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {feedChecks.length
+                        ? `${feedChecks.length} check(s)`
+                        : "Not tested yet"}
+                      {last && ` · ran ${new Date(last.at).toLocaleTimeString()} in ${last.ms}ms`}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => run(src.scope)}
+                      disabled={running}
+                    >
+                      {busy ? (
+                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <PlayCircle className="mr-2 h-3.5 w-3.5" />
+                      )}
+                      Run tests
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => run(src.scope, true)}
+                      disabled={running}
+                    >
+                      <Bug className="mr-2 h-3.5 w-3.5 text-primary" />
+                      Rerun with debug
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+
         {report && (
           <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
             <div className="flex flex-wrap items-center gap-2">
@@ -257,15 +384,41 @@ const IngestionCompatibility = () => {
 
         {feeds.map(({ feed, checks }) => (
           <Card key={feed} className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              {feed}
-            </h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                {feed}
+              </h2>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => run(scopeForFeed(feed))}
+                  disabled={running}
+                >
+                  {running && runningScope === scopeForFeed(feed) ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                  )}
+                  Run tests
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => run(scopeForFeed(feed), true)}
+                  disabled={running}
+                >
+                  <Bug className="mr-2 h-3.5 w-3.5 text-primary" />
+                  Rerun with debug
+                </Button>
+              </div>
+            </div>
             <ul className="space-y-2">
               {checks.map((c) => {
                 const meta = STATUS_META[c.status];
                 const Icon = meta.icon;
                 const isOpen = !!open[c.id];
-                const hasDetail = !!(c.expected || c.actual || c.remediation || c.evidence);
+                const hasDetail = !!(c.expected || c.actual || c.remediation || c.evidence || c.debug);
                 return (
                   <li key={c.id} className="rounded-lg border border-border/60 bg-background/40">
                     <button
@@ -330,6 +483,16 @@ const IngestionCompatibility = () => {
                           <pre className="max-h-40 overflow-auto rounded-md bg-muted/40 p-2 font-mono text-[10px] leading-relaxed">
                             {JSON.stringify(c.evidence, null, 2)}
                           </pre>
+                        )}
+                        {c.debug && (
+                          <div className="rounded-md border border-primary/20 bg-primary/5 p-2">
+                            <span className="flex items-center gap-1 font-medium text-primary">
+                              <Bug className="h-3 w-3" /> Debug
+                            </span>
+                            <pre className="mt-1 max-h-56 overflow-auto font-mono text-[10px] leading-relaxed">
+                              {JSON.stringify(c.debug, null, 2)}
+                            </pre>
+                          </div>
                         )}
                       </div>
                     )}
@@ -398,6 +561,18 @@ const IngestionCompatibility = () => {
                 </tbody>
               </table>
             </div>
+          </Card>
+        )}
+        {report?.trace && report.trace.length > 0 && (
+          <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <Bug className="h-4 w-4 text-primary" /> Debug trace ({report.trace.length} step(s))
+            </h2>
+            <pre className="max-h-64 overflow-auto rounded-md bg-muted/40 p-2 font-mono text-[10px] leading-relaxed">
+              {report.trace.map((t) => `+${t.at}ms  ${t.step}${
+                t.detail !== undefined ? `  ${JSON.stringify(t.detail)}` : ""
+              }`).join("\n")}
+            </pre>
           </Card>
         )}
       </main>

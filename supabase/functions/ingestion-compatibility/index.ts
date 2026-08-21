@@ -38,6 +38,11 @@ const corsHeaders = {
 
 type Status = "pass" | "warn" | "fail" | "skip";
 
+/** Per-source scopes so a single feed can be retested without a full sweep. */
+type Scope = "all" | "object_store" | "intuizi" | "ec2_analysis" | "librosa_rest";
+
+const SCOPES: Scope[] = ["all", "object_store", "intuizi", "ec2_analysis", "librosa_rest"];
+
 interface Check {
   id: string;
   feed: string;
@@ -48,6 +53,7 @@ interface Check {
   actual?: string;
   remediation?: string;
   evidence?: Record<string, unknown>;
+  debug?: Record<string, unknown>;
 }
 
 const SUPPORTED_EXT = [".parquet", ".pq", ".csv", ".csv.gz", ".json", ".json.gz", ".jsonl", ".ndjson"];
@@ -109,52 +115,114 @@ Deno.serve(async (req) => {
     maxRowsPerObject?: number;
     prefixes?: string[];
     key?: string;
+    scope?: string;
+    debug?: boolean;
   };
   const maxObjects = Math.max(1, Math.min(8, Number(body.maxObjects ?? 3)));
   const maxRows = Math.max(20, Math.min(2000, Number(body.maxRowsPerObject ?? 300)));
+  const scope: Scope = SCOPES.includes(body.scope as Scope) ? (body.scope as Scope) : "all";
+  const debug = body.debug === true;
+
+  const wants = (s: Exclude<Scope, "all">) => scope === "all" || scope === s;
+  /** Object-store reads back both the store scope and the intuizi contract scope. */
+  const wantsStoreReads = wants("object_store") || wants("intuizi");
 
   const startedAt = Date.now();
   const checks: Check[] = [];
-  const add = (c: Check) => checks.push(c);
+  const trace: { at: number; step: string; detail?: unknown }[] = [];
+  const log = (step: string, detail?: unknown) => {
+    if (debug) trace.push({ at: Date.now() - startedAt, step, detail });
+  };
+  const add = (c: Check) => {
+    if (!debug && c.debug) delete c.debug;
+    checks.push(c);
+  };
+  log("start", { scope, maxObjects, maxRows });
+
+  const finish = (extra: Record<string, unknown> = {}) =>
+    json({
+      ran_at: new Date().toISOString(),
+      duration_ms: Date.now() - startedAt,
+      scope,
+      debug,
+      summary: summarize(checks),
+      checks,
+      objects_sampled: [],
+      ...extra,
+      ...(debug ? { trace } : {}),
+    });
 
   // ---------------------------------------------------------------- 1. config
   const backend = s3BackendInfo();
-  add({
-    id: "config.object_store",
-    feed: "object store",
-    title: "Object store backend configured",
-    status: backend.configured ? (backend.placeholder ? "warn" : "pass") : "fail",
-    detail: backend.placeholder
-      ? `Active backend "${backend.backend}" is a placeholder implementation.`
-      : `Active backend: ${backend.backend}.`,
-    expected: "a configured, implemented backend driver",
-    actual: `${backend.backend} (configured=${backend.configured})`,
-    remediation: backend.configured
-      ? (backend.placeholder
-        ? "Unset S3_BACKEND to use the connector gateway, or implement the enterprise driver in supabase/functions/_shared/s3.ts."
-        : undefined)
-      : "Link the Amazon S3 connection to this project (or set S3_ENTERPRISE_BASE_URL / S3_ENTERPRISE_API_KEY for the enterprise backend), then re-run these tests.",
-  });
+  if (wantsStoreReads) {
+    add({
+      id: "config.object_store",
+      feed: "object store",
+      title: "Object store backend configured",
+      status: backend.configured ? (backend.placeholder ? "warn" : "pass") : "fail",
+      detail: backend.placeholder
+        ? `Active backend "${backend.backend}" is a placeholder implementation.`
+        : `Active backend: ${backend.backend}.`,
+      expected: "a configured, implemented backend driver",
+      actual: `${backend.backend} (configured=${backend.configured})`,
+      remediation: backend.configured
+        ? (backend.placeholder
+          ? "Unset S3_BACKEND to use the connector gateway, or implement the enterprise driver in supabase/functions/_shared/s3.ts."
+          : undefined)
+        : "Link the Amazon S3 connection to this project (or set S3_ENTERPRISE_BASE_URL / S3_ENTERPRISE_API_KEY for the enterprise backend), then re-run these tests.",
+      debug: {
+        backend,
+        env_present: {
+          LOVABLE_API_KEY: !!Deno.env.get("LOVABLE_API_KEY"),
+          AWS_S3_API_KEY: !!Deno.env.get("AWS_S3_API_KEY"),
+          S3_BACKEND: Deno.env.get("S3_BACKEND") ?? null,
+          S3_ENTERPRISE_BASE_URL: !!Deno.env.get("S3_ENTERPRISE_BASE_URL"),
+        },
+      },
+    });
 
-  add({
-    id: "config.gateway_keys",
-    feed: "object store",
-    title: "Gateway credentials present",
-    status: backend.backend !== "connector_gateway"
-      ? "skip"
-      : (Deno.env.get("LOVABLE_API_KEY") && Deno.env.get("AWS_S3_API_KEY") ? "pass" : "fail"),
-    detail: backend.backend !== "connector_gateway"
-      ? "Not applicable for the current backend."
-      : "LOVABLE_API_KEY + AWS_S3_API_KEY are required for listing and signed reads.",
-    remediation:
-      "Link the Amazon S3 connection so AWS_S3_API_KEY is injected; LOVABLE_API_KEY is provided by the platform.",
-  });
+    add({
+      id: "config.gateway_keys",
+      feed: "object store",
+      title: "Gateway credentials present",
+      status: backend.backend !== "connector_gateway"
+        ? "skip"
+        : (Deno.env.get("LOVABLE_API_KEY") && Deno.env.get("AWS_S3_API_KEY") ? "pass" : "fail"),
+      detail: backend.backend !== "connector_gateway"
+        ? "Not applicable for the current backend."
+        : "LOVABLE_API_KEY + AWS_S3_API_KEY are required for listing and signed reads.",
+      remediation:
+        "Link the Amazon S3 connection so AWS_S3_API_KEY is injected; LOVABLE_API_KEY is provided by the platform.",
+    });
+  }
 
-  const altFeeds: { id: string; label: string; env: string[] }[] = [
-    { id: "ec2_analysis", label: "EC2 analysis API", env: ["AWS_API_URL", "AWS_API_KEY"] },
-    { id: "librosa_rest", label: "Librosa REST", env: ["LIBROSA_REST_URL"] },
+  const altFeeds: {
+    id: Exclude<Scope, "all">;
+    label: string;
+    env: string[];
+    urlEnv: string;
+    healthPath: string;
+    authEnv?: string;
+  }[] = [
+    {
+      id: "ec2_analysis",
+      label: "EC2 analysis API",
+      env: ["AWS_API_URL", "AWS_API_KEY"],
+      urlEnv: "AWS_API_URL",
+      healthPath: "/health",
+      authEnv: "AWS_API_KEY",
+    },
+    {
+      id: "librosa_rest",
+      label: "Librosa REST",
+      env: ["LIBROSA_REST_URL"],
+      urlEnv: "LIBROSA_REST_URL",
+      healthPath: "/health",
+      authEnv: "LIBROSA_REST_TOKEN",
+    },
   ];
   for (const f of altFeeds) {
+    if (!wants(f.id)) continue;
     const missing = f.env.filter((k) => !Deno.env.get(k));
     add({
       id: `config.${f.id}`,
@@ -167,18 +235,62 @@ Deno.serve(async (req) => {
       remediation: missing.length
         ? `Add ${missing.join(" and ")} in the backend secrets if this feed should be active.`
         : undefined,
+      debug: { required: f.env, missing },
     });
+
+    // Live reachability probe — only when the feed is explicitly in scope.
+    const base = Deno.env.get(f.urlEnv);
+    if (!base) continue;
+    const target = `${base.replace(/\/+$/, "")}${f.healthPath}`;
+    const t0 = Date.now();
+    try {
+      const token = f.authEnv ? Deno.env.get(f.authEnv) : undefined;
+      const res = await fetch(target, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: AbortSignal.timeout(8000),
+      });
+      const text = (await res.text()).slice(0, 400);
+      log(`probe.${f.id}`, { status: res.status, ms: Date.now() - t0 });
+      add({
+        id: `reach.${f.id}`,
+        feed: f.label,
+        title: `${f.label} reachable`,
+        status: res.ok ? "pass" : "fail",
+        detail: res.ok
+          ? `Health endpoint answered ${res.status} in ${Date.now() - t0}ms.`
+          : `Health endpoint answered ${res.status}.`,
+        expected: "HTTP 200 from the feed health endpoint",
+        actual: `HTTP ${res.status}`,
+        remediation: res.ok
+          ? undefined
+          : res.status === 401 || res.status === 403
+          ? `Credentials rejected. Rotate ${f.authEnv ?? "the feed token"} and confirm the service expects a bearer token.`
+          : "Confirm the service is running behind its reverse proxy and the URL points at the health route.",
+        debug: { url: target, status: res.status, latency_ms: Date.now() - t0, body: text },
+      });
+    } catch (e) {
+      const msg = errMsg(e);
+      log(`probe.${f.id}.error`, msg);
+      add({
+        id: `reach.${f.id}`,
+        feed: f.label,
+        title: `${f.label} reachable`,
+        status: "fail",
+        detail: msg,
+        expected: "HTTP 200 from the feed health endpoint",
+        actual: msg,
+        remediation: /timed out|timeout|abort/i.test(msg)
+          ? "The host did not answer within 8s — check the security group, Nginx upstream and the service unit."
+          : "Verify the configured URL is publicly resolvable from the backend runtime.",
+        debug: { url: target, latency_ms: Date.now() - t0 },
+      });
+    }
   }
 
-  if (!s3Configured()) {
-    return json({
-      ran_at: new Date().toISOString(),
-      duration_ms: Date.now() - startedAt,
-      summary: summarize(checks),
-      checks,
-      objects_sampled: [],
-    });
-  }
+  if (!wantsStoreReads) return finish({ backend });
+
+  if (!s3Configured()) return finish();
+
 
   // ----------------------------------------------------- 2. prefix reachability
   clearS3Cache();
@@ -187,10 +299,12 @@ Deno.serve(async (req) => {
   let anyPrefixOk = false;
 
   for (const prefix of prefixes) {
+    const t0 = Date.now();
     try {
       const objects = await listObjects(prefix, 50);
       anyPrefixOk = true;
       discovered.push(...objects);
+      log(`list.${prefix}`, { count: objects.length, ms: Date.now() - t0 });
       add({
         id: `list.${prefix}`,
         feed: "object store",
@@ -203,9 +317,15 @@ Deno.serve(async (req) => {
           ? undefined
           : `No deliveries under ${prefix}. Confirm the feed writes to this prefix (or remove it from INGEST_PREFIXES).`,
         evidence: { sample: objects.slice(0, 3).map((o) => o.key) },
+        debug: {
+          latency_ms: Date.now() - t0,
+          all_keys: objects.map((o) => o.key),
+          sizes: objects.slice(0, 10).map((o) => ({ key: o.key, size: o.size, last_modified: o.lastModified })),
+        },
       });
     } catch (e) {
       const msg = errMsg(e);
+      log(`list.${prefix}.error`, msg);
       add({
         id: `list.${prefix}`,
         feed: "object store",
@@ -219,19 +339,16 @@ Deno.serve(async (req) => {
           : /404|NoSuchBucket/i.test(msg)
           ? "Bucket or prefix does not exist. Verify the bucket name and path prefix on the connection."
           : "Re-check the object store connection, then re-run. If the error persists, the gateway response body above is the provider's own error.",
+        debug: { latency_ms: Date.now() - t0, prefix, raw_error: msg },
       });
     }
   }
+  if (!anyPrefixOk) return finish({ backend, discovered_objects: 0 });
 
-  if (!anyPrefixOk) {
-    return json({
-      ran_at: new Date().toISOString(),
-      duration_ms: Date.now() - startedAt,
-      summary: summarize(checks),
-      checks,
-      objects_sampled: [],
-    });
-  }
+  // Object-store-only runs stop after reachability; contract checks belong to intuizi.
+  if (!wants("intuizi")) return finish({ backend, discovered_objects: discovered.length });
+
+
 
   // ------------------------------------------------------ 3. metadata contracts
   const unsupported = discovered.filter((o) => !isSupported(o.key));
@@ -342,6 +459,7 @@ Deno.serve(async (req) => {
 
   for (const obj of targets) {
     const reportType = reportTypeFromKey(obj.key)!;
+    const t0 = Date.now();
     try {
       const url = await signReadUrl(obj.key);
       const rows = await fetchObjectRows(url, obj.key, maxRows);
@@ -351,6 +469,25 @@ Deno.serve(async (req) => {
       const rosterRows = rows.filter((r) => isRosterRow(r)).length;
       const normalized = rows.map((r) => normalizeRow(reportType, r)).filter(Boolean);
       const tagRate = rows.length ? normalized.length / rows.length : 0;
+      log(`probe.${obj.key}`, { rows: rows.length, ms: Date.now() - t0 });
+      /** First rows with identifier-ish values masked, for debug reruns only. */
+      const sampleRows = rows.slice(0, 3).map((r) =>
+        Object.fromEntries(
+          Object.entries(r).map(([k, v]) =>
+            /id$|identifier|maid|madid|idfa|aaid|gaid|hem|email/i.test(k)
+              ? [k, v ? "«masked»" : v]
+              : [k, typeof v === "string" ? v.slice(0, 120) : v]
+          ),
+        )
+      );
+      const probeDebug = {
+        latency_ms: Date.now() - t0,
+        rows_read: rows.length,
+        columns: cols,
+        sample_rows: sampleRows,
+        first_normalized: normalized.slice(0, 2),
+      };
+
 
       sampled.push({
         key: obj.key,
@@ -375,6 +512,7 @@ Deno.serve(async (req) => {
           expected: "≥1 data row",
           actual: "0 rows",
           remediation: "Re-request this delivery: the export wrote a schema with no records, so nothing can be scored.",
+          debug: probeDebug,
         });
         continue;
       }
@@ -399,6 +537,7 @@ Deno.serve(async (req) => {
             : undefined)
           : `Ask the provider to include an identifier column (${IDENTIFIER_ALIASES}) or taxonomy columns (TaxonomyName/CategoryName).`,
         evidence: { columns: cols },
+        debug: probeDebug,
       });
 
       // taxonomy / feature columns for the resolved report type
@@ -425,6 +564,7 @@ Deno.serve(async (req) => {
             expectedFields.filter((g) => !matchedGroups.includes(g)).join("  •  ")
           }. Either request these columns from the feed, or extend normalizeRow() in _shared/intuizi.ts with the provider's actual column aliases.`,
         evidence: { columns: cols },
+        debug: { ...probeDebug, matched_groups: matchedGroups },
       });
 
       // normalization yield
@@ -443,6 +583,7 @@ Deno.serve(async (req) => {
           : rosterRows > 0
           ? "This delivery is mostly a device roster (join keys only). Pair it with the matching taxonomy/summary export so the identifiers acquire signal."
           : "Column values are present but unmapped. Compare the observed columns above with the expected aliases and extend the field mapping.",
+        debug: probeDebug,
       });
     } catch (e) {
       const msg = errMsg(e);
@@ -461,17 +602,14 @@ Deno.serve(async (req) => {
           : /JSON|Unexpected token|parse/i.test(msg)
           ? "The file extension does not match its contents. Confirm the provider's export format for this prefix."
           : "Inspect the raw error above; it is the provider/parser message verbatim.",
+        debug: { key: obj.key, report_type: reportType, latency_ms: Date.now() - t0, raw_error: msg },
       });
     }
   }
 
-  return json({
-    ran_at: new Date().toISOString(),
-    duration_ms: Date.now() - startedAt,
+  return finish({
     backend,
     discovered_objects: discovered.length,
-    summary: summarize(checks),
-    checks,
     objects_sampled: sampled,
   });
 });

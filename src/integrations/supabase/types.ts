@@ -288,6 +288,24 @@ export type Database = {
         }
         Relationships: []
       }
+      embedding_cache: {
+        Row: {
+          created_at: string
+          embedding: string
+          text_hash: string
+        }
+        Insert: {
+          created_at?: string
+          embedding: string
+          text_hash: string
+        }
+        Update: {
+          created_at?: string
+          embedding?: string
+          text_hash?: string
+        }
+        Relationships: []
+      }
       integration_credentials: {
         Row: {
           created_at: string
@@ -791,6 +809,7 @@ export type Database = {
           created_at: string
           emotional_desc: string | null
           emotional_score: number
+          feature_hash: string | null
           id: string
           social_desc: string | null
           social_score: number
@@ -810,6 +829,7 @@ export type Database = {
           created_at?: string
           emotional_desc?: string | null
           emotional_score: number
+          feature_hash?: string | null
           id?: string
           social_desc?: string | null
           social_score: number
@@ -829,6 +849,7 @@ export type Database = {
           created_at?: string
           emotional_desc?: string | null
           emotional_score?: number
+          feature_hash?: string | null
           id?: string
           social_desc?: string | null
           social_score?: number

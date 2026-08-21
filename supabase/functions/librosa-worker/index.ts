@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
       // Another path may have filled the cache since this job was queued.
       const cached = await readCache(admin, cacheKey);
       if (cached.status === "ready") {
-        await completeJob(admin, job, audioSourceId, userId, cached.features);
+        await completeJob(admin, job, audioSourceId, userId, cached.features, cacheKey);
         logCall(admin, {
           cache_key: cacheKey,
           audio_source_id: audioSourceId,
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
 
       if (res.ok && res.parsed) {
         await finishFlight(admin, cacheKey, res.parsed);
-        await completeJob(admin, job, audioSourceId, userId, res.parsed);
+        await completeJob(admin, job, audioSourceId, userId, res.parsed, cacheKey);
         logCall(admin, {
           cache_key: cacheKey,
           audio_source_id: audioSourceId,
@@ -170,6 +170,7 @@ async function completeJob(
   audioSourceId: string | null,
   userId: string | null,
   features: Record<string, unknown>,
+  cacheKey: string | null = null,
 ) {
   await admin
     .from("analysis_jobs")
@@ -187,6 +188,9 @@ async function completeJob(
       .eq("id", audioSourceId);
     await (userId ? q.eq("user_id", userId) : q);
   }
+
+  // Reuses the cached vector when this audio was embedded before.
+  await attachProfileEmbedding(admin, { cacheKey, audioSourceId, userId, features });
 }
 
 // deno-lint-ignore no-explicit-any

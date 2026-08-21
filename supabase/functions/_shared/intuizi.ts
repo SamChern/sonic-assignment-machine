@@ -139,8 +139,25 @@ function daypart(iso: string): string {
 
 /** The join key. Never a feature. */
 export function identifierOf(row: Record<string, unknown>): string {
-  return pick(row, "primary_identifier", "primaryidentifier", "eid", "maid", "hem", "device_id");
+  return pick(
+    row,
+    "primary_identifier",
+    "primaryidentifier",
+    "eid",
+    "maid",
+    "madid",
+    "maid_id",
+    "idfa",
+    "aaid",
+    "gaid",
+    "hem",
+    "device_id",
+    "email1",
+    "hashed_email",
+    "email",
+  );
 }
+
 
 /* ---------------------------------------------------------------- mappings */
 

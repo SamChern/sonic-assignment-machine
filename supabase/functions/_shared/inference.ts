@@ -260,8 +260,9 @@ export async function embedText(text: string): Promise<number[] | null> {
 
 /**
  * Embed with a persistent cache in `public.embedding_cache`, keyed by the hash
- * of the input text. Identical taxonomy labels / profile strings never pay for
- * a second embedding call.
+ * of the input text *and* the embedding model. Identical taxonomy labels /
+ * profile strings never pay for a second embedding call, and switching models
+ * simply misses the cache instead of returning vectors from another space.
  */
 export async function embedCached(
   // deno-lint-disable-next-line no-explicit-any
@@ -270,11 +271,13 @@ export async function embedCached(
 ): Promise<number[] | null> {
   if (!supabase) return await embedText(text);
   const hash = await stableHash(text);
+  const model = activeEmbeddingSpace();
   try {
     const { data } = await supabase
       .from("embedding_cache")
       .select("embedding")
       .eq("text_hash", hash)
+      .eq("model", model)
       .maybeSingle();
     if (data?.embedding) {
       const v = typeof data.embedding === "string" ? JSON.parse(data.embedding) : data.embedding;
@@ -289,13 +292,14 @@ export async function embedCached(
     try {
       await supabase
         .from("embedding_cache")
-        .upsert({ text_hash: hash, embedding: vec }, { onConflict: "text_hash" });
+        .upsert({ text_hash: hash, model, embedding: vec }, { onConflict: "text_hash,model" });
     } catch (e) {
       console.warn("embedding_cache write failed:", e instanceof Error ? e.message : e);
     }
   }
   return vec;
 }
+
 
 /** Describes the active routing, for admin diagnostics. */
 export function inferenceStatus() {

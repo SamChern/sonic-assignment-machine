@@ -29,7 +29,7 @@ import {
   REPORT_TYPES,
   type ReportType,
 } from "../_shared/intuizi.ts";
-import { listObjects, s3Configured, signReadUrl } from "../_shared/s3.ts";
+import { listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -6,7 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
-import { Gauge, Loader2, RefreshCw, AlertTriangle, Info } from "lucide-react";
+import {
+  Gauge,
+  Loader2,
+  RefreshCw,
+  AlertTriangle,
+  Info,
+  ChevronRight,
+  ChevronDown,
+  FileText,
+  Users,
+} from "lucide-react";
+
 
 /* ------------------------------------------------------------------ types */
 

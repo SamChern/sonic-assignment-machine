@@ -304,6 +304,58 @@ const SpeechNormalizationPanel = ({ sample, sampleLabel }: Props) => {
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tuning, setTuning] = useState(false);
+  const [tune, setTune] = useState<AutoTuneResult | null>(null);
+
+  const runAutoTune = useCallback(async () => {
+    setTuning(true);
+    setTune(null);
+    const types = SOURCE_TYPES_BY_SCOPE[scope];
+    const { data, error } = await supabase
+      .from("source_analyses")
+      .select(
+        "raw_scores,emotional_score,cognitive_score,social_score,communication_score,contextual_score,artistic_score,created_at,audio_sources!inner(source_type)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(300);
+    setTuning(false);
+    if (error) {
+      toast({ title: "Auto-tune failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    const rows = (data ?? []).filter((r: any) => {
+      const t = r.audio_sources?.source_type as string | undefined;
+      if (!t) return false;
+      return types ? types.includes(t) : !["intuizi", "ctv"].includes(t);
+    });
+    const samples = rows.map((r: any) => {
+      const rawObj = r.raw_scores as Record<string, number> | null;
+      const hasRaw =
+        !!rawObj && CATEGORIES.some((c) => typeof rawObj[c] === "number");
+      const scores = {} as Record<Category, number>;
+      for (const c of CATEGORIES) {
+        scores[c] = hasRaw
+          ? Number(rawObj?.[c] ?? 0)
+          : Number(r[`${c}_score`] ?? 0);
+      }
+      return { scores, isRaw: hasRaw };
+    });
+    const result = computeAutoTune(samples, cfg?.redistribute !== false);
+    if (!result) {
+      toast({
+        title: "Nothing to tune yet",
+        description: `No recent analyses found for the "${scope}" scope.`,
+      });
+      return;
+    }
+    setTune(result);
+  }, [scope, cfg?.redistribute]);
+
+  useEffect(() => {
+    setTune(null);
+  }, [scope]);
+
+
 
   const load = useCallback(async (s: string) => {
     setLoading(true);

@@ -512,6 +512,7 @@ Deno.serve(async (req) => {
           expected: "≥1 data row",
           actual: "0 rows",
           remediation: "Re-request this delivery: the export wrote a schema with no records, so nothing can be scored.",
+          debug: probeDebug,
         });
         continue;
       }
@@ -536,6 +537,7 @@ Deno.serve(async (req) => {
             : undefined)
           : `Ask the provider to include an identifier column (${IDENTIFIER_ALIASES}) or taxonomy columns (TaxonomyName/CategoryName).`,
         evidence: { columns: cols },
+        debug: probeDebug,
       });
 
       // taxonomy / feature columns for the resolved report type
@@ -562,6 +564,7 @@ Deno.serve(async (req) => {
             expectedFields.filter((g) => !matchedGroups.includes(g)).join("  •  ")
           }. Either request these columns from the feed, or extend normalizeRow() in _shared/intuizi.ts with the provider's actual column aliases.`,
         evidence: { columns: cols },
+        debug: { ...probeDebug, matched_groups: matchedGroups },
       });
 
       // normalization yield
@@ -580,6 +583,7 @@ Deno.serve(async (req) => {
           : rosterRows > 0
           ? "This delivery is mostly a device roster (join keys only). Pair it with the matching taxonomy/summary export so the identifiers acquire signal."
           : "Column values are present but unmapped. Compare the observed columns above with the expected aliases and extend the field mapping.",
+        debug: probeDebug,
       });
     } catch (e) {
       const msg = errMsg(e);
@@ -598,17 +602,14 @@ Deno.serve(async (req) => {
           : /JSON|Unexpected token|parse/i.test(msg)
           ? "The file extension does not match its contents. Confirm the provider's export format for this prefix."
           : "Inspect the raw error above; it is the provider/parser message verbatim.",
+        debug: { key: obj.key, report_type: reportType, latency_ms: Date.now() - t0, raw_error: msg },
       });
     }
   }
 
-  return json({
-    ran_at: new Date().toISOString(),
-    duration_ms: Date.now() - startedAt,
+  return finish({
     backend,
     discovered_objects: discovered.length,
-    summary: summarize(checks),
-    checks,
     objects_sampled: sampled,
   });
 });

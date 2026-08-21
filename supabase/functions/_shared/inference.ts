@@ -307,6 +307,8 @@ export function inferenceStatus() {
     ec2_configured: Boolean(EC2_URL),
     ec2_chat_model: EC2_CHAT_MODEL || null,
     ec2_embedding_model: EC2_EMBED_MODEL || null,
+    ec2_embedding_dims: EC2_EMBED_DIMS || null,
+    embedding_space: activeEmbeddingSpace(),
     ec2_required: EC2_REQUIRED,
     ec2_breaker_open: Date.now() < ec2OpenUntil,
     gateway_fallback: !EC2_REQUIRED,

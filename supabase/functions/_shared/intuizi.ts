@@ -263,10 +263,16 @@ export function isSummaryRow(row: Record<string, unknown>): boolean {
   );
 }
 
-/** True when a row has only join keys (maid / hem) and no taxonomy content. */
+/** True when a row has only join keys (device ids / emails) and no taxonomy content. */
 export function isRosterRow(row: Record<string, unknown>): boolean {
-  return !!identifierOf(row) && !isSummaryRow({ ...row, maid: "", hem: "", eid: "" });
+  if (!identifierOf(row)) return false;
+  return !(
+    pick(row, "taxonomyname", "taxonomy_name", "taxonomy") ||
+    pick(row, "categoryname", "category_name", "category") ||
+    pick(row, "contentgenre", "content_genre", "genre", "channelname", "iab_cats")
+  );
 }
+
 
 /**
  * Fold an audience-level summary report into one synthetic "audience profile"

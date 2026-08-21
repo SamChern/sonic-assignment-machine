@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Mic, RotateCcw, Save, Sparkles } from "lucide-react";
+import { Loader2, Mic, RotateCcw, Save, Scale, Sparkles } from "lucide-react";
 
 /* ------------------------------------------------------------------ shared */
 

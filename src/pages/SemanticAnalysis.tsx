@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import InspectMappingPanel from "@/components/InspectMappingPanel";
 import PostIngestionWizard from "@/components/PostIngestionWizard";
 import ConfidenceBreakdownPanel from "@/components/ConfidenceBreakdownPanel";
+import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 
 
 import {
@@ -61,13 +62,22 @@ interface AnalysisRow {
 }
 
 const CATEGORY_KEYS = [
-  ["emotional_score", "Emo"],
-  ["cognitive_score", "Cog"],
-  ["social_score", "Soc"],
-  ["communication_score", "Com"],
-  ["contextual_score", "Ctx"],
-  ["artistic_score", "Art"],
+  ["emotional_score", "Emo", "bg-category-emotional", "var(--gradient-emotional)"],
+  ["cognitive_score", "Cog", "bg-category-cognitive", "var(--gradient-cognitive)"],
+  ["social_score", "Soc", "bg-category-social", "var(--gradient-social)"],
+  ["communication_score", "Com", "bg-category-communication", "var(--gradient-communication)"],
+  ["contextual_score", "Ctx", "bg-category-contextual", "var(--gradient-contextual)"],
+  ["artistic_score", "Art", "bg-category-artistic", "var(--gradient-artistic)"],
 ] as const;
+
+const CATEGORY_GRADIENTS: Record<string, string> = {
+  emotional: "var(--gradient-emotional)",
+  cognitive: "var(--gradient-cognitive)",
+  social: "var(--gradient-social)",
+  communication: "var(--gradient-communication)",
+  contextual: "var(--gradient-contextual)",
+  artistic: "var(--gradient-artistic)",
+};
 
 const relative = (iso: string | null) => {
   if (!iso) return "never";
@@ -82,6 +92,30 @@ const relative = (iso: string | null) => {
 const nonEmpty = (o: Record<string, unknown> | null | undefined) =>
   !!o && Object.keys(o).length > 0;
 
+const ScoreBars = ({ ana }: { ana: AnalysisRow }) => (
+  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    {CATEGORY_KEYS.map(([key, short, , gradient]) => {
+      const value = Math.round(Number(ana[key]));
+      return (
+        <div key={key} className="flex items-center gap-2">
+          <span className="w-8 shrink-0 text-[11px] font-medium text-muted-foreground">
+            {short}
+          </span>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full transition-smooth"
+              style={{ width: `${Math.max(2, Math.min(100, value))}%`, background: gradient }}
+            />
+          </div>
+          <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-foreground/80">
+            {value}
+          </span>
+        </div>
+      );
+    })}
+  </div>
+);
+
 const StepPill = ({
   label,
   state,
@@ -95,12 +129,12 @@ const StepPill = ({
     state === "ok" ? CheckCircle2 : state === "error" ? AlertTriangle : CircleDashed;
   const tone =
     state === "ok"
-      ? "text-primary border-primary/40 bg-primary/10"
+      ? "text-success border-success/40 bg-success/10 shadow-[0_0_20px_-8px_hsl(var(--success)/0.6)]"
       : state === "error"
         ? "text-destructive border-destructive/40 bg-destructive/10"
         : "text-muted-foreground border-border bg-muted/40";
   return (
-    <div className={`rounded-md border px-3 py-2 ${tone}`}>
+    <div className={`rounded-lg border px-3 py-2 backdrop-blur-sm transition-smooth ${tone}`}>
       <div className="flex items-center gap-1.5 text-xs font-medium">
         <Icon className="h-3.5 w-3.5" />
         {label}
@@ -109,6 +143,7 @@ const StepPill = ({
     </div>
   );
 };
+
 
 const SemanticAnalysis = () => {
   const navigate = useNavigate();
@@ -222,16 +257,37 @@ const SemanticAnalysis = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
+    <div className="relative min-h-screen gradient-app">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-72 opacity-40 blur-3xl"
+        style={{ background: "var(--gradient-brand)" }}
+      />
+      <header className="sticky top-0 z-20 border-b border-border/60 bg-background/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4">
           <Button variant="ghost" size="sm" onClick={() => navigate("/admin/pipeline")}>
             <ArrowLeft className="mr-1 h-4 w-4" />
             Pipeline
           </Button>
+          <img
+            src={sonicSimLogo}
+            alt="SonicSIM"
+            className="h-7 w-auto opacity-90"
+            loading="lazy"
+          />
           <div className="flex items-center gap-2">
-            <Layers className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-semibold">Post-ingestion semantic analysis</h1>
+            <span
+              className="flex h-8 w-8 items-center justify-center rounded-lg shadow-elegant"
+              style={{ background: "var(--gradient-brand)" }}
+            >
+              <Layers className="h-4 w-4 text-primary-foreground" />
+            </span>
+            <h1
+              className="bg-clip-text text-lg font-semibold text-transparent"
+              style={{ backgroundImage: "var(--gradient-brand)" }}
+            >
+              Post-ingestion semantic analysis
+            </h1>
           </div>
           <Button
             variant="outline"
@@ -250,17 +306,30 @@ const SemanticAnalysis = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="relative mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-3 sm:grid-cols-4">
-          {[
-            ["Identifiers", totals.total],
-            ["Normalized", totals.normalized],
-            ["Sources created", totals.created],
-            ["Scored", totals.scored],
-          ].map(([label, value]) => (
-            <Card key={String(label)} className="p-4">
+          {([
+            ["Identifiers", totals.total, "var(--gradient-cognitive)"],
+            ["Normalized", totals.normalized, "var(--gradient-contextual)"],
+            ["Sources created", totals.created, "var(--gradient-social)"],
+            ["Scored", totals.scored, "var(--gradient-artistic)"],
+          ] as const).map(([label, value, gradient]) => (
+            <Card
+              key={label}
+              className="relative overflow-hidden border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth hover:shadow-elegant"
+            >
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-1"
+                style={{ background: gradient }}
+              />
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="text-2xl font-semibold">{value as number}</p>
+              <p
+                className="bg-clip-text text-3xl font-semibold text-transparent"
+                style={{ backgroundImage: gradient }}
+              >
+                {value}
+              </p>
             </Card>
           ))}
         </div>
@@ -277,18 +346,15 @@ const SemanticAnalysis = () => {
           <InspectMappingPanel />
         </div>
 
-
-
-
-
         <div className="mt-6">
           <Input
             placeholder="Filter by identifier or tag code…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="max-w-sm"
+            className="max-w-sm bg-card/60 backdrop-blur-sm"
           />
         </div>
+
 
         <div className="mt-4 space-y-3">
           {loading && rows.length === 0 && (
@@ -328,18 +394,40 @@ const SemanticAnalysis = () => {
                 ? "error"
                 : "pending";
 
+            const catGradient = ana?.category
+              ? CATEGORY_GRADIENTS[ana.category.toLowerCase()] ?? "var(--gradient-brand)"
+              : "var(--gradient-brand)";
+
             return (
-              <Card key={r.id} className="p-4">
-                <div className="flex flex-wrap items-center gap-2">
+              <Card
+                key={r.id}
+                className="relative overflow-hidden border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth hover:shadow-elegant"
+              >
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 w-1"
+                  style={{ background: ana ? catGradient : "hsl(var(--border))" }}
+                />
+                <div className="flex flex-wrap items-center gap-2 pl-2">
                   <p className="font-mono text-sm break-all">{r.primary_identifier}</p>
                   <Badge variant="outline" className="text-xs">
                     {r.observation_count} obs
                   </Badge>
-                  {ana?.category && <Badge className="text-xs">{ana.category}</Badge>}
+                  {ana?.category && (
+                    <Badge
+                      className="border-0 text-xs text-primary-foreground"
+                      style={{ background: catGradient }}
+                    >
+                      {ana.category}
+                    </Badge>
+                  )}
                   <span className="ml-auto text-xs text-muted-foreground">
                     updated {relative(r.updated_at)}
                   </span>
                 </div>
+
+                {ana && <ScoreBars ana={ana} />}
+
 
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
                   <StepPill

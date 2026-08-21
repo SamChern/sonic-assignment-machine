@@ -262,8 +262,13 @@ const SemanticAnalysis = () => {
         </div>
 
         <div className="mt-6">
+          <PostIngestionWizard />
+        </div>
+
+        <div className="mt-6">
           <InspectMappingPanel />
         </div>
+
 
 
 

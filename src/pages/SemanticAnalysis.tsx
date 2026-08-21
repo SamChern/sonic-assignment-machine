@@ -61,12 +61,12 @@ interface AnalysisRow {
 }
 
 const CATEGORY_KEYS = [
-  ["emotional_score", "Emo"],
-  ["cognitive_score", "Cog"],
-  ["social_score", "Soc"],
-  ["communication_score", "Com"],
-  ["contextual_score", "Ctx"],
-  ["artistic_score", "Art"],
+  ["emotional_score", "Emo", "bg-category-emotional", "var(--gradient-emotional)"],
+  ["cognitive_score", "Cog", "bg-category-cognitive", "var(--gradient-cognitive)"],
+  ["social_score", "Soc", "bg-category-social", "var(--gradient-social)"],
+  ["communication_score", "Com", "bg-category-communication", "var(--gradient-communication)"],
+  ["contextual_score", "Ctx", "bg-category-contextual", "var(--gradient-contextual)"],
+  ["artistic_score", "Art", "bg-category-artistic", "var(--gradient-artistic)"],
 ] as const;
 
 const relative = (iso: string | null) => {
@@ -82,6 +82,30 @@ const relative = (iso: string | null) => {
 const nonEmpty = (o: Record<string, unknown> | null | undefined) =>
   !!o && Object.keys(o).length > 0;
 
+const ScoreBars = ({ ana }: { ana: AnalysisRow }) => (
+  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    {CATEGORY_KEYS.map(([key, short, , gradient]) => {
+      const value = Math.round(Number(ana[key]));
+      return (
+        <div key={key} className="flex items-center gap-2">
+          <span className="w-8 shrink-0 text-[11px] font-medium text-muted-foreground">
+            {short}
+          </span>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full transition-smooth"
+              style={{ width: `${Math.max(2, Math.min(100, value))}%`, background: gradient }}
+            />
+          </div>
+          <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-foreground/80">
+            {value}
+          </span>
+        </div>
+      );
+    })}
+  </div>
+);
+
 const StepPill = ({
   label,
   state,
@@ -95,12 +119,12 @@ const StepPill = ({
     state === "ok" ? CheckCircle2 : state === "error" ? AlertTriangle : CircleDashed;
   const tone =
     state === "ok"
-      ? "text-primary border-primary/40 bg-primary/10"
+      ? "text-success border-success/40 bg-success/10 shadow-[0_0_20px_-8px_hsl(var(--success)/0.6)]"
       : state === "error"
         ? "text-destructive border-destructive/40 bg-destructive/10"
         : "text-muted-foreground border-border bg-muted/40";
   return (
-    <div className={`rounded-md border px-3 py-2 ${tone}`}>
+    <div className={`rounded-lg border px-3 py-2 backdrop-blur-sm transition-smooth ${tone}`}>
       <div className="flex items-center gap-1.5 text-xs font-medium">
         <Icon className="h-3.5 w-3.5" />
         {label}
@@ -109,6 +133,7 @@ const StepPill = ({
     </div>
   );
 };
+
 
 const SemanticAnalysis = () => {
   const navigate = useNavigate();

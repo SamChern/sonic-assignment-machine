@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import InspectMappingPanel from "@/components/InspectMappingPanel";
 import PostIngestionWizard from "@/components/PostIngestionWizard";
 import ConfidenceBreakdownPanel from "@/components/ConfidenceBreakdownPanel";
+import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 
 
 import {
@@ -68,6 +69,15 @@ const CATEGORY_KEYS = [
   ["contextual_score", "Ctx", "bg-category-contextual", "var(--gradient-contextual)"],
   ["artistic_score", "Art", "bg-category-artistic", "var(--gradient-artistic)"],
 ] as const;
+
+const CATEGORY_GRADIENTS: Record<string, string> = {
+  emotional: "var(--gradient-emotional)",
+  cognitive: "var(--gradient-cognitive)",
+  social: "var(--gradient-social)",
+  communication: "var(--gradient-communication)",
+  contextual: "var(--gradient-contextual)",
+  artistic: "var(--gradient-artistic)",
+};
 
 const relative = (iso: string | null) => {
   if (!iso) return "never";
@@ -384,11 +394,9 @@ const SemanticAnalysis = () => {
                 ? "error"
                 : "pending";
 
-            const catGradient =
-              CATEGORY_KEYS.find(
-                ([, short]) =>
-                  ana?.category?.toLowerCase().startsWith(short.toLowerCase()),
-              )?.[3] ?? "var(--gradient-brand)";
+            const catGradient = ana?.category
+              ? CATEGORY_GRADIENTS[ana.category.toLowerCase()] ?? "var(--gradient-brand)"
+              : "var(--gradient-brand)";
 
             return (
               <Card

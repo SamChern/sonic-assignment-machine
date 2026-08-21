@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       strategies: "generateSW",
-      registerType: "autoUpdate",
+      registerType: "prompt",
       filename: "sw.js",
       // The existing public/manifest.webmanifest stays the source of truth.
       manifest: false,
@@ -25,7 +25,8 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: true,
+        // Wait for the user to accept the in-app update banner.
+        skipWaiting: false,
         // SPA routes (dashboard, admin, semantic analysis, ...) fall back to the
         // cached app shell when the network is unavailable.
         navigateFallback: "/index.html",

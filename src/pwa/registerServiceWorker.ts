@@ -7,6 +7,10 @@
 
 const SW_URL = "/sw.js";
 
+export const SW_UPDATE_EVENT = "sonicsim:sw-update-available";
+
+let waitingWorker: ServiceWorker | null = null;
+
 function isPreviewHost(hostname: string): boolean {
   return (
     hostname.startsWith("id-preview--") ||
@@ -24,8 +28,7 @@ function shouldRegister(): boolean {
   if (!import.meta.env.PROD) return false;
   if (window.self !== window.top) return false; // iframe (editor preview)
   if (isPreviewHost(window.location.hostname)) return false;
-  if (new URLSearchParams(window.location.search).has("sw") &&
-      new URLSearchParams(window.location.search).get("sw") === "off") return false;
+  if (new URLSearchParams(window.location.search).get("sw") === "off") return false;
   return true;
 }
 
@@ -43,6 +46,34 @@ async function unregisterAppWorkers(): Promise<void> {
   );
 }
 
+function announceUpdate(worker: ServiceWorker) {
+  waitingWorker = worker;
+  window.dispatchEvent(new CustomEvent(SW_UPDATE_EVENT));
+}
+
+/** Activate the waiting worker and reload once it takes control. */
+export function applyServiceWorkerUpdate(): void {
+  const worker = waitingWorker;
+  if (!worker) {
+    window.location.reload();
+    return;
+  }
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloaded) return;
+    reloaded = true;
+    window.location.reload();
+  });
+  worker.postMessage({ type: "SKIP_WAITING" });
+  // Fallback in case the worker never reports a controller change.
+  window.setTimeout(() => {
+    if (!reloaded) {
+      reloaded = true;
+      window.location.reload();
+    }
+  }, 3000);
+}
+
 export function registerServiceWorker(): void {
   if (!("serviceWorker" in navigator)) return;
 
@@ -52,8 +83,31 @@ export function registerServiceWorker(): void {
   }
 
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register(SW_URL, { scope: "/" }).catch((err) => {
-      console.warn("Service worker registration failed", err);
-    });
+    void navigator.serviceWorker
+      .register(SW_URL, { scope: "/" })
+      .then((registration) => {
+        if (registration.waiting && navigator.serviceWorker.controller) {
+          announceUpdate(registration.waiting);
+        }
+
+        registration.addEventListener("updatefound", () => {
+          const installing = registration.installing;
+          if (!installing) return;
+          installing.addEventListener("statechange", () => {
+            if (installing.state === "installed" && navigator.serviceWorker.controller) {
+              announceUpdate(installing);
+            }
+          });
+        });
+
+        // Periodic check so long-lived tabs still learn about new deploys.
+        window.setInterval(() => void registration.update(), 60 * 60 * 1000);
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") void registration.update();
+        });
+      })
+      .catch((err) => {
+        console.warn("Service worker registration failed", err);
+      });
   });
 }

@@ -60,11 +60,31 @@ export function tagOptions(tagLists: (string[] | null | undefined)[]): TagOption
     .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
 }
 
-/** Case-insensitive substring match across any of the provided haystacks. */
+/**
+ * Fold a string for search: lower-cased, accent/diacritic-stripped and
+ * whitespace-collapsed so "Ámelie  Café" matches "amelie cafe".
+ */
+export function normalizeSearch(input: string | null | undefined): string {
+  if (!input) return "";
+  return input
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Accent- and case-insensitive substring match across any haystack.
+ * Multiple whitespace-separated terms must all match (AND), which makes
+ * incremental typing at scale far more precise.
+ */
 export function matchesText(haystacks: (string | null | undefined)[], text: string): boolean {
-  const q = text.trim().toLowerCase();
+  const q = normalizeSearch(text);
   if (!q) return true;
-  return haystacks.some((h) => !!h && h.toLowerCase().includes(q));
+  const terms = q.split(" ");
+  const folded = haystacks.filter(Boolean).map((h) => normalizeSearch(h));
+  return terms.every((term) => folded.some((h) => h.includes(term)));
 }
 
 export function matchesTags(tags: string[] | null | undefined, selected: string[]): boolean {

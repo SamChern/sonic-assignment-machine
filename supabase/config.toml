@@ -28,3 +28,6 @@ verify_jwt = true
 
 [functions.intuizi-ingest]
 verify_jwt = false
+
+[functions.analysis-job-status]
+verify_jwt = false

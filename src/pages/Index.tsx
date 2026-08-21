@@ -29,6 +29,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TasteNeighbors } from "@/components/TasteNeighbors";
 import { useFingerprints } from "@/hooks/useFingerprints";
 import { cn } from "@/lib/utils";
+import { AudioJobsPanel } from "@/components/AudioJobsPanel";
+
 
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
@@ -489,7 +491,9 @@ const Index = () => {
                 onSpotifyTrack={handleSpotifyTrack}
                 onLibrarySelect={handleLibrarySelect}
               />
+              {user && <AudioJobsPanel />}
             </div>
+
             
             {/* Selected Sources Display - Compact & Collapsible */}
             {totalItems > 0 && (

@@ -515,6 +515,45 @@ export type Database = {
         }
         Relationships: []
       }
+      job_worker_state: {
+        Row: {
+          created_at: string
+          id: string
+          last_error: string | null
+          last_kick_at: string | null
+          lease_owner: string | null
+          lease_until: string | null
+          pause_reason: string | null
+          paused: boolean
+          paused_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_kick_at?: string | null
+          lease_owner?: string | null
+          lease_until?: string | null
+          pause_reason?: string | null
+          paused?: boolean
+          paused_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_kick_at?: string | null
+          lease_owner?: string | null
+          lease_until?: string | null
+          pause_reason?: string | null
+          paused?: boolean
+          paused_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       librosa_cache: {
         Row: {
           cache_key: string
@@ -928,6 +967,10 @@ export type Database = {
         Args: { p_owner: string; p_seconds?: number }
         Returns: boolean
       }
+      acquire_job_worker_lease: {
+        Args: { p_owner: string; p_seconds?: number }
+        Returns: boolean
+      }
       admin_prune_analysis_telemetry: {
         Args: {
           p_cache_idle_days?: number
@@ -1008,6 +1051,10 @@ export type Database = {
         Returns: undefined
       }
       release_intuizi_lease: { Args: { p_owner: string }; Returns: undefined }
+      release_job_worker_lease: {
+        Args: { p_owner: string }
+        Returns: undefined
+      }
       require_admin: { Args: never; Returns: undefined }
     }
     Enums: {

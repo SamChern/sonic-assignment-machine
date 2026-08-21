@@ -657,9 +657,17 @@ const IntegrationStatus = () => {
           })}
         </ol>
 
+        <div className="mt-6 flex justify-end">
+          <Button variant="outline" size="sm" onClick={() => navigate("/admin/semantic")}>
+            <Activity className="mr-1 h-4 w-4" />
+            Post-ingestion semantic analysis
+          </Button>
+        </div>
+
         <div className="mt-6">
           <IngestDebugPanel />
         </div>
+
       </main>
 
     </div>

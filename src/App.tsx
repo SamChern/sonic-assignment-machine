@@ -12,6 +12,7 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminIntegrations = lazy(() => import("./pages/AdminIntegrations"));
 const AdminCTV = lazy(() => import("./pages/AdminCTV"));
 const IntegrationStatus = lazy(() => import("./pages/IntegrationStatus"));
+const SemanticAnalysis = lazy(() => import("./pages/SemanticAnalysis"));
 const Demo = lazy(() => import("./pages/Demo"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -47,6 +48,8 @@ const App = () => (
               <Route path="/admin/integrations" element={<AdminIntegrations />} />
               <Route path="/admin/ctv" element={<AdminCTV />} />
               <Route path="/admin/pipeline" element={<IntegrationStatus />} />
+              <Route path="/admin/semantic" element={<SemanticAnalysis />} />
+
 
               <Route path="/demo" element={<Demo />} />
 

@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
-  const { checkHealth, loading: ec2Loading } = useEC2Api();
+  
   const { myFingerprint, allFingerprints } = useFingerprints();
   
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);

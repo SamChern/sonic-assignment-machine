@@ -156,6 +156,8 @@ Deno.serve(async (req) => {
     files_processed: 0,
     files_failed: 0,
     identifiers_scored: 0,
+    roster_identifiers: 0,
+
     rows_read: 0,
     probe_only: probeOnly,
     paused: false,

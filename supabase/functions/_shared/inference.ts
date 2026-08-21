@@ -21,7 +21,16 @@ const EC2_URL = (Deno.env.get("EC2_INFERENCE_URL") ?? "").replace(/\/+$/, "");
 const EC2_KEY = Deno.env.get("EC2_INFERENCE_API_KEY") ?? Deno.env.get("AWS_API_KEY") ?? "";
 const EC2_CHAT_MODEL = Deno.env.get("EC2_INFERENCE_MODEL") ?? "";
 const EC2_EMBED_MODEL = Deno.env.get("EC2_EMBEDDING_MODEL") ?? "";
+/**
+ * Native dimensionality of EC2_EMBEDDING_MODEL. Most CPU-friendly local
+ * embedders are 768/1024-dim; vectors are zero-padded up to EMBEDDING_DIMS so
+ * they fit the pgvector columns. Padding is distance-preserving, but vectors
+ * from different models are NOT comparable — that is why cache rows and any
+ * re-embedding are keyed by model id.
+ */
+const EC2_EMBED_DIMS = Number(Deno.env.get("EC2_EMBEDDING_DIMS") ?? "0") || 0;
 const EC2_REQUIRED = (Deno.env.get("EC2_INFERENCE_REQUIRED") ?? "").toLowerCase() === "true";
+
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 export const GATEWAY_CHAT_MODEL = "google/gemini-2.5-flash";

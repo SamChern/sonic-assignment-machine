@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Contrast } from "lucide-react";
+import { ArrowLeft, Contrast, Download, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
+import highlightVideo from "@/assets/sonicsim-highlight.mp4.asset.json";
+
 
 type CaptionStyle = "high-contrast" | "minimal";
 

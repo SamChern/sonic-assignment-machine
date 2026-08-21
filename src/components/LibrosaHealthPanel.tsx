@@ -106,10 +106,23 @@ export function LibrosaHealthPanel() {
   }, []);
 
   useEffect(() => {
+    if (!canRead) return;
     load();
-    const t = setInterval(load, 30_000);
-    return () => clearInterval(t);
-  }, [load]);
+    // Poll only while the tab is visible, and refresh immediately on return —
+    // background tabs otherwise burn 5 queries every interval.
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [load, canRead]);
+
 
   const drain = async () => {
     setDraining(true);

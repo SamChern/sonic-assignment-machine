@@ -59,6 +59,18 @@ interface AudioSourceWithProfile {
   profile?: UserProfile | null;
 }
 
+type EntityMode = "user" | "provider";
+
+const PROVIDER_META: Record<string, { label: string; description: string }> = {
+  spotify: { label: "Spotify", description: "Music streaming catalog" },
+  file: { label: "File uploads", description: "Direct audio uploads" },
+  intuizi: { label: "Intuizi", description: "Signal provider feed (CTV / apps)" },
+  ctv: { label: "CTV feed", description: "Connected TV audio signals" },
+};
+
+const providerMeta = (key: string) =>
+  PROVIDER_META[key] || { label: key, description: "Signal source" };
+
 const AdminDashboard = () => {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
@@ -72,13 +84,41 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("users");
   const [dataLoading, setDataLoading] = useState(true);
   const [filteredUserIds, setFilteredUserIds] = useState<string[]>([]);
+  const [filteredProviders, setFilteredProviders] = useState<string[]>([]);
+  const [entityMode, setEntityMode] = useState<EntityMode>("user");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [signalCounts, setSignalCounts] = useState<Record<string, number>>({});
   const [compareMode, setCompareMode] = useState<FingerprintMode>("all");
   const [neighborsOpenFor, setNeighborsOpenFor] = useState<string | null>(null);
 
   const displayedUsers = filteredUserIds.length > 0 
     ? users.filter(u => filteredUserIds.includes(u.user_id))
     : users;
+
+  const providerKeys = Array.from(new Set(allSources.map(s => s.source_type))).sort();
+  const displayedProviders = filteredProviders.length > 0
+    ? providerKeys.filter(p => filteredProviders.includes(p))
+    : providerKeys;
+
+  // Users implied by the active provider filter (used to scope aggregate/compare)
+  const providerScopedUserIds = Array.from(
+    new Set(
+      allSources
+        .filter(s => filteredProviders.length === 0 || filteredProviders.includes(s.source_type))
+        .map(s => s.user_id)
+    )
+  );
+
+  const scopedFingerprints = entityMode === "user"
+    ? (filteredUserIds.length > 0
+        ? allFingerprints.filter(fp => filteredUserIds.includes(fp.user_id))
+        : allFingerprints)
+    : (filteredProviders.length > 0
+        ? allFingerprints.filter(fp => providerScopedUserIds.includes(fp.user_id))
+        : allFingerprints);
+
+  const activeFilterCount = entityMode === "user" ? filteredUserIds.length : filteredProviders.length;
 
   const toggleUserFilter = (userId: string) => {
     setFilteredUserIds(prev =>
@@ -88,7 +128,25 @@ const AdminDashboard = () => {
     );
   };
 
-  const clearFilters = () => setFilteredUserIds([]);
+  const toggleProviderFilter = (provider: string) => {
+    setFilteredProviders(prev =>
+      prev.includes(provider)
+        ? prev.filter(p => p !== provider)
+        : [...prev, provider]
+    );
+  };
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const clearFilters = () => {
+    setFilteredUserIds([]);
+    setFilteredProviders([]);
+  };
+
 
   useEffect(() => {
     if (!loading && (!user || !isAdmin)) {

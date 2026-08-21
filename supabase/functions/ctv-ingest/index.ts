@@ -2,6 +2,7 @@
 // through librosa + analyze-audio, persists results as regular audio_sources,
 // links taxonomy tags, generates embeddings, and updates calibration stats.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -125,21 +126,14 @@ async function updateCalibration(supabase: any, nodeIds: string[], scores: Recor
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  // Auth: require admin
+  // Auth: admin role or internal service-role invocation (single shared guard).
   const authHeader = req.headers.get("Authorization") ?? "";
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: { user } } = await userClient.auth.getUser();
-  if (!user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { data: roleRow } = await supabase
-    .from("user_roles").select("id").eq("user_id", user.id).eq("role", "admin").maybeSingle();
-  if (!roleRow) {
-    return new Response(JSON.stringify({ error: "Admin only" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const authz = await requireAdmin(req, supabase).catch((e) => e as AuthzError);
+  if (authz instanceof AuthzError) {
+    return new Response(JSON.stringify({ error: authz.message }), { status: authz.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
+  const user = { id: authz.userId };
 
   let body: IngestRequest;
   try { body = await req.json(); } catch {

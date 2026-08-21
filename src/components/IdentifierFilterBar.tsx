@@ -45,6 +45,8 @@ interface IdentifierFilterBarProps {
   className?: string;
   /** Right-aligned slot for page-specific controls. */
   trailing?: ReactNode;
+  /** Basis chips only make sense where vectors are derived (cohort views). */
+  showBasis?: boolean;
 }
 
 const BASIS_OPTIONS: { value: IdentifierFilterState["basis"]; label: string }[] = [
@@ -74,6 +76,7 @@ export function IdentifierFilterBar({
   placeholder = "Search identifiers, tags or facets…",
   className,
   trailing,
+  showBasis = true,
 }: IdentifierFilterBarProps) {
   const [tagOpen, setTagOpen] = useState(false);
   const active = isFilterActive(value);
@@ -139,6 +142,7 @@ export function IdentifierFilterBar({
           </PopoverContent>
         </Popover>
 
+        {showBasis && (
         <div className="flex items-center gap-1 rounded-md border border-border/60 bg-card/60 p-0.5">
           {BASIS_OPTIONS.map(opt => (
             <Button
@@ -152,6 +156,7 @@ export function IdentifierFilterBar({
             </Button>
           ))}
         </div>
+        )}
 
         {segments && segments.length > 0 && (
           <div className="flex items-center gap-1 rounded-md border border-border/60 bg-card/60 p-0.5">

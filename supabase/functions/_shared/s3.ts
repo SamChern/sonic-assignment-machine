@@ -150,10 +150,13 @@ const gatewayDriver: S3Driver = {
   },
 
   async headObject(objectKey) {
-    const res = await fetch(`${GATEWAY_BASE}/${CONNECTOR}/${objectKey}`, {
+    // Encode each segment so keys with spaces or reserved characters resolve.
+    const encodedKey = objectKey.split("/").map(encodeURIComponent).join("/");
+    const res = await fetch(`${GATEWAY_BASE}/${CONNECTOR}/${encodedKey}`, {
       method: "HEAD",
       headers: gatewayHeaders(),
     });
+
     if (!res.ok) {
       throw Object.assign(new Error(`S3 head failed [${res.status}] for ${objectKey}`), {
         status: res.status,

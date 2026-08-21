@@ -156,8 +156,6 @@ const StepPill = ({
   );
 };
 
-const PAGE_SIZE = 25;
-
 type Stage = "all" | "normalized" | "linked" | "scored" | "failed";
 
 const StatusDot = ({ state, title }: { state: StepState; title: string }) => (

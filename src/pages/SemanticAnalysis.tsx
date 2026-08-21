@@ -292,51 +292,49 @@ const SemanticAnalysis = () => {
         className="pointer-events-none absolute inset-x-0 top-0 h-72 opacity-40 blur-3xl"
         style={{ background: "var(--gradient-brand)" }}
       />
-      <header className="sticky top-0 z-20 border-b border-border/60 bg-background/70 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/admin/pipeline")}>
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Pipeline
-          </Button>
-          <img
-            src={sonicSimLogo}
-            alt="SonicSIM"
-            width={1264}
-            height={847}
-            className="h-6 sm:h-7 md:h-8 w-auto max-w-[40vw] object-contain opacity-90"
-            loading="lazy"
-            decoding="async"
-          />
-          <div className="flex items-center gap-2">
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 shadow-elegant backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
             <span
-              className="flex h-8 w-8 items-center justify-center rounded-lg shadow-elegant"
-              style={{ background: "var(--gradient-brand)" }}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-elegant"
+              style={{ background: "var(--gradient-teal)" }}
             >
               <Layers className="h-4 w-4 text-primary-foreground" />
             </span>
             <h1
-              className="bg-clip-text text-lg font-semibold text-transparent"
-              style={{ backgroundImage: "var(--gradient-brand)" }}
+              className="truncate bg-clip-text text-base font-semibold text-transparent sm:text-lg"
+              style={{ backgroundImage: "var(--gradient-teal)" }}
             >
               Post-ingestion semantic analysis
             </h1>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto"
-            onClick={load}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-1 h-4 w-4" />
-            )}
-            Refresh
-          </Button>
+
+          <div className="ml-auto flex items-center gap-2">
+            <img
+              src={sonicSimLogo}
+              alt="SonicSIM"
+              width={1264}
+              height={847}
+              className="hidden h-6 w-auto max-w-[28vw] object-contain opacity-80 sm:block md:h-7"
+              loading="lazy"
+              decoding="async"
+            />
+            <Button variant="ghost" size="sm" onClick={() => navigate("/admin/pipeline")}>
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Pipeline
+            </Button>
+            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+              {loading ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1 h-4 w-4" />
+              )}
+              Refresh
+            </Button>
+          </div>
         </div>
       </header>
+
 
       <main className="relative mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-3 sm:grid-cols-4">

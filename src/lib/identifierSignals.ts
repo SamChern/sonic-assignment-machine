@@ -285,6 +285,10 @@ export interface SignalCohort {
   observations: number;
   avgConfidence: number;
   scoredMembers: number;
+  /** Activation/scope signature shared by every member. */
+  signature: string;
+  /** True when the feed carries no detail that could split this group further. */
+  undifferentiated: boolean;
 }
 
 const MAX_DIST = Math.sqrt(CATEGORY_KEYS.length * 100 * 100);

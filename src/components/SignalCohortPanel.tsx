@@ -196,8 +196,16 @@ export function SignalCohortPanel({
           </Button>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Identifiers are pseudonymized — raw identifier values are never displayed.
+          Identifiers are pseudonymized — raw identifier values are never displayed. Cohorts are first
+          partitioned by activation and feed scope, then split further only where per-identifier signals
+          actually differ.
         </p>
+        {cohorts.length < cohortCount && (
+          <p className="mt-1 text-xs text-amber-500">
+            Only {cohorts.length} cohort{cohorts.length !== 1 ? "s" : ""} available: the remaining
+            identifiers share identical signals, so the feed carries no detail to split them further.
+          </p>
+        )}
       </Card>
 
       {/* Cohorts */}
@@ -232,6 +240,11 @@ export function SignalCohortPanel({
                     <Badge variant="secondary">{cohort.dominantCategory}-led</Badge>
                     <Badge variant="outline">Cohesion {(cohort.cohesion * 100).toFixed(0)}%</Badge>
                     <Badge variant="outline">Confidence {(cohort.avgConfidence * 100).toFixed(0)}%</Badge>
+                    {cohort.undifferentiated && cohort.members.length > 1 && (
+                      <Badge variant="outline" className="text-amber-500">
+                        Uniform signals — not splittable
+                      </Badge>
+                    )}
                     {cohort.topFacets.map((f) => (
                       <Badge key={f.label} variant="outline" className="gap-1 text-[11px]">
                         <Hash className="h-3 w-3" />

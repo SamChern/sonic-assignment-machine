@@ -32,19 +32,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    // Tracks which user id already has profile/role hydrated, so repeated auth
+    // events (INITIAL_SESSION, TOKEN_REFRESHED, tab focus) don't refetch.
+    let hydratedFor: string | null = null;
+
+    const hydrate = async (userId: string) => {
+      if (hydratedFor === userId) return;
+      hydratedFor = userId;
+      await Promise.all([fetchProfile(userId), checkAdminRole(userId)]);
+    };
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
+
         // Defer profile and role fetch
         if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id);
-            checkAdminRole(session.user.id);
-          }, 0);
+          const uid = session.user.id;
+          setTimeout(() => { void hydrate(uid); }, 0);
         } else {
+          hydratedFor = null;
           setProfile(null);
           setIsAdmin(false);
         }
@@ -57,10 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         // Await role/profile so consumers don't see isAdmin=false transiently
-        await Promise.all([
-          fetchProfile(session.user.id),
-          checkAdminRole(session.user.id),
-        ]);
+        await hydrate(session.user.id);
       }
       setLoading(false);
     });
@@ -68,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase

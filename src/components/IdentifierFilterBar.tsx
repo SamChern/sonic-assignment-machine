@@ -85,6 +85,8 @@ export function IdentifierFilterBar({
   const [draft, setDraft] = useState(value.text);
   const latest = useRef(value);
   latest.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // Sync when the parent resets the filter externally (e.g. "Clear").
   useEffect(() => {
@@ -94,10 +96,10 @@ export function IdentifierFilterBar({
   useEffect(() => {
     if (draft === latest.current.text) return;
     const id = window.setTimeout(() => {
-      onChange({ ...latest.current, text: draft });
+      onChangeRef.current({ ...latest.current, text: draft });
     }, 220);
     return () => window.clearTimeout(id);
-  }, [draft, onChange]);
+  }, [draft]);
 
   const active = isFilterActive(value);
   const count = identifierFilterCount(value);

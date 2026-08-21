@@ -299,10 +299,12 @@ Deno.serve(async (req) => {
   let anyPrefixOk = false;
 
   for (const prefix of prefixes) {
+    const t0 = Date.now();
     try {
       const objects = await listObjects(prefix, 50);
       anyPrefixOk = true;
       discovered.push(...objects);
+      log(`list.${prefix}`, { count: objects.length, ms: Date.now() - t0 });
       add({
         id: `list.${prefix}`,
         feed: "object store",
@@ -315,9 +317,15 @@ Deno.serve(async (req) => {
           ? undefined
           : `No deliveries under ${prefix}. Confirm the feed writes to this prefix (or remove it from INGEST_PREFIXES).`,
         evidence: { sample: objects.slice(0, 3).map((o) => o.key) },
+        debug: {
+          latency_ms: Date.now() - t0,
+          all_keys: objects.map((o) => o.key),
+          sizes: objects.slice(0, 10).map((o) => ({ key: o.key, size: o.size, last_modified: o.lastModified })),
+        },
       });
     } catch (e) {
       const msg = errMsg(e);
+      log(`list.${prefix}.error`, msg);
       add({
         id: `list.${prefix}`,
         feed: "object store",
@@ -331,9 +339,11 @@ Deno.serve(async (req) => {
           : /404|NoSuchBucket/i.test(msg)
           ? "Bucket or prefix does not exist. Verify the bucket name and path prefix on the connection."
           : "Re-check the object store connection, then re-run. If the error persists, the gateway response body above is the provider's own error.",
+        debug: { latency_ms: Date.now() - t0, prefix, raw_error: msg },
       });
     }
   }
+
 
   if (!anyPrefixOk) {
     return json({

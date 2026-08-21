@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -416,6 +416,10 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
           {/* driver rows */}
           <div className="mt-5">
             <p className="text-xs font-medium">Taxonomy rows that drove the score</p>
+            <p className="text-[11px] text-muted-foreground">
+              Select a row to drill into the source record, the fields that contributed, and the
+              linked audience identifiers.
+            </p>
             {driverRows.length === 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">
                 No summary rows recorded for this activation.
@@ -441,9 +445,8 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                         ([k]) => k !== "feed" && k !== "object_key",
                       );
                       return (
-                        <>
+                        <Fragment key={i}>
                           <tr
-                            key={i}
                             className="cursor-pointer border-b border-border/50 transition-smooth hover:bg-muted/40"
                             onClick={() => loadDrill(i, r)}
                           >
@@ -472,7 +475,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                             <td className="py-1.5 pr-3">{r.period ?? "—"}</td>
                           </tr>
                           {isOpen && (
-                            <tr key={`${i}-detail`} className="border-b border-border/50">
+                            <tr className="border-b border-border/50">
                               <td colSpan={6} className="p-0">
                                 <div className="space-y-3 bg-muted/20 px-3 py-3">
                                   {/* source file */}
@@ -642,7 +645,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                               </td>
                             </tr>
                           )}
-                        </>
+                        </Fragment>
                       );
                     })}
 

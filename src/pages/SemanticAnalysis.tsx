@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -309,6 +309,22 @@ const SemanticAnalysis = () => {
       ),
     [rows, stage, filter, stageOf],
   );
+
+  // Row virtualization keeps the DOM at ~20 rows no matter how many
+  // identifiers pass the filter (thousands of Intuizi devices per activation).
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 37,
+    overscan: 8,
+    getItemKey: (index) => filtered[index]?.id ?? index,
+  });
+
+  const virtualRows = rowVirtualizer.getVirtualItems();
+
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [expanded, rowVirtualizer]);
 
   const stageSegments: FilterSegment[] = useMemo(() => {
     const counts: Record<Stage, number> = {

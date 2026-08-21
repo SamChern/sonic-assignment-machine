@@ -355,22 +355,79 @@ function kmeans(points: SignalPoint[], k: number): number[] {
 
 const LETTERS = "ABCDEFGH";
 
-/** Sub-cluster identifier points into cohorts, largest first. */
+/** Facet signature: identifiers sharing one are from the same feed slice. */
+function signatureOf(p: SignalPoint): string {
+  const parts = p.facets
+    .filter((f) => f.kind === "activation" || f.kind === "scope")
+    .map((f) => f.label)
+    .sort();
+  return parts.length ? parts.join(" · ") : "unattributed";
+}
+
+/**
+ * Sub-cluster identifiers into cohorts, largest first.
+ *
+ * Two stages, because Intuizi roster rows frequently carry no per-identifier
+ * detail at all (just activation + scope):
+ *   1. Partition by facet signature — always meaningful, never fabricated.
+ *   2. Split partitions whose ontology vectors actually vary with k-means,
+ *      spending the requested cohort budget on the largest varied partitions.
+ *
+ * A partition whose members share an identical vector stays one cohort and is
+ * flagged `undifferentiated`, so the UI can say the feed lacks the detail
+ * needed to split it further instead of inventing arbitrary groups.
+ */
 export function clusterSignals(points: SignalPoint[], k?: number): SignalCohort[] {
   if (!points.length) return [];
-  const kk = Math.max(1, Math.min(k ?? suggestedK(points.length), 8));
-  const assign = kmeans(points, kk);
+  const budget = Math.max(1, Math.min(k ?? suggestedK(points.length), 8));
 
-  const groups = new Map<number, SignalPoint[]>();
-  points.forEach((p, i) => {
-    const g = groups.get(assign[i]) ?? [];
+  // Stage 1: facet-signature partitions.
+  const partitions = new Map<string, SignalPoint[]>();
+  points.forEach((p) => {
+    const sig = signatureOf(p);
+    const g = partitions.get(sig) ?? [];
     g.push(p);
-    groups.set(assign[i], g);
+    partitions.set(sig, g);
   });
 
-  const cohorts = Array.from(groups.values())
-    .filter((members) => members.length > 0)
-    .map((members) => {
+  const varies = (group: SignalPoint[]) =>
+    group.some((m) => distance(m.vector, group[0].vector) > 1e-6);
+
+  let groups: { members: SignalPoint[]; signature: string; undifferentiated: boolean }[] =
+    Array.from(partitions.entries()).map(([signature, members]) => ({
+      members,
+      signature,
+      undifferentiated: !varies(members),
+    }));
+
+  // Stage 2: spend the remaining cohort budget splitting varied partitions.
+  let guard = 0;
+  while (groups.length < budget && guard++ < 16) {
+    const candidates = groups
+      .map((g, i) => ({ g, i }))
+      .filter(({ g }) => !g.undifferentiated && g.members.length >= 4)
+      .sort((a, b) => b.g.members.length - a.g.members.length);
+    if (!candidates.length) break;
+
+    const { g, i } = candidates[0];
+    const assign = kmeans(g.members, 2);
+    const left = g.members.filter((_, idx) => assign[idx] === 0);
+    const right = g.members.filter((_, idx) => assign[idx] === 1);
+    if (!left.length || !right.length) {
+      groups[i] = { ...g, undifferentiated: true };
+      continue;
+    }
+    groups = [
+      ...groups.slice(0, i),
+      { members: left, signature: g.signature, undifferentiated: !varies(left) },
+      { members: right, signature: g.signature, undifferentiated: !varies(right) },
+      ...groups.slice(i + 1),
+    ];
+  }
+
+  const cohorts = groups
+    .filter(({ members }) => members.length > 0)
+    .map(({ members, signature, undifferentiated }) => {
       const centroid = members[0].vector.map(
         (_, d) => members.reduce((s, m) => s + m.vector[d], 0) / members.length,
       );
@@ -389,6 +446,8 @@ export function clusterSignals(points: SignalPoint[], k?: number): SignalCohort[
 
       return {
         centroid,
+        signature,
+        undifferentiated,
         members: members.slice().sort((a, b) => b.observations - a.observations || a.label.localeCompare(b.label)),
         share: members.length / points.length,
         cohesion: Math.max(0, 1 - avgDist / MAX_DIST),
@@ -403,7 +462,7 @@ export function clusterSignals(points: SignalPoint[], k?: number): SignalCohort[
 
   return cohorts.map((c, i) => {
     const letter = LETTERS[i] ?? String(i + 1);
-    const facet = c.topFacets[0]?.label;
+    const facet = c.topFacets[0]?.label ?? (c.signature !== "unattributed" ? c.signature : undefined);
     return {
       ...c,
       key: `cohort:${letter}`,

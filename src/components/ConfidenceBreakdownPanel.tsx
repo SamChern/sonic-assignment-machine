@@ -45,6 +45,50 @@ interface TagRow {
   taxonomy_nodes: { code: string; label: string; parent_code: string | null } | null;
 }
 
+interface IngestFileRow {
+  object_key: string;
+  report_type: string;
+  status: string;
+  partition_date: string | null;
+  size_bytes: number | null;
+  total_rows: number;
+  processed_rows: number;
+  failed_rows: number;
+  error_message: string | null;
+  discovered_at: string;
+  finished_at: string | null;
+}
+
+interface RosterRow {
+  primary_identifier: string;
+  observation_count: number;
+  last_seen_at: string | null;
+  tag_codes: string[] | null;
+}
+
+interface DrillData {
+  file: IngestFileRow | null;
+  rosterCount: number;
+  roster: RosterRow[];
+  matchedTags: TagRow[];
+  matchedCodes: string[];
+}
+
+const slugify = (v: string) =>
+  v
+    .toLowerCase()
+    .replace(/&/g, " ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const fmtBytes = (n: number | null) => {
+  if (n == null) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+};
+
+
 const SIGNAL_COLUMNS = [
   ["ctv_signals", "CTV"],
   ["apps_signals", "Apps"],

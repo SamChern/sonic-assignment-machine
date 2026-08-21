@@ -43,6 +43,14 @@ import { useFingerprints } from "@/hooks/useFingerprints";
 import { useEC2Api } from "@/hooks/useEC2Api";
 import { calculateSimilarity, type FingerprintMode } from "@/lib/fingerprintMath";
 import { SignalCohortPanel } from "@/components/SignalCohortPanel";
+import { IdentifierFilterBar } from "@/components/IdentifierFilterBar";
+import {
+  EMPTY_IDENTIFIER_FILTER,
+  filterSignalPoints,
+  identifierFilterCount,
+  tagOptions,
+  type IdentifierFilterState,
+} from "@/lib/identifierFilters";
 import {
   buildSignalPoints,
   clusterSignals,
@@ -126,10 +134,23 @@ const AdminDashboard = () => {
   const [cohortCount, setCohortCount] = useState(4);
   const [cohortCountTouched, setCohortCountTouched] = useState(false);
   const [selectedCohortKeys, setSelectedCohortKeys] = useState<string[]>([]);
+  const [identifierFilter, setIdentifierFilter] = useState<IdentifierFilterState>({
+    ...EMPTY_IDENTIFIER_FILTER,
+  });
 
-  const signalPoints = useMemo(
+  const allSignalPoints = useMemo(
     () => (identifierRows ? buildSignalPoints(identifierRows, sourceBaselines) : []),
     [identifierRows, sourceBaselines],
+  );
+  // Identifier-level filters apply before clustering, so cohorts, the meta
+  // rollup, aggregate, compare and analysis all reflect the same scope.
+  const signalPoints = useMemo(
+    () => filterSignalPoints(allSignalPoints, identifierFilter),
+    [allSignalPoints, identifierFilter],
+  );
+  const identifierTagOptions = useMemo(
+    () => tagOptions(allSignalPoints.map(p => p.tags)),
+    [allSignalPoints],
   );
   const cohorts = useMemo(() => clusterSignals(signalPoints, cohortCount), [signalPoints, cohortCount]);
   const meta = useMemo(
@@ -175,7 +196,7 @@ const AdminDashboard = () => {
         : allFingerprints);
 
   const activeFilterCount = entityMode === "signal"
-    ? selectedCohortKeys.length
+    ? selectedCohortKeys.length + identifierFilterCount(identifierFilter)
     : entityMode === "user"
       ? filteredUserIds.length
       : filteredProviders.length;
@@ -212,6 +233,7 @@ const AdminDashboard = () => {
     setFilteredUserIds([]);
     setFilteredProviders([]);
     setSelectedCohortKeys([]);
+    setIdentifierFilter({ ...EMPTY_IDENTIFIER_FILTER });
   };
 
   // Fetch identifier-level signals + their linked source baselines on demand.
@@ -275,6 +297,14 @@ const AdminDashboard = () => {
       fetchSignalData();
     }
   }, [entityMode, isAdmin, identifierRows, signalsLoading]);
+
+  // Cohort keys can disappear when the identifier filter narrows the population.
+  useEffect(() => {
+    setSelectedCohortKeys(prev => {
+      const valid = prev.filter(k => cohorts.some(c => c.key === k));
+      return valid.length === prev.length ? prev : valid;
+    });
+  }, [cohorts]);
 
   // Default cohort count follows population size until the admin overrides it.
   useEffect(() => {
@@ -751,6 +781,20 @@ const AdminDashboard = () => {
                 </Button>
               )}
             </div>
+
+            {entityMode === "signal" && (
+              <div className="pt-1 border-t border-border/60">
+                <IdentifierFilterBar
+                  value={identifierFilter}
+                  onChange={setIdentifierFilter}
+                  tags={identifierTagOptions}
+                  resultCount={signalPoints.length}
+                  totalCount={allSignalPoints.length}
+                  placeholder="Search pseudonym, tag code or facet…"
+                  className="pt-3"
+                />
+              </div>
+            )}
           </div>
         </Card>
 

@@ -208,6 +208,8 @@ export interface SignalPoint {
   label: string;
   vector: number[];
   facets: Facet[];
+  /** Raw taxonomy tag codes (not PII) — used for identifier-level filtering. */
+  tags: string[];
   observations: number;
   confidence: number;
   /** Where the ontology vector came from, for honest UI labelling. */
@@ -256,6 +258,7 @@ export function buildSignalPoints(
       label: pseudonym(row.primary_identifier),
       vector,
       facets,
+      tags: (row.tag_codes ?? []).filter((t): t is string => typeof t === "string" && !!t),
       observations: Math.max(1, Number(row.observation_count) || 1),
       // Inherited vectors with no facet evidence are the weakest signal we have.
       confidence: explicit

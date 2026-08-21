@@ -261,6 +261,12 @@ const SemanticAnalysis = () => {
         </div>
 
         <div className="mt-6">
+          <InspectMappingPanel />
+        </div>
+
+
+
+        <div className="mt-6">
           <Input
             placeholder="Filter by identifier or tag code…"
             value={query}

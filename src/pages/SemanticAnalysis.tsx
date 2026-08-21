@@ -380,6 +380,12 @@ const SemanticAnalysis = () => {
           />
         </div>
 
+        <div className="mt-6">
+          <CategoryFlipTrendWidget />
+        </div>
+
+
+
 
         <div className="mt-6">
           <InspectMappingPanel />

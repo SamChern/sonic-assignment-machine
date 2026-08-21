@@ -148,11 +148,14 @@ export function useFingerprints() {
   } = useQuery({
     queryKey: ['fingerprints', 'all'],
     queryFn: fetchAllFingerprintsData,
+    // RLS requires a session; skip the request for signed-out visitors.
+    enabled: !!user,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });
 
-  const loading = isLoadingMyFingerprint || isLoadingMyAnalyses || isLoadingAllFingerprints;
+  const loading = !!user && (isLoadingMyFingerprint || isLoadingMyAnalyses || isLoadingAllFingerprints);
+
 
   const refresh = useCallback(async () => {
     await Promise.all([

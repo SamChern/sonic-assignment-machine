@@ -69,12 +69,14 @@ export async function fetchObjectRows(
   url: string,
   objectKey: string,
   maxRows = 5000,
+  expectedRowsPerUser?: number,
 ): Promise<Record<string, unknown>[]> {
   const lower = objectKey.toLowerCase();
 
   if (lower.endsWith(".parquet") || lower.endsWith(".pq")) {
-    return await readParquetRows(url, maxRows);
+    return await readParquetRows(url, maxRows, expectedRowsPerUser);
   }
+
 
   const res = await fetch(url);
   if (!res.ok) {

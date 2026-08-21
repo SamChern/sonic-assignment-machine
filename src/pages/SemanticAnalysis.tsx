@@ -549,15 +549,22 @@ const SemanticAnalysis = () => {
                 {virtualRows.map((virtualRow) => {
                   const r = filtered[virtualRow.index];
                   if (!r) return null;
-              const st = rowStatus(r, sources, analyses);
-                    const { present, tags, normState, createState, scoreState, src, ana } = st;
-                    const catGradient = ana?.category
-                      ? CATEGORY_GRADIENTS[ana.category.toLowerCase()] ?? "var(--gradient-brand)"
-                      : "var(--gradient-brand)";
-                    const open = expanded === r.id;
+                  const st = rowStatus(r, sources, analyses);
+                  const { present, tags, normState, createState, scoreState, src, ana } = st;
+                  const catGradient = ana?.category
+                    ? CATEGORY_GRADIENTS[ana.category.toLowerCase()] ?? "var(--gradient-brand)"
+                    : "var(--gradient-brand)";
+                  const open = expanded === r.id;
 
-                    return (
-                      <div key={r.id} className="relative">
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      ref={rowVirtualizer.measureElement}
+                      data-index={virtualRow.index}
+                      className="absolute left-0 top-0 w-full border-b border-border/60"
+                      style={{ transform: `translateY(${virtualRow.start}px)` }}
+                    >
+
                         <span
                           aria-hidden
                           className="absolute inset-y-0 left-0 w-0.5"

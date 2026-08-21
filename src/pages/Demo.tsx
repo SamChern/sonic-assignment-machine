@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
-import highlightVideo from "@/assets/sonicsim-highlight.mp4.asset.json";
+import featureVideo from "@/assets/sonicsim-features.mp4.asset.json";
 
 
 type CaptionStyle = "high-contrast" | "minimal";
@@ -58,8 +58,8 @@ const Demo = () => {
 
       <h1 className="text-3xl font-semibold tracking-tight">Product demo</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
-        A 50-second highlight reel of the live app, plus the full walkthrough
-        with step-by-step captions.
+        A 56-second feature film of what makes SonicSIM unique, plus the full
+        product walkthrough with step-by-step captions.
       </p>
 
       <Card className="mt-6 overflow-hidden border-primary/30 bg-card/60 p-3">
@@ -67,11 +67,11 @@ const Demo = () => {
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-primary" aria-hidden="true" />
             <h2 className="text-sm font-semibold tracking-tight">
-              Highlight reel — the sonic semantic layer in 50 seconds
+              Feature film — the sonic semantic layer in 56 seconds
             </h2>
           </div>
           <Button asChild variant="outline" size="sm">
-            <a href={highlightVideo.url} download="sonicsim-highlight.mp4">
+            <a href={featureVideo.url} download="sonicsim-features.mp4">
               <Download />
               <span>Download MP4</span>
             </a>
@@ -83,8 +83,8 @@ const Demo = () => {
             controls
             playsInline
             preload="metadata"
-            src={highlightVideo.url}
-            aria-label="SonicSIM highlight reel with on-screen supers"
+            src={featureVideo.url}
+            aria-label="SonicSIM feature film highlighting the sonic semantic layer"
           />
         </div>
       </Card>

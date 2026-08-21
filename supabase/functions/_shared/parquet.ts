@@ -10,9 +10,11 @@
 
 import {
   asyncBufferFromUrl,
+  parquetMetadataAsync,
   parquetReadObjects,
 } from "https://esm.sh/hyparquet@1.29.1";
 import { compressors } from "https://esm.sh/hyparquet-compressors@1.1.1";
+
 
 /** Anything larger than this is refused rather than buffered. */
 const MAX_OBJECT_BYTES = 512 * 1024 * 1024;

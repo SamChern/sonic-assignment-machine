@@ -83,14 +83,8 @@ const Index = () => {
     setActiveTab("select");
   };
 
-  const handleHealthCheck = async () => {
-    const result = await checkHealth();
-    if (result.error) {
-      toast.error(`EC2 Connection Failed: ${result.error}`);
-    } else {
-      toast.success(`EC2 Connected! Status: ${result.data?.status || 'OK'}`);
-    }
-  };
+
+
 
   const handleFileSelect = (file: File) => {
     setSelectedFiles(prev => [...prev, file]);

@@ -654,7 +654,12 @@ const IntegrationStatus = () => {
             );
           })}
         </ol>
+
+        <div className="mt-6">
+          <IngestDebugPanel />
+        </div>
       </main>
+
     </div>
   );
 };

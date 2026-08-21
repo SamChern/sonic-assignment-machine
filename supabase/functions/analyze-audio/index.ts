@@ -163,8 +163,10 @@ Deno.serve(async (req) => {
       throw new Error('No audio sources provided');
     }
 
+    // Not fatal on its own: when an EC2 inference server is configured the
+    // gateway key is only used as a fallback.
     if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
+      console.warn('LOVABLE_API_KEY is not set — relying on the EC2 inference server');
     }
 
     console.log(`Analyzing ${sources.length} audio source(s):`, sources);
@@ -619,6 +621,7 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
             source_key: cacheKey,
             source_type: sourceType,
             source_name: result.name,
+            feature_hash: originalSource?.feature_hash ?? null,
             ...categories,
           };
         });

@@ -80,6 +80,16 @@ const AdminDashboard = () => {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const { allFingerprints, loading: fingerprintsLoading, refresh: refreshFingerprints } = useFingerprints();
+  const { checkHealth, loading: ec2Loading } = useEC2Api();
+
+  const handleHealthCheck = async () => {
+    const result = await checkHealth();
+    if (result.error) {
+      toast.error(`EC2 Connection Failed: ${result.error}`);
+    } else {
+      toast.success(`EC2 Connected! Status: ${result.data?.status || "OK"}`);
+    }
+  };
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [allSources, setAllSources] = useState<AudioSourceWithProfile[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);

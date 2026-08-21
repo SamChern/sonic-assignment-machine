@@ -852,7 +852,7 @@ const AdminDashboard = () => {
                 </Button>
               </div>
             </div>
-            <FingerprintComparison fingerprints={allFingerprints} mode={compareMode} />
+            <FingerprintComparison fingerprints={scopedFingerprints} mode={compareMode} />
           </TabsContent>
 
           <TabsContent value="analysis" className="space-y-6">

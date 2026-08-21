@@ -122,6 +122,10 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
   const [analysis, setAnalysis] = useState<Record<string, number | string | null> | null>(null);
   const [tags, setTags] = useState<TagRow[]>([]);
   const [notFound, setNotFound] = useState(false);
+  const [openRow, setOpenRow] = useState<number | null>(null);
+  const [drill, setDrill] = useState<Record<number, DrillData>>({});
+  const [drillLoading, setDrillLoading] = useState<number | null>(null);
+
 
   const load = useCallback(async (id: string) => {
     setLoading(true);

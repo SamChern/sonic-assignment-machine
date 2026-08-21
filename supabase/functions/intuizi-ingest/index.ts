@@ -33,6 +33,7 @@ import {
 } from "../_shared/intuizi.ts";
 
 import { listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";
+import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,7 +42,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 // ---- Work bounds (every run ends, even with work remaining) ----------------
 const MAX_FILES_PER_RUN = 3;
@@ -84,23 +84,11 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const bearer = authHeader.replace(/^Bearer\s+/i, "");
-  const isCron = bearer === SERVICE_KEY;
-  let actorId: string | null = null;
-
-  if (!isCron) {
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user } } = await userClient.auth.getUser();
-    if (!user) return json({ error: "Unauthorized" }, 401);
-    const { data: roleRow } = await admin
-      .from("user_roles").select("id")
-      .eq("user_id", user.id).eq("role", "admin").maybeSingle();
-    if (!roleRow) return json({ error: "Admin only" }, 403);
-    actorId = user.id;
-  }
+  // Uniform authorization: admin role or internal service-role (scheduled) run.
+  const authz = await requireAdmin(req, admin).catch((e) => e as AuthzError);
+  if (authz instanceof AuthzError) return json({ error: authz.message }, authz.status);
+  const isCron = authz.isInternal;
+  const actorId: string | null = authz.userId;
 
   let body: Json = {};
   try { body = await req.json(); } catch { /* empty body = scheduled run */ }

@@ -5,6 +5,7 @@
 // Body: { integration_id: string, tool_name: string, arguments?: Record<string, unknown> }
 // Response: { success: boolean, result?: unknown, error?: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,20 +27,13 @@ Deno.serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return json({ success: false, error: "Missing auth" }, 401);
-    }
-
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData.user) {
-      return json({ success: false, error: "Unauthorized" }, 401);
+    // Diagnostic/maintenance endpoint: admin role or internal service-role only.
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    const authz = await requireAdmin(req, admin).catch((e) => e as AuthzError);
+    if (authz instanceof AuthzError) {
+      return json({ success: false, error: authz.message }, authz.status);
     }
 
     const body = await req.json().catch(() => null);
@@ -55,7 +49,6 @@ Deno.serve(async (req) => {
       return json({ success: false, error: "tool_name is required" }, 400);
     }
 
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const { data: credRows, error: credErr } = await admin
       .from("integration_credentials")
       .select("field_key, field_value")

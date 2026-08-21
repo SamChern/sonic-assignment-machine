@@ -2,6 +2,7 @@
 // Reads credentials from integration_credentials (admin-only managed via UI).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { create as createJwt, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,28 +18,14 @@ Deno.serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return json({ success: false, error: "Missing auth" }, 401);
-    }
-
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData } = await userClient.auth.getUser();
-    if (!userData.user) return json({ success: false, error: "Unauthorized" }, 401);
-
+    // Uniform authorization: admin role or internal service-role invocation.
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { data: roleRow } = await admin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userData.user.id)
-      .eq("role", "admin")
-      .maybeSingle();
-    if (!roleRow) return json({ success: false, error: "Admin only" }, 403);
+    const authz = await requireAdmin(req, admin).catch((e) => e as AuthzError);
+    if (authz instanceof AuthzError) {
+      return json({ success: false, error: authz.message }, authz.status);
+    }
 
     // Load credentials
     const { data: creds, error: credErr } = await admin
@@ -53,7 +40,7 @@ Deno.serve(async (req) => {
     const privateKeyPem = map.get("APPLE_PRIVATE_KEY");
 
     if (!teamId || !keyId || !privateKeyPem) {
-      return await record(admin, userData.user.id, false, startedAt, "Missing one or more credentials");
+      return await record(admin, authz.userId, false, startedAt, "Missing one or more credentials");
     }
 
     // Import the .p8 key (PKCS#8 PEM) for ES256 signing
@@ -72,7 +59,7 @@ Deno.serve(async (req) => {
         ["sign"],
       );
     } catch (e) {
-      return await record(admin, userData.user.id, false, startedAt,
+      return await record(admin, authz.userId, false, startedAt,
         `Invalid .p8 key: ${e instanceof Error ? e.message : String(e)}`);
     }
 
@@ -89,7 +76,7 @@ Deno.serve(async (req) => {
         cryptoKey,
       );
     } catch (e) {
-      return await record(admin, userData.user.id, false, startedAt,
+      return await record(admin, authz.userId, false, startedAt,
         `JWT signing failed: ${e instanceof Error ? e.message : String(e)}`);
     }
 
@@ -100,7 +87,7 @@ Deno.serve(async (req) => {
     );
     const text = await resp.text();
     if (!resp.ok) {
-      return await record(admin, userData.user.id, false, startedAt,
+      return await record(admin, authz.userId, false, startedAt,
         `Apple API ${resp.status}: ${text.slice(0, 300)}`);
     }
 
@@ -113,7 +100,7 @@ Deno.serve(async (req) => {
       // ignore
     }
 
-    return await record(admin, userData.user.id, true, startedAt, null, sample);
+    return await record(admin, authz.userId, true, startedAt, null, sample);
   } catch (e) {
     return json({
       success: false,

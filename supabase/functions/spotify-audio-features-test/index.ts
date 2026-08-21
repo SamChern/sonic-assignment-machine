@@ -14,6 +14,7 @@
 // Records outcome in integration_test_history like the other testers.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,37 +35,20 @@ Deno.serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const SPOTIFY_CLIENT_ID = Deno.env.get("SPOTIFY_CLIENT_ID")?.trim();
     const SPOTIFY_CLIENT_SECRET = Deno.env.get("SPOTIFY_CLIENT_SECRET")?.trim();
 
-    const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return json({ success: false, error: "Missing auth" }, 401);
-    }
-
-    // Verify caller is admin
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData.user) {
-      return json({ success: false, error: "Unauthorized" }, 401);
-    }
-
+    // Uniform authorization: admin role or internal service-role invocation.
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { data: roleRow } = await admin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userData.user.id)
-      .eq("role", "admin")
-      .maybeSingle();
-    if (!roleRow) return json({ success: false, error: "Admin only" }, 403);
+    const authz = await requireAdmin(req, admin).catch((e) => e as AuthzError);
+    if (authz instanceof AuthzError) {
+      return json({ success: false, error: authz.message }, authz.status);
+    }
 
     if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         "Spotify credentials not configured — set them in the Spotify card above first.",
       );
     }
@@ -84,14 +68,14 @@ Deno.serve(async (req) => {
       const tokenText = await tokenResp.text();
       if (!tokenResp.ok) {
         return await record(
-          admin, userData.user.id, false, startedAt,
+          admin, authz.userId, false, startedAt,
           `Spotify token request failed: HTTP ${tokenResp.status}: ${tokenText.slice(0, 200)}`,
         );
       }
       const parsed = JSON.parse(tokenText) as { access_token?: string };
       if (!parsed.access_token) {
         return await record(
-          admin, userData.user.id, false, startedAt,
+          admin, authz.userId, false, startedAt,
           "Spotify returned no access_token",
         );
       }
@@ -99,7 +83,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Network error";
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `Token fetch failed: ${msg}`,
       );
     }
@@ -119,7 +103,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Network error";
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `Audio-features fetch failed: ${msg}`,
       );
     }
@@ -128,7 +112,7 @@ Deno.serve(async (req) => {
       // The Nov 2024 deprecation case — surface clearly so the admin knows
       // they need a grandfathered app or the librosa fallback.
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         "Spotify HTTP 403: /audio-features is restricted for this app. " +
           "Apps registered after Nov 27, 2024 lost access to this endpoint. " +
           "Use a pre-existing Spotify app or fall back to the Librosa REST API.",
@@ -138,7 +122,7 @@ Deno.serve(async (req) => {
 
     if (!featResp.ok) {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `Spotify HTTP ${featResp.status}: ${featText.slice(0, 200)}`,
       );
     }
@@ -146,20 +130,20 @@ Deno.serve(async (req) => {
     let parsed: { tempo?: number; key?: number; energy?: number } = {};
     try { parsed = JSON.parse(featText); } catch {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `Unparseable audio-features response: ${featText.slice(0, 200)}`,
       );
     }
 
     if (typeof parsed.tempo !== "number") {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         "Audio-features response missing tempo — unexpected shape",
         parsed,
       );
     }
 
-    return await record(admin, userData.user.id, true, startedAt, null, {
+    return await record(admin, authz.userId, true, startedAt, null, {
       probe_track: PROBE_TRACK_ID,
       tempo: parsed.tempo,
       key: parsed.key,

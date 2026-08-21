@@ -1,6 +1,7 @@
 // Applies pending category_feedback rows to category_calibration.bias and
 // marks them processed. Idempotent. Admin-only.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,24 +10,18 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 const LEARNING_RATE = 0.25; // damp per-feedback nudges
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: { user } } = await userClient.auth.getUser();
-  if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
+  // Uniform authorization: admin role or internal service-role invocation.
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { data: roleRow } = await supabase
-    .from("user_roles").select("id").eq("user_id", user.id).eq("role", "admin").maybeSingle();
-  if (!roleRow) return new Response(JSON.stringify({ error: "Admin only" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const authz = await requireAdmin(req, supabase).catch((e) => e as AuthzError);
+  if (authz instanceof AuthzError) {
+    return new Response(JSON.stringify({ error: authz.message }), { status: authz.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
 
   // Pull pending feedback joined with the tags of the underlying audio_source
   const { data: feedback, error } = await supabase

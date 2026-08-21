@@ -2,6 +2,7 @@
 // against the configured base URL with the stored Bearer token, records the
 // outcome in integration_test_history, and returns latency.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,30 +21,14 @@ Deno.serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return json({ success: false, error: "Missing auth" }, 401);
-    }
-
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData.user) {
-      return json({ success: false, error: "Unauthorized" }, 401);
-    }
-
+    // Uniform authorization: admin role or internal service-role invocation.
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { data: roleRow } = await admin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userData.user.id)
-      .eq("role", "admin")
-      .maybeSingle();
-    if (!roleRow) return json({ success: false, error: "Admin only" }, 403);
+    const authz = await requireAdmin(req, admin).catch((e) => e as AuthzError);
+    if (authz instanceof AuthzError) {
+      return json({ success: false, error: authz.message }, authz.status);
+    }
 
     // Load credentials
     const { data: credRows, error: credErr } = await admin
@@ -51,7 +36,7 @@ Deno.serve(async (req) => {
       .select("field_key, field_value")
       .eq("integration_id", INTEGRATION_ID);
     if (credErr) {
-      return await record(admin, userData.user.id, false, startedAt, credErr.message);
+      return await record(admin, authz.userId, false, startedAt, credErr.message);
     }
 
     const creds: Record<string, string> = {};
@@ -61,10 +46,10 @@ Deno.serve(async (req) => {
     const token = creds.LIBROSA_REST_TOKEN;
 
     if (!baseUrl) {
-      return await record(admin, userData.user.id, false, startedAt, "LIBROSA_REST_URL not configured");
+      return await record(admin, authz.userId, false, startedAt, "LIBROSA_REST_URL not configured");
     }
     if (!token) {
-      return await record(admin, userData.user.id, false, startedAt, "LIBROSA_REST_TOKEN not configured");
+      return await record(admin, authz.userId, false, startedAt, "LIBROSA_REST_TOKEN not configured");
     }
 
     const healthUrl = `${baseUrl}/health`;
@@ -83,12 +68,12 @@ Deno.serve(async (req) => {
       text = await resp.text();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Network error";
-      return await record(admin, userData.user.id, false, startedAt, `Fetch failed: ${msg}`);
+      return await record(admin, authz.userId, false, startedAt, `Fetch failed: ${msg}`);
     }
 
     if (!resp.ok) {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `HTTP ${resp.status}: ${text.slice(0, 300)}`,
       );
     }
@@ -98,12 +83,12 @@ Deno.serve(async (req) => {
 
     if (!parsed?.ok) {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `Unexpected /health body: ${text.slice(0, 200)}`,
       );
     }
 
-    return await record(admin, userData.user.id, true, startedAt, null, parsed);
+    return await record(admin, authz.userId, true, startedAt, null, parsed);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown";
     return json({ success: false, error: msg }, 500);

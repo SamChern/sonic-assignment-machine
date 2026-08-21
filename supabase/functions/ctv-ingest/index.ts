@@ -2,6 +2,7 @@
 // through librosa + analyze-audio, persists results as regular audio_sources,
 // links taxonomy tags, generates embeddings, and updates calibration stats.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -125,21 +126,14 @@ async function updateCalibration(supabase: any, nodeIds: string[], scores: Recor
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  // Auth: require admin
+  // Auth: admin role or internal service-role invocation (single shared guard).
   const authHeader = req.headers.get("Authorization") ?? "";
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: { user } } = await userClient.auth.getUser();
-  if (!user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { data: roleRow } = await supabase
-    .from("user_roles").select("id").eq("user_id", user.id).eq("role", "admin").maybeSingle();
-  if (!roleRow) {
-    return new Response(JSON.stringify({ error: "Admin only" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const authz = await requireAdmin(req, supabase).catch((e) => e as AuthzError);
+  if (authz instanceof AuthzError) {
+    return new Response(JSON.stringify({ error: authz.message }), { status: authz.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
+  const actorId: string | null = authz.userId;
 
   let body: IngestRequest;
   try { body = await req.json(); } catch {
@@ -148,6 +142,11 @@ Deno.serve(async (req) => {
   if (!body?.feed_name || !Array.isArray(body.rows) || body.rows.length === 0) {
     return new Response(JSON.stringify({ error: "feed_name and rows[] required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
+  // Internal (service-role) runs have no acting user, so every row must name an owner.
+  if (!actorId && body.rows.some((r) => !r.for_user_id)) {
+    return new Response(JSON.stringify({ error: "Internal runs require for_user_id on every row" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
 
   const { data: batch, error: batchErr } = await supabase
     .from("ctv_ingest_batches")
@@ -156,7 +155,7 @@ Deno.serve(async (req) => {
       file_uri: body.file_uri ?? null,
       total_rows: body.rows.length,
       status: "running",
-      ingested_by: user.id,
+      ingested_by: actorId,
     })
     .select("id").single();
   if (batchErr) {
@@ -171,7 +170,7 @@ Deno.serve(async (req) => {
     try {
       // 1. Ensure audio_sources row
       let audioSourceId = row.audio_source_id ?? null;
-      const targetUserId = row.for_user_id ?? user.id;
+      const targetUserId = row.for_user_id ?? actorId!;
       if (!audioSourceId) {
         const { data: src, error: srcErr } = await supabase
           .from("audio_sources")

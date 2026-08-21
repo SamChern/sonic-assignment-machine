@@ -83,6 +83,95 @@ export function normalizeScores(
   return out;
 }
 
+export interface ImpactRow {
+  category: Category;
+  raw: number;
+  damped: number;
+  /** Points removed by speech damping (negative number). */
+  cut: number;
+  /** Points handed back by redistribution. */
+  given: number;
+  /** Points added/removed by the per-category gain. */
+  gainDelta: number;
+  final: number;
+  net: number;
+  speechLoad: number;
+}
+
+/** Stage-by-stage explanation of what normalization did to each category. */
+export function explainNormalization(
+  raw: Record<Category, number>,
+  cfg: { enabled: boolean; speech_bias: number; redistribute: boolean; gains: Record<string, number> },
+): { rows: ImpactRow[]; removed: number; redistributed: number; enabled: boolean } {
+  if (!cfg.enabled) {
+    return {
+      enabled: false,
+      removed: 0,
+      redistributed: 0,
+      rows: CATEGORIES.map((c) => ({
+        category: c,
+        raw: clamp(raw[c] ?? 0),
+        damped: clamp(raw[c] ?? 0),
+        cut: 0,
+        given: 0,
+        gainDelta: 0,
+        final: clamp(raw[c] ?? 0),
+        net: 0,
+        speechLoad: SPEECH_LOAD[c],
+      })),
+    };
+  }
+
+  const bias = Math.max(0, Math.min(1, cfg.speech_bias));
+  const cut = {} as Record<Category, number>;
+  const damped = {} as Record<Category, number>;
+  let removed = 0;
+  for (const c of CATEGORIES) {
+    const v = raw[c] ?? 0;
+    cut[c] = v * bias * SPEECH_LOAD[c];
+    damped[c] = v - cut[c];
+    removed += cut[c];
+  }
+
+  const given = {} as Record<Category, number>;
+  for (const c of CATEGORIES) given[c] = 0;
+  let redistributed = 0;
+  if (cfg.redistribute && removed > 0) {
+    let total = 0;
+    const w = {} as Record<Category, number>;
+    for (const c of CATEGORIES) {
+      w[c] = damped[c] * (1 - SPEECH_LOAD[c]);
+      total += w[c];
+    }
+    if (total > 0) {
+      for (const c of CATEGORIES) {
+        given[c] = removed * (w[c] / total);
+        redistributed += given[c];
+      }
+    }
+  }
+
+  const rows = CATEGORIES.map((c) => {
+    const preGain = damped[c] + given[c];
+    const final = Math.round(clamp(preGain * (cfg.gains?.[c] ?? 1)) * 10) / 10;
+    return {
+      category: c,
+      raw: raw[c] ?? 0,
+      damped: damped[c],
+      cut: -cut[c],
+      given: given[c],
+      gainDelta: final - clamp(preGain),
+      final,
+      net: final - (raw[c] ?? 0),
+      speechLoad: SPEECH_LOAD[c],
+    };
+  });
+
+  return { rows, removed, redistributed, enabled: true };
+}
+
+
+
 interface Cfg {
   scope: string;
   enabled: boolean;

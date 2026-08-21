@@ -131,11 +131,12 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
   const blocks = useMemo(() => {
     if (!identifier) return [] as { label: string; block: SignalBlock }[];
     return SIGNAL_COLUMNS.map(([col, label]) => ({
-      label,
+      label: label as string,
       block: (identifier[col] ?? null) as SignalBlock | null,
     }))
-      .filter((b): b is { label: string; block: SignalBlock } => !!b.block && !!b.block.rows?.length)
-      .map((b) => ({ label: b.label, block: b.block }));
+      .filter((b) => !!b.block && !!b.block.rows?.length)
+      .map((b) => ({ label: b.label, block: b.block as SignalBlock }));
+
   }, [identifier]);
 
   const driverRows = useMemo(() => {

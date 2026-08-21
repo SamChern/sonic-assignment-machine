@@ -268,7 +268,8 @@ Deno.serve(async (req) => {
 
       try {
         const url = await signReadUrl(cand.key);
-        const rawRows = (await fetchObjectRows(url, cand.key)).slice(0, MAX_ROWS_PER_FILE);
+        const rawRows = (await fetchObjectRows(url, cand.key, MAX_ROWS_PER_FILE))
+          .slice(0, MAX_ROWS_PER_FILE);
         summary.rows_read += rawRows.length;
 
         // ---- Roll rows up per identifier ---------------------------------

@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import InspectMappingPanel from "@/components/InspectMappingPanel";
 import PostIngestionWizard from "@/components/PostIngestionWizard";
+import ConfidenceBreakdownPanel from "@/components/ConfidenceBreakdownPanel";
+
 
 import {
   ArrowLeft,
@@ -268,8 +270,13 @@ const SemanticAnalysis = () => {
         </div>
 
         <div className="mt-6">
+          <ConfidenceBreakdownPanel defaultActivation="5498" />
+        </div>
+
+        <div className="mt-6">
           <InspectMappingPanel />
         </div>
+
 
 
 

@@ -130,6 +130,8 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
   const load = useCallback(async (id: string) => {
     setLoading(true);
     setNotFound(false);
+    setOpenRow(null);
+    setDrill({});
     const { data, error } = await supabase
       .from("intuizi_identifiers")
       .select(
@@ -205,6 +207,70 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
     }
     return out.sort((a, b) => (Number(b.uniques) || 0) - (Number(a.uniques) || 0));
   }, [blocks]);
+
+  const loadDrill = useCallback(
+    async (index: number, row: SummaryRow & { feed: string; object_key?: string | null }) => {
+      if (openRow === index) {
+        setOpenRow(null);
+        return;
+      }
+      setOpenRow(index);
+      if (drill[index]) return;
+
+      setDrillLoading(index);
+      const sourceId = (identifier as { audio_source_id?: string | null } | null)?.audio_source_id ?? null;
+
+      const [fileRes, rosterRes] = await Promise.all([
+        row.object_key
+          ? supabase
+              .from("intuizi_ingest_files")
+              .select(
+                "object_key, report_type, status, partition_date, size_bytes, total_rows, processed_rows, failed_rows, error_message, discovered_at, finished_at",
+              )
+              .eq("object_key", row.object_key)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        sourceId
+          ? supabase
+              .from("intuizi_identifiers")
+              .select("primary_identifier, observation_count, last_seen_at, tag_codes", {
+                count: "exact",
+              })
+              .eq("audio_source_id", sourceId)
+              .neq("primary_identifier", `activation:${activation.trim()}`)
+              .order("updated_at", { ascending: false })
+              .limit(8)
+          : Promise.resolve({ data: [], count: 0 }),
+      ]);
+
+      const slugs = [row.TaxonomyName, row.CategoryName]
+        .filter((v): v is string => !!v && !!v.trim())
+        .map(slugify);
+      const matchedTags = tags.filter((t) => {
+        const code = (t.taxonomy_nodes?.code ?? "").toLowerCase();
+        const label = (t.taxonomy_nodes?.label ?? "").toLowerCase();
+        return slugs.some((sl) => code.endsWith(sl) || code.includes(sl) || slugify(label) === sl);
+      });
+      const codes = ((identifier as { tag_codes?: string[] | null } | null)?.tag_codes ?? []).filter(
+        (c) => slugs.some((sl) => c.toLowerCase().includes(sl)),
+      );
+
+      setDrill((prev) => ({
+        ...prev,
+        [index]: {
+          file: ((fileRes as { data: unknown }).data ?? null) as IngestFileRow | null,
+          rosterCount:
+            (rosterRes as { count?: number | null }).count ??
+            ((rosterRes as { data?: unknown[] }).data?.length ?? 0),
+          roster: (((rosterRes as { data?: unknown[] }).data ?? []) as unknown) as RosterRow[],
+          matchedTags: matchedTags.length ? matchedTags : tags,
+          matchedCodes: codes,
+        },
+      }));
+      setDrillLoading(null);
+    },
+    [openRow, drill, identifier, tags, activation],
+  );
 
   const math = useMemo(() => {
     if (!analysis) return null;

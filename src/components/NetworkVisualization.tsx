@@ -750,7 +750,11 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
             <img
               src={sonicSimLogo}
               alt="SonicSIM"
-              className="h-12 md:h-14 w-auto shrink-0 select-none pointer-events-none"
+              width={1264}
+              height={847}
+              loading="lazy"
+              decoding="async"
+              className="h-9 sm:h-12 md:h-14 w-auto max-w-[40%] shrink-0 object-contain select-none pointer-events-none"
               style={{
                 mixBlendMode: "screen",
                 filter: "brightness(1.05) contrast(1.1)",

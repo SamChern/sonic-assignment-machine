@@ -311,7 +311,10 @@ const Index = () => {
           <img
             src={sonicSimLogo}
             alt="SonicSIM"
-            className="h-8 sm:h-9 w-auto object-contain select-none transition-opacity duration-150 ease-out will-change-opacity"
+            width={1264}
+            height={847}
+            decoding="async"
+            className="h-6 sm:h-8 md:h-9 w-auto max-w-[45vw] object-contain select-none transition-opacity duration-150 ease-out will-change-opacity"
             style={{ opacity: 'var(--header-logo-opacity, 0)', filter: 'brightness(1.2)' }}
             draggable={false}
           />
@@ -388,8 +391,17 @@ const Index = () => {
               <img
                 src={sonicSimLogo}
                 alt="SonicSIM"
-                className="mx-auto h-[127px] sm:h-[169px] md:h-[211px] w-auto object-contain select-none transition-all duration-75 ease-out will-change-[opacity,transform,filter]"
-                style={{ opacity: 'var(--logo-opacity, 1)', filter: 'brightness(1.2) blur(var(--logo-blur, 0px))', transform: 'scale(var(--logo-scale, 1))' }}
+                width={1264}
+                height={847}
+                fetchPriority="high"
+                decoding="async"
+                className="mx-auto h-[clamp(84px,27vw,211px)] w-auto max-w-full object-contain select-none transition-all duration-75 ease-out will-change-[opacity,transform,filter]"
+                style={{
+                  aspectRatio: "1264 / 847",
+                  opacity: 'var(--logo-opacity, 1)',
+                  filter: 'brightness(1.2) blur(var(--logo-blur, 0px))',
+                  transform: 'scale(var(--logo-scale, 1))',
+                }}
                 draggable={false}
               />
               <div

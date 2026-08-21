@@ -279,9 +279,8 @@ Deno.serve(async (req) => {
           labels: string[];
         }>();
 
-        for (const raw of rawRows) {
-          const norm = normalizeRow(cand.report_type, raw as Record<string, unknown>);
-          if (!norm) continue;
+        const addNorm = (norm: ReturnType<typeof normalizeRow>) => {
+          if (!norm) return;
           const entry = perIdentifier.get(norm.primary_identifier) ?? {
             tags: new Map<string, OntologyTag>(),
             signals: [],
@@ -293,6 +292,74 @@ Deno.serve(async (req) => {
           entry.confidence = Math.max(entry.confidence, norm.confidence);
           if (norm.label && entry.labels.length < 4) entry.labels.push(norm.label);
           perIdentifier.set(norm.primary_identifier, entry);
+        };
+
+        for (const raw of rawRows) {
+          addNorm(normalizeRow(cand.report_type, raw as Record<string, unknown>));
+        }
+
+        // Fallback A — audience-level summary report (taxonomy rollup, no device
+        // identifier). Folded into one synthetic activation profile and scored.
+        if (!perIdentifier.size && rawRows.length) {
+          const summaryRows = (rawRows as Record<string, unknown>[]).filter(isSummaryRow);
+          for (const norm of normalizeSummaryRows(cand.report_type, summaryRows, cand.key)) {
+            addNorm(norm);
+          }
+        }
+
+        // Fallback B — roster delivery (maid / hem only). No ontological content,
+        // so nothing to score: register the identifiers against the matching
+        // activation profile so the audience is joinable downstream.
+        if (!perIdentifier.size && rawRows.length) {
+          const rosterIds = Array.from(new Set(
+            (rawRows as Record<string, unknown>[])
+              .filter(isRosterRow)
+              .map((r) => identifierOf(r))
+              .filter(Boolean),
+          ));
+          if (rosterIds.length) {
+            const activation = activationIdFromKey(cand.key);
+            let activationSourceId: string | null = null;
+            if (activation) {
+              const { data: actRow } = await admin
+                .from("intuizi_identifiers")
+                .select("audio_source_id")
+                .eq("primary_identifier", `activation:${activation}`)
+                .maybeSingle();
+              activationSourceId = actRow?.audio_source_id ?? null;
+            }
+            const nowIso = new Date().toISOString();
+            for (let i = 0; i < rosterIds.length; i += 500) {
+              const chunk = rosterIds.slice(i, i + 500).map((id) => ({
+                primary_identifier: id,
+                audio_source_id: activationSourceId,
+                observation_count: 1,
+                last_seen_at: nowIso,
+                [SIGNAL_COLUMN[cand.report_type]]: {
+                  scope: "roster",
+                  activation_id: activation,
+                  object_key: cand.key,
+                  registered_at: nowIso,
+                },
+              }));
+              const { error: rosterErr } = await admin
+                .from("intuizi_identifiers")
+                .upsert(chunk, { onConflict: "primary_identifier" });
+              if (rosterErr) throw rosterErr;
+            }
+            await admin.from("intuizi_ingest_files").update({
+              status: "done",
+              total_rows: rawRows.length,
+              processed_rows: rosterIds.length,
+              failed_rows: 0,
+              cursor_offset: rosterIds.length,
+              finished_at: nowIso,
+              error_message: null,
+            }).eq("id", fileRow.id);
+            summary.files_processed++;
+            summary.roster_identifiers += rosterIds.length;
+            continue;
+          }
         }
 
         if (!perIdentifier.size && rawRows.length) {
@@ -301,6 +368,7 @@ Deno.serve(async (req) => {
             `no usable rows — identifier or taxonomy fields missing. columns seen: ${cols}`,
           );
         }
+
 
         let scoredInFile = 0;
         let failedInFile = 0;

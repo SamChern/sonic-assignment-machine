@@ -459,7 +459,9 @@ const IngestionCompatibility = () => {
                         : "Not tested yet"}
                       {last && ` · ran ${new Date(last.at).toLocaleTimeString()} in ${last.ms}ms`}
                     </p>
+                    </div>
                   </div>
+
                   <div className="flex shrink-0 items-center gap-2">
                     <Button
                       size="sm"

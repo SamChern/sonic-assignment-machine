@@ -181,6 +181,23 @@ function canonicalJson(value: unknown): string {
 }
 
 /**
+ * Identifier of the embedding space currently in use. Cache rows are keyed by
+ * this so vectors produced by different models are never mixed or compared.
+ */
+export function activeEmbeddingSpace(): string {
+  if (EC2_URL && EC2_EMBED_MODEL) return `ec2:${EC2_EMBED_MODEL}`;
+  return `gateway:${GATEWAY_EMBED_MODEL}`;
+}
+
+/** Zero-pad a shorter vector up to the pgvector column width. */
+function padTo(v: number[], dims: number): number[] {
+  if (v.length === dims) return v;
+  const out = new Array<number>(dims).fill(0);
+  for (let i = 0; i < Math.min(v.length, dims); i++) out[i] = v[i];
+  return out;
+}
+
+/**
  * Embed a text string. Order: EC2 server -> Lovable gateway.
  * Returns null on non-terminal failure (embeddings are enrichment, never fatal).
  * Terminal gateway denials (402/403/429) are thrown so callers can trip a breaker.
@@ -197,18 +214,24 @@ export async function embedText(text: string): Promise<number[] | null> {
       if (!r.ok) throw new Error(`ec2 ${r.status}`);
       const j = await r.json();
       const v = j?.data?.[0]?.embedding;
-      if (Array.isArray(v) && v.length === EMBEDDING_DIMS) {
-        noteEc2Success();
-        return v as number[];
+      if (!Array.isArray(v) || v.length === 0) throw new Error("empty ec2 embedding");
+      const expected = EC2_EMBED_DIMS || v.length;
+      if (v.length !== expected) {
+        throw new Error(`ec2 embedding dim ${v.length} != declared ${expected}`);
       }
-      throw new Error(
-        `ec2 embedding dim ${Array.isArray(v) ? v.length : "n/a"} != ${EMBEDDING_DIMS}`,
-      );
+      if (v.length > EMBEDDING_DIMS) {
+        throw new Error(
+          `ec2 embedding dim ${v.length} exceeds column width ${EMBEDDING_DIMS}`,
+        );
+      }
+      noteEc2Success();
+      return padTo(v as number[], EMBEDDING_DIMS);
     } catch (e) {
       noteEc2Failure(e);
       if (EC2_REQUIRED) return null;
     }
   }
+
 
   if (!LOVABLE_API_KEY) return null;
   try {

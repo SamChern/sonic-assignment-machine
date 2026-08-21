@@ -34,7 +34,21 @@ interface Check {
   actual?: string;
   remediation?: string;
   evidence?: Record<string, unknown>;
+  debug?: Record<string, unknown>;
 }
+
+type Scope = "all" | "object_store" | "intuizi" | "ec2_analysis" | "librosa_rest";
+
+/** Per-source test targets — feed labels come back from the function verbatim. */
+const SOURCES: { scope: Exclude<Scope, "all">; label: string; feed: string }[] = [
+  { scope: "object_store", label: "S3 object store", feed: "object store" },
+  { scope: "intuizi", label: "Intuizi deliveries", feed: "intuizi" },
+  { scope: "ec2_analysis", label: "EC2 analysis API", feed: "EC2 analysis API" },
+  { scope: "librosa_rest", label: "Librosa REST", feed: "Librosa REST" },
+];
+
+const scopeForFeed = (feed: string): Exclude<Scope, "all"> =>
+  SOURCES.find((s) => s.feed === feed)?.scope ?? "intuizi";
 
 interface SampledObject {
   key: string;
@@ -52,6 +66,9 @@ interface SampledObject {
 interface Report {
   ran_at: string;
   duration_ms: number;
+  scope?: Scope;
+  debug?: boolean;
+  trace?: { at: number; step: string; detail?: unknown }[];
   backend?: { backend: string; configured: boolean; placeholder: boolean };
   discovered_objects?: number;
   summary: { pass: number; warn: number; fail: number; skip: number; total: number; verdict: string };
@@ -78,6 +95,8 @@ const IngestionCompatibility = () => {
   const { isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const [running, setRunning] = useState(false);
+  const [runningScope, setRunningScope] = useState<Scope | null>(null);
+  const [lastRun, setLastRun] = useState<Record<string, { at: string; debug: boolean; ms: number }>>({});
   const [report, setReport] = useState<Report | null>(null);
   const [maxObjects, setMaxObjects] = useState(3);
   const [maxRows, setMaxRows] = useState(300);
@@ -88,31 +107,50 @@ const IngestionCompatibility = () => {
     if (!loading && !isAdmin) navigate("/");
   }, [loading, isAdmin, navigate]);
 
-  const run = useCallback(async () => {
-    setRunning(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("ingestion-compatibility", {
-        body: { maxObjects, maxRowsPerObject: maxRows },
-      });
-      if (error) {
-        const details =
-          error instanceof FunctionsHttpError ? await error.context.text() : error.message;
-        throw new Error(details);
+  const run = useCallback(
+    async (scope: Scope = "all", debug = false) => {
+      setRunning(true);
+      setRunningScope(scope);
+      try {
+        const { data, error } = await supabase.functions.invoke("ingestion-compatibility", {
+          body: { maxObjects, maxRowsPerObject: maxRows, scope, debug },
+        });
+        if (error) {
+          const details =
+            error instanceof FunctionsHttpError ? await error.context.text() : error.message;
+          throw new Error(details);
+        }
+        const next = data as Report;
+        setReport((prev) => (scope === "all" || !prev ? next : mergeReport(prev, next)));
+        const feeds = [...new Set(next.checks.map((c) => c.feed))];
+        setLastRun((prev) => {
+          const stamped = { at: next.ran_at, debug, ms: next.duration_ms };
+          const merged = { ...prev };
+          for (const f of feeds) merged[f] = stamped;
+          return merged;
+        });
+        if (scope !== "all") {
+          toast({
+            title: debug ? "Debug rerun complete" : "Tests complete",
+            description: `${next.summary.pass} pass · ${next.summary.warn} mismatch · ${next.summary.fail} blocking (${next.duration_ms}ms)`,
+          });
+        }
+      } catch (e) {
+        toast({
+          title: "Compatibility run failed",
+          description: e instanceof Error ? e.message : "Unknown error",
+          variant: "destructive",
+        });
+      } finally {
+        setRunning(false);
+        setRunningScope(null);
       }
-      setReport(data as Report);
-    } catch (e) {
-      toast({
-        title: "Compatibility run failed",
-        description: e instanceof Error ? e.message : "Unknown error",
-        variant: "destructive",
-      });
-    } finally {
-      setRunning(false);
-    }
-  }, [maxObjects, maxRows]);
+    },
+    [maxObjects, maxRows],
+  );
 
   useEffect(() => {
-    if (isAdmin) void run();
+    if (isAdmin) void run("all");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
@@ -165,7 +203,7 @@ const IngestionCompatibility = () => {
                 {report.summary.verdict}
               </Badge>
             )}
-            <Button size="sm" onClick={run} disabled={running}>
+            <Button size="sm" onClick={() => run("all")} disabled={running}>
               {running ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (

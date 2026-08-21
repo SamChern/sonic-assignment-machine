@@ -58,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTimeout(() => { void hydrate(uid); }, 0);
         } else {
           hydratedFor = null;
+          hydration = null;
           setProfile(null);
           setIsAdmin(false);
         }

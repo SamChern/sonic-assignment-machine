@@ -390,137 +390,161 @@ const SemanticAnalysis = () => {
           <InspectMappingPanel />
         </div>
 
-        <div className="mt-6">
-          <Input
-            placeholder="Filter by identifier or tag code…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="max-w-sm bg-card/60 backdrop-blur-sm"
+        <Card className="mt-6 border-border/60 bg-card/70 p-4 backdrop-blur-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <Layers className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold">Identifier pipeline status</h2>
+          </div>
+          <IdentifierFilterBar
+            value={filter}
+            onChange={(next) => {
+              setFilter(next);
+              setVisibleCount(PAGE_SIZE);
+            }}
+            tags={tagList}
+            showBasis={false}
+            segments={stageSegments}
+            segmentValue={stage}
+            onSegmentChange={(v) => {
+              setStage(v as Stage);
+              setVisibleCount(PAGE_SIZE);
+            }}
+            resultCount={filtered.length}
+            totalCount={rows.length}
+            placeholder="Search identifier or tag code…"
           />
-        </div>
 
+          <div className="mt-4 divide-y divide-border/60 rounded-lg border border-border/60 bg-background/40">
+            {loading && rows.length === 0 && (
+              <p className="p-4 text-sm text-muted-foreground">Loading identifiers…</p>
+            )}
+            {!loading && filtered.length === 0 && (
+              <p className="p-4 text-sm text-muted-foreground">
+                {rows.length === 0
+                  ? "No ingested identifiers yet. Once a delivery contains data rows, each identifier will appear here with its normalization, source creation, and scoring status."
+                  : "No identifiers match the current filters."}
+              </p>
+            )}
 
-        <div className="mt-4 space-y-3">
-          {loading && rows.length === 0 && (
-            <Card className="p-6 text-sm text-muted-foreground">Loading identifiers…</Card>
-          )}
-          {!loading && filtered.length === 0 && (
-            <Card className="p-6 text-sm text-muted-foreground">
-              No ingested identifiers yet. Once a delivery contains data rows, each identifier
-              will appear here with its normalization, source creation, and scoring status.
-            </Card>
-          )}
+            {filtered.slice(0, visibleCount).map((r) => {
+              const st = rowStatus(r, sources, analyses);
+              const { present, tags, normState, createState, scoreState, src, ana } = st;
+              const catGradient = ana?.category
+                ? CATEGORY_GRADIENTS[ana.category.toLowerCase()] ?? "var(--gradient-brand)"
+                : "var(--gradient-brand)";
+              const open = expanded === r.id;
 
-          {filtered.map((r) => {
-            const signalGroups = [
-              ["ctv", r.ctv_signals],
-              ["apps", r.apps_signals],
-              ["visitation", r.visitation_signals],
-              ["demographics", r.demographics_signals],
-              ["origin", r.origin_signals],
-            ] as const;
-            const present = signalGroups
-              .filter(([, v]) => nonEmpty(v as Record<string, unknown>))
-              .map(([k]) => k);
-            const tags = r.tag_codes ?? [];
-
-            const normState: StepState = present.length ? "ok" : "pending";
-            const src = r.audio_source_id ? sources[r.audio_source_id] : undefined;
-            const createState: StepState = !r.audio_source_id
-              ? "pending"
-              : src?.analysis_status === "failed"
-                ? "error"
-                : "ok";
-            const ana = r.audio_source_id ? analyses[r.audio_source_id] : undefined;
-            const scoreState: StepState = ana
-              ? "ok"
-              : src?.analysis_status === "failed"
-                ? "error"
-                : "pending";
-
-            const catGradient = ana?.category
-              ? CATEGORY_GRADIENTS[ana.category.toLowerCase()] ?? "var(--gradient-brand)"
-              : "var(--gradient-brand)";
-
-            return (
-              <Card
-                key={r.id}
-                className="relative overflow-hidden border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth hover:shadow-elegant"
-              >
-                <span
-                  aria-hidden
-                  className="absolute inset-y-0 left-0 w-1"
-                  style={{ background: ana ? catGradient : "hsl(var(--border))" }}
-                />
-                <div className="flex flex-wrap items-center gap-2 pl-2">
-                  <p className="font-mono text-sm break-all">{r.primary_identifier}</p>
-                  <Badge variant="outline" className="text-xs">
-                    {r.observation_count} obs
-                  </Badge>
-                  {ana?.category && (
-                    <Badge
-                      className="border-0 text-xs text-primary-foreground"
-                      style={{ background: catGradient }}
-                    >
-                      {ana.category}
-                    </Badge>
-                  )}
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    updated {relative(r.updated_at)}
-                  </span>
-                </div>
-
-                {ana && <ScoreBars ana={ana} />}
-
-
-                <div className="mt-3 grid gap-2 md:grid-cols-3">
-                  <StepPill
-                    label="1. Normalization"
-                    state={normState}
-                    detail={
-                      present.length
-                        ? `signals: ${present.join(", ")} · ${tags.length} tag code${tags.length === 1 ? "" : "s"}`
-                        : "no signal groups captured"
-                    }
+              return (
+                <div key={r.id} className="relative">
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 w-0.5"
+                    style={{ background: ana ? catGradient : "hsl(var(--border))" }}
                   />
-                  <StepPill
-                    label="2. Source creation"
-                    state={createState}
-                    detail={
-                      src
-                        ? `${src.name} · ${src.analysis_status}${src.profile_embedding ? " · embedded" : ""}`
-                        : "no audio source linked"
-                    }
-                  />
-                  <StepPill
-                    label="3. Scoring"
-                    state={scoreState}
-                    detail={
-                      ana
-                        ? `${CATEGORY_KEYS.map(([k, short]) => `${short} ${Math.round(Number(ana[k]))}`).join(" · ")} · conf ${Number(ana.confidence ?? 0).toFixed(2)}`
-                        : src?.analysis_error || "awaiting analyze-audio"
-                    }
-                  />
-                </div>
-
-                {tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {tags.slice(0, 12).map((t) => (
-                      <Badge key={t} variant="secondary" className="text-[11px]">
-                        {t}
-                      </Badge>
-                    ))}
-                    {tags.length > 12 && (
-                      <Badge variant="secondary" className="text-[11px]">
-                        +{tags.length - 12}
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(open ? null : r.id)}
+                    aria-expanded={open}
+                    className="flex w-full items-center gap-2 px-3 py-2 pl-4 text-left transition-smooth hover:bg-muted/40"
+                  >
+                    <ChevronRight
+                      className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+                    />
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs">
+                      {r.primary_identifier}
+                    </span>
+                    <span className="hidden items-center gap-1 sm:flex">
+                      <StatusDot state={normState} title="Normalization" />
+                      <StatusDot state={createState} title="Source creation" />
+                      <StatusDot state={scoreState} title="Scoring" />
+                    </span>
+                    {ana?.category && (
+                      <Badge
+                        className="hidden border-0 text-[10px] text-primary-foreground md:inline-flex"
+                        style={{ background: catGradient }}
+                      >
+                        {ana.category}
                       </Badge>
                     )}
-                  </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
+                    <span className="hidden text-[11px] text-muted-foreground lg:inline">
+                      {tags.length} tag{tags.length === 1 ? "" : "s"} · {r.observation_count} obs
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {relative(r.updated_at)}
+                    </span>
+                  </button>
+
+                  {open && (
+                    <div className="px-4 pb-4 pl-6">
+                      {ana && <ScoreBars ana={ana} />}
+
+                      <div className="mt-3 grid gap-2 md:grid-cols-3">
+                        <StepPill
+                          label="1. Normalization"
+                          state={normState}
+                          detail={
+                            present.length
+                              ? `signals: ${present.join(", ")} · ${tags.length} tag code${tags.length === 1 ? "" : "s"}`
+                              : "no signal groups captured"
+                          }
+                        />
+                        <StepPill
+                          label="2. Source creation"
+                          state={createState}
+                          detail={
+                            src
+                              ? `${src.name} · ${src.analysis_status}${src.profile_embedding ? " · embedded" : ""}`
+                              : "no audio source linked"
+                          }
+                        />
+                        <StepPill
+                          label="3. Scoring"
+                          state={scoreState}
+                          detail={
+                            ana
+                              ? `${CATEGORY_KEYS.map(([k, short]) => `${short} ${Math.round(Number(ana[k]))}`).join(" · ")} · conf ${Number(ana.confidence ?? 0).toFixed(2)}`
+                              : src?.analysis_error || "awaiting analyze-audio"
+                          }
+                        />
+                      </div>
+
+                      {tags.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          {tags.slice(0, 12).map((t) => (
+                            <Badge key={t} variant="secondary" className="text-[11px]">
+                              {t}
+                            </Badge>
+                          ))}
+                          {tags.length > 12 && (
+                            <Badge variant="secondary" className="text-[11px]">
+                              +{tags.length - 12}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {filtered.length > visibleCount && (
+            <div className="mt-3 flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              >
+                Show {Math.min(PAGE_SIZE, filtered.length - visibleCount)} more
+                <span className="ml-1 text-xs text-muted-foreground">
+                  ({filtered.length - visibleCount} remaining)
+                </span>
+              </Button>
+            </div>
+          )}
+        </Card>
+
       </main>
     </div>
   );

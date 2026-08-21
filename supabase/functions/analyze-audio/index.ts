@@ -7,6 +7,7 @@ import {
   neighborPrior,
   type EvidenceKind,
 } from '../_shared/evidence.ts';
+import { chatCompletion, GatewayError, stableHash } from '../_shared/inference.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,6 +27,8 @@ interface AudioSource {
   taxonomy_context?: string; // Optional CTV taxonomy + calibration prior block
   /** Phase 2 — which evidence tier produced `acoustic_profile`. */
   evidence?: EvidenceKind;
+  /** Hash of the acoustic/taxonomy evidence actually used for scoring. */
+  feature_hash?: string;
 }
 
 
@@ -288,14 +291,64 @@ Deno.serve(async (req) => {
       }
 
 
+      // === Semantic score cache keyed by ACOUSTIC FEATURE HASH ===
+      // Two different names with identical measured evidence produce the same
+      // semantic profile, so we never pay for a second model call. This is what
+      // stops re-analysis from re-prompting the LLM.
+      for (const s of uncachedSources) {
+        s.feature_hash = await stableHash({
+          v: 1,
+          evidence: s.evidence ?? 'none',
+          acoustic: s.acoustic_profile ?? null,
+          taxonomy: s.taxonomy_context ?? null,
+        });
+      }
+
+      let toAnalyze = uncachedSources;
+      if (supabaseAdmin) {
+        // Only evidence-backed hashes are trustworthy; a metadata-only source is
+        // identified by its name alone and must not borrow another's score.
+        const hashable = uncachedSources.filter(
+          s => s.feature_hash && s.evidence && s.evidence !== 'none',
+        );
+        if (hashable.length > 0) {
+          const { data: featCache } = await supabaseAdmin
+            .from('source_cache')
+            .select('*')
+            .in('feature_hash', hashable.map(s => s.feature_hash!));
+          const byHash = new Map(
+            (featCache ?? []).map((row: CachedSource & { feature_hash: string }) => [
+              row.feature_hash,
+              row,
+            ]),
+          );
+          if (byHash.size > 0) {
+            const stillNeeded: AudioSource[] = [];
+            for (const src of uncachedSources) {
+              const hit = src.feature_hash ? byHash.get(src.feature_hash) : undefined;
+              if (hit && src.evidence && src.evidence !== 'none') {
+                // Reuse the scores, but keep the requested source's own name.
+                cachedResults.push({ ...cachedToSourceResult(hit as CachedSource), name: src.name });
+              } else {
+                stillNeeded.push(src);
+              }
+            }
+            console.log(
+              `Feature-hash cache hits: ${uncachedSources.length - stillNeeded.length}`,
+            );
+            toAnalyze = stillNeeded;
+          }
+        }
+      }
+
       // Batch sources to avoid truncation (max 5 per batch)
       const BATCH_SIZE = 5;
       const batches: AudioSource[][] = [];
-      for (let i = 0; i < uncachedSources.length; i += BATCH_SIZE) {
-        batches.push(uncachedSources.slice(i, i + BATCH_SIZE));
+      for (let i = 0; i < toAnalyze.length; i += BATCH_SIZE) {
+        batches.push(toAnalyze.slice(i, i + BATCH_SIZE));
       }
 
-      console.log(`Processing ${uncachedSources.length} sources in ${batches.length} batch(es)`);
+      console.log(`Processing ${toAnalyze.length} sources in ${batches.length} batch(es)`);
 
       for (const batch of batches) {
         const sourcesList = batch

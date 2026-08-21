@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Check, Filter, Search, Tags, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Check, Filter, RotateCcw, Search, Tags, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +79,26 @@ export function IdentifierFilterBar({
   showBasis = true,
 }: IdentifierFilterBarProps) {
   const [tagOpen, setTagOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Local text state keeps typing at 60fps; the parent (and therefore the
+  // filtering pass over thousands of identifiers) only updates after a pause.
+  const [draft, setDraft] = useState(value.text);
+  const latest = useRef(value);
+  latest.current = value;
+
+  // Sync when the parent resets the filter externally (e.g. "Clear").
+  useEffect(() => {
+    setDraft((d) => (d.trim() === value.text.trim() ? d : value.text));
+  }, [value.text]);
+
+  useEffect(() => {
+    if (draft === latest.current.text) return;
+    const id = window.setTimeout(() => {
+      onChange({ ...latest.current, text: draft });
+    }, 220);
+    return () => window.clearTimeout(id);
+  }, [draft, onChange]);
+
   const active = isFilterActive(value);
   const count = identifierFilterCount(value);
 
@@ -100,12 +120,33 @@ export function IdentifierFilterBar({
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            value={value.text}
-            onChange={e => onChange({ ...value, text: e.target.value })}
+            ref={inputRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Escape") {
+                setDraft("");
+                onChange({ ...value, text: "" });
+              }
+            }}
             placeholder={placeholder}
-            className="h-9 pl-8 bg-card/60 backdrop-blur-sm"
+            className="h-9 pl-8 pr-8 bg-card/60 backdrop-blur-sm"
             aria-label="Search identifiers"
           />
+          {draft.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setDraft("");
+                onChange({ ...value, text: "" });
+                inputRef.current?.focus();
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         <Popover open={tagOpen} onOpenChange={setTagOpen}>
@@ -206,9 +247,13 @@ export function IdentifierFilterBar({
             variant="ghost"
             size="sm"
             className="h-6 px-2 text-xs"
-            onClick={() => onChange({ ...EMPTY_IDENTIFIER_FILTER })}
+            onClick={() => {
+              setDraft("");
+              onChange({ ...EMPTY_IDENTIFIER_FILTER });
+            }}
           >
-            Clear
+            <RotateCcw className="mr-1 h-3 w-3" />
+            Reset all
           </Button>
         )}
       </div>

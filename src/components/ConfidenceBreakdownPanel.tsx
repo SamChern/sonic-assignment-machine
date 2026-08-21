@@ -1166,9 +1166,28 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                       const a = Number(analysis?.[k]) || 0;
                       const b = Number(compare.analysis?.[k]) || 0;
                       const d = b - a;
+                      const rank = scoreMovers.top.get(String(k));
                       return (
-                        <div key={k} className="rounded-md border border-border bg-card/60 px-3 py-2">
-                          <p className="text-[11px] text-muted-foreground">{label}</p>
+                        <div
+                          key={k}
+                          className={
+                            "rounded-md border px-3 py-2 " +
+                            (rank
+                              ? "border-primary/50 bg-primary/15 ring-1 ring-inset ring-primary/30"
+                              : "border-border bg-card/60")
+                          }
+                        >
+                          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            {label}
+                            {rank && (
+                              <Badge
+                                variant="outline"
+                                className="h-4 border-primary/50 px-1 font-mono text-[10px] text-primary"
+                              >
+                                mover #{rank}
+                              </Badge>
+                            )}
+                          </p>
                           <p className="text-sm font-semibold">
                             {Math.round(a)} → {Math.round(b)}{" "}
                             <span
@@ -1183,6 +1202,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                           </p>
                         </div>
                       );
+
                     })}
                   </div>
                 </>

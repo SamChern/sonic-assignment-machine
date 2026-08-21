@@ -883,6 +883,19 @@ export type Database = {
         Args: { p_owner: string; p_seconds?: number }
         Returns: boolean
       }
+      admin_prune_analysis_telemetry: {
+        Args: {
+          p_cache_idle_days?: number
+          p_job_days?: number
+          p_log_days?: number
+        }
+        Returns: Json
+      }
+      admin_recalculate_all_fingerprints: { Args: never; Returns: number }
+      admin_recalculate_user_fingerprint: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       claim_analysis_jobs: {
         Args: { p_limit?: number }
         Returns: {
@@ -950,6 +963,7 @@ export type Database = {
         Returns: undefined
       }
       release_intuizi_lease: { Args: { p_owner: string }; Returns: undefined }
+      require_admin: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"

@@ -5,6 +5,7 @@
 // runs them against the UNCHANGED Librosa REST endpoint, never exceeding the
 // concurrency the upstream service can absorb.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { AuthzError, requireAdmin } from "../_shared/admin.ts";
 import {
   breakerOpen,
   callUpstream,
@@ -34,6 +35,14 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+    // Privileged endpoint: scheduled runs (service role) or admins only.
+    try {
+      await requireAdmin(req, admin);
+    } catch (e) {
+      if (e instanceof AuthzError) return json({ success: false, error: e.message }, e.status);
+      throw e;
+    }
 
     if (await breakerOpen(admin)) {
       return json({ success: true, skipped: "circuit_breaker_open", processed: 0 });

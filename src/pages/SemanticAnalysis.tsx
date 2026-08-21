@@ -5,7 +5,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { IdentifierFilterBar, type FilterSegment } from "@/components/IdentifierFilterBar";
+import {
+  EMPTY_IDENTIFIER_FILTER,
+  matchesTags,
+  matchesText,
+  tagOptions,
+  type IdentifierFilterState,
+} from "@/lib/identifierFilters";
 import { toast } from "@/hooks/use-toast";
 import InspectMappingPanel from "@/components/InspectMappingPanel";
 import PostIngestionWizard from "@/components/PostIngestionWizard";
@@ -24,6 +31,7 @@ import {
   AlertTriangle,
   CircleDashed,
   Layers,
+  ChevronRight,
 } from "lucide-react";
 
 type StepState = "ok" | "pending" | "error";
@@ -147,6 +155,55 @@ const StepPill = ({
   );
 };
 
+const PAGE_SIZE = 25;
+
+type Stage = "all" | "normalized" | "linked" | "scored" | "failed";
+
+const StatusDot = ({ state, title }: { state: StepState; title: string }) => (
+  <span
+    title={`${title}: ${state}`}
+    aria-label={`${title}: ${state}`}
+    className={`h-2 w-2 rounded-full ${
+      state === "ok" ? "bg-success" : state === "error" ? "bg-destructive" : "bg-muted-foreground/50"
+    }`}
+  />
+);
+
+/** Per-identifier pipeline status, shared by the filter and the row renderer. */
+function rowStatus(
+  r: IdentifierRow,
+  sources: Record<string, SourceRow>,
+  analyses: Record<string, AnalysisRow>,
+) {
+  const signalGroups = [
+    ["ctv", r.ctv_signals],
+    ["apps", r.apps_signals],
+    ["visitation", r.visitation_signals],
+    ["demographics", r.demographics_signals],
+    ["origin", r.origin_signals],
+  ] as const;
+  const present = signalGroups
+    .filter(([, v]) => nonEmpty(v as Record<string, unknown>))
+    .map(([k]) => k);
+  const tags = r.tag_codes ?? [];
+  const src = r.audio_source_id ? sources[r.audio_source_id] : undefined;
+  const ana = r.audio_source_id ? analyses[r.audio_source_id] : undefined;
+
+  const normState: StepState = present.length ? "ok" : "pending";
+  const createState: StepState = !r.audio_source_id
+    ? "pending"
+    : src?.analysis_status === "failed"
+      ? "error"
+      : "ok";
+  const scoreState: StepState = ana
+    ? "ok"
+    : src?.analysis_status === "failed"
+      ? "error"
+      : "pending";
+
+  return { present, tags, src, ana, normState, createState, scoreState };
+}
+
 
 const SemanticAnalysis = () => {
   const navigate = useNavigate();
@@ -155,7 +212,10 @@ const SemanticAnalysis = () => {
   const [sources, setSources] = useState<Record<string, SourceRow>>({});
   const [analyses, setAnalyses] = useState<Record<string, AnalysisRow>>({});
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<IdentifierFilterState>({ ...EMPTY_IDENTIFIER_FILTER });
+  const [stage, setStage] = useState<Stage>("all");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && (!user || !isAdmin)) navigate("/");
@@ -223,15 +283,51 @@ const SemanticAnalysis = () => {
     if (isAdmin) load();
   }, [isAdmin, load]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.primary_identifier.toLowerCase().includes(q) ||
-        (r.tag_codes ?? []).some((t) => t.toLowerCase().includes(q)),
-    );
-  }, [rows, query]);
+  const tagList = useMemo(() => tagOptions(rows.map((r) => r.tag_codes)), [rows]);
+
+  const stageOf = useCallback(
+    (r: IdentifierRow): Stage[] => {
+      const st = rowStatus(r, sources, analyses);
+      const stages: Stage[] = ["all"];
+      if (st.normState === "ok") stages.push("normalized");
+      if (st.createState === "ok") stages.push("linked");
+      if (st.scoreState === "ok") stages.push("scored");
+      if (st.createState === "error" || st.scoreState === "error") stages.push("failed");
+      return stages;
+    },
+    [sources, analyses],
+  );
+
+  const filtered = useMemo(
+    () =>
+      rows.filter(
+        (r) =>
+          stageOf(r).includes(stage) &&
+          matchesTags(r.tag_codes, filter.tags) &&
+          matchesText([r.primary_identifier, ...(r.tag_codes ?? [])], filter.text),
+      ),
+    [rows, stage, filter, stageOf],
+  );
+
+  const stageSegments: FilterSegment[] = useMemo(() => {
+    const counts: Record<Stage, number> = {
+      all: rows.length,
+      normalized: 0,
+      linked: 0,
+      scored: 0,
+      failed: 0,
+    };
+    for (const r of rows) {
+      for (const s of stageOf(r)) if (s !== "all") counts[s] += 1;
+    }
+    return [
+      { value: "all", label: "All", count: counts.all },
+      { value: "normalized", label: "Normalized", count: counts.normalized },
+      { value: "linked", label: "Linked", count: counts.linked },
+      { value: "scored", label: "Scored", count: counts.scored },
+      { value: "failed", label: "Failed", count: counts.failed },
+    ];
+  }, [rows, stageOf]);
 
   const totals = useMemo(() => {
     let normalized = 0;

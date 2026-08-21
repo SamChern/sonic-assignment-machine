@@ -375,11 +375,140 @@ const AdminDashboard = () => {
           </Card>
         </div>
 
+        {/* Global meta filter: entity mode + filter picker (applies to all tabs) */}
+        <Card className="p-4 mb-6 bg-card/80">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-sm font-medium text-muted-foreground">Filter by source</span>
+              <div className="inline-flex rounded-md border border-border p-0.5 bg-muted">
+                <Button
+                  size="sm"
+                  variant={entityMode === "user" ? "default" : "ghost"}
+                  className="h-8 gap-1.5"
+                  onClick={() => setEntityMode("user")}
+                >
+                  <User className="h-3.5 w-3.5" />
+                  User
+                </Button>
+                <Button
+                  size="sm"
+                  variant={entityMode === "provider" ? "default" : "ghost"}
+                  className="h-8 gap-1.5"
+                  onClick={() => setEntityMode("provider")}
+                >
+                  <Radio className="h-3.5 w-3.5" />
+                  Signal Provider
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Filter className="h-4 w-4" />
+                    Filter by
+                    {activeFilterCount > 0 && (
+                      <Badge variant="secondary" className="ml-1">
+                        {activeFilterCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-0 bg-popover" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder={entityMode === "user" ? "Search users..." : "Search signal providers..."}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {entityMode === "user" ? "No users found." : "No signal providers found."}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {entityMode === "user"
+                          ? users.map(u => (
+                              <CommandItem
+                                key={u.user_id}
+                                onSelect={() => toggleUserFilter(u.user_id)}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <Avatar className="h-6 w-6">
+                                  <AvatarImage src={u.avatar_url || undefined} />
+                                  <AvatarFallback><User className="h-3 w-3" /></AvatarFallback>
+                                </Avatar>
+                                <span className="flex-1">{u.username || 'Anonymous'}</span>
+                                {filteredUserIds.includes(u.user_id) && (
+                                  <Check className="h-4 w-4 text-primary" />
+                                )}
+                              </CommandItem>
+                            ))
+                          : providerKeys.map(p => (
+                              <CommandItem
+                                key={p}
+                                onSelect={() => toggleProviderFilter(p)}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <Radio className="h-4 w-4 text-primary" />
+                                <span className="flex-1">{providerMeta(p).label}</span>
+                                <span className="text-xs text-muted-foreground mr-1">
+                                  {allSources.filter(s => s.source_type === p).length}
+                                </span>
+                                {filteredProviders.includes(p) && (
+                                  <Check className="h-4 w-4 text-primary" />
+                                )}
+                              </CommandItem>
+                            ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {/* Filter badges */}
+              {entityMode === "user"
+                ? filteredUserIds.map(uid => {
+                    const u = users.find(user => user.user_id === uid);
+                    if (!u) return null;
+                    return (
+                      <Badge key={uid} variant="secondary" className="gap-1 pr-1">
+                        {u.username || 'Anonymous'}
+                        <button
+                          onClick={() => toggleUserFilter(uid)}
+                          className="ml-1 hover:bg-muted rounded-full p-0.5"
+                          aria-label={`Remove ${u.username || 'Anonymous'} filter`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })
+                : filteredProviders.map(p => (
+                    <Badge key={p} variant="secondary" className="gap-1 pr-1">
+                      {providerMeta(p).label}
+                      <button
+                        onClick={() => toggleProviderFilter(p)}
+                        className="ml-1 hover:bg-muted rounded-full p-0.5"
+                        aria-label={`Remove ${providerMeta(p).label} filter`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+
+              {activeFilterCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  Clear All
+                </Button>
+              )}
+            </div>
+          </div>
+        </Card>
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">
             <TabsTrigger value="users" className="gap-2">
               <Users className="h-4 w-4" />
-              Users & Sources
+              {entityMode === "user" ? "Users & Sources" : "Providers & Signals"}
             </TabsTrigger>
             <TabsTrigger value="fingerprints" className="gap-2">
               <Fingerprint className="h-4 w-4" />
@@ -395,218 +524,211 @@ const AdminDashboard = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="users" className="space-y-6">
-            {/* User Filter */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <Popover open={filterOpen} onOpenChange={setFilterOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <Filter className="h-4 w-4" />
-                    Filter by User
-                    {filteredUserIds.length > 0 && (
-                      <Badge variant="secondary" className="ml-1">
-                        {filteredUserIds.length}
-                      </Badge>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-72 p-0 bg-popover" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search users..." />
-                    <CommandList>
-                      <CommandEmpty>No users found.</CommandEmpty>
-                      <CommandGroup>
-                        {users.map(u => (
-                          <CommandItem
-                            key={u.user_id}
-                            onSelect={() => toggleUserFilter(u.user_id)}
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <Avatar className="h-6 w-6">
-                              <AvatarImage src={u.avatar_url || undefined} />
-                              <AvatarFallback><User className="h-3 w-3" /></AvatarFallback>
-                            </Avatar>
-                            <span className="flex-1">{u.username || 'Anonymous'}</span>
-                            {filteredUserIds.includes(u.user_id) && (
-                              <Check className="h-4 w-4 text-primary" />
+          <TabsContent value="users" className="space-y-4">
+            {entityMode === "user" ? (
+              displayedUsers.length === 0 ? (
+                <Card className="p-8 text-center">
+                  <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-lg text-muted-foreground">
+                    {filteredUserIds.length > 0 ? 'No users match your filter' : 'No users yet'}
+                  </p>
+                </Card>
+              ) : (
+                displayedUsers.map(userProfile => {
+                  const userSources = getSourcesByUser(userProfile.user_id);
+                  const allSelected = userSources.length > 0 &&
+                    userSources.every(s => selectedSourceIds.includes(s.id));
+                  const groupKey = `user:${userProfile.user_id}`;
+                  const isExpanded = expandedGroups.includes(groupKey);
+                  const fp = allFingerprints.find(f => f.user_id === userProfile.user_id);
+
+                  return (
+                    <Card key={userProfile.id} className="p-6 bg-card/80">
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-4">
+                          <Checkbox
+                            checked={selectedUserIds.includes(userProfile.user_id)}
+                            onCheckedChange={() => toggleUserSelection(userProfile.user_id)}
+                          />
+                          <Avatar className="h-12 w-12">
+                            <AvatarImage src={userProfile.avatar_url || undefined} />
+                            <AvatarFallback>
+                              <User className="h-6 w-6" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h3 className="font-semibold text-foreground">
+                              {userProfile.username || 'Anonymous User'}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {userSources.length} audio source{userSources.length !== 1 ? 's' : ''}
+                            </p>
+                            {userProfile.bio && (
+                              <p className="text-sm text-muted-foreground mt-1">{userProfile.bio}</p>
                             )}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+                          </div>
+                        </div>
 
-              {/* Filter badges */}
-              {filteredUserIds.map(uid => {
-                const u = users.find(user => user.user_id === uid);
-                if (!u) return null;
-                return (
-                  <Badge key={uid} variant="secondary" className="gap-1 pr-1">
-                    {u.username || 'Anonymous'}
-                    <button
-                      onClick={() => toggleUserFilter(uid)}
-                      className="ml-1 hover:bg-muted rounded-full p-0.5"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                );
-              })}
-
-              {filteredUserIds.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={clearFilters}>
-                  Clear All
-                </Button>
-              )}
-            </div>
-
-            {displayedUsers.length === 0 ? (
-              <Card className="p-8 text-center">
-                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-lg text-muted-foreground">
-                  {filteredUserIds.length > 0 ? 'No users match your filter' : 'No users yet'}
-                </p>
-              </Card>
-            ) : (
-              displayedUsers.map(userProfile => {
-                const userSources = getSourcesByUser(userProfile.user_id);
-                const allSelected = userSources.length > 0 && 
-                  userSources.every(s => selectedSourceIds.includes(s.id));
-                
-                return (
-                  <Card key={userProfile.id} className="p-6 bg-card/80">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-4">
-                        <Checkbox
-                          checked={selectedUserIds.includes(userProfile.user_id)}
-                          onCheckedChange={() => toggleUserSelection(userProfile.user_id)}
-                        />
-                        <Avatar className="h-12 w-12">
-                          <AvatarImage src={userProfile.avatar_url || undefined} />
-                          <AvatarFallback>
-                            <User className="h-6 w-6" />
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h3 className="font-semibold text-foreground">
-                            {userProfile.username || 'Anonymous User'}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {userSources.length} audio source{userSources.length !== 1 ? 's' : ''}
-                          </p>
-                          {userProfile.bio && (
-                            <p className="text-sm text-muted-foreground mt-1">{userProfile.bio}</p>
+                        <div className="flex items-center gap-2">
+                          {userSources.length > 0 && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1"
+                                onClick={() => toggleGroup(groupKey)}
+                              >
+                                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                {isExpanded ? 'Hide' : 'Show'} sources
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => selectAllUserSources(userProfile.user_id)}
+                              >
+                                {allSelected ? 'Deselect All' : 'Select All Sources'}
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
-                      
-                      {userSources.length > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => selectAllUserSources(userProfile.user_id)}
-                        >
-                          {allSelected ? 'Deselect All' : 'Select All Sources'}
-                        </Button>
-                      )}
-                    </div>
 
-                    {userSources.length > 0 && (
-                      <div className="grid gap-2 ml-10">
-                        {userSources.map(source => (
-                          <div
-                            key={source.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
-                              selectedSourceIds.includes(source.id)
-                                ? 'bg-primary/10 border-primary/30'
-                                : 'bg-secondary/20 border-secondary/30 hover:bg-secondary/30'
-                            }`}
-                            onClick={() => toggleSourceSelection(source.id)}
-                          >
-                            <Checkbox
-                              checked={selectedSourceIds.includes(source.id)}
-                              onCheckedChange={() => toggleSourceSelection(source.id)}
-                            />
-                            {source.album_image ? (
-                              <img
-                                src={source.album_image}
-                                alt={source.name}
-                                className="w-10 h-10 rounded"
-                              />
-                            ) : (
-                              <FileAudio className="w-10 h-10 text-muted-foreground p-2" />
+                      {isExpanded && userSources.length > 0 && (
+                        <div className="grid gap-2 ml-10 mt-4">
+                          {userSources.map(source => renderSourceRow(source))}
+                        </div>
+                      )}
+
+                      {/* Confidence + Neighbors */}
+                      {fp && (() => {
+                        const conf = Number(fp.fingerprint_confidence) || 0;
+                        const confLabel = conf >= 0.7 ? "High" : conf >= 0.4 ? "Medium" : "Low";
+                        const isOpen = neighborsOpenFor === userProfile.user_id;
+                        const neighbors = isOpen ? getTopNeighbors(userProfile.user_id, 3) : [];
+                        return (
+                          <div className="ml-10 mt-3 flex flex-col gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="secondary" className="gap-1">
+                                <ShieldCheck className="h-3 w-3" />
+                                {confLabel} confidence • {fp.total_sources_analyzed} sources
+                              </Badge>
+                              {fp.recent_sources_analyzed > 0 && (
+                                <Badge variant="outline" className="gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {fp.recent_sources_analyzed} in last 30d
+                                </Badge>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => setNeighborsOpenFor(isOpen ? null : userProfile.user_id)}
+                              >
+                                {isOpen ? "Hide" : "Show"} Taste Neighbors
+                              </Button>
+                            </div>
+                            {isOpen && (
+                              <div className="flex flex-wrap gap-2">
+                                {neighbors.length === 0 ? (
+                                  <span className="text-xs text-muted-foreground">No neighbors yet.</span>
+                                ) : neighbors.map(n => (
+                                  <Badge key={n.fp.user_id} variant="outline" className="gap-1.5">
+                                    <Avatar className="h-4 w-4">
+                                      <AvatarImage src={n.fp.avatar_url || undefined} />
+                                      <AvatarFallback><User className="h-2 w-2" /></AvatarFallback>
+                                    </Avatar>
+                                    {n.fp.username || "Anonymous"} • {(n.similarity * 100).toFixed(0)}%
+                                  </Badge>
+                                ))}
+                              </div>
                             )}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-foreground truncate">{source.name}</p>
-                              {source.artists && (
-                                <p className="text-sm text-muted-foreground truncate">
-                                  {source.artists.join(', ')}
-                                </p>
+                          </div>
+                        );
+                      })()}
+                    </Card>
+                  );
+                })
+              )
+            ) : (
+              displayedProviders.length === 0 ? (
+                <Card className="p-8 text-center">
+                  <Radio className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-lg text-muted-foreground">
+                    {filteredProviders.length > 0 ? 'No providers match your filter' : 'No signal providers yet'}
+                  </p>
+                </Card>
+              ) : (
+                displayedProviders.map(provider => {
+                  const providerSources = getSourcesByProvider(provider);
+                  const groupKey = `provider:${provider}`;
+                  const isExpanded = expandedGroups.includes(groupKey);
+                  const allSelected = providerSources.length > 0 &&
+                    providerSources.every(s => selectedSourceIds.includes(s.id));
+                  const linkedSignals = providerSources.reduce(
+                    (sum, s) => sum + (signalCounts[s.id] || 0), 0
+                  );
+                  const contributors = new Set(providerSources.map(s => s.user_id)).size;
+                  const meta = providerMeta(provider);
+
+                  return (
+                    <Card key={provider} className="p-6 bg-card/80">
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-4">
+                          <div className="h-12 w-12 rounded-lg gradient-primary flex items-center justify-center">
+                            <Radio className="h-6 w-6 text-primary-foreground" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground">{meta.label}</h3>
+                            <p className="text-sm text-muted-foreground">{meta.description}</p>
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                              <Badge variant="secondary">
+                                {providerSources.length} signal{providerSources.length !== 1 ? 's' : ''}
+                              </Badge>
+                              <Badge variant="outline">
+                                {contributors} account{contributors !== 1 ? 's' : ''}
+                              </Badge>
+                              {linkedSignals > 0 && (
+                                <Badge variant="outline" className="gap-1">
+                                  <Users className="h-3 w-3" />
+                                  {linkedSignals} linked identifiers
+                                </Badge>
                               )}
                             </div>
-                            <Badge variant="outline" className="text-xs">
-                              {source.source_type}
-                            </Badge>
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Confidence + Neighbors */}
-                    {(() => {
-                      const fp = allFingerprints.find(f => f.user_id === userProfile.user_id);
-                      if (!fp) return null;
-                      const conf = Number(fp.fingerprint_confidence) || 0;
-                      const confLabel = conf >= 0.7 ? "High" : conf >= 0.4 ? "Medium" : "Low";
-                      const isOpen = neighborsOpenFor === userProfile.user_id;
-                      const neighbors = isOpen ? getTopNeighbors(userProfile.user_id, 3) : [];
-                      return (
-                        <div className="ml-10 mt-3 flex flex-col gap-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant="secondary" className="gap-1">
-                              <ShieldCheck className="h-3 w-3" />
-                              {confLabel} confidence • {fp.total_sources_analyzed} sources
-                            </Badge>
-                            {fp.recent_sources_analyzed > 0 && (
-                              <Badge variant="outline" className="gap-1">
-                                <Clock className="h-3 w-3" />
-                                {fp.recent_sources_analyzed} in last 30d
-                              </Badge>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={() => setNeighborsOpenFor(isOpen ? null : userProfile.user_id)}
-                            >
-                              {isOpen ? "Hide" : "Show"} Taste Neighbors
-                            </Button>
-                          </div>
-                          {isOpen && (
-                            <div className="flex flex-wrap gap-2">
-                              {neighbors.length === 0 ? (
-                                <span className="text-xs text-muted-foreground">No neighbors yet.</span>
-                              ) : neighbors.map(n => (
-                                <Badge key={n.fp.user_id} variant="outline" className="gap-1.5">
-                                  <Avatar className="h-4 w-4">
-                                    <AvatarImage src={n.fp.avatar_url || undefined} />
-                                    <AvatarFallback><User className="h-2 w-2" /></AvatarFallback>
-                                  </Avatar>
-                                  {n.fp.username || "Anonymous"} • {(n.similarity * 100).toFixed(0)}%
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
                         </div>
-                      );
-                    })()}
-                  </Card>
-                );
-              })
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => toggleGroup(groupKey)}
+                          >
+                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            {isExpanded ? 'Hide' : 'Show'} signals
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => selectAllProviderSources(provider)}
+                          >
+                            {allSelected ? 'Deselect All' : 'Select All Signals'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {isExpanded && providerSources.length > 0 && (
+                        <div className="grid gap-2 ml-4 mt-4">
+                          {providerSources.map(source => renderSourceRow(source, true))}
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })
+              )
             )}
           </TabsContent>
+
 
           <TabsContent value="fingerprints" className="space-y-6">
             <div className="flex justify-between items-center">

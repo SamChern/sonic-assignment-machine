@@ -21,6 +21,7 @@ import {
   MAX_INFLIGHT,
   readCache,
   resolveParams,
+  attachProfileEmbedding,
 } from "../_shared/librosa.ts";
 
 const corsHeaders = {
@@ -100,10 +101,17 @@ Deno.serve(async (req) => {
         cache_hit: true,
       });
       await persist(admin, audioSourceId, userId, cached.features, "ready");
+      const embedSource = await attachProfileEmbedding(admin, {
+        cacheKey,
+        audioSourceId,
+        userId,
+        features: cached.features as Record<string, unknown> | null,
+      });
       return json({
         success: true,
         cached: true,
         cache_key: cacheKey,
+        embedding_source: embedSource,
         result: cached.features,
       });
     }
@@ -253,11 +261,18 @@ Deno.serve(async (req) => {
       http_status: res.status ?? null,
     });
     await persist(admin, audioSourceId, userId, res.parsed, "ready");
+    const embedSource = await attachProfileEmbedding(admin, {
+      cacheKey,
+      audioSourceId,
+      userId,
+      features: res.parsed as Record<string, unknown> | null,
+    });
 
     return json({
       success: true,
       cached: false,
       cache_key: cacheKey,
+      embedding_source: embedSource,
       result: res.parsed,
     });
   } catch (e) {

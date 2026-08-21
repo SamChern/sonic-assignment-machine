@@ -300,6 +300,103 @@ export async function embedCached(
   return vec;
 }
 
+/**
+ * Content-addressed embedding cache for audio profiles.
+ *
+ * Keyed by the Librosa cache key (a hash of the audio content + analysis
+ * params) and the active embedding space, so re-uploading the *same* audio —
+ * by any user, under any audio_source row — never calls the EC2 inference
+ * server again. Falls back to the text-hash cache (`embedding_cache`) before
+ * paying for a fresh embedding, which also collapses different files whose
+ * acoustic profile string is identical.
+ *
+ * Returns `{ vector, source }` where source is "audio_cache" | "text_cache" |
+ * "computed" so callers can log/report cache effectiveness.
+ */
+export async function embedAudioProfileCached(
+  // deno-lint-disable-next-line no-explicit-any
+  supabase: any | null,
+  cacheKey: string | null,
+  profileText: string,
+): Promise<{ vector: number[] | null; source: "audio_cache" | "text_cache" | "computed" }> {
+  const model = activeEmbeddingSpace();
+
+  if (supabase && cacheKey) {
+    try {
+      const { data } = await supabase
+        .from("audio_profile_embeddings")
+        .select("embedding")
+        .eq("cache_key", cacheKey)
+        .eq("model", model)
+        .maybeSingle();
+      const raw = data?.embedding;
+      if (raw) {
+        const v = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (Array.isArray(v) && v.length === EMBEDDING_DIMS) {
+          // Fire-and-forget usage counter; never blocks the caller.
+          supabase.rpc("touch_audio_profile_embedding", {
+            p_cache_key: cacheKey,
+            p_model: model,
+          }).then(() => {}, () => {});
+          return { vector: v as number[], source: "audio_cache" };
+        }
+      }
+    } catch (e) {
+      console.warn(
+        "audio_profile_embeddings read failed:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+
+  // Second tier: identical profile text already embedded for another key.
+  let source: "text_cache" | "computed" = "computed";
+  let vec: number[] | null = null;
+  if (supabase) {
+    const hash = await stableHash(profileText);
+    try {
+      const { data } = await supabase
+        .from("embedding_cache")
+        .select("embedding")
+        .eq("text_hash", hash)
+        .eq("model", model)
+        .maybeSingle();
+      const raw = data?.embedding;
+      if (raw) {
+        const v = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (Array.isArray(v) && v.length === EMBEDDING_DIMS) {
+          vec = v as number[];
+          source = "text_cache";
+        }
+      }
+    } catch (e) {
+      console.warn("embedding_cache read failed:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  if (!vec) vec = await embedCached(supabase, profileText);
+  if (!vec) return { vector: null, source: "computed" };
+
+  if (supabase && cacheKey) {
+    try {
+      await supabase
+        .from("audio_profile_embeddings")
+        .upsert(
+          { cache_key: cacheKey, model, embedding: vec, dims: vec.length },
+          { onConflict: "cache_key,model" },
+        );
+    } catch (e) {
+      console.warn(
+        "audio_profile_embeddings write failed:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+  return { vector: vec, source };
+}
+
+
+
 
 /** Describes the active routing, for admin diagnostics. */
 export function inferenceStatus() {

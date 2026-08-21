@@ -62,6 +62,36 @@ export type Database = {
         }
         Relationships: []
       }
+      audio_profile_embeddings: {
+        Row: {
+          cache_key: string
+          created_at: string
+          dims: number
+          embedding: string
+          hit_count: number
+          last_used_at: string
+          model: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          dims?: number
+          embedding: string
+          hit_count?: number
+          last_used_at?: string
+          model: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          dims?: number
+          embedding?: string
+          hit_count?: number
+          last_used_at?: string
+          model?: string
+        }
+        Relationships: []
+      }
       audio_source_tags: {
         Row: {
           audio_source_id: string
@@ -1080,6 +1110,10 @@ export type Database = {
         Returns: undefined
       }
       require_admin: { Args: never; Returns: undefined }
+      touch_audio_profile_embedding: {
+        Args: { p_cache_key: string; p_model: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"

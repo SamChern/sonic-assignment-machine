@@ -47,6 +47,12 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const MAX_FILES_PER_RUN = 3;
 const MAX_IDENTIFIERS_PER_RUN = 40;
 const MAX_ROWS_PER_FILE = 5000;
+// Expected rows per user/device in an Intuizi activation delivery. Used only by
+// the pre-ingest parquet validation log to flag deliveries whose shape drifted.
+const EXPECTED_ROWS_PER_USER = Number(
+  Deno.env.get("INTUIZI_EXPECTED_ROWS_PER_USER") ?? "100",
+);
+
 const LEASE_SECONDS = 600;
 
 type Json = Record<string, unknown>;
@@ -268,8 +274,13 @@ Deno.serve(async (req) => {
 
       try {
         const url = await signReadUrl(cand.key);
-        const rawRows = (await fetchObjectRows(url, cand.key, MAX_ROWS_PER_FILE))
-          .slice(0, MAX_ROWS_PER_FILE);
+        const rawRows = (await fetchObjectRows(
+          url,
+          cand.key,
+          MAX_ROWS_PER_FILE,
+          EXPECTED_ROWS_PER_USER,
+        )).slice(0, MAX_ROWS_PER_FILE);
+
         summary.rows_read += rawRows.length;
 
         // ---- Roll rows up per identifier ---------------------------------

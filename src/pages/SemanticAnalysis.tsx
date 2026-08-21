@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import InspectMappingPanel from "@/components/InspectMappingPanel";
 import {
   ArrowLeft,
   RefreshCw,
@@ -259,6 +260,12 @@ const SemanticAnalysis = () => {
             </Card>
           ))}
         </div>
+
+        <div className="mt-6">
+          <InspectMappingPanel />
+        </div>
+
+
 
         <div className="mt-6">
           <Input

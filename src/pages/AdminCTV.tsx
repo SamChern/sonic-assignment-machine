@@ -77,6 +77,7 @@ export default function AdminCTV() {
   }, [loading, user, isAdmin, navigate]);
 
   const loadBatches = async () => {
+    if (!user || !isAdmin) return;
     const { data } = await supabase
       .from("ctv_ingest_batches")
       .select("*")
@@ -85,7 +86,9 @@ export default function AdminCTV() {
     setBatches((data ?? []) as unknown as Batch[]);
   };
 
-  useEffect(() => { loadBatches(); }, []);
+  // Wait for the admin check before spending any round trips.
+  useEffect(() => { if (user && isAdmin) loadBatches(); }, [user, isAdmin]);
+
 
   const submit = async () => {
     setSubmitting(true);

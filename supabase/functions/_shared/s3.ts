@@ -150,10 +150,13 @@ const gatewayDriver: S3Driver = {
   },
 
   async headObject(objectKey) {
-    const res = await fetch(`${GATEWAY_BASE}/${CONNECTOR}/${objectKey}`, {
+    // Encode each segment so keys with spaces or reserved characters resolve.
+    const encodedKey = objectKey.split("/").map(encodeURIComponent).join("/");
+    const res = await fetch(`${GATEWAY_BASE}/${CONNECTOR}/${encodedKey}`, {
       method: "HEAD",
       headers: gatewayHeaders(),
     });
+
     if (!res.ok) {
       throw Object.assign(new Error(`S3 head failed [${res.status}] for ${objectKey}`), {
         status: res.status,
@@ -247,17 +250,80 @@ export function s3BackendInfo() {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Isolate-local caches
+//
+// A single ingest run lists the same prefixes and signs/heads the same keys
+// repeatedly (discovery -> candidate selection -> read). Caching per isolate
+// with short TTLs plus in-flight de-duplication cuts redundant gateway calls
+// (and therefore latency, tokens/keys usage and S3 request cost) without ever
+// serving data older than the TTL. Signed URLs are cached well inside their
+// 900s validity window.
+// ---------------------------------------------------------------------------
+
+const LIST_TTL_MS = 30_000;
+const SIGN_TTL_MS = 10 * 60 * 1000; // signed URLs are valid 15 min
+const HEAD_TTL_MS = 60_000;
+
+interface CacheEntry<T> {
+  expires: number;
+  value: Promise<T>;
+}
+
+const listCache = new Map<string, CacheEntry<S3Object[]>>();
+const signCache = new Map<string, CacheEntry<string>>();
+const headCache = new Map<string, CacheEntry<S3ObjectHead>>();
+
+function memo<T>(
+  cache: Map<string, CacheEntry<T>>,
+  key: string,
+  ttlMs: number,
+  produce: () => Promise<T>,
+): Promise<T> {
+  const now = Date.now();
+  const hit = cache.get(key);
+  if (hit && hit.expires > now) return hit.value;
+
+  // Keep the promise (not the resolved value) so concurrent callers share one
+  // upstream request; drop it on failure so errors are never cached.
+  const value = produce().catch((err) => {
+    cache.delete(key);
+    throw err;
+  });
+  cache.set(key, { expires: now + ttlMs, value });
+
+  if (cache.size > 200) {
+    for (const [k, v] of cache) {
+      if (v.expires <= now) cache.delete(k);
+    }
+  }
+  return value;
+}
+
+/** Drop all cached S3 metadata (use when a run must see freshly landed files). */
+export function clearS3Cache() {
+  listCache.clear();
+  signCache.clear();
+  headCache.clear();
+}
+
 /** ListObjectsV2 under a prefix. Follows continuation tokens up to maxKeys. */
 export function listObjects(prefix: string, maxKeys = 200): Promise<S3Object[]> {
-  return driver().listObjects(prefix, maxKeys);
+  const d = driver();
+  return memo(listCache, `${d.name}|${prefix}|${maxKeys}`, LIST_TTL_MS, () =>
+    d.listObjects(prefix, maxKeys),
+  );
 }
 
 /** Time-limited direct download URL for one object. */
 export function signReadUrl(objectKey: string): Promise<string> {
-  return driver().signReadUrl(objectKey);
+  const d = driver();
+  return memo(signCache, `${d.name}|${objectKey}`, SIGN_TTL_MS, () => d.signReadUrl(objectKey));
 }
 
 /** Object metadata without downloading the body. */
 export function headObject(objectKey: string): Promise<S3ObjectHead> {
-  return driver().headObject(objectKey);
+  const d = driver();
+  return memo(headCache, `${d.name}|${objectKey}`, HEAD_TTL_MS, () => d.headObject(objectKey));
 }
+

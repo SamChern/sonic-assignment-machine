@@ -165,8 +165,8 @@ const ResultBlock = ({
                     {f.tags.map((t) => (
                       <div key={t.code}>
                         <p className="font-mono break-all">{t.code}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          parent {t.parent_code} ·{" "}
+                        <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                          <span>parent {t.parent_code} ·</span>
                           {nodeIds[t.code] ? (
                             <Badge variant="outline" className="text-[10px] py-0">
                               existing node
@@ -176,7 +176,8 @@ const ResultBlock = ({
                               will be created
                             </Badge>
                           )}
-                        </p>
+                        </div>
+
                       </div>
                     ))}
                   </div>

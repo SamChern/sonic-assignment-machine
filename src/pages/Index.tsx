@@ -376,7 +376,7 @@ const Index = () => {
                 alt="SonicSIM"
                 width={1264}
                 height={847}
-                fetchPriority="high"
+                {...{ fetchpriority: "high" }}
                 decoding="async"
                 className="mx-auto h-[clamp(84px,27vw,211px)] w-auto max-w-full object-contain select-none transition-all duration-75 ease-out will-change-[opacity,transform,filter]"
                 style={{

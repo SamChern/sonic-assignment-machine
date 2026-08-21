@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Activity, RefreshCw, Play, Layers } from "lucide-react";
+
 
 interface Metrics {
   total: number;
@@ -39,15 +41,21 @@ function percentile(sorted: number[], p: number): number | null {
 }
 
 export function LibrosaHealthPanel() {
+  const { user, isAdmin } = useAuth();
   const [metrics, setMetrics] = useState<Metrics>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [draining, setDraining] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
-
+  const canRead = !!user && isAdmin;
+  const canReadRef = useRef(canRead);
+  canReadRef.current = canRead;
 
   const load = useCallback(async () => {
+    // These tables are admin-only under RLS — never spend a round trip otherwise.
+    if (!canReadRef.current) return;
     setLoading(true);
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+
 
     const [logs, jobsPending, jobsFailed, cacheReady, cachePending] = await Promise.all([
       supabase
@@ -98,10 +106,23 @@ export function LibrosaHealthPanel() {
   }, []);
 
   useEffect(() => {
+    if (!canRead) return;
     load();
-    const t = setInterval(load, 30_000);
-    return () => clearInterval(t);
-  }, [load]);
+    // Poll only while the tab is visible, and refresh immediately on return —
+    // background tabs otherwise burn 5 queries every interval.
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [load, canRead]);
+
 
   const drain = async () => {
     setDraining(true);

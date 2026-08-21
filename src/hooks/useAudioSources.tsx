@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
@@ -22,66 +23,75 @@ export interface AudioSource {
   } | null;
 }
 
+// Explicit column list — avoids over-fetching wide/derived columns (e.g. librosa_features)
+const SOURCE_COLUMNS =
+  'id,user_id,source_type,name,spotify_id,spotify_url,album_name,album_image,artists,preview_url,file_url,created_at';
+
+async function fetchMySourcesData(userId: string): Promise<AudioSource[]> {
+  const { data, error } = await supabase
+    .from('audio_sources')
+    .select(SOURCE_COLUMNS)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as AudioSource[];
+}
+
+async function fetchAllSourcesData(): Promise<AudioSource[]> {
+  const { data: sourcesData, error: sourcesError } = await supabase
+    .from('audio_sources')
+    .select(SOURCE_COLUMNS)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (sourcesError) throw sourcesError;
+
+  const userIds = [...new Set((sourcesData || []).map((s) => s.user_id))];
+  if (userIds.length === 0) return [];
+
+  const { data: profilesData } = await supabase
+    .from('profiles')
+    .select('user_id, username, avatar_url')
+    .in('user_id', userIds);
+
+  const profileMap = new Map((profilesData || []).map((p) => [p.user_id, p]));
+
+  return (sourcesData || []).map((source) => {
+    const profile = profileMap.get(source.user_id);
+    return {
+      ...source,
+      profile: profile ? { username: profile.username, avatar_url: profile.avatar_url } : null,
+    };
+  }) as AudioSource[];
+}
+
 export function useAudioSources() {
   const { user } = useAuth();
-  const [mySources, setMySources] = useState<AudioSource[]>([]);
-  const [allSources, setAllSources] = useState<AudioSource[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const fetchMySources = useCallback(async () => {
-    if (!user) {
-      setMySources([]);
-      return;
-    }
+  const { data: mySources = [], isLoading: isLoadingMine } = useQuery({
+    queryKey: ['audio-sources', 'mine', user?.id],
+    queryFn: () => fetchMySourcesData(user!.id),
+    enabled: !!user,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
 
-    const { data, error } = await supabase
-      .from('audio_sources')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+  // Reads require an authenticated session (RLS), so skip the request entirely for visitors.
+  const { data: allSources = [], isLoading: isLoadingAll } = useQuery({
+    queryKey: ['audio-sources', 'all'],
+    queryFn: fetchAllSourcesData,
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
 
-    if (error) {
-      console.error('Error fetching my sources:', error);
-    } else {
-      setMySources(data || []);
-    }
-  }, [user]);
+  const loading = !!user && (isLoadingMine || isLoadingAll);
 
-  const fetchAllSources = useCallback(async () => {
-    // First get audio sources
-    const { data: sourcesData, error: sourcesError } = await supabase
-      .from('audio_sources')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100);
-
-    if (sourcesError) {
-      console.error('Error fetching all sources:', sourcesError);
-      setLoading(false);
-      return;
-    }
-
-    // Then get profiles for those users
-    const userIds = [...new Set(sourcesData?.map(s => s.user_id) || [])];
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('user_id, username, avatar_url')
-      .in('user_id', userIds);
-
-    // Merge profile data with sources
-    const sourcesWithProfiles = (sourcesData || []).map(source => ({
-      ...source,
-      profile: profilesData?.find(p => p.user_id === source.user_id) || null,
-    }));
-
-    setAllSources(sourcesWithProfiles);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetchMySources();
-    fetchAllSources();
-  }, [fetchMySources, fetchAllSources]);
+  const refresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['audio-sources'] });
+  }, [queryClient]);
 
   const saveSpotifyTrack = async (track: any) => {
     if (!user) {
@@ -89,8 +99,7 @@ export function useAudioSources() {
       return { error: new Error('Not authenticated') };
     }
 
-    // Check if already saved
-    const existing = mySources.find(s => s.spotify_id === track.id);
+    const existing = mySources.find((s) => s.spotify_id === track.id);
     if (existing) {
       toast.info('Track already in your library');
       return { error: null };
@@ -114,8 +123,7 @@ export function useAudioSources() {
     }
 
     toast.success('Track saved to your library');
-    fetchMySources();
-    fetchAllSources();
+    await refresh();
     return { error: null };
   };
 
@@ -138,8 +146,7 @@ export function useAudioSources() {
     }
 
     toast.success('File saved to your library');
-    fetchMySources();
-    fetchAllSources();
+    await refresh();
     return { error: null };
   };
 
@@ -158,8 +165,7 @@ export function useAudioSources() {
     }
 
     toast.success('Source removed from library');
-    fetchMySources();
-    fetchAllSources();
+    await refresh();
     return { error: null };
   };
 
@@ -170,9 +176,6 @@ export function useAudioSources() {
     saveSpotifyTrack,
     saveFileSource,
     deleteSource,
-    refresh: () => {
-      fetchMySources();
-      fetchAllSources();
-    },
+    refresh,
   };
 }

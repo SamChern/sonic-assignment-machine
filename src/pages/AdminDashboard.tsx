@@ -39,6 +39,7 @@ import { AnalysisResults } from "@/components/AnalysisResults";
 import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";
 import { FingerprintComparison } from "@/components/FingerprintComparison";
 import { useFingerprints } from "@/hooks/useFingerprints";
+import { useEC2Api } from "@/hooks/useEC2Api";
 import { calculateSimilarity, type FingerprintMode } from "@/lib/fingerprintMath";
 
 interface UserProfile {

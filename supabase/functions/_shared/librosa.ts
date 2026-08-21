@@ -7,6 +7,9 @@
 // requests, not to reconfigure it.
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+import { formatLibrosaProfile } from "./evidence.ts";
+import { embedAudioProfileCached } from "./inference.ts";
+
 export const INTEGRATION_ID = "librosa_rest";
 
 /** Max simultaneous in-flight upstream calls we allow ourselves to make. */
@@ -357,5 +360,56 @@ export async function callUpstream(
       error: e instanceof Error ? e.message : "Network error",
       durationMs: Date.now() - t0,
     };
+  }
+}
+
+/**
+ * Content-addressed profile embedding.
+ *
+ * Whenever Librosa features become available for an audio source, derive the
+ * acoustic profile string and store its vector on `audio_sources.profile_embedding`
+ * so kNN warm-starts work for uploads too. The vector itself is resolved through
+ * `embedAudioProfileCached`, keyed by this cache key — so the second (and every
+ * later) upload of the same audio reuses the stored vector and makes ZERO calls
+ * to the EC2 inference server.
+ *
+ * Never throws: embeddings are enrichment, not a precondition for analysis.
+ */
+export async function attachProfileEmbedding(
+  // deno-lint-disable-next-line no-explicit-any
+  admin: any,
+  args: {
+    cacheKey: string | null;
+    audioSourceId: string | null;
+    userId?: string | null;
+    features: Record<string, unknown> | null;
+  },
+): Promise<"audio_cache" | "text_cache" | "computed" | "skipped"> {
+  try {
+    if (!args.features) return "skipped";
+    const profile = formatLibrosaProfile(args.features);
+    if (!profile) return "skipped";
+
+    const { vector, source } = await embedAudioProfileCached(
+      admin,
+      args.cacheKey,
+      profile,
+    );
+    if (!vector) return "skipped";
+
+    if (args.audioSourceId) {
+      const q = admin
+        .from("audio_sources")
+        .update({ profile_embedding: vector })
+        .eq("id", args.audioSourceId);
+      await (args.userId ? q.eq("user_id", args.userId) : q);
+    }
+    return source;
+  } catch (e) {
+    console.warn(
+      "attachProfileEmbedding failed:",
+      e instanceof Error ? e.message : e,
+    );
+    return "skipped";
   }
 }

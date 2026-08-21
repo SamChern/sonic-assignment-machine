@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
-import { Gauge, Loader2, RefreshCw, AlertTriangle, Info } from "lucide-react";
+import {
+  Gauge,
+  Loader2,
+  RefreshCw,
+  AlertTriangle,
+  Info,
+  ChevronRight,
+  ChevronDown,
+  FileText,
+  Users,
+} from "lucide-react";
+
 
 /* ------------------------------------------------------------------ types */
 
@@ -33,6 +44,50 @@ interface TagRow {
   weight: number;
   taxonomy_nodes: { code: string; label: string; parent_code: string | null } | null;
 }
+
+interface IngestFileRow {
+  object_key: string;
+  report_type: string;
+  status: string;
+  partition_date: string | null;
+  size_bytes: number | null;
+  total_rows: number;
+  processed_rows: number;
+  failed_rows: number;
+  error_message: string | null;
+  discovered_at: string;
+  finished_at: string | null;
+}
+
+interface RosterRow {
+  primary_identifier: string;
+  observation_count: number;
+  last_seen_at: string | null;
+  tag_codes: string[] | null;
+}
+
+interface DrillData {
+  file: IngestFileRow | null;
+  rosterCount: number;
+  roster: RosterRow[];
+  matchedTags: TagRow[];
+  matchedCodes: string[];
+}
+
+const slugify = (v: string) =>
+  v
+    .toLowerCase()
+    .replace(/&/g, " ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const fmtBytes = (n: number | null) => {
+  if (n == null) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+};
+
 
 const SIGNAL_COLUMNS = [
   ["ctv_signals", "CTV"],
@@ -67,10 +122,16 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
   const [analysis, setAnalysis] = useState<Record<string, number | string | null> | null>(null);
   const [tags, setTags] = useState<TagRow[]>([]);
   const [notFound, setNotFound] = useState(false);
+  const [openRow, setOpenRow] = useState<number | null>(null);
+  const [drill, setDrill] = useState<Record<number, DrillData>>({});
+  const [drillLoading, setDrillLoading] = useState<number | null>(null);
+
 
   const load = useCallback(async (id: string) => {
     setLoading(true);
     setNotFound(false);
+    setOpenRow(null);
+    setDrill({});
     const { data, error } = await supabase
       .from("intuizi_identifiers")
       .select(
@@ -146,6 +207,70 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
     }
     return out.sort((a, b) => (Number(b.uniques) || 0) - (Number(a.uniques) || 0));
   }, [blocks]);
+
+  const loadDrill = useCallback(
+    async (index: number, row: SummaryRow & { feed: string; object_key?: string | null }) => {
+      if (openRow === index) {
+        setOpenRow(null);
+        return;
+      }
+      setOpenRow(index);
+      if (drill[index]) return;
+
+      setDrillLoading(index);
+      const sourceId = (identifier as { audio_source_id?: string | null } | null)?.audio_source_id ?? null;
+
+      const [fileRes, rosterRes] = await Promise.all([
+        row.object_key
+          ? supabase
+              .from("intuizi_ingest_files")
+              .select(
+                "object_key, report_type, status, partition_date, size_bytes, total_rows, processed_rows, failed_rows, error_message, discovered_at, finished_at",
+              )
+              .eq("object_key", row.object_key)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        sourceId
+          ? supabase
+              .from("intuizi_identifiers")
+              .select("primary_identifier, observation_count, last_seen_at, tag_codes", {
+                count: "exact",
+              })
+              .eq("audio_source_id", sourceId)
+              .neq("primary_identifier", `activation:${activation.trim()}`)
+              .order("updated_at", { ascending: false })
+              .limit(8)
+          : Promise.resolve({ data: [], count: 0 }),
+      ]);
+
+      const slugs = [row.TaxonomyName, row.CategoryName]
+        .filter((v): v is string => !!v && !!v.trim())
+        .map(slugify);
+      const matchedTags = tags.filter((t) => {
+        const code = (t.taxonomy_nodes?.code ?? "").toLowerCase();
+        const label = (t.taxonomy_nodes?.label ?? "").toLowerCase();
+        return slugs.some((sl) => code.endsWith(sl) || code.includes(sl) || slugify(label) === sl);
+      });
+      const codes = ((identifier as { tag_codes?: string[] | null } | null)?.tag_codes ?? []).filter(
+        (c) => slugs.some((sl) => c.toLowerCase().includes(sl)),
+      );
+
+      setDrill((prev) => ({
+        ...prev,
+        [index]: {
+          file: ((fileRes as { data: unknown }).data ?? null) as IngestFileRow | null,
+          rosterCount:
+            (rosterRes as { count?: number | null }).count ??
+            ((rosterRes as { data?: unknown[] }).data?.length ?? 0),
+          roster: (((rosterRes as { data?: unknown[] }).data ?? []) as unknown) as RosterRow[],
+          matchedTags: matchedTags.length ? matchedTags : tags,
+          matchedCodes: codes,
+        },
+      }));
+      setDrillLoading(null);
+    },
+    [openRow, drill, identifier, tags, activation],
+  );
 
   const math = useMemo(() => {
     if (!analysis) return null;
@@ -291,6 +416,10 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
           {/* driver rows */}
           <div className="mt-5">
             <p className="text-xs font-medium">Taxonomy rows that drove the score</p>
+            <p className="text-[11px] text-muted-foreground">
+              Select a row to drill into the source record, the fields that contributed, and the
+              linked audience identifiers.
+            </p>
             {driverRows.length === 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">
                 No summary rows recorded for this activation.
@@ -309,24 +438,217 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                     </tr>
                   </thead>
                   <tbody>
-                    {driverRows.map((r, i) => (
-                      <tr key={i} className="border-b border-border/50">
-                        <td className="py-1.5 pr-3">
-                          <Badge variant="outline" className="text-[10px]">
-                            {r.feed}
-                          </Badge>
-                        </td>
-                        <td className="py-1.5 pr-3">
-                          {[r.TaxonomyName, r.CategoryName].filter(Boolean).join(" · ") || "—"}
-                        </td>
-                        <td className="py-1.5 pr-3">{r.uniques ?? "—"}</td>
-                        <td className="py-1.5 pr-3">{r.signals ?? "—"}</td>
-                        <td className="py-1.5 pr-3">
-                          {r.share != null ? `${(Number(r.share) * 100).toFixed(0)}%` : "—"}
-                        </td>
-                        <td className="py-1.5 pr-3">{r.period ?? "—"}</td>
-                      </tr>
-                    ))}
+                    {driverRows.map((r, i) => {
+                      const isOpen = openRow === i;
+                      const d = drill[i];
+                      const rawEntries = Object.entries(r).filter(
+                        ([k]) => k !== "feed" && k !== "object_key",
+                      );
+                      return (
+                        <Fragment key={i}>
+                          <tr
+                            className="cursor-pointer border-b border-border/50 transition-smooth hover:bg-muted/40"
+                            onClick={() => loadDrill(i, r)}
+                          >
+                            <td className="py-1.5 pr-3">
+                              <span className="flex items-center gap-1">
+                                {drillLoading === i ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : isOpen ? (
+                                  <ChevronDown className="h-3 w-3 text-primary" />
+                                ) : (
+                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                )}
+                                <Badge variant="outline" className="text-[10px]">
+                                  {r.feed}
+                                </Badge>
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-3">
+                              {[r.TaxonomyName, r.CategoryName].filter(Boolean).join(" · ") || "—"}
+                            </td>
+                            <td className="py-1.5 pr-3">{r.uniques ?? "—"}</td>
+                            <td className="py-1.5 pr-3">{r.signals ?? "—"}</td>
+                            <td className="py-1.5 pr-3">
+                              {r.share != null ? `${(Number(r.share) * 100).toFixed(0)}%` : "—"}
+                            </td>
+                            <td className="py-1.5 pr-3">{r.period ?? "—"}</td>
+                          </tr>
+                          {isOpen && (
+                            <tr className="border-b border-border/50">
+                              <td colSpan={6} className="p-0">
+                                <div className="space-y-3 bg-muted/20 px-3 py-3">
+                                  {/* source file */}
+                                  <div className="rounded-md border border-border bg-card/60 p-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-medium">
+                                      <FileText className="h-3.5 w-3.5 text-primary" />
+                                      Source record
+                                    </div>
+                                    <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground">
+                                      {r.object_key ?? "object key not recorded on this signal block"}
+                                    </p>
+                                    {d?.file ? (
+                                      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                                        {(
+                                          [
+                                            ["report type", d.file.report_type],
+                                            ["status", d.file.status],
+                                            ["partition", d.file.partition_date ?? "—"],
+                                            ["size", fmtBytes(d.file.size_bytes)],
+                                            [
+                                              "rows",
+                                              `${d.file.processed_rows}/${d.file.total_rows} ok · ${d.file.failed_rows} failed`,
+                                            ],
+                                            [
+                                              "finished",
+                                              d.file.finished_at
+                                                ? new Date(d.file.finished_at).toLocaleString()
+                                                : "—",
+                                            ],
+                                          ] as const
+                                        ).map(([k, v]) => (
+                                          <div key={k}>
+                                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                              {k}
+                                            </p>
+                                            <p className="text-[11px]">{v}</p>
+                                          </div>
+                                        ))}
+                                        {d.file.error_message && (
+                                          <p className="sm:col-span-3 text-[11px] text-destructive">
+                                            {d.file.error_message}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <p className="mt-2 text-[11px] text-muted-foreground">
+                                        No ingest-ledger entry found for this object key.
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* raw fields */}
+                                  <div className="rounded-md border border-border bg-card/60 p-3">
+                                    <p className="text-[11px] font-medium">
+                                      Fields that contributed
+                                    </p>
+                                    <div className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                                      {rawEntries.map(([k, v]) => (
+                                        <div
+                                          key={k}
+                                          className="flex items-baseline justify-between gap-3 border-b border-border/40 py-0.5"
+                                        >
+                                          <span className="font-mono text-[10px] text-muted-foreground">
+                                            {k}
+                                          </span>
+                                          <span className="break-all text-right text-[11px]">
+                                            {v === null || v === undefined || v === ""
+                                              ? "—"
+                                              : String(v)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* mapped nodes */}
+                                  <div className="rounded-md border border-border bg-card/60 p-3">
+                                    <p className="text-[11px] font-medium">
+                                      Ontology nodes this row resolved to
+                                    </p>
+                                    {d && d.matchedTags.length > 0 ? (
+                                      <div className="mt-2 space-y-2">
+                                        {d.matchedTags.map((t, ti) => (
+                                          <div key={ti} className="flex items-center gap-3">
+                                            <span className="w-56 shrink-0 truncate text-[11px]">
+                                              {t.taxonomy_nodes?.label ?? "unknown node"}
+                                            </span>
+                                            <Progress
+                                              value={Math.min(100, Number(t.weight) * 100)}
+                                              className="h-1.5"
+                                            />
+                                            <span className="w-20 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+                                              w {Number(t.weight).toFixed(2)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                        <div className="flex flex-wrap gap-1">
+                                          {(d.matchedCodes.length
+                                            ? d.matchedCodes
+                                            : d.matchedTags.map((t) => t.taxonomy_nodes?.code ?? "")
+                                          )
+                                            .filter(Boolean)
+                                            .map((c) => (
+                                              <Badge
+                                                key={c}
+                                                variant="secondary"
+                                                className="font-mono text-[10px]"
+                                              >
+                                                {c}
+                                              </Badge>
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground">
+                                          contribution ≈ share{" "}
+                                          {r.share != null ? Number(r.share).toFixed(2) : "—"} × node
+                                          weight — this row carries{" "}
+                                          {r.share != null
+                                            ? `${(Number(r.share) * 100).toFixed(0)}%`
+                                            : "an unknown share"}{" "}
+                                          of the profile's tagged evidence.
+                                        </p>
+                                      </div>
+                                    ) : (
+                                      <p className="mt-2 text-[11px] text-muted-foreground">
+                                        No taxonomy node matched this row's category label.
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* roster */}
+                                  <div className="rounded-md border border-border bg-card/60 p-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-medium">
+                                      <Users className="h-3.5 w-3.5 text-primary" />
+                                      Linked audience records ({d?.rosterCount ?? 0})
+                                    </div>
+                                    {d && d.roster.length > 0 ? (
+                                      <div className="mt-2 space-y-1">
+                                        {d.roster.map((ro) => (
+                                          <div
+                                            key={ro.primary_identifier}
+                                            className="flex items-center justify-between gap-3 border-b border-border/40 py-0.5"
+                                          >
+                                            <span className="break-all font-mono text-[10px]">
+                                              {ro.primary_identifier}
+                                            </span>
+                                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                                              {ro.observation_count} obs
+                                              {ro.last_seen_at
+                                                ? ` · ${new Date(ro.last_seen_at).toLocaleDateString()}`
+                                                : ""}
+                                            </span>
+                                          </div>
+                                        ))}
+                                        {d.rosterCount > d.roster.length && (
+                                          <p className="text-[10px] text-muted-foreground">
+                                            showing {d.roster.length} of {d.rosterCount} roster rows
+                                          </p>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <p className="mt-2 text-[11px] text-muted-foreground">
+                                        No roster identifiers are linked to this profile yet.
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+
                   </tbody>
                 </table>
               </div>

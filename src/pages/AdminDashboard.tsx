@@ -39,6 +39,7 @@ import { AnalysisResults } from "@/components/AnalysisResults";
 import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";
 import { FingerprintComparison } from "@/components/FingerprintComparison";
 import { useFingerprints } from "@/hooks/useFingerprints";
+import { useEC2Api } from "@/hooks/useEC2Api";
 import { calculateSimilarity, type FingerprintMode } from "@/lib/fingerprintMath";
 
 interface UserProfile {
@@ -79,6 +80,16 @@ const AdminDashboard = () => {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const { allFingerprints, loading: fingerprintsLoading, refresh: refreshFingerprints } = useFingerprints();
+  const { checkHealth, loading: ec2Loading } = useEC2Api();
+
+  const handleHealthCheck = async () => {
+    const result = await checkHealth();
+    if (result.error) {
+      toast.error(`EC2 Connection Failed: ${result.error}`);
+    } else {
+      toast.success(`EC2 Connected! Status: ${result.data?.status || "OK"}`);
+    }
+  };
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [allSources, setAllSources] = useState<AudioSourceWithProfile[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -367,6 +378,17 @@ const AdminDashboard = () => {
           </div>
           
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
+              onClick={handleHealthCheck}
+              disabled={ec2Loading}
+            >
+              <Activity className={`h-4 w-4 ${ec2Loading ? "animate-pulse" : ""}`} />
+              <span className="hidden sm:inline">{ec2Loading ? "Checking..." : "EC2 Health"}</span>
+            </Button>
+
             {selectedSourceIds.length > 0 && (
               <Button
                 onClick={handleAnalyzeSelected}

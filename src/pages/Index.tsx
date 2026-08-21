@@ -26,7 +26,6 @@ import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
 import { WaveformBackground } from "@/components/WaveformBackground";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useEC2Api } from "@/hooks/useEC2Api";
 import { TasteNeighbors } from "@/components/TasteNeighbors";
 import { useFingerprints } from "@/hooks/useFingerprints";
 import { cn } from "@/lib/utils";
@@ -34,7 +33,7 @@ import { cn } from "@/lib/utils";
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
-  const { checkHealth, loading: ec2Loading } = useEC2Api();
+  
   const { myFingerprint, allFingerprints } = useFingerprints();
   
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -83,14 +82,8 @@ const Index = () => {
     setActiveTab("select");
   };
 
-  const handleHealthCheck = async () => {
-    const result = await checkHealth();
-    if (result.error) {
-      toast.error(`EC2 Connection Failed: ${result.error}`);
-    } else {
-      toast.success(`EC2 Connected! Status: ${result.data?.status || 'OK'}`);
-    }
-  };
+
+
 
   const handleFileSelect = (file: File) => {
     setSelectedFiles(prev => [...prev, file]);
@@ -322,19 +315,9 @@ const Index = () => {
         
         {/* Auth Controls */}
         <div className="flex items-center gap-3">
-          {/* EC2 Health Check Button - Admin Only */}
-          {isAdmin && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
-              onClick={handleHealthCheck}
-              disabled={ec2Loading}
-            >
-              <Activity className={`h-4 w-4 ${ec2Loading ? 'animate-pulse' : ''}`} />
-              <span className="hidden sm:inline">{ec2Loading ? 'Checking...' : 'EC2 Health'}</span>
-            </Button>
-          )}
+          {/* EC2 Health check lives in the admin dashboard header */}
+
+
           
           {authLoading ? (
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />

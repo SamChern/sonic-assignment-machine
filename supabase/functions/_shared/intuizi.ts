@@ -5,6 +5,8 @@
 // precise geo/device values are carried as metadata and never used as features.
 
 import type { OntologyTag } from "./ontology.ts";
+import { readParquetRows } from "./parquet.ts";
+
 
 export const REPORT_TYPES = [
   "ctv",

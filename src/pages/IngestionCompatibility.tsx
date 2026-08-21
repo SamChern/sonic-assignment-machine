@@ -114,11 +114,28 @@ function mergeReport(prev: Report, next: Report): Report {
   };
 }
 
+interface ParallelResult {
+  scope: Exclude<Scope, "all">;
+  label: string;
+  ok: boolean;
+  ms: number;
+  counts?: Report["summary"];
+  error?: string;
+}
+
 const IngestionCompatibility = () => {
   const { isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const [running, setRunning] = useState(false);
   const [runningScope, setRunningScope] = useState<Scope | null>(null);
+  const [runningScopes, setRunningScopes] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [parallel, setParallel] = useState<{
+    at: string;
+    ms: number;
+    debug: boolean;
+    results: ParallelResult[];
+  } | null>(null);
   const [lastRun, setLastRun] = useState<Record<string, { at: string; debug: boolean; ms: number }>>({});
   const [report, setReport] = useState<Report | null>(null);
   const [maxObjects, setMaxObjects] = useState(3);
@@ -130,28 +147,39 @@ const IngestionCompatibility = () => {
     if (!loading && !isAdmin) navigate("/");
   }, [loading, isAdmin, navigate]);
 
+  const invokeRun = useCallback(
+    async (scope: Scope, debug: boolean): Promise<Report> => {
+      const { data, error } = await supabase.functions.invoke("ingestion-compatibility", {
+        body: { maxObjects, maxRowsPerObject: maxRows, scope, debug },
+      });
+      if (error) {
+        const details =
+          error instanceof FunctionsHttpError ? await error.context.text() : error.message;
+        throw new Error(details);
+      }
+      return data as Report;
+    },
+    [maxObjects, maxRows],
+  );
+
+  const stampFeeds = useCallback((next: Report, debug: boolean) => {
+    const feeds = [...new Set(next.checks.map((c) => c.feed))];
+    setLastRun((prev) => {
+      const stamped = { at: next.ran_at, debug, ms: next.duration_ms };
+      const merged = { ...prev };
+      for (const f of feeds) merged[f] = stamped;
+      return merged;
+    });
+  }, []);
+
   const run = useCallback(
     async (scope: Scope = "all", debug = false) => {
       setRunning(true);
       setRunningScope(scope);
       try {
-        const { data, error } = await supabase.functions.invoke("ingestion-compatibility", {
-          body: { maxObjects, maxRowsPerObject: maxRows, scope, debug },
-        });
-        if (error) {
-          const details =
-            error instanceof FunctionsHttpError ? await error.context.text() : error.message;
-          throw new Error(details);
-        }
-        const next = data as Report;
+        const next = await invokeRun(scope, debug);
         setReport((prev) => (scope === "all" || !prev ? next : mergeReport(prev, next)));
-        const feeds = [...new Set(next.checks.map((c) => c.feed))];
-        setLastRun((prev) => {
-          const stamped = { at: next.ran_at, debug, ms: next.duration_ms };
-          const merged = { ...prev };
-          for (const f of feeds) merged[f] = stamped;
-          return merged;
-        });
+        stampFeeds(next, debug);
         if (scope !== "all") {
           toast({
             title: debug ? "Debug rerun complete" : "Tests complete",
@@ -169,13 +197,80 @@ const IngestionCompatibility = () => {
         setRunningScope(null);
       }
     },
-    [maxObjects, maxRows],
+    [invokeRun, stampFeeds],
+  );
+
+  /** Fan out every selected source concurrently, then merge + summarize. */
+  const runSelected = useCallback(
+    async (debug = false) => {
+      const targets = SOURCES.filter((s) => selected.includes(s.scope));
+      if (targets.length === 0) {
+        toast({ title: "No sources selected", description: "Pick at least one source to test." });
+        return;
+      }
+      setRunning(true);
+      setRunningScopes(targets.map((t) => t.scope));
+      setParallel(null);
+      const startedAt = performance.now();
+      const settled = await Promise.all(
+        targets.map(async (t): Promise<ParallelResult & { report?: Report }> => {
+          const t0 = performance.now();
+          try {
+            const rep = await invokeRun(t.scope, debug);
+            return {
+              scope: t.scope,
+              label: t.label,
+              ok: true,
+              ms: Math.round(performance.now() - t0),
+              counts: rep.summary,
+              report: rep,
+            };
+          } catch (e) {
+            return {
+              scope: t.scope,
+              label: t.label,
+              ok: false,
+              ms: Math.round(performance.now() - t0),
+              error: e instanceof Error ? e.message : "Unknown error",
+            };
+          }
+        }),
+      );
+
+      const good = settled.filter((r) => r.report);
+      if (good.length) {
+        setReport((prev) => {
+          let acc = prev ?? good[0].report!;
+          for (const r of good) acc = mergeReport(acc, r.report!);
+          return acc;
+        });
+        for (const r of good) stampFeeds(r.report!, debug);
+      }
+      setParallel({
+        at: new Date().toISOString(),
+        ms: Math.round(performance.now() - startedAt),
+        debug,
+        results: settled.map(({ report: _r, ...rest }) => rest),
+      });
+      setRunning(false);
+      setRunningScopes([]);
+      const failed = settled.filter((r) => !r.ok).length;
+      toast({
+        title: debug ? "Parallel debug run complete" : "Parallel run complete",
+        description: `${good.length}/${settled.length} source(s) succeeded${
+          failed ? `, ${failed} errored` : ""
+        } in ${Math.round(performance.now() - startedAt)}ms`,
+        variant: failed ? "destructive" : undefined,
+      });
+    },
+    [selected, invokeRun, stampFeeds],
   );
 
   useEffect(() => {
     if (isAdmin) void run("all");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
+
 
   const feeds = useMemo(() => {
     if (!report) return [] as { feed: string; checks: Check[] }[];

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +32,7 @@ import {
   Radio,
   ChevronDown,
   ChevronRight,
+  Layers,
 
 } from "lucide-react";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
@@ -41,6 +42,16 @@ import { FingerprintComparison } from "@/components/FingerprintComparison";
 import { useFingerprints } from "@/hooks/useFingerprints";
 import { useEC2Api } from "@/hooks/useEC2Api";
 import { calculateSimilarity, type FingerprintMode } from "@/lib/fingerprintMath";
+import { SignalCohortPanel } from "@/components/SignalCohortPanel";
+import {
+  buildSignalPoints,
+  clusterSignals,
+  cohortFingerprint,
+  metaFingerprint,
+  suggestedK,
+  type IdentifierRow,
+  type SourceBaseline,
+} from "@/lib/identifierSignals";
 
 interface UserProfile {
   id: string;
@@ -64,7 +75,7 @@ interface AudioSourceWithProfile {
   profile?: UserProfile | null;
 }
 
-type EntityMode = "user" | "provider";
+type EntityMode = "user" | "provider" | "signal";
 
 const PROVIDER_META: Record<string, { label: string; description: string }> = {
   spotify: { label: "Spotify", description: "Music streaming catalog" },
@@ -107,6 +118,34 @@ const AdminDashboard = () => {
   const [compareMode, setCompareMode] = useState<FingerprintMode>("all");
   const [neighborsOpenFor, setNeighborsOpenFor] = useState<string | null>(null);
 
+  // Identifier-level (Intuizi) signal state. Loaded lazily the first time the
+  // admin switches into signal mode — it is by far the largest table here.
+  const [identifierRows, setIdentifierRows] = useState<IdentifierRow[] | null>(null);
+  const [sourceBaselines, setSourceBaselines] = useState<Record<string, SourceBaseline>>({});
+  const [signalsLoading, setSignalsLoading] = useState(false);
+  const [cohortCount, setCohortCount] = useState(4);
+  const [cohortCountTouched, setCohortCountTouched] = useState(false);
+  const [selectedCohortKeys, setSelectedCohortKeys] = useState<string[]>([]);
+
+  const signalPoints = useMemo(
+    () => (identifierRows ? buildSignalPoints(identifierRows, sourceBaselines) : []),
+    [identifierRows, sourceBaselines],
+  );
+  const cohorts = useMemo(() => clusterSignals(signalPoints, cohortCount), [signalPoints, cohortCount]);
+  const meta = useMemo(
+    () => metaFingerprint(cohorts, "All Intuizi identifiers"),
+    [cohorts],
+  );
+  const cohortFingerprints = useMemo(() => {
+    const scoped = selectedCohortKeys.length
+      ? cohorts.filter(c => selectedCohortKeys.includes(c.key))
+      : cohorts;
+    const list = scoped.map(cohortFingerprint);
+    // Include the meta rollup alongside cohorts so aggregate/compare views can
+    // show each cohort against the population-level fingerprint.
+    return meta && scoped.length > 1 ? [...list, meta as any] : list;
+  }, [cohorts, selectedCohortKeys, meta]);
+
   const displayedUsers = filteredUserIds.length > 0 
     ? users.filter(u => filteredUserIds.includes(u.user_id))
     : users;
@@ -125,7 +164,9 @@ const AdminDashboard = () => {
     )
   );
 
-  const scopedFingerprints = entityMode === "user"
+  const scopedFingerprints = entityMode === "signal"
+    ? (cohortFingerprints as any[])
+    : entityMode === "user"
     ? (filteredUserIds.length > 0
         ? allFingerprints.filter(fp => filteredUserIds.includes(fp.user_id))
         : allFingerprints)
@@ -133,7 +174,11 @@ const AdminDashboard = () => {
         ? allFingerprints.filter(fp => providerScopedUserIds.includes(fp.user_id))
         : allFingerprints);
 
-  const activeFilterCount = entityMode === "user" ? filteredUserIds.length : filteredProviders.length;
+  const activeFilterCount = entityMode === "signal"
+    ? selectedCohortKeys.length
+    : entityMode === "user"
+      ? filteredUserIds.length
+      : filteredProviders.length;
 
   const toggleUserFilter = (userId: string) => {
     setFilteredUserIds(prev =>
@@ -157,10 +202,86 @@ const AdminDashboard = () => {
     );
   };
 
+  const toggleCohortFilter = (key: string) => {
+    setSelectedCohortKeys(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
   const clearFilters = () => {
     setFilteredUserIds([]);
     setFilteredProviders([]);
+    setSelectedCohortKeys([]);
   };
+
+  // Fetch identifier-level signals + their linked source baselines on demand.
+  const fetchSignalData = async () => {
+    setSignalsLoading(true);
+    try {
+      const PAGE = 1000;
+      const rows: IdentifierRow[] = [];
+      for (let from = 0; from < 20000; from += PAGE) {
+        const { data, error } = await supabase
+          .from("intuizi_identifiers")
+          .select(
+            "id, primary_identifier, tag_codes, observation_count, last_seen_at, audio_source_id, ctv_signals, apps_signals, visitation_signals, demographics_signals, origin_signals"
+          )
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        rows.push(...((data || []) as unknown as IdentifierRow[]));
+        if (!data || data.length < PAGE) break;
+      }
+      setIdentifierRows(rows);
+
+      const sourceIds = Array.from(
+        new Set(rows.map(r => r.audio_source_id).filter((v): v is string => !!v))
+      );
+      const baselines: Record<string, SourceBaseline> = {};
+      if (sourceIds.length) {
+        const { data: analyses } = await supabase
+          .from("source_analyses")
+          .select(
+            "audio_source_id, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score, confidence, created_at"
+          )
+          .in("audio_source_id", sourceIds)
+          .order("created_at", { ascending: false });
+        // Most recent analysis wins per source.
+        (analyses || []).forEach(a => {
+          if (!a.audio_source_id || baselines[a.audio_source_id]) return;
+          baselines[a.audio_source_id] = {
+            emotional: Number(a.emotional_score) || 0,
+            cognitive: Number(a.cognitive_score) || 0,
+            social: Number(a.social_score) || 0,
+            communication: Number(a.communication_score) || 0,
+            contextual: Number(a.contextual_score) || 0,
+            artistic: Number(a.artistic_score) || 0,
+            confidence: Number(a.confidence) || 0.5,
+          };
+        });
+      }
+      setSourceBaselines(baselines);
+    } catch (err) {
+      console.error("Failed to load identifier signals", err);
+      toast.error("Could not load identifier-level signals");
+      setIdentifierRows([]);
+    } finally {
+      setSignalsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (entityMode === "signal" && isAdmin && identifierRows === null && !signalsLoading) {
+      fetchSignalData();
+    }
+  }, [entityMode, isAdmin, identifierRows, signalsLoading]);
+
+  // Default cohort count follows population size until the admin overrides it.
+  useEffect(() => {
+    if (!cohortCountTouched && signalPoints.length) {
+      setCohortCount(suggestedK(signalPoints.length));
+    }
+  }, [signalPoints.length, cohortCountTouched]);
 
 
   useEffect(() => {

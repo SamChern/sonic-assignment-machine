@@ -819,6 +819,12 @@ const AdminDashboard = () => {
                 <p className="text-sm text-muted-foreground">
                   Select 2 or more users to overlay their radar charts side-by-side
                 </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Scope: {activeFilterCount > 0
+                    ? `${entityMode === "user" ? "users" : "signal providers"} filter • ${scopedFingerprints.length} of ${allFingerprints.length} fingerprints`
+                    : `all ${allFingerprints.length} fingerprints`}
+
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <div className="inline-flex rounded-md border border-border p-0.5 bg-muted">

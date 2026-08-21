@@ -195,7 +195,103 @@ const SCOPES: { value: string; label: string; hint: string }[] = [
   { value: "global", label: "Global default", hint: "Fallback for music / file uploads" },
 ];
 
+/* -------------------------------------------------------------- auto-tune */
+
+const SOURCE_TYPES_BY_SCOPE: Record<string, string[] | null> = {
+  intuizi: ["intuizi"],
+  ctv: ["ctv"],
+  global: null, // everything else (music / uploads)
+};
+
+const round05 = (n: number) => Math.round(n / 0.05) * 0.05;
+const clampRange = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+
+export interface AutoTuneResult {
+  sampleSize: number;
+  usedRaw: number;
+  means: Record<Category, number>;
+  /** Recommended settings. */
+  speech_bias: number;
+  gains: Record<string, number>;
+  /** Category means after applying the recommendation. */
+  tuned: Record<Category, number>;
+  notes: string[];
+}
+
+/**
+ * Recommends speech_bias + per-category gains from recent ingests in a scope.
+ * Bias comes from how far Communication over-indexes vs the other categories
+ * (divided by its speech load); gains nudge each category halfway toward the
+ * post-damping average so no single dimension dominates the learned profile.
+ */
+export function computeAutoTune(
+  samples: { scores: Record<Category, number>; isRaw: boolean }[],
+  redistribute: boolean,
+): AutoTuneResult | null {
+  if (samples.length === 0) return null;
+
+  const means = {} as Record<Category, number>;
+  for (const c of CATEGORIES) {
+    means[c] = samples.reduce((sum, s) => sum + (s.scores[c] ?? 0), 0) / samples.length;
+  }
+
+  const notes: string[] = [];
+  const comm = means.communication;
+  const others = CATEGORIES.filter((c) => c !== "communication");
+  const otherMean = others.reduce((a, c) => a + means[c], 0) / others.length;
+
+  let bias = 0;
+  if (comm > 0 && comm > otherMean) {
+    const excessShare = (comm - otherMean) / comm;
+    bias = clampRange(round05(excessShare / SPEECH_LOAD.communication), 0, 1);
+  }
+  if (bias === 0) {
+    notes.push("Communication does not over-index in this scope — damping stays near zero.");
+  }
+
+  const damped = normalizeScores(means, {
+    enabled: true,
+    speech_bias: bias,
+    redistribute,
+    gains: { ...DEFAULT_GAINS },
+  });
+
+  const dampedMean =
+    CATEGORIES.reduce((a, c) => a + (damped[c] ?? 0), 0) / CATEGORIES.length;
+
+  const gains: Record<string, number> = {};
+  for (const c of CATEGORIES) {
+    const v = damped[c] ?? 0;
+    if (v <= 0 || dampedMean <= 0) {
+      gains[c] = 1;
+      continue;
+    }
+    // Blend halfway toward flat so real signal differences survive.
+    gains[c] = clampRange(round05(1 + 0.5 * (dampedMean / v - 1)), 0.5, 1.5);
+  }
+
+  const tuned = normalizeScores(means, {
+    enabled: true,
+    speech_bias: bias,
+    redistribute,
+    gains,
+  });
+
+  const usedRaw = samples.filter((s) => s.isRaw).length;
+  if (usedRaw === 0) {
+    notes.push(
+      "No raw pre-normalization scores stored yet — recommendation is based on already-stored profiles, so re-run after new ingests for a tighter fit.",
+    );
+  }
+  if (samples.length < 5) {
+    notes.push(`Only ${samples.length} recent analysis(es) in scope — treat this as a rough start.`);
+  }
+
+  return { sampleSize: samples.length, usedRaw, means, speech_bias: bias, gains, tuned, notes };
+}
+
 /* --------------------------------------------------------------- component */
+
 
 interface Props {
   /** Optional live sample (e.g. the selected activation's current scores). */

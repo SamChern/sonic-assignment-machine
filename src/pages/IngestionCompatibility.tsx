@@ -6,7 +6,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
+
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 import {
@@ -22,6 +24,8 @@ import {
   Wrench,
   Bug,
   PlayCircle,
+  Layers,
+
 } from "lucide-react";
 
 type Status = "pass" | "warn" | "fail" | "skip";
@@ -114,11 +118,28 @@ function mergeReport(prev: Report, next: Report): Report {
   };
 }
 
+interface ParallelResult {
+  scope: Exclude<Scope, "all">;
+  label: string;
+  ok: boolean;
+  ms: number;
+  counts?: Report["summary"];
+  error?: string;
+}
+
 const IngestionCompatibility = () => {
   const { isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const [running, setRunning] = useState(false);
   const [runningScope, setRunningScope] = useState<Scope | null>(null);
+  const [runningScopes, setRunningScopes] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [parallel, setParallel] = useState<{
+    at: string;
+    ms: number;
+    debug: boolean;
+    results: ParallelResult[];
+  } | null>(null);
   const [lastRun, setLastRun] = useState<Record<string, { at: string; debug: boolean; ms: number }>>({});
   const [report, setReport] = useState<Report | null>(null);
   const [maxObjects, setMaxObjects] = useState(3);
@@ -130,28 +151,39 @@ const IngestionCompatibility = () => {
     if (!loading && !isAdmin) navigate("/");
   }, [loading, isAdmin, navigate]);
 
+  const invokeRun = useCallback(
+    async (scope: Scope, debug: boolean): Promise<Report> => {
+      const { data, error } = await supabase.functions.invoke("ingestion-compatibility", {
+        body: { maxObjects, maxRowsPerObject: maxRows, scope, debug },
+      });
+      if (error) {
+        const details =
+          error instanceof FunctionsHttpError ? await error.context.text() : error.message;
+        throw new Error(details);
+      }
+      return data as Report;
+    },
+    [maxObjects, maxRows],
+  );
+
+  const stampFeeds = useCallback((next: Report, debug: boolean) => {
+    const feeds = [...new Set(next.checks.map((c) => c.feed))];
+    setLastRun((prev) => {
+      const stamped = { at: next.ran_at, debug, ms: next.duration_ms };
+      const merged = { ...prev };
+      for (const f of feeds) merged[f] = stamped;
+      return merged;
+    });
+  }, []);
+
   const run = useCallback(
     async (scope: Scope = "all", debug = false) => {
       setRunning(true);
       setRunningScope(scope);
       try {
-        const { data, error } = await supabase.functions.invoke("ingestion-compatibility", {
-          body: { maxObjects, maxRowsPerObject: maxRows, scope, debug },
-        });
-        if (error) {
-          const details =
-            error instanceof FunctionsHttpError ? await error.context.text() : error.message;
-          throw new Error(details);
-        }
-        const next = data as Report;
+        const next = await invokeRun(scope, debug);
         setReport((prev) => (scope === "all" || !prev ? next : mergeReport(prev, next)));
-        const feeds = [...new Set(next.checks.map((c) => c.feed))];
-        setLastRun((prev) => {
-          const stamped = { at: next.ran_at, debug, ms: next.duration_ms };
-          const merged = { ...prev };
-          for (const f of feeds) merged[f] = stamped;
-          return merged;
-        });
+        stampFeeds(next, debug);
         if (scope !== "all") {
           toast({
             title: debug ? "Debug rerun complete" : "Tests complete",
@@ -169,13 +201,80 @@ const IngestionCompatibility = () => {
         setRunningScope(null);
       }
     },
-    [maxObjects, maxRows],
+    [invokeRun, stampFeeds],
+  );
+
+  /** Fan out every selected source concurrently, then merge + summarize. */
+  const runSelected = useCallback(
+    async (debug = false) => {
+      const targets = SOURCES.filter((s) => selected.includes(s.scope));
+      if (targets.length === 0) {
+        toast({ title: "No sources selected", description: "Pick at least one source to test." });
+        return;
+      }
+      setRunning(true);
+      setRunningScopes(targets.map((t) => t.scope));
+      setParallel(null);
+      const startedAt = performance.now();
+      const settled = await Promise.all(
+        targets.map(async (t): Promise<ParallelResult & { report?: Report }> => {
+          const t0 = performance.now();
+          try {
+            const rep = await invokeRun(t.scope, debug);
+            return {
+              scope: t.scope,
+              label: t.label,
+              ok: true,
+              ms: Math.round(performance.now() - t0),
+              counts: rep.summary,
+              report: rep,
+            };
+          } catch (e) {
+            return {
+              scope: t.scope,
+              label: t.label,
+              ok: false,
+              ms: Math.round(performance.now() - t0),
+              error: e instanceof Error ? e.message : "Unknown error",
+            };
+          }
+        }),
+      );
+
+      const good = settled.filter((r) => r.report);
+      if (good.length) {
+        setReport((prev) => {
+          let acc = prev ?? good[0].report!;
+          for (const r of good) acc = mergeReport(acc, r.report!);
+          return acc;
+        });
+        for (const r of good) stampFeeds(r.report!, debug);
+      }
+      setParallel({
+        at: new Date().toISOString(),
+        ms: Math.round(performance.now() - startedAt),
+        debug,
+        results: settled.map(({ report: _r, ...rest }) => rest),
+      });
+      setRunning(false);
+      setRunningScopes([]);
+      const failed = settled.filter((r) => !r.ok).length;
+      toast({
+        title: debug ? "Parallel debug run complete" : "Parallel run complete",
+        description: `${good.length}/${settled.length} source(s) succeeded${
+          failed ? `, ${failed} errored` : ""
+        } in ${Math.round(performance.now() - startedAt)}ms`,
+        variant: failed ? "destructive" : undefined,
+      });
+    },
+    [selected, invokeRun, stampFeeds],
   );
 
   useEffect(() => {
     if (isAdmin) void run("all");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
+
 
   const feeds = useMemo(() => {
     if (!report) return [] as { feed: string; checks: Check[] }[];
@@ -278,7 +377,44 @@ const IngestionCompatibility = () => {
         </Card>
 
         <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-          <h2 className="mb-3 text-sm font-semibold">Per-source tests</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Per-source tests</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setSelected(
+                    selected.length === SOURCES.length ? [] : SOURCES.map((s) => s.scope),
+                  )
+                }
+                disabled={running}
+              >
+                {selected.length === SOURCES.length ? "Clear all" : "Select all"}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => runSelected(false)}
+                disabled={running || selected.length === 0}
+              >
+                {running && runningScopes.length > 0 ? (
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Layers className="mr-2 h-3.5 w-3.5" />
+                )}
+                Run selected in parallel ({selected.length})
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runSelected(true)}
+                disabled={running || selected.length === 0}
+              >
+                <Bug className="mr-2 h-3.5 w-3.5 text-primary" />
+                Debug selected
+              </Button>
+            </div>
+          </div>
           <ul className="space-y-2">
             {SOURCES.map((src) => {
               const feedChecks = report?.checks.filter((c) => c.feed === src.feed) ?? [];
@@ -288,13 +424,28 @@ const IngestionCompatibility = () => {
                   ) ?? null
                 : null;
               const last = lastRun[src.feed];
-              const busy = running && runningScope === src.scope;
+              const busy =
+                running && (runningScope === src.scope || runningScopes.includes(src.scope));
+              const isSelected = selected.includes(src.scope);
               return (
                 <li
                   key={src.scope}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 p-3"
                 >
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Checkbox
+                      id={`sel-${src.scope}`}
+                      className="mt-0.5"
+                      checked={isSelected}
+                      disabled={running}
+                      onCheckedChange={(v) =>
+                        setSelected((prev) =>
+                          v ? [...prev, src.scope] : prev.filter((s) => s !== src.scope),
+                        )
+                      }
+                    />
+                    <div className="min-w-0">
+
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium">{src.label}</span>
                       {worst && (
@@ -312,7 +463,9 @@ const IngestionCompatibility = () => {
                         : "Not tested yet"}
                       {last && ` · ran ${new Date(last.at).toLocaleTimeString()} in ${last.ms}ms`}
                     </p>
+                    </div>
                   </div>
+
                   <div className="flex shrink-0 items-center gap-2">
                     <Button
                       size="sm"
@@ -342,6 +495,78 @@ const IngestionCompatibility = () => {
             })}
           </ul>
         </Card>
+
+        {parallel && (
+          <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <Layers className="h-4 w-4 text-primary" />
+                Parallel run summary
+                {parallel.debug && (
+                  <Badge variant="outline" className="text-[10px]">debug</Badge>
+                )}
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                {parallel.results.length} source(s) ·{" "}
+                {new Date(parallel.at).toLocaleTimeString()} · wall {parallel.ms}ms
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="text-muted-foreground">
+                  <tr className="border-b border-border/60">
+                    <th className="py-2 pr-3 font-medium">Source</th>
+                    <th className="py-2 pr-3 font-medium">Result</th>
+                    <th className="py-2 pr-3 font-medium">Pass</th>
+                    <th className="py-2 pr-3 font-medium">Mismatch</th>
+                    <th className="py-2 pr-3 font-medium">Blocking</th>
+                    <th className="py-2 pr-3 font-medium">Skipped</th>
+                    <th className="py-2 font-medium">Latency</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parallel.results.map((r) => (
+                    <tr key={r.scope} className="border-b border-border/40 last:border-0">
+                      <td className="py-2 pr-3 font-medium">{r.label}</td>
+                      <td className="py-2 pr-3">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${
+                            r.ok
+                              ? STATUS_META[
+                                  r.counts?.fail ? "fail" : r.counts?.warn ? "warn" : "pass"
+                                ].className
+                              : STATUS_META.fail.className
+                          }`}
+                        >
+                          {r.ok ? r.counts?.verdict ?? "ok" : "error"}
+                        </Badge>
+                      </td>
+                      <td className="py-2 pr-3">{r.counts?.pass ?? "—"}</td>
+                      <td className="py-2 pr-3">{r.counts?.warn ?? "—"}</td>
+                      <td className="py-2 pr-3">{r.counts?.fail ?? "—"}</td>
+                      <td className="py-2 pr-3">{r.counts?.skip ?? "—"}</td>
+                      <td className="py-2">{r.ms}ms</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {parallel.results.some((r) => !r.ok) && (
+              <ul className="mt-3 space-y-1 text-xs text-destructive">
+                {parallel.results
+                  .filter((r) => !r.ok)
+                  .map((r) => (
+                    <li key={r.scope} className="break-words">
+                      <span className="font-medium">{r.label}:</span> {r.error}
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </Card>
+        )}
+
+
 
         {report && (
           <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">

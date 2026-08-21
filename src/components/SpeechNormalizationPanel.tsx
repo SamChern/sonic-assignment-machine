@@ -583,8 +583,77 @@ const SpeechNormalizationPanel = ({ sample, sampleLabel }: Props) => {
                 <Button size="sm" variant="ghost" onClick={() => load(scope)}>
                   Revert
                 </Button>
+                <Button size="sm" variant="outline" onClick={runAutoTune} disabled={tuning}>
+                  {tuning ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Wand2 className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Auto-tune
+                </Button>
               </div>
+
+              {tune && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="text-xs font-medium">Recommendation</span>
+                    <Badge variant="outline" className="font-mono">
+                      {tune.sampleSize} recent analyses
+                    </Badge>
+                    <Badge variant="outline" className="font-mono">
+                      {tune.usedRaw > 0 ? `${tune.usedRaw} with raw scores` : "stored profiles only"}
+                    </Badge>
+                    <span className="ml-auto font-mono text-primary">
+                      strength {tune.speech_bias.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] sm:grid-cols-3">
+                    {CATEGORIES.map((c) => (
+                      <div key={c} className="flex items-center justify-between gap-2">
+                        <span className="capitalize text-muted-foreground">{c}</span>
+                        <span className="font-mono">
+                          {Math.round(tune.means[c])} → {Math.round(tune.tuned[c] ?? 0)}
+                          <span className="ml-1 text-primary">
+                            {(tune.gains[c] ?? 1).toFixed(2)}×
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {tune.notes.map((n) => (
+                    <p key={n} className="mt-1.5 text-[11px] text-muted-foreground">
+                      {n}
+                    </p>
+                  ))}
+
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        setCfg({
+                          ...cfg,
+                          enabled: true,
+                          speech_bias: tune.speech_bias,
+                          gains: { ...cfg.gains, ...tune.gains },
+                        })
+                      }
+                    >
+                      Apply recommendation
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setTune(null)}>
+                      Dismiss
+                    </Button>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Applying only fills the controls — press “Save settings” to persist it for this
+                    scope.
+                  </p>
+                </div>
+              )}
             </div>
+
 
             {/* live preview */}
             <div className="rounded-lg border border-border bg-background/40 p-4">

@@ -16,7 +16,16 @@ import {
   ChevronDown,
   FileText,
   Users,
+  GitCompare,
+  X,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 
 /* ------------------------------------------------------------------ types */
@@ -206,6 +215,10 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
   const [openRow, setOpenRow] = useState<number | null>(null);
   const [drill, setDrill] = useState<Record<number, DrillData>>({});
   const [drillLoading, setDrillLoading] = useState<number | null>(null);
+  const [options, setOptions] = useState<string[]>([]);
+  const [compareId, setCompareId] = useState<string>("");
+  const [compare, setCompare] = useState<Bundle | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
 
 
   const load = useCallback(async (id: string) => {
@@ -236,6 +249,44 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
   useEffect(() => {
     load(defaultActivation);
   }, [defaultActivation, load]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("intuizi_identifiers")
+        .select("primary_identifier")
+        .like("primary_identifier", "activation:%")
+        .order("updated_at", { ascending: false })
+        .limit(100);
+      const ids = Array.from(
+        new Set(((data ?? []) as { primary_identifier: string }[]).map((r) => r.primary_identifier.replace("activation:", ""))),
+      );
+      setOptions(ids);
+    })();
+  }, []);
+
+  const loadCompare = useCallback(async (id: string) => {
+    setCompareId(id);
+    if (!id) {
+      setCompare(null);
+      return;
+    }
+    setCompareLoading(true);
+    const { bundle, error } = await fetchBundle(id);
+    if (error) {
+      toast({ title: "Could not load comparison", description: error, variant: "destructive" });
+    } else if (!bundle) {
+      toast({ title: `No ingested profile for activation ${id}`, variant: "destructive" });
+    }
+    setCompare(bundle);
+    setCompareLoading(false);
+  }, []);
+
+  const compareDriverRows = useMemo(
+    () => computeDriverRows(compare?.identifier ?? null),
+    [compare],
+  );
+  const compareMath = useMemo(() => computeMath(compare?.analysis ?? null), [compare]);
 
   /* ---------------------------------------------------------- derivations */
 
@@ -368,6 +419,29 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
             )}
             Analyze
           </Button>
+          <div className="flex items-center gap-1">
+            <GitCompare className="h-4 w-4 text-muted-foreground" />
+            <Select value={compareId || "none"} onValueChange={(v) => loadCompare(v === "none" ? "" : v)}>
+              <SelectTrigger className="h-8 w-[190px] text-xs">
+                <SelectValue placeholder="Compare with..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Compare with...</SelectItem>
+                {options
+                  .filter((o) => o !== activation.trim())
+                  .map((o) => (
+                    <SelectItem key={o} value={o}>
+                      Activation {o}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {compareId && (
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => loadCompare("")}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -728,6 +802,159 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* comparison mode */}
+          {(compareLoading || compare) && (
+            <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-4">
+              <div className="flex items-center gap-2">
+                <GitCompare className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold">
+                  Comparison — activation {activation.trim()} vs {compareId}
+                </h3>
+                {compareLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              </div>
+
+              {compare && (
+                <>
+                  {/* confidence math side by side */}
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full min-w-[520px] text-xs">
+                      <thead>
+                        <tr className="border-b border-border text-left text-muted-foreground">
+                          <th className="py-1.5 pr-3 font-medium">Confidence input</th>
+                          <th className="py-1.5 pr-3 font-medium">{activation.trim()}</th>
+                          <th className="py-1.5 pr-3 font-medium">{compareId}</th>
+                          <th className="py-1.5 font-medium">Delta</th>
+                        </tr>
+                      </thead>
+                      <tbody className="font-mono">
+                        {[
+                          ["score stddev", math?.stddev, compareMath?.stddev, 1],
+                          ["spread factor", math?.spread, compareMath?.spread, 3],
+                          ["evidence factor", math?.tier.factor, compareMath?.tier.factor, 1],
+                          ["confidence", math?.confidence, compareMath?.confidence, 3],
+                        ].map(([label, a, b, dp]) => {
+                          const av = typeof a === "number" ? a : null;
+                          const bv = typeof b === "number" ? b : null;
+                          const d = av !== null && bv !== null ? bv - av : null;
+                          const fixed = dp as number;
+                          return (
+                            <tr key={String(label)} className="border-b border-border/50">
+                              <td className="py-1.5 pr-3 font-sans">{String(label)}</td>
+                              <td className="py-1.5 pr-3">{av !== null ? av.toFixed(fixed) : "—"}</td>
+                              <td className="py-1.5 pr-3">{bv !== null ? bv.toFixed(fixed) : "—"}</td>
+                              <td
+                                className={
+                                  "py-1.5 " +
+                                  (d === null
+                                    ? "text-muted-foreground"
+                                    : d > 0
+                                      ? "text-primary"
+                                      : d < 0
+                                        ? "text-destructive"
+                                        : "text-muted-foreground")
+                                }
+                              >
+                                {d === null ? "—" : `${d > 0 ? "+" : ""}${d.toFixed(fixed)}`}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        <tr>
+                          <td className="py-1.5 pr-3 font-sans">evidence tier</td>
+                          <td className="py-1.5 pr-3 font-sans capitalize">{math?.tier.kind ?? "—"}</td>
+                          <td className="py-1.5 pr-3 font-sans capitalize">{compareMath?.tier.kind ?? "—"}</td>
+                          <td className="py-1.5 font-sans text-muted-foreground">
+                            {math && compareMath && math.tier.kind !== compareMath.tier.kind
+                              ? "different evidence path"
+                              : "same"}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* driver rows side by side */}
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    {[
+                      { id: activation.trim(), rows: driverRows, cat: analysis?.category, nodes: tags.length },
+                      { id: compareId, rows: compareDriverRows, cat: compare.analysis?.category, nodes: compare.tags.length },
+                    ].map((side) => (
+                      <div key={side.id} className="rounded-md border border-border bg-card/60 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-xs font-semibold">Activation {side.id}</p>
+                          {side.cat ? (
+                            <Badge variant="secondary">{String(side.cat)}</Badge>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">not scored</span>
+                          )}
+                          <span className="ml-auto text-[11px] text-muted-foreground">
+                            {side.rows.length} driver row{side.rows.length === 1 ? "" : "s"} · {side.nodes} node
+                            {side.nodes === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <table className="mt-2 w-full text-[11px]">
+                          <thead>
+                            <tr className="border-b border-border text-left text-muted-foreground">
+                              <th className="py-1 pr-2 font-medium">Feed</th>
+                              <th className="py-1 pr-2 font-medium">Category</th>
+                              <th className="py-1 pr-2 font-medium">Share</th>
+                              <th className="py-1 font-medium">Uniques</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {side.rows.length === 0 && (
+                              <tr>
+                                <td colSpan={4} className="py-2 text-muted-foreground">
+                                  No driver rows ingested.
+                                </td>
+                              </tr>
+                            )}
+                            {side.rows.slice(0, 10).map((r, i) => (
+                              <tr key={i} className="border-b border-border/50">
+                                <td className="py-1 pr-2 text-muted-foreground">{r.feed}</td>
+                                <td className="py-1 pr-2">{r.TaxonomyName || r.CategoryName || "—"}</td>
+                                <td className="py-1 pr-2 font-mono">
+                                  {r.share != null ? `${(Number(r.share) * 100).toFixed(0)}%` : "—"}
+                                </td>
+                                <td className="py-1 font-mono">{Number(r.uniques) || 0}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* per-category deltas */}
+                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    {SCORE_KEYS.map(([k, label]) => {
+                      const a = Number(analysis?.[k]) || 0;
+                      const b = Number(compare.analysis?.[k]) || 0;
+                      const d = b - a;
+                      return (
+                        <div key={k} className="rounded-md border border-border bg-card/60 px-3 py-2">
+                          <p className="text-[11px] text-muted-foreground">{label}</p>
+                          <p className="text-sm font-semibold">
+                            {Math.round(a)} → {Math.round(b)}{" "}
+                            <span
+                              className={
+                                "text-[11px] font-mono " +
+                                (d > 0 ? "text-primary" : d < 0 ? "text-destructive" : "text-muted-foreground")
+                              }
+                            >
+                              {d > 0 ? "+" : ""}
+                              {Math.round(d)}
+                            </span>
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           )}
 

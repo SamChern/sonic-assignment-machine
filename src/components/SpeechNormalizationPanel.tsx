@@ -284,6 +284,15 @@ const SpeechNormalizationPanel = ({ sample, sampleLabel }: Props) => {
     [raw, cfg],
   );
 
+  const impact = useMemo(
+    () =>
+      cfg
+        ? explainNormalization(raw, cfg)
+        : { rows: [], removed: 0, redistributed: 0, enabled: false },
+    [raw, cfg],
+  );
+
+
   const dominant = useMemo(() => {
     const pick = (m: Record<Category, number>) =>
       CATEGORIES.reduce((a, b) => ((m[b] ?? 0) > (m[a] ?? 0) ? b : a), CATEGORIES[0]);

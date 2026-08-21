@@ -185,8 +185,22 @@ const AdminDashboard = () => {
     }));
 
     setAllSources(sourcesWithProfiles);
+
+    // Intuizi signal volume per audio source (linked identifiers)
+    const { data: identifierRows } = await supabase
+      .from('intuizi_identifiers')
+      .select('audio_source_id, observation_count');
+
+    const counts: Record<string, number> = {};
+    (identifierRows || []).forEach(row => {
+      if (!row.audio_source_id) return;
+      counts[row.audio_source_id] = (counts[row.audio_source_id] || 0) + 1;
+    });
+    setSignalCounts(counts);
+
     setDataLoading(false);
   };
+
 
   const toggleUserSelection = (userId: string) => {
     setSelectedUserIds(prev =>

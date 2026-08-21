@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { IdentifierFilterBar, type FilterSegment } from "@/components/IdentifierFilterBar";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   EMPTY_IDENTIFIER_FILTER,
   matchesTags,
@@ -214,8 +215,8 @@ const SemanticAnalysis = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<IdentifierFilterState>({ ...EMPTY_IDENTIFIER_FILTER });
   const [stage, setStage] = useState<Stage>("all");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!authLoading && (!user || !isAdmin)) navigate("/");
@@ -495,7 +496,8 @@ const SemanticAnalysis = () => {
             value={filter}
             onChange={(next) => {
               setFilter(next);
-              setVisibleCount(PAGE_SIZE);
+              setExpanded(null);
+              scrollRef.current?.scrollTo({ top: 0 });
             }}
             tags={tagList}
             showBasis={false}
@@ -503,7 +505,8 @@ const SemanticAnalysis = () => {
             segmentValue={stage}
             onSegmentChange={(v) => {
               setStage(v as Stage);
-              setVisibleCount(PAGE_SIZE);
+              setExpanded(null);
+              scrollRef.current?.scrollTo({ top: 0 });
             }}
             resultCount={filtered.length}
             totalCount={rows.length}

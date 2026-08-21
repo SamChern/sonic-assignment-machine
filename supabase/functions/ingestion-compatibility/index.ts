@@ -38,6 +38,11 @@ const corsHeaders = {
 
 type Status = "pass" | "warn" | "fail" | "skip";
 
+/** Per-source scopes so a single feed can be retested without a full sweep. */
+type Scope = "all" | "object_store" | "intuizi" | "ec2_analysis" | "librosa_rest";
+
+const SCOPES: Scope[] = ["all", "object_store", "intuizi", "ec2_analysis", "librosa_rest"];
+
 interface Check {
   id: string;
   feed: string;
@@ -48,6 +53,7 @@ interface Check {
   actual?: string;
   remediation?: string;
   evidence?: Record<string, unknown>;
+  debug?: Record<string, unknown>;
 }
 
 const SUPPORTED_EXT = [".parquet", ".pq", ".csv", ".csv.gz", ".json", ".json.gz", ".jsonl", ".ndjson"];

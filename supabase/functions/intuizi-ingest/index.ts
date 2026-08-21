@@ -183,20 +183,24 @@ Deno.serve(async (req) => {
 
     const explicitKey = typeof body.object_key === "string" ? body.object_key : null;
     if (explicitKey) {
-      const rt = body.report_type as ReportType | undefined;
+      const requested = body.report_type as ReportType | undefined;
+      const rt = requested ?? reportTypeFromKey(explicitKey) ?? undefined;
       if (!rt || !REPORT_TYPES.includes(rt)) {
-        throw new Error(`object_key requires report_type (one of ${REPORT_TYPES.join(", ")})`);
+        throw new Error(
+          `could not infer report_type from "${explicitKey}" — pass report_type ` +
+            `(one of ${REPORT_TYPES.join(", ")})`,
+        );
       }
       candidates.push({ key: explicitKey, report_type: rt, size: 0, etag: null });
     } else {
-      for (const rt of REPORT_TYPES) {
+      for (const { prefix, report_type } of INGEST_PREFIXES) {
         if (candidates.length >= MAX_FILES_PER_RUN) break;
         let objects: Awaited<ReturnType<typeof listObjects>> = [];
         try {
-          objects = await listObjects(`${rt}/`, 100);
+          objects = await listObjects(prefix, 100);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          summary.errors.push(`list ${rt}/: ${msg}`);
+          summary.errors.push(`list ${prefix}: ${msg}`);
           continue;
         }
         const dataObjects = objects.filter((o) => o.size > 0 && !o.key.endsWith("/"));
@@ -212,11 +216,18 @@ Deno.serve(async (req) => {
 
         for (const o of dataObjects) {
           if (done.has(o.key)) continue;
+          // Mixed-content prefixes carry the report kind in the filename.
+          const rt = report_type ?? reportTypeFromKey(o.key);
+          if (!rt) {
+            summary.errors.push(`skipped ${o.key}: report type not recognizable from the file name`);
+            continue;
+          }
           candidates.push({ key: o.key, report_type: rt, size: o.size, etag: o.etag });
           if (candidates.length >= MAX_FILES_PER_RUN) break;
         }
       }
     }
+
 
     if (!candidates.length) {
       // Idle path stops here — it does not kick more work.

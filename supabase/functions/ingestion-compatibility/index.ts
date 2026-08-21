@@ -115,13 +115,29 @@ Deno.serve(async (req) => {
     maxRowsPerObject?: number;
     prefixes?: string[];
     key?: string;
+    scope?: string;
+    debug?: boolean;
   };
   const maxObjects = Math.max(1, Math.min(8, Number(body.maxObjects ?? 3)));
   const maxRows = Math.max(20, Math.min(2000, Number(body.maxRowsPerObject ?? 300)));
+  const scope: Scope = SCOPES.includes(body.scope as Scope) ? (body.scope as Scope) : "all";
+  const debug = body.debug === true;
+
+  const wants = (s: Exclude<Scope, "all">) => scope === "all" || scope === s;
+  /** Object-store reads back both the store scope and the intuizi contract scope. */
+  const wantsStoreReads = wants("object_store") || wants("intuizi");
 
   const startedAt = Date.now();
   const checks: Check[] = [];
-  const add = (c: Check) => checks.push(c);
+  const trace: { at: number; step: string; detail?: unknown }[] = [];
+  const log = (step: string, detail?: unknown) => {
+    if (debug) trace.push({ at: Date.now() - startedAt, step, detail });
+  };
+  const add = (c: Check) => {
+    if (!debug && c.debug) delete c.debug;
+    checks.push(c);
+  };
+  log("start", { scope, maxObjects, maxRows });
 
   // ---------------------------------------------------------------- 1. config
   const backend = s3BackendInfo();

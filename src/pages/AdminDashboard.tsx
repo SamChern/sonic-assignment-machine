@@ -298,6 +298,14 @@ const AdminDashboard = () => {
     }
   }, [entityMode, isAdmin, identifierRows, signalsLoading]);
 
+  // Cohort keys can disappear when the identifier filter narrows the population.
+  useEffect(() => {
+    setSelectedCohortKeys(prev => {
+      const valid = prev.filter(k => cohorts.some(c => c.key === k));
+      return valid.length === prev.length ? prev : valid;
+    });
+  }, [cohorts]);
+
   // Default cohort count follows population size until the admin overrides it.
   useEffect(() => {
     if (!cohortCountTouched && signalPoints.length) {

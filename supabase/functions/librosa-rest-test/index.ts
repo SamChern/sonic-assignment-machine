@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       .select("field_key, field_value")
       .eq("integration_id", INTEGRATION_ID);
     if (credErr) {
-      return await record(admin, userData.user.id, false, startedAt, credErr.message);
+      return await record(admin, authz.userId, false, startedAt, credErr.message);
     }
 
     const creds: Record<string, string> = {};
@@ -47,10 +47,10 @@ Deno.serve(async (req) => {
     const token = creds.LIBROSA_REST_TOKEN;
 
     if (!baseUrl) {
-      return await record(admin, userData.user.id, false, startedAt, "LIBROSA_REST_URL not configured");
+      return await record(admin, authz.userId, false, startedAt, "LIBROSA_REST_URL not configured");
     }
     if (!token) {
-      return await record(admin, userData.user.id, false, startedAt, "LIBROSA_REST_TOKEN not configured");
+      return await record(admin, authz.userId, false, startedAt, "LIBROSA_REST_TOKEN not configured");
     }
 
     const healthUrl = `${baseUrl}/health`;
@@ -69,12 +69,12 @@ Deno.serve(async (req) => {
       text = await resp.text();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Network error";
-      return await record(admin, userData.user.id, false, startedAt, `Fetch failed: ${msg}`);
+      return await record(admin, authz.userId, false, startedAt, `Fetch failed: ${msg}`);
     }
 
     if (!resp.ok) {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `HTTP ${resp.status}: ${text.slice(0, 300)}`,
       );
     }
@@ -84,12 +84,12 @@ Deno.serve(async (req) => {
 
     if (!parsed?.ok) {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `Unexpected /health body: ${text.slice(0, 200)}`,
       );
     }
 
-    return await record(admin, userData.user.id, true, startedAt, null, parsed);
+    return await record(admin, authz.userId, true, startedAt, null, parsed);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown";
     return json({ success: false, error: msg }, 500);

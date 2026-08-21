@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
         integration_id: integrationId,
         field_key: key,
         field_value: value,
-        updated_by: userData.user.id,
+        updated_by: authz.userId,
         updated_at: new Date().toISOString(),
       });
     }

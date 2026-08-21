@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     const privateKeyPem = map.get("APPLE_PRIVATE_KEY");
 
     if (!teamId || !keyId || !privateKeyPem) {
-      return await record(admin, userData.user.id, false, startedAt, "Missing one or more credentials");
+      return await record(admin, authz.userId, false, startedAt, "Missing one or more credentials");
     }
 
     // Import the .p8 key (PKCS#8 PEM) for ES256 signing
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
         ["sign"],
       );
     } catch (e) {
-      return await record(admin, userData.user.id, false, startedAt,
+      return await record(admin, authz.userId, false, startedAt,
         `Invalid .p8 key: ${e instanceof Error ? e.message : String(e)}`);
     }
 
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
         cryptoKey,
       );
     } catch (e) {
-      return await record(admin, userData.user.id, false, startedAt,
+      return await record(admin, authz.userId, false, startedAt,
         `JWT signing failed: ${e instanceof Error ? e.message : String(e)}`);
     }
 
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     );
     const text = await resp.text();
     if (!resp.ok) {
-      return await record(admin, userData.user.id, false, startedAt,
+      return await record(admin, authz.userId, false, startedAt,
         `Apple API ${resp.status}: ${text.slice(0, 300)}`);
     }
 
@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
       // ignore
     }
 
-    return await record(admin, userData.user.id, true, startedAt, null, sample);
+    return await record(admin, authz.userId, true, startedAt, null, sample);
   } catch (e) {
     return json({
       success: false,

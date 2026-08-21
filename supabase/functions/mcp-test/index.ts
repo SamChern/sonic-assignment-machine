@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
       .select("field_key, field_value")
       .eq("integration_id", integrationId);
     if (credErr) {
-      return await record(admin, integrationId, userData.user.id, false, startedAt, credErr.message);
+      return await record(admin, integrationId, authz.userId, false, startedAt, credErr.message);
     }
 
     const creds: Record<string, string> = {};
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
 
     const serverUrl = creds.MCP_SERVER_URL;
     if (!serverUrl) {
-      return await record(admin, integrationId, userData.user.id, false, startedAt, "MCP_SERVER_URL not configured");
+      return await record(admin, integrationId, authz.userId, false, startedAt, "MCP_SERVER_URL not configured");
     }
 
     const headers: Record<string, string> = {
@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
         if (!sseResp.ok || !sseResp.body) {
           const errText = await sseResp.text().catch(() => "");
           return await record(
-            admin, integrationId, userData.user.id, false, startedAt,
+            admin, integrationId, authz.userId, false, startedAt,
             `SSE GET failed: HTTP ${sseResp.status}: ${errText.slice(0, 200)}`,
           );
         }
@@ -167,7 +167,7 @@ Deno.serve(async (req) => {
         if (!endpointPath) {
           try { await reader.cancel(); } catch { /* noop */ }
           return await record(
-            admin, integrationId, userData.user.id, false, startedAt,
+            admin, integrationId, authz.userId, false, startedAt,
             "SSE stream opened but no `event: endpoint` received within 10s",
           );
         }
@@ -202,12 +202,12 @@ Deno.serve(async (req) => {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Network error";
-      return await record(admin, integrationId, userData.user.id, false, startedAt, `Fetch failed: ${msg}`);
+      return await record(admin, integrationId, authz.userId, false, startedAt, `Fetch failed: ${msg}`);
     }
 
     if (!resp.ok) {
       return await record(
-        admin, integrationId, userData.user.id, false, startedAt,
+        admin, integrationId, authz.userId, false, startedAt,
         `HTTP ${resp.status}: ${text.slice(0, 300)}`,
       );
     }
@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
     if (isSseTransport) {
       // 2xx on the messages endpoint is success. Body is typically just "Accepted".
       return await record(
-        admin, integrationId, userData.user.id, true, startedAt, null,
+        admin, integrationId, authz.userId, true, startedAt, null,
         { transport: "sse", status: resp.status, body: text.slice(0, 200) },
       );
     }
@@ -234,19 +234,19 @@ Deno.serve(async (req) => {
     const r = parsed as { result?: { serverInfo?: unknown; protocolVersion?: string }; error?: { message?: string } } | null;
     if (r?.error) {
       return await record(
-        admin, integrationId, userData.user.id, false, startedAt,
+        admin, integrationId, authz.userId, false, startedAt,
         `JSON-RPC error: ${r.error.message ?? "unknown"}`,
         parsed,
       );
     }
     if (!r?.result) {
       return await record(
-        admin, integrationId, userData.user.id, false, startedAt,
+        admin, integrationId, authz.userId, false, startedAt,
         `Unexpected response shape: ${text.slice(0, 200)}`,
       );
     }
 
-    return await record(admin, integrationId, userData.user.id, true, startedAt, null, parsed);
+    return await record(admin, integrationId, authz.userId, true, startedAt, null, parsed);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown";
     return json({ success: false, error: msg, integration_id: integrationId }, 500);

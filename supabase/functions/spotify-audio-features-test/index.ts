@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         "Spotify credentials not configured — set them in the Spotify card above first.",
       );
     }
@@ -69,14 +69,14 @@ Deno.serve(async (req) => {
       const tokenText = await tokenResp.text();
       if (!tokenResp.ok) {
         return await record(
-          admin, userData.user.id, false, startedAt,
+          admin, authz.userId, false, startedAt,
           `Spotify token request failed: HTTP ${tokenResp.status}: ${tokenText.slice(0, 200)}`,
         );
       }
       const parsed = JSON.parse(tokenText) as { access_token?: string };
       if (!parsed.access_token) {
         return await record(
-          admin, userData.user.id, false, startedAt,
+          admin, authz.userId, false, startedAt,
           "Spotify returned no access_token",
         );
       }
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Network error";
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `Token fetch failed: ${msg}`,
       );
     }
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Network error";
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `Audio-features fetch failed: ${msg}`,
       );
     }
@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
       // The Nov 2024 deprecation case — surface clearly so the admin knows
       // they need a grandfathered app or the librosa fallback.
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         "Spotify HTTP 403: /audio-features is restricted for this app. " +
           "Apps registered after Nov 27, 2024 lost access to this endpoint. " +
           "Use a pre-existing Spotify app or fall back to the Librosa REST API.",
@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
 
     if (!featResp.ok) {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `Spotify HTTP ${featResp.status}: ${featText.slice(0, 200)}`,
       );
     }
@@ -131,20 +131,20 @@ Deno.serve(async (req) => {
     let parsed: { tempo?: number; key?: number; energy?: number } = {};
     try { parsed = JSON.parse(featText); } catch {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         `Unparseable audio-features response: ${featText.slice(0, 200)}`,
       );
     }
 
     if (typeof parsed.tempo !== "number") {
       return await record(
-        admin, userData.user.id, false, startedAt,
+        admin, authz.userId, false, startedAt,
         "Audio-features response missing tempo — unexpected shape",
         parsed,
       );
     }
 
-    return await record(admin, userData.user.id, true, startedAt, null, {
+    return await record(admin, authz.userId, true, startedAt, null, {
       probe_track: PROBE_TRACK_ID,
       tempo: parsed.tempo,
       key: parsed.key,

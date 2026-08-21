@@ -239,7 +239,12 @@ export function normalizeRow(
 export const INGEST_PREFIXES: { prefix: string; report_type: ReportType | null }[] = [
   ...REPORT_TYPES.map((t) => ({ prefix: `${t}/`, report_type: t })),
   { prefix: "Activations/", report_type: null },
+  // Intuizi console delivery prefixes (report kind encoded in the filename).
+  { prefix: "marketing_audience/", report_type: null },
+  { prefix: "marketing_audience_maids_and_hems/", report_type: null },
+  { prefix: "apps_summary_report/", report_type: null },
 ];
+
 
 /** Filename tokens that identify a report type in activation exports. */
 const TYPE_TOKENS: { type: ReportType; tokens: string[] }[] = [

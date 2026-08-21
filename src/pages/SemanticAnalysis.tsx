@@ -384,18 +384,42 @@ const SemanticAnalysis = () => {
                 ? "error"
                 : "pending";
 
+            const catGradient =
+              CATEGORY_KEYS.find(
+                ([, short]) =>
+                  ana?.category?.toLowerCase().startsWith(short.toLowerCase()),
+              )?.[3] ?? "var(--gradient-brand)";
+
             return (
-              <Card key={r.id} className="p-4">
-                <div className="flex flex-wrap items-center gap-2">
+              <Card
+                key={r.id}
+                className="relative overflow-hidden border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth hover:shadow-elegant"
+              >
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 w-1"
+                  style={{ background: ana ? catGradient : "hsl(var(--border))" }}
+                />
+                <div className="flex flex-wrap items-center gap-2 pl-2">
                   <p className="font-mono text-sm break-all">{r.primary_identifier}</p>
                   <Badge variant="outline" className="text-xs">
                     {r.observation_count} obs
                   </Badge>
-                  {ana?.category && <Badge className="text-xs">{ana.category}</Badge>}
+                  {ana?.category && (
+                    <Badge
+                      className="border-0 text-xs text-primary-foreground"
+                      style={{ background: catGradient }}
+                    >
+                      {ana.category}
+                    </Badge>
+                  )}
                   <span className="ml-auto text-xs text-muted-foreground">
                     updated {relative(r.updated_at)}
                   </span>
                 </div>
+
+                {ana && <ScoreBars ana={ana} />}
+
 
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
                   <StepPill

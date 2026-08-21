@@ -10,6 +10,8 @@ import { toast } from "@/hooks/use-toast";
 import InspectMappingPanel from "@/components/InspectMappingPanel";
 import PostIngestionWizard from "@/components/PostIngestionWizard";
 import ConfidenceBreakdownPanel from "@/components/ConfidenceBreakdownPanel";
+import SpeechNormalizationPanel from "@/components/SpeechNormalizationPanel";
+
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 
 

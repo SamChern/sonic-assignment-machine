@@ -27,7 +27,6 @@ Deno.serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     // Diagnostic/maintenance endpoint: admin role or internal service-role only.
@@ -50,7 +49,6 @@ Deno.serve(async (req) => {
       return json({ success: false, error: "tool_name is required" }, 400);
     }
 
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const { data: credRows, error: credErr } = await admin
       .from("integration_credentials")
       .select("field_key, field_value")

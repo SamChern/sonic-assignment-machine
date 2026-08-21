@@ -86,6 +86,26 @@ function statusOf(e: unknown): number | undefined {
   return m ? Number(m[1] ?? m[2]) : undefined;
 }
 
+/** Readable message for Errors, PostgrestErrors and FunctionsHttpError bodies. */
+function errMsg(e: unknown): string {
+  if (e instanceof Error) {
+    // deno-lint-ignore no-explicit-any
+    const ctx = (e as any).context;
+    const extra = ctx && typeof ctx === "object"
+      ? ` :: ${JSON.stringify(ctx).slice(0, 400)}`
+      : "";
+    return `${e.message}${extra}`;
+  }
+  if (e && typeof e === "object") {
+    // deno-lint-ignore no-explicit-any
+    const o = e as any;
+    const parts = [o.message, o.details, o.hint, o.code].filter(Boolean);
+    return parts.length ? parts.join(" | ") : JSON.stringify(o).slice(0, 600);
+  }
+  return String(e);
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 

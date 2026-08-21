@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
       file_uri: body.file_uri ?? null,
       total_rows: body.rows.length,
       status: "running",
-      ingested_by: user.id,
+      ingested_by: actorId,
     })
     .select("id").single();
   if (batchErr) {
@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
     try {
       // 1. Ensure audio_sources row
       let audioSourceId = row.audio_source_id ?? null;
-      const targetUserId = row.for_user_id ?? user.id;
+      const targetUserId = row.for_user_id ?? actorId!;
       if (!audioSourceId) {
         const { data: src, error: srcErr } = await supabase
           .from("audio_sources")

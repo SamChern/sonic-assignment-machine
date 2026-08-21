@@ -139,8 +139,25 @@ function daypart(iso: string): string {
 
 /** The join key. Never a feature. */
 export function identifierOf(row: Record<string, unknown>): string {
-  return pick(row, "primary_identifier", "primaryidentifier", "eid", "maid", "hem", "device_id");
+  return pick(
+    row,
+    "primary_identifier",
+    "primaryidentifier",
+    "eid",
+    "maid",
+    "madid",
+    "maid_id",
+    "idfa",
+    "aaid",
+    "gaid",
+    "hem",
+    "device_id",
+    "email1",
+    "hashed_email",
+    "email",
+  );
 }
+
 
 /* ---------------------------------------------------------------- mappings */
 
@@ -227,7 +244,95 @@ export function normalizeRow(
   return { primary_identifier: id, report_type: reportType, tags, signals, confidence, label };
 }
 
+/* ------------------------------------------- activation-level (summary) rows */
+
+/** `..._activation_id5498_uniquedevices.csv` -> `5498`. */
+export function activationIdFromKey(key: string): string | null {
+  return key.toLowerCase().match(/activation[_-]?id(\d+)/)?.[1] ?? null;
+}
+
+/**
+ * True when a row carries taxonomy content but no per-device identifier — the
+ * Intuizi "summary report" shape (audience-level rollup per taxonomy category).
+ */
+export function isSummaryRow(row: Record<string, unknown>): boolean {
+  if (identifierOf(row)) return false;
+  return !!(
+    pick(row, "taxonomyname", "taxonomy_name", "taxonomy") ||
+    pick(row, "categoryname", "category_name", "category")
+  );
+}
+
+/** True when a row has only join keys (device ids / emails) and no taxonomy content. */
+export function isRosterRow(row: Record<string, unknown>): boolean {
+  if (!identifierOf(row)) return false;
+  return !(
+    pick(row, "taxonomyname", "taxonomy_name", "taxonomy") ||
+    pick(row, "categoryname", "category_name", "category") ||
+    pick(row, "contentgenre", "content_genre", "genre", "channelname", "iab_cats")
+  );
+}
+
+
+/**
+ * Fold an audience-level summary report into one synthetic "audience profile"
+ * row so it can travel the same ontology path as a music source. Tag weights
+ * follow each category's share of unique devices.
+ */
+export function normalizeSummaryRows(
+  reportType: ReportType,
+  rows: Record<string, unknown>[],
+  objectKey: string,
+): NormalizedRow[] {
+  const activation = activationIdFromKey(objectKey) ?? "unknown";
+  const identifier = `activation:${activation}`;
+  const totals = rows.map((r) => Number(pick(r, "uniques", "unique_devices", "devices")) || 0);
+  const total = totals.reduce((a, b) => a + b, 0) || rows.length || 1;
+
+  const out: NormalizedRow[] = [];
+  rows.forEach((row, i) => {
+    const category = pick(row, "categoryname", "category_name", "category");
+    const taxonomy = pick(row, "taxonomyname", "taxonomy_name", "taxonomy");
+    if (!category && !taxonomy) return;
+    const share = (totals[i] || 1) / total;
+    const tags: OntologyTag[] = [];
+    if (category) {
+      tags.push({
+        code: `app.category.${slug(category)}`,
+        label: `App category: ${category}`,
+        parent_code: "app.category",
+      });
+    }
+    if (taxonomy) {
+      tags.push({
+        code: `app.taxonomy.${slug(taxonomy)}`,
+        label: `App taxonomy: ${taxonomy}`,
+        parent_code: "app.taxonomy",
+      });
+    }
+    out.push({
+      primary_identifier: identifier,
+      report_type: reportType,
+      tags,
+      signals: {
+        scope: "audience_summary",
+        activation_id: activation,
+        CategoryName: category,
+        TaxonomyName: taxonomy,
+        uniques: totals[i] || null,
+        share: Number(share.toFixed(4)),
+        signals: Number(pick(row, "signals", "signal_count")) || null,
+        period: [pick(row, "year"), pick(row, "month")].filter(Boolean).join("-") || null,
+      },
+      confidence: Math.min(1, 0.5 + 0.5 * share),
+      label: [taxonomy, category].filter(Boolean).join(" · ") || `Activation ${activation}`,
+    });
+  });
+  return out;
+}
+
 /* ------------------------------------------------------- prefixes & routing */
+
 
 /**
  * S3 prefixes the scheduled ingest scans.
@@ -239,7 +344,12 @@ export function normalizeRow(
 export const INGEST_PREFIXES: { prefix: string; report_type: ReportType | null }[] = [
   ...REPORT_TYPES.map((t) => ({ prefix: `${t}/`, report_type: t })),
   { prefix: "Activations/", report_type: null },
+  // Intuizi console delivery prefixes (report kind encoded in the filename).
+  { prefix: "marketing_audience/", report_type: null },
+  { prefix: "marketing_audience_maids_and_hems/", report_type: null },
+  { prefix: "apps_summary_report/", report_type: null },
 ];
+
 
 /** Filename tokens that identify a report type in activation exports. */
 const TYPE_TOKENS: { type: ReportType; tokens: string[] }[] = [

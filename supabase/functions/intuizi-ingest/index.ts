@@ -23,14 +23,20 @@ import {
   updateCalibration,
 } from "../_shared/ontology.ts";
 import {
+  activationIdFromKey,
   fetchObjectRows,
+  identifierOf,
   INGEST_PREFIXES,
+  isRosterRow,
+  isSummaryRow,
   normalizeRow,
+  normalizeSummaryRows,
   partitionDateFromKey,
   REPORT_TYPES,
   type ReportType,
   reportTypeFromKey,
 } from "../_shared/intuizi.ts";
+
 
 import { listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
@@ -75,10 +81,30 @@ function json(payload: unknown, status = 200) {
 function statusOf(e: unknown): number | undefined {
   const s = (e as { status?: number })?.status;
   if (s) return s;
-  const msg = e instanceof Error ? e.message : String(e);
+  const msg = errMsg(e);
   const m = msg.match(/gateway (\d{3})|\[(\d{3})\]/);
   return m ? Number(m[1] ?? m[2]) : undefined;
 }
+
+/** Readable message for Errors, PostgrestErrors and FunctionsHttpError bodies. */
+function errMsg(e: unknown): string {
+  if (e instanceof Error) {
+    // deno-lint-ignore no-explicit-any
+    const ctx = (e as any).context;
+    const extra = ctx && typeof ctx === "object"
+      ? ` :: ${JSON.stringify(ctx).slice(0, 400)}`
+      : "";
+    return `${e.message}${extra}`;
+  }
+  if (e && typeof e === "object") {
+    // deno-lint-ignore no-explicit-any
+    const o = e as any;
+    const parts = [o.message, o.details, o.hint, o.code].filter(Boolean);
+    return parts.length ? parts.join(" | ") : JSON.stringify(o).slice(0, 600);
+  }
+  return String(e);
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -150,6 +176,8 @@ Deno.serve(async (req) => {
     files_processed: 0,
     files_failed: 0,
     identifiers_scored: 0,
+    roster_identifiers: 0,
+
     rows_read: 0,
     probe_only: probeOnly,
     paused: false,
@@ -196,7 +224,7 @@ Deno.serve(async (req) => {
         try {
           objects = await listObjects(prefix, 100);
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg = errMsg(e);
           summary.errors.push(`list ${prefix}: ${msg}`);
           continue;
         }
@@ -279,9 +307,8 @@ Deno.serve(async (req) => {
           labels: string[];
         }>();
 
-        for (const raw of rawRows) {
-          const norm = normalizeRow(cand.report_type, raw as Record<string, unknown>);
-          if (!norm) continue;
+        const addNorm = (norm: ReturnType<typeof normalizeRow>) => {
+          if (!norm) return;
           const entry = perIdentifier.get(norm.primary_identifier) ?? {
             tags: new Map<string, OntologyTag>(),
             signals: [],
@@ -293,6 +320,74 @@ Deno.serve(async (req) => {
           entry.confidence = Math.max(entry.confidence, norm.confidence);
           if (norm.label && entry.labels.length < 4) entry.labels.push(norm.label);
           perIdentifier.set(norm.primary_identifier, entry);
+        };
+
+        for (const raw of rawRows) {
+          addNorm(normalizeRow(cand.report_type, raw as Record<string, unknown>));
+        }
+
+        // Fallback A — audience-level summary report (taxonomy rollup, no device
+        // identifier). Folded into one synthetic activation profile and scored.
+        if (!perIdentifier.size && rawRows.length) {
+          const summaryRows = (rawRows as Record<string, unknown>[]).filter(isSummaryRow);
+          for (const norm of normalizeSummaryRows(cand.report_type, summaryRows, cand.key)) {
+            addNorm(norm);
+          }
+        }
+
+        // Fallback B — roster delivery (maid / hem only). No ontological content,
+        // so nothing to score: register the identifiers against the matching
+        // activation profile so the audience is joinable downstream.
+        if (!perIdentifier.size && rawRows.length) {
+          const rosterIds = Array.from(new Set(
+            (rawRows as Record<string, unknown>[])
+              .filter(isRosterRow)
+              .map((r) => identifierOf(r))
+              .filter(Boolean),
+          ));
+          if (rosterIds.length) {
+            const activation = activationIdFromKey(cand.key);
+            let activationSourceId: string | null = null;
+            if (activation) {
+              const { data: actRow } = await admin
+                .from("intuizi_identifiers")
+                .select("audio_source_id")
+                .eq("primary_identifier", `activation:${activation}`)
+                .maybeSingle();
+              activationSourceId = actRow?.audio_source_id ?? null;
+            }
+            const nowIso = new Date().toISOString();
+            for (let i = 0; i < rosterIds.length; i += 500) {
+              const chunk = rosterIds.slice(i, i + 500).map((id) => ({
+                primary_identifier: id,
+                audio_source_id: activationSourceId,
+                observation_count: 1,
+                last_seen_at: nowIso,
+                [SIGNAL_COLUMN[cand.report_type]]: {
+                  scope: "roster",
+                  activation_id: activation,
+                  object_key: cand.key,
+                  registered_at: nowIso,
+                },
+              }));
+              const { error: rosterErr } = await admin
+                .from("intuizi_identifiers")
+                .upsert(chunk, { onConflict: "primary_identifier" });
+              if (rosterErr) throw rosterErr;
+            }
+            await admin.from("intuizi_ingest_files").update({
+              status: "done",
+              total_rows: rawRows.length,
+              processed_rows: rosterIds.length,
+              failed_rows: 0,
+              cursor_offset: rosterIds.length,
+              finished_at: nowIso,
+              error_message: null,
+            }).eq("id", fileRow.id);
+            summary.files_processed++;
+            summary.roster_identifiers += rosterIds.length;
+            continue;
+          }
         }
 
         if (!perIdentifier.size && rawRows.length) {
@@ -301,6 +396,7 @@ Deno.serve(async (req) => {
             `no usable rows — identifier or taxonomy fields missing. columns seen: ${cols}`,
           );
         }
+
 
         let scoredInFile = 0;
         let failedInFile = 0;
@@ -457,7 +553,7 @@ Deno.serve(async (req) => {
             }
           } catch (e) {
             const st = statusOf(e);
-            const msg = e instanceof Error ? e.message : String(e);
+            const msg = errMsg(e);
             failedInFile++;
             summary.errors.push(`${identifier}: ${msg}`);
 
@@ -508,7 +604,7 @@ Deno.serve(async (req) => {
         summary.files_processed++;
       } catch (e) {
         const st = statusOf(e);
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errMsg(e);
         await admin.from("intuizi_ingest_files").update({
           status: "failed",
           error_message: msg.slice(0, 2000),
@@ -538,7 +634,7 @@ Deno.serve(async (req) => {
 
     return json(summary);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errMsg(e);
     console.error("intuizi-ingest failed:", msg);
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),

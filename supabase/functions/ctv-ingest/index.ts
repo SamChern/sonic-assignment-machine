@@ -7,6 +7,7 @@ import {
   applyNormalizationToAnalysis,
   loadNormalization,
 } from "../_shared/normalization.ts";
+import { embed as ontologyEmbed } from "../_shared/ontology.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,17 +45,10 @@ interface IngestRequest {
   rows: CtvRow[];
 }
 
+// Embeddings go through the shared inference layer: EC2 inference server when
+// configured, Lovable AI Gateway otherwise, with a persistent text-hash cache.
 async function embed(text: string): Promise<number[] | null> {
-  try {
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "openai/text-embedding-3-small", input: text }),
-    });
-    if (!r.ok) return null;
-    const j = await r.json();
-    return j?.data?.[0]?.embedding ?? null;
-  } catch { return null; }
+  return await ontologyEmbed(text);
 }
 
 async function resolveTag(supabase: any, tag: CtvTag) {

@@ -12,7 +12,16 @@ export const CATEGORIES = [
 ] as const;
 export type Category = typeof CATEGORIES[number];
 
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { embedCached } from "./inference.ts";
+
+// Dedicated service-role client used only for the embedding cache, so callers
+// that do not already hold a client still get cache hits.
+const embedCacheClient = (() => {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  return url && key ? createClient(url, key) : null;
+})();
 
 export interface OntologyTag {
   code: string;
@@ -21,32 +30,13 @@ export interface OntologyTag {
   weight?: number;
 }
 
-/** Embed a text string. Returns null on any failure (non-fatal by design). */
+/**
+ * Embed a text string. Routed through the inference layer (EC2 inference server
+ * first, Lovable AI Gateway as fallback) and served from `embedding_cache` when
+ * the same text has been embedded before. Returns null on non-terminal failure.
+ */
 export async function embed(text: string): Promise<number[] | null> {
-  try {
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model: "openai/text-embedding-3-small", input: text }),
-    });
-    if (!r.ok) {
-      // Surface terminal gateway denials so callers can trip the breaker.
-      if (r.status === 402 || r.status === 403 || r.status === 429) {
-        const body = await r.text();
-        throw Object.assign(new Error(`gateway ${r.status}: ${body}`), { status: r.status });
-      }
-      return null;
-    }
-    const j = await r.json();
-    return j?.data?.[0]?.embedding ?? null;
-  } catch (e) {
-    const status = (e as { status?: number })?.status;
-    if (status === 402 || status === 403 || status === 429) throw e;
-    return null;
-  }
+  return await embedCached(embedCacheClient, text);
 }
 
 /** Find or create a taxonomy node for a tag code; returns its id. */

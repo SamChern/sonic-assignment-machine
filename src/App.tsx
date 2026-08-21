@@ -51,6 +51,8 @@ const App = () => (
               <Route path="/admin/integrations" element={<AdminIntegrations />} />
               <Route path="/admin/ctv" element={<AdminCTV />} />
               <Route path="/admin/pipeline" element={<IntegrationStatus />} />
+              <Route path="/admin/compatibility" element={<IngestionCompatibility />} />
+
               <Route path="/admin/semantic" element={<SemanticAnalysis />} />
 
 

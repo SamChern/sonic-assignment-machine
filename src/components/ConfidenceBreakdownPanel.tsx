@@ -20,6 +20,8 @@ import {
   X,
   SlidersHorizontal,
   Flag,
+  TrendingUp,
+
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -378,6 +380,54 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
     () => driverRows.filter((r) => rowSupport(r.share) < threshold).length,
     [driverRows, rowSupport, threshold],
   );
+
+  /* -------------------------------------------------- fastest-moving deltas */
+
+  const rowKey = (r: SummaryRow) =>
+    String(r.TaxonomyName || r.CategoryName || "—").trim().toLowerCase();
+
+  /** Driver rows ranked by |support delta| between the two activations. */
+  const rowMovers = useMemo(() => {
+    if (!compare) return { ranked: [] as { key: string; label: string; a: number; b: number; delta: number }[], top: new Map<string, number>() };
+    const fa = math?.tier.factor ?? 0;
+    const fb = compareMath?.tier.factor ?? 0;
+    const acc = new Map<string, { label: string; a: number; b: number }>();
+    for (const r of driverRows) {
+      const k = rowKey(r);
+      const e = acc.get(k) ?? { label: String(r.TaxonomyName || r.CategoryName || "—"), a: 0, b: 0 };
+      e.a += (Number(r.share) || 0) * fa;
+      acc.set(k, e);
+    }
+    for (const r of compareDriverRows) {
+      const k = rowKey(r);
+      const e = acc.get(k) ?? { label: String(r.TaxonomyName || r.CategoryName || "—"), a: 0, b: 0 };
+      e.b += (Number(r.share) || 0) * fb;
+      acc.set(k, e);
+    }
+    const ranked = Array.from(acc.entries())
+      .map(([key, v]) => ({ key, label: v.label, a: v.a, b: v.b, delta: v.b - v.a }))
+      .filter((v) => Math.abs(v.delta) > 0.0001)
+      .sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+    const top = new Map<string, number>();
+    ranked.slice(0, 3).forEach((v, i) => top.set(v.key, i + 1));
+    return { ranked, top };
+  }, [compare, compareDriverRows, driverRows, math, compareMath]);
+
+  /** Category scores ranked by |delta|; top 2 get highlighted. */
+  const scoreMovers = useMemo(() => {
+    if (!compare) return { ranked: [] as { k: string; label: string; a: number; b: number; delta: number }[], top: new Map<string, number>() };
+    const ranked = SCORE_KEYS.map(([k, label]) => {
+      const a = Number(analysis?.[k]) || 0;
+      const b = Number(compare.analysis?.[k]) || 0;
+      return { k: String(k), label: String(label), a, b, delta: b - a };
+    })
+      .filter((v) => Math.abs(v.delta) >= 1)
+      .sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+    const top = new Map<string, number>();
+    ranked.slice(0, 2).forEach((v, i) => top.set(v.k, i + 1));
+    return { ranked, top };
+  }, [compare, analysis]);
+
 
   const reasons = useMemo(() => {
     const list: string[] = [];
@@ -966,7 +1016,74 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                     </table>
                   </div>
 
+                  {/* fastest movers */}
+                  {(rowMovers.ranked.length > 0 || scoreMovers.ranked.length > 0) && (
+                    <div className="mt-4 rounded-md border border-primary/40 bg-primary/10 p-3">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold">
+                        <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                        Fastest movers ({activation.trim()} → {compareId})
+                      </div>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Driver rows by support shift
+                          </p>
+                          <ul className="mt-1 space-y-1">
+                            {rowMovers.ranked.length === 0 && (
+                              <li className="text-[11px] text-muted-foreground">No row-level shift.</li>
+                            )}
+                            {rowMovers.ranked.slice(0, 3).map((m, i) => (
+                              <li key={m.key} className="flex items-center gap-2 text-[11px]">
+                                <Badge variant="outline" className="h-4 px-1 font-mono text-[10px]">
+                                  #{i + 1}
+                                </Badge>
+                                <span className="truncate">{m.label}</span>
+                                <span
+                                  className={
+                                    "ml-auto font-mono " +
+                                    (m.delta > 0 ? "text-primary" : "text-destructive")
+                                  }
+                                >
+                                  {m.a.toFixed(2)} → {m.b.toFixed(2)} ({m.delta > 0 ? "+" : ""}
+                                  {m.delta.toFixed(2)})
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Category scores by point shift
+                          </p>
+                          <ul className="mt-1 space-y-1">
+                            {scoreMovers.ranked.length === 0 && (
+                              <li className="text-[11px] text-muted-foreground">No category shift ≥ 1 point.</li>
+                            )}
+                            {scoreMovers.ranked.slice(0, 3).map((m, i) => (
+                              <li key={m.k} className="flex items-center gap-2 text-[11px]">
+                                <Badge variant="outline" className="h-4 px-1 font-mono text-[10px]">
+                                  #{i + 1}
+                                </Badge>
+                                <span className="truncate">{m.label}</span>
+                                <span
+                                  className={
+                                    "ml-auto font-mono " +
+                                    (m.delta > 0 ? "text-primary" : "text-destructive")
+                                  }
+                                >
+                                  {Math.round(m.a)} → {Math.round(m.b)} ({m.delta > 0 ? "+" : ""}
+                                  {Math.round(m.delta)})
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* driver rows side by side */}
+
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">
                     {[
                       { id: activation.trim(), rows: driverRows, cat: analysis?.category, nodes: tags.length, factor: math?.tier.factor },
@@ -1005,12 +1122,31 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                             {side.rows.slice(0, 10).map((r, i) => {
                               const sup = rowSupport(r.share, side.factor);
                               const flg = sup < threshold;
+                              const rank = rowMovers.top.get(rowKey(r));
                               return (
-                              <tr key={i} className={"border-b border-border/50 " + (flg ? "bg-destructive/5" : "")}>
+                              <tr
+                                key={i}
+                                className={
+                                  "border-b border-border/50 " +
+                                  (rank
+                                    ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
+                                    : flg
+                                      ? "bg-destructive/5"
+                                      : "")
+                                }
+                              >
                                 <td className="py-1 pr-2 text-muted-foreground">{r.feed}</td>
                                 <td className="py-1 pr-2">
                                   {r.TaxonomyName || r.CategoryName || "—"}
                                   {flg && <span className="ml-1 text-destructive">⚑</span>}
+                                  {rank && (
+                                    <Badge
+                                      variant="outline"
+                                      className="ml-1 h-4 border-primary/50 px-1 font-mono text-[10px] text-primary"
+                                    >
+                                      mover #{rank}
+                                    </Badge>
+                                  )}
                                 </td>
                                 <td className="py-1 pr-2 font-mono">
                                   {r.share != null ? `${(Number(r.share) * 100).toFixed(0)}%` : "—"}
@@ -1019,6 +1155,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                               </tr>
                               );
                             })}
+
                           </tbody>
                         </table>
                       </div>
@@ -1031,9 +1168,28 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                       const a = Number(analysis?.[k]) || 0;
                       const b = Number(compare.analysis?.[k]) || 0;
                       const d = b - a;
+                      const rank = scoreMovers.top.get(String(k));
                       return (
-                        <div key={k} className="rounded-md border border-border bg-card/60 px-3 py-2">
-                          <p className="text-[11px] text-muted-foreground">{label}</p>
+                        <div
+                          key={k}
+                          className={
+                            "rounded-md border px-3 py-2 " +
+                            (rank
+                              ? "border-primary/50 bg-primary/15 ring-1 ring-inset ring-primary/30"
+                              : "border-border bg-card/60")
+                          }
+                        >
+                          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            {label}
+                            {rank && (
+                              <Badge
+                                variant="outline"
+                                className="h-4 border-primary/50 px-1 font-mono text-[10px] text-primary"
+                              >
+                                mover #{rank}
+                              </Badge>
+                            )}
+                          </p>
                           <p className="text-sm font-semibold">
                             {Math.round(a)} → {Math.round(b)}{" "}
                             <span
@@ -1048,6 +1204,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                           </p>
                         </div>
                       );
+
                     })}
                   </div>
                 </>

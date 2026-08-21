@@ -5,6 +5,7 @@
 // runs them against the UNCHANGED Librosa REST endpoint, never exceeding the
 // concurrency the upstream service can absorb.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { AuthzError, requireAdmin } from "../_shared/admin.ts";
 import {
   breakerOpen,
   callUpstream,

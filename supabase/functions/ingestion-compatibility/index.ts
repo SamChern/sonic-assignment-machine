@@ -459,6 +459,7 @@ Deno.serve(async (req) => {
 
   for (const obj of targets) {
     const reportType = reportTypeFromKey(obj.key)!;
+    const t0 = Date.now();
     try {
       const url = await signReadUrl(obj.key);
       const rows = await fetchObjectRows(url, obj.key, maxRows);
@@ -468,6 +469,25 @@ Deno.serve(async (req) => {
       const rosterRows = rows.filter((r) => isRosterRow(r)).length;
       const normalized = rows.map((r) => normalizeRow(reportType, r)).filter(Boolean);
       const tagRate = rows.length ? normalized.length / rows.length : 0;
+      log(`probe.${obj.key}`, { rows: rows.length, ms: Date.now() - t0 });
+      /** First rows with identifier-ish values masked, for debug reruns only. */
+      const sampleRows = rows.slice(0, 3).map((r) =>
+        Object.fromEntries(
+          Object.entries(r).map(([k, v]) =>
+            /id$|identifier|maid|madid|idfa|aaid|gaid|hem|email/i.test(k)
+              ? [k, v ? "«masked»" : v]
+              : [k, typeof v === "string" ? v.slice(0, 120) : v]
+          ),
+        )
+      );
+      const probeDebug = {
+        latency_ms: Date.now() - t0,
+        rows_read: rows.length,
+        columns: cols,
+        sample_rows: sampleRows,
+        first_normalized: normalized.slice(0, 2),
+      };
+
 
       sampled.push({
         key: obj.key,

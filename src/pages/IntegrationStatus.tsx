@@ -657,12 +657,17 @@ const IntegrationStatus = () => {
           })}
         </ol>
 
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate("/admin/compatibility")}>
+            <CheckCircle2 className="mr-1 h-4 w-4" />
+            Ingestion compatibility tests
+          </Button>
           <Button variant="outline" size="sm" onClick={() => navigate("/admin/semantic")}>
             <Activity className="mr-1 h-4 w-4" />
             Post-ingestion semantic analysis
           </Button>
         </div>
+
 
         <div className="mt-6">
           <IngestDebugPanel />

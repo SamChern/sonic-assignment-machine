@@ -199,6 +199,11 @@ All colors MUST be HSL.
   .gradient-brand {
     background: var(--gradient-brand);
   }
+
+  .gradient-teal {
+    background: var(--gradient-teal);
+  }
+
   
   .gradient-subtle {
     background: var(--gradient-subtle);

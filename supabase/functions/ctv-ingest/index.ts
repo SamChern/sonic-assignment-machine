@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
   if (authz instanceof AuthzError) {
     return new Response(JSON.stringify({ error: authz.message }), { status: authz.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-  const user = { id: authz.userId };
+  const actorId: string | null = authz.userId;
 
   let body: IngestRequest;
   try { body = await req.json(); } catch {
@@ -142,6 +142,11 @@ Deno.serve(async (req) => {
   if (!body?.feed_name || !Array.isArray(body.rows) || body.rows.length === 0) {
     return new Response(JSON.stringify({ error: "feed_name and rows[] required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
+  // Internal (service-role) runs have no acting user, so every row must name an owner.
+  if (!actorId && body.rows.some((r) => !r.for_user_id)) {
+    return new Response(JSON.stringify({ error: "Internal runs require for_user_id on every row" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
 
   const { data: batch, error: batchErr } = await supabase
     .from("ctv_ingest_batches")

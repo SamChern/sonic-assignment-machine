@@ -1180,7 +1180,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                               : "border-border bg-card/60")
                           }
                         >
-                          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                             {label}
                             {rank && (
                               <Badge
@@ -1190,7 +1190,8 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                                 mover #{rank}
                               </Badge>
                             )}
-                          </p>
+                          </div>
+
                           <p className="text-sm font-semibold">
                             {Math.round(a)} → {Math.round(b)}{" "}
                             <span

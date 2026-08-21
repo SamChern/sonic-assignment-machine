@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import InspectMappingPanel from "@/components/InspectMappingPanel";
+import PostIngestionWizard from "@/components/PostIngestionWizard";
+
 import {
   ArrowLeft,
   RefreshCw,
@@ -262,8 +264,13 @@ const SemanticAnalysis = () => {
         </div>
 
         <div className="mt-6">
+          <PostIngestionWizard />
+        </div>
+
+        <div className="mt-6">
           <InspectMappingPanel />
         </div>
+
 
 
 

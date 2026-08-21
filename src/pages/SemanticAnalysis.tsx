@@ -530,6 +530,9 @@ const SemanticAnalysis = () => {
           <div className="mb-3 flex items-center gap-2">
             <Layers className="h-4 w-4 text-primary" />
             <h2 className="text-sm font-semibold">Identifier pipeline status</h2>
+            <div className="ml-auto">
+              <PerfMetricsBadge />
+            </div>
           </div>
           <IdentifierFilterBar
             value={filter}

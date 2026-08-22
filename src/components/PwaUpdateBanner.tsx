@@ -23,7 +23,7 @@ const PwaUpdateBanner = () => {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4"
+      className="above-mobile-nav fixed inset-x-0 z-50 flex justify-center px-4"
     >
       <div className="flex w-full max-w-md items-center gap-3 rounded-xl border border-border/60 bg-card/90 p-3 shadow-elegant backdrop-blur-md">
         <span

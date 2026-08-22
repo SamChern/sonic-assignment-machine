@@ -215,6 +215,28 @@ All colors MUST be HSL.
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
+  /* Float fixed overlays (banners, floating panels) above the sticky mobile nav */
+  .above-mobile-nav {
+    bottom: calc(4rem + env(safe-area-inset-bottom, 0px) + 0.75rem);
+  }
+  @media (min-width: 640px) {
+    .above-mobile-nav {
+      bottom: 1rem;
+    }
+  }
+
+  /* Sonner toasts must clear the sticky mobile nav + home indicator */
+  @media (max-width: 639px) {
+    [data-sonner-toaster][data-y-position="bottom"] {
+      bottom: calc(4rem + env(safe-area-inset-bottom, 0px) + 0.75rem) !important;
+    }
+  }
+
+  /* Keep overlay content (dialogs, bottom sheets, drawers) clear of the nav + home indicator */
+  .overlay-safe-bottom {
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
 
   .gradient-primary {
     background: var(--gradient-primary);

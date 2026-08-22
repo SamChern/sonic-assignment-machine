@@ -60,6 +60,22 @@ const Index = () => {
   const logoRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
 
+  // Keep the tab state and the ?tab= param in sync so the mobile bottom nav
+  // can deep-link into a specific tab from any route.
+  const urlTab = searchParams.get("tab");
+  useEffect(() => {
+    if (urlTab && urlTab !== activeTab) setActiveTab(urlTab);
+  }, [urlTab]);
+
+  const handleTabChange = (next: string) => {
+    setActiveTab(next);
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", next);
+    setSearchParams(params, { replace: true });
+  };
+
+
+
   useEffect(() => {
     const handleScroll = () => {
       const scrollY = window.scrollY;

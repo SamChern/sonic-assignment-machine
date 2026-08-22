@@ -431,39 +431,37 @@ const Index = () => {
       </div>
 
       {/* Main Content with Tabs */}
-      <div className="mx-auto max-w-7xl px-6 py-12">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-8">
-            <TabsTrigger value="select" className="flex items-center gap-2">
+          <TabsList className="mb-6 sm:mb-8 flex w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
+            <TabsTrigger value="select" className="flex shrink-0 items-center gap-2 min-h-11">
               <FileAudio className="h-4 w-4" />
               <span className="hidden sm:inline">Select Sources</span>
               <span className="sm:hidden">Sources</span>
             </TabsTrigger>
-            <TabsTrigger value="network" className="flex items-center gap-2" disabled={!results}>
+            <TabsTrigger value="network" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!results}>
               <Network className="h-4 w-4" />
-              <span className="hidden sm:inline">Network</span>
-              <span className="sm:hidden">Network</span>
+              <span>Network</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex items-center gap-2" disabled={!results}>
+            <TabsTrigger value="analysis" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!results}>
               <ListTree className="h-4 w-4" />
-              <span className="hidden sm:inline">Analysis</span>
-              <span className="sm:hidden">Analysis</span>
+              <span>Analysis</span>
             </TabsTrigger>
-            <TabsTrigger value="discover" className="flex items-center gap-2" disabled={!user}>
+            <TabsTrigger value="discover" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!user}>
               <UsersIcon className="h-4 w-4" />
-              <span className="hidden sm:inline">Discover</span>
-              <span className="sm:hidden">Discover</span>
+              <span>Discover</span>
             </TabsTrigger>
           </TabsList>
 
           {/* Tab 1: Select Audio Sources */}
           <TabsContent value="select" className="space-y-8">
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-foreground">
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground">
                   Select Audio Sources
                   {totalItems > 0 && <span className="text-primary ml-2">({totalItems} selected)</span>}
                 </h2>
+
                 {user && (
                   <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
                     <Save className="h-3.5 w-3.5 text-green-500" />

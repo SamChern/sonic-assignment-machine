@@ -14,6 +14,13 @@ All colors MUST be HSL.
     --mobile-nav-h: 4rem;
     --above-mobile-nav-offset: calc(var(--mobile-nav-h) + var(--safe-bottom) + 0.75rem);
 
+    /* Stacking scale: the sticky mobile nav always stays on top and visible */
+    --z-docked: 30; /* docked panels (upload/analysis progress) */
+    --z-overlay: 50; /* dialog & sheet overlays + content */
+    --z-banner: 55; /* PWA update banner */
+    --z-nav: 60; /* sticky mobile bottom nav */
+    --z-toast: 70; /* toasts (always readable, docked above the nav) */
+
     --background: 175 58% 4%;
     --foreground: 172 34% 87%;
 
@@ -232,6 +239,9 @@ All colors MUST be HSL.
   }
 
   /* Sonner toasts must clear the sticky mobile nav + home indicator */
+  [data-sonner-toaster] {
+    z-index: var(--z-toast) !important;
+  }
   @media (max-width: 639px) {
     [data-sonner-toaster][data-y-position="bottom"] {
       bottom: var(--above-mobile-nav-offset) !important;
@@ -241,6 +251,52 @@ All colors MUST be HSL.
   /* Keep overlay content (dialogs, bottom sheets, drawers) clear of the nav + home indicator */
   .overlay-safe-bottom {
     padding-bottom: calc(1.5rem + var(--safe-bottom)) !important;
+  }
+
+  /* Stacking helpers driven by the single z-scale */
+  .z-docked {
+    z-index: var(--z-docked);
+  }
+  .z-overlay {
+    z-index: var(--z-overlay);
+  }
+  .z-banner {
+    z-index: var(--z-banner);
+  }
+  .z-nav {
+    z-index: var(--z-nav);
+  }
+
+  /* Dialog/sheet backdrops stop short of the nav on mobile so it stays visible & tappable */
+  @media (max-width: 639px) {
+    .overlay-backdrop-above-nav {
+      bottom: calc(var(--mobile-nav-h) + var(--safe-bottom));
+    }
+    /* Modal content is capped so it never reaches under the nav */
+    .overlay-content-above-nav {
+      max-height: calc(100dvh - var(--mobile-nav-h) - var(--safe-bottom) - 2rem);
+    }
+    .sheet-bottom-above-nav {
+      bottom: calc(var(--mobile-nav-h) + var(--safe-bottom));
+    }
+  }
+
+  /* Docked progress panel: floats above the nav on mobile, inline on desktop */
+  .docked-above-nav {
+    position: fixed;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: var(--above-mobile-nav-offset);
+    z-index: var(--z-docked);
+  }
+  @media (min-width: 640px) {
+    .docked-above-nav {
+      position: static;
+      left: auto;
+      right: auto;
+      bottom: auto;
+      z-index: auto;
+    }
   }
 
 

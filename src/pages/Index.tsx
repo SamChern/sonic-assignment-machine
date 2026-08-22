@@ -30,6 +30,7 @@ import { TasteNeighbors } from "@/components/TasteNeighbors";
 import { useFingerprints } from "@/hooks/useFingerprints";
 import { cn } from "@/lib/utils";
 import { AudioJobsPanel } from "@/components/AudioJobsPanel";
+import { UploadProgressPanel } from "@/components/UploadProgressPanel";
 
 
 const Index = () => {
@@ -591,48 +592,12 @@ const Index = () => {
               </Collapsible>
             )}
 
-            {/* Loading State with Progress */}
+            {/* Loading State with Progress — docks above the sticky bottom nav on mobile */}
             {isAnalyzing && analysisProgress && (
-              <Card className="p-8 shadow-elegant">
-                <div className="space-y-4 text-center">
-                  <div className="flex justify-center">
-                    <div className="h-16 w-16 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                  </div>
-                  
-                  {/* Progress Status */}
-                  <div className="space-y-2">
-                    <p className="text-lg font-semibold text-foreground">
-                      {analysisProgress.status === 'checking-cache' && 'Checking semantic cache...'}
-                      {analysisProgress.status === 'analyzing' && 'Running AI semantic analysis...'}
-                      {analysisProgress.status === 'complete' && 'Finalizing results...'}
-                    </p>
-                    
-                    {/* Progress indicators */}
-                    <div className="flex justify-center gap-4 text-sm">
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary/20 rounded-full">
-                        <Activity className="h-3.5 w-3.5 text-primary animate-pulse" />
-                        <span className="text-muted-foreground">
-                          {analysisProgress.total} source{analysisProgress.total !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      
-                      {analysisProgress.status === 'analyzing' && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 rounded-full">
-                          <Sparkles className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-primary font-medium">Agent processing...</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {analysisProgress.status === 'checking-cache' && 
-                        'Looking up previously analyzed sources to speed up processing...'}
-                      {analysisProgress.status === 'analyzing' && 
-                        'Extracting semantic features via hierarchical transformer and aligning modalities'}
-                    </p>
-                  </div>
-                </div>
-              </Card>
+              <UploadProgressPanel
+                status={analysisProgress.status}
+                total={analysisProgress.total}
+              />
             )}
           </TabsContent>
 

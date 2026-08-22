@@ -398,9 +398,9 @@ const Index = () => {
 
           
           {/* Example Output Preview */}
-          <div className="mt-8 flex justify-center items-center gap-12">
-            {/* Main glowing image - positioned left */}
-            <div className="relative rounded-3xl max-w-md animate-float flex-shrink-0">
+          <div className="mt-6 sm:mt-8 flex flex-col md:flex-row justify-center items-center gap-6 md:gap-12">
+            {/* Main glowing image */}
+            <div className="relative rounded-3xl w-full max-w-sm md:max-w-md animate-float md:flex-shrink-0">
               <div className="rounded-3xl overflow-hidden" style={{ maskImage: 'linear-gradient(to bottom, black 35%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 35%, transparent 100%)' }}>
                 <img 
                   src={exampleOutput} 
@@ -411,14 +411,14 @@ const Index = () => {
               </div>
             </div>
             
-            {/* Text content - positioned right */}
-            <div className="flex flex-col items-start gap-6 max-w-md">
-              <p className="text-xl sm:text-2xl text-foreground">
+            {/* Text content */}
+            <div className="flex w-full flex-col items-center md:items-start gap-5 sm:gap-6 max-w-md text-center md:text-left">
+              <p className="text-lg sm:text-2xl text-foreground">
                 Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
               </p>
               <Button 
                 size="lg" 
-                className="shadow-xl"
+                className="shadow-xl w-full sm:w-auto min-h-12"
                 onClick={() => setShowGetStartedDialog(true)}
               >
                 <Sparkles className="mr-2 h-5 w-5" />
@@ -426,6 +426,7 @@ const Index = () => {
               </Button>
             </div>
           </div>
+
         </div>
       </div>
 

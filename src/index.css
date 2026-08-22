@@ -8,6 +8,12 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
+    /* Device insets & mobile chrome metrics — single source of truth */
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
+    --mobile-nav-h: 4rem;
+    --above-mobile-nav-offset: calc(var(--mobile-nav-h) + var(--safe-bottom) + 0.75rem);
+
     --background: 175 58% 4%;
     --foreground: 172 34% 87%;
 

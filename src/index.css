@@ -14,6 +14,13 @@ All colors MUST be HSL.
     --mobile-nav-h: 4rem;
     --above-mobile-nav-offset: calc(var(--mobile-nav-h) + var(--safe-bottom) + 0.75rem);
 
+    /* Stacking scale: the sticky mobile nav always stays on top and visible */
+    --z-docked: 30; /* docked panels (upload/analysis progress) */
+    --z-overlay: 50; /* dialog & sheet overlays + content */
+    --z-banner: 55; /* PWA update banner */
+    --z-nav: 60; /* sticky mobile bottom nav */
+    --z-toast: 70; /* toasts (always readable, docked above the nav) */
+
     --background: 175 58% 4%;
     --foreground: 172 34% 87%;
 

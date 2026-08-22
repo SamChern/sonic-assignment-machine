@@ -296,7 +296,7 @@ const Index = () => {
       {/* Sticky Header */}
       <header
         ref={headerRef}
-        className="fixed top-0 left-0 right-0 z-50 px-6 py-3 flex items-center justify-between backdrop-blur-md border-b transition-all duration-150 ease-out will-change-[background-color,border-color]"
+        className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-between gap-2 backdrop-blur-md border-b transition-all duration-150 ease-out will-change-[background-color,border-color]"
         style={{
           backgroundColor: 'hsl(var(--background) / var(--header-bg-opacity, 0))',
           borderColor: 'hsl(var(--border) / var(--header-border-opacity, 0))',

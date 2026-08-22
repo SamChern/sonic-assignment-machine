@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { AudioUploader } from "@/components/AudioUploader";
 import { AnalysisResults, predictCategory, getCategoryStyles, getCategoryIcon } from "@/components/AnalysisResults";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,10 @@ const Index = () => {
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("select");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<string>(
+    () => searchParams.get("tab") ?? "select",
+  );
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [showGetStartedDialog, setShowGetStartedDialog] = useState(false);
   const logoRef = useRef<HTMLDivElement>(null);
@@ -432,7 +435,7 @@ const Index = () => {
 
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="mb-6 sm:mb-8 flex w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
             <TabsTrigger value="select" className="flex shrink-0 items-center gap-2 min-h-11">
               <FileAudio className="h-4 w-4" />

@@ -30,6 +30,7 @@ import { TasteNeighbors } from "@/components/TasteNeighbors";
 import { useFingerprints } from "@/hooks/useFingerprints";
 import { cn } from "@/lib/utils";
 import { AudioJobsPanel } from "@/components/AudioJobsPanel";
+import { UploadProgressPanel } from "@/components/UploadProgressPanel";
 
 
 const Index = () => {

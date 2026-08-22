@@ -533,9 +533,10 @@ const AdminDashboard = () => {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
+              className="gap-2 shrink-0 min-h-11 whitespace-nowrap border-green-500/50 text-green-500 hover:bg-green-500/10"
               onClick={handleHealthCheck}
               disabled={ec2Loading}
+              aria-label="EC2 health check"
             >
               <Activity className={`h-4 w-4 ${ec2Loading ? "animate-pulse" : ""}`} />
               <span className="hidden sm:inline">{ec2Loading ? "Checking..." : "EC2 Health"}</span>
@@ -545,15 +546,16 @@ const AdminDashboard = () => {
               <Button
                 onClick={handleAnalyzeSelected}
                 disabled={isAnalyzing}
-                className="gradient-primary"
+                className="gradient-primary shrink-0 min-h-11 whitespace-nowrap"
               >
                 <Sparkles className="h-4 w-4 mr-2" />
-                {isAnalyzing ? "Analyzing..." : `Analyze ${selectedSourceIds.length} Sources`}
+                {isAnalyzing ? "Analyzing..." : `Analyze ${selectedSourceIds.length}`}
               </Button>
             )}
             <Button
               variant="outline"
               size="sm"
+              className="shrink-0 min-h-11 whitespace-nowrap"
               onClick={() => navigate("/admin/pipeline")}
             >
               <Activity className="h-4 w-4 mr-2" />
@@ -562,6 +564,7 @@ const AdminDashboard = () => {
             <Button
               variant="outline"
               size="sm"
+              className="shrink-0 min-h-11 whitespace-nowrap"
               onClick={() => navigate("/admin/integrations")}
             >
               <Plug className="h-4 w-4 mr-2" />
@@ -572,7 +575,8 @@ const AdminDashboard = () => {
       </div>
 
       {/* Stats Overview */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Card className="p-4 bg-card/80">
             <div className="flex items-center gap-3">

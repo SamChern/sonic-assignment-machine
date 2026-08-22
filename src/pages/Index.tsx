@@ -370,7 +370,7 @@ const Index = () => {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
         
-        <div className="relative mx-auto max-w-7xl px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 pt-16 sm:pt-24 pb-8 sm:pb-12">
           <div className="text-center" ref={logoRef}>
             <div className="relative inline-block">
               <img

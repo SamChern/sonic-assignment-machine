@@ -805,8 +805,8 @@ const AdminDashboard = () => {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="users" className="gap-2">
+          <TabsList className="mb-6 flex w-full justify-start overflow-x-auto no-scrollbar">
+            <TabsTrigger value="users" className="gap-2 shrink-0 min-h-11 whitespace-nowrap">
               <Users className="h-4 w-4" />
               {entityMode === "user"
                 ? "Users & Sources"
@@ -814,19 +814,20 @@ const AdminDashboard = () => {
                   ? "Providers & Signals"
                   : "Cohorts & Identifiers"}
             </TabsTrigger>
-            <TabsTrigger value="fingerprints" className="gap-2">
+            <TabsTrigger value="fingerprints" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" aria-label="Aggregate">
               <Fingerprint className="h-4 w-4" />
               <span className="hidden sm:inline">Aggregate</span>
             </TabsTrigger>
-            <TabsTrigger value="compare" className="gap-2">
+            <TabsTrigger value="compare" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" aria-label="Compare">
               <GitCompare className="h-4 w-4" />
               <span className="hidden sm:inline">Compare</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="gap-2" disabled={!analysisResults}>
+            <TabsTrigger value="analysis" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" disabled={!analysisResults} aria-label="Analysis">
               <Network className="h-4 w-4" />
               <span className="hidden sm:inline">Analysis</span>
             </TabsTrigger>
           </TabsList>
+
 
           <TabsContent value="users" className="space-y-4">
             {entityMode === "signal" ? (

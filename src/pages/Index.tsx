@@ -316,7 +316,7 @@ const Index = () => {
         </div>
         
         {/* Auth Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* EC2 Health check lives in the admin dashboard header */}
 
 
@@ -324,10 +324,10 @@ const Index = () => {
           {authLoading ? (
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           ) : user ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-3">
               {isAdmin && (
-                <Link to="/admin">
-                  <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary">
+                <Link to="/admin" aria-label="Admin dashboard">
+                  <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
                     <Shield className="h-4 w-4" />
                     <span className="hidden sm:inline">Admin</span>
                   </Button>
@@ -342,7 +342,7 @@ const Index = () => {
               <span className="text-sm text-foreground font-medium hidden sm:inline">
                 {profile?.username || user.email?.split('@')[0]}
               </span>
-              <Button variant="ghost" size="sm" onClick={signOut}>
+              <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out" className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>

@@ -610,9 +610,10 @@ const AdminDashboard = () => {
         {/* Global meta filter: entity mode + filter picker (applies to all tabs) */}
         <Card className="p-4 mb-6 bg-card/80">
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
               <span className="text-sm font-medium text-muted-foreground">Filter by source</span>
-              <div className="inline-flex rounded-md border border-border p-0.5 bg-muted">
+              <div className="flex w-full sm:w-auto sm:inline-flex overflow-x-auto no-scrollbar rounded-md border border-border p-0.5 bg-muted">
+
                 <Button
                   size="sm"
                   variant={entityMode === "user" ? "default" : "ghost"}

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { Suspense, lazy } from "react";
 import PwaUpdateBanner from "@/components/PwaUpdateBanner";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import Index from "./pages/Index";
 
 const Auth = lazy(() => import("./pages/Auth"));
@@ -43,6 +44,7 @@ const App = () => (
         <Sonner />
         <PwaUpdateBanner />
         <BrowserRouter>
+          <div className="pb-16 sm:pb-0">
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<Index />} />
@@ -62,6 +64,8 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
+          </div>
+          <MobileBottomNav />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

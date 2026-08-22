@@ -498,17 +498,17 @@ const IntegrationStatus = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card/40 backdrop-blur sticky top-0 z-10">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between gap-4">
+        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
               <ArrowLeft className="h-4 w-4 mr-1" /> Back
             </Button>
             <div className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-primary" />
-              <h1 className="text-xl font-semibold">Integration Status</h1>
+              <h1 className="text-lg sm:text-xl font-semibold truncate">Integration Status</h1>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar -mx-1 px-1">
             {ingestState?.paused ? (
               <Button variant="default" size="sm" onClick={() => invokeIngest("resume")} disabled={running}>
                 {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-2" />}
@@ -535,7 +535,7 @@ const IntegrationStatus = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-6 py-8 max-w-4xl space-y-4">
+      <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-4xl space-y-4">
         <p className="text-sm text-muted-foreground">
           End-to-end pipeline health from the Intuizi console through to outbound
           segment activation. Each stage reports its most recent run and the

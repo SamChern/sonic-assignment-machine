@@ -192,6 +192,17 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
+  /* Horizontal scroll rails (mobile tab bars, toggle groups) without visible scrollbar */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+
   .gradient-primary {
     background: var(--gradient-primary);
   }

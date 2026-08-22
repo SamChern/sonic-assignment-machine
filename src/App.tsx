@@ -44,7 +44,7 @@ const App = () => (
         <Sonner />
         <PwaUpdateBanner />
         <BrowserRouter>
-          <div className="pb-16 sm:pb-0">
+          <div className="pb-mobile-nav">
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<Index />} />

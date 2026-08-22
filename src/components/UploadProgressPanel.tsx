@@ -2,7 +2,7 @@ import { Activity, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-export type UploadProgressStatus = "checking-cache" | "analyzing" | "complete";
+export type UploadProgressStatus = "idle" | "checking-cache" | "analyzing" | "complete";
 
 export interface UploadProgressPanelProps {
   status: UploadProgressStatus;
@@ -11,6 +11,7 @@ export interface UploadProgressPanelProps {
 }
 
 const STATUS_LABEL: Record<UploadProgressStatus, string> = {
+  idle: "Preparing analysis...",
   "checking-cache": "Checking semantic cache...",
   analyzing: "Running AI semantic analysis...",
   complete: "Finalizing results...",

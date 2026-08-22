@@ -202,6 +202,19 @@ All colors MUST be HSL.
     display: none;
   }
 
+  /* Reserve room for the sticky mobile nav plus the iOS home indicator */
+  .pb-mobile-nav {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 640px) {
+    .pb-mobile-nav {
+      padding-bottom: 0;
+    }
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
 
   .gradient-primary {
     background: var(--gradient-primary);

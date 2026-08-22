@@ -296,7 +296,7 @@ const Index = () => {
       {/* Sticky Header */}
       <header
         ref={headerRef}
-        className="fixed top-0 left-0 right-0 z-50 px-6 py-3 flex items-center justify-between backdrop-blur-md border-b transition-all duration-150 ease-out will-change-[background-color,border-color]"
+        className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-between gap-2 backdrop-blur-md border-b transition-all duration-150 ease-out will-change-[background-color,border-color]"
         style={{
           backgroundColor: 'hsl(var(--background) / var(--header-bg-opacity, 0))',
           borderColor: 'hsl(var(--border) / var(--header-border-opacity, 0))',
@@ -316,7 +316,7 @@ const Index = () => {
         </div>
         
         {/* Auth Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* EC2 Health check lives in the admin dashboard header */}
 
 
@@ -324,10 +324,10 @@ const Index = () => {
           {authLoading ? (
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           ) : user ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-3">
               {isAdmin && (
-                <Link to="/admin">
-                  <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary">
+                <Link to="/admin" aria-label="Admin dashboard">
+                  <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
                     <Shield className="h-4 w-4" />
                     <span className="hidden sm:inline">Admin</span>
                   </Button>
@@ -342,7 +342,7 @@ const Index = () => {
               <span className="text-sm text-foreground font-medium hidden sm:inline">
                 {profile?.username || user.email?.split('@')[0]}
               </span>
-              <Button variant="ghost" size="sm" onClick={signOut}>
+              <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out" className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
@@ -370,7 +370,7 @@ const Index = () => {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
         
-        <div className="relative mx-auto max-w-7xl px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 pt-16 sm:pt-24 pb-8 sm:pb-12">
           <div className="text-center" ref={logoRef}>
             <div className="relative inline-block">
               <img
@@ -398,9 +398,9 @@ const Index = () => {
 
           
           {/* Example Output Preview */}
-          <div className="mt-8 flex justify-center items-center gap-12">
-            {/* Main glowing image - positioned left */}
-            <div className="relative rounded-3xl max-w-md animate-float flex-shrink-0">
+          <div className="mt-6 sm:mt-8 flex flex-col md:flex-row justify-center items-center gap-6 md:gap-12">
+            {/* Main glowing image */}
+            <div className="relative rounded-3xl w-full max-w-sm md:max-w-md animate-float md:flex-shrink-0">
               <div className="rounded-3xl overflow-hidden" style={{ maskImage: 'linear-gradient(to bottom, black 35%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 35%, transparent 100%)' }}>
                 <img 
                   src={exampleOutput} 
@@ -411,14 +411,14 @@ const Index = () => {
               </div>
             </div>
             
-            {/* Text content - positioned right */}
-            <div className="flex flex-col items-start gap-6 max-w-md">
-              <p className="text-xl sm:text-2xl text-foreground">
+            {/* Text content */}
+            <div className="flex w-full flex-col items-center md:items-start gap-5 sm:gap-6 max-w-md text-center md:text-left">
+              <p className="text-lg sm:text-2xl text-foreground">
                 Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
               </p>
               <Button 
                 size="lg" 
-                className="shadow-xl"
+                className="shadow-xl w-full sm:w-auto min-h-12"
                 onClick={() => setShowGetStartedDialog(true)}
               >
                 <Sparkles className="mr-2 h-5 w-5" />
@@ -426,43 +426,42 @@ const Index = () => {
               </Button>
             </div>
           </div>
+
         </div>
       </div>
 
       {/* Main Content with Tabs */}
-      <div className="mx-auto max-w-7xl px-6 py-12">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-8">
-            <TabsTrigger value="select" className="flex items-center gap-2">
+          <TabsList className="mb-6 sm:mb-8 flex w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
+            <TabsTrigger value="select" className="flex shrink-0 items-center gap-2 min-h-11">
               <FileAudio className="h-4 w-4" />
               <span className="hidden sm:inline">Select Sources</span>
               <span className="sm:hidden">Sources</span>
             </TabsTrigger>
-            <TabsTrigger value="network" className="flex items-center gap-2" disabled={!results}>
+            <TabsTrigger value="network" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!results}>
               <Network className="h-4 w-4" />
-              <span className="hidden sm:inline">Network</span>
-              <span className="sm:hidden">Network</span>
+              <span>Network</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex items-center gap-2" disabled={!results}>
+            <TabsTrigger value="analysis" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!results}>
               <ListTree className="h-4 w-4" />
-              <span className="hidden sm:inline">Analysis</span>
-              <span className="sm:hidden">Analysis</span>
+              <span>Analysis</span>
             </TabsTrigger>
-            <TabsTrigger value="discover" className="flex items-center gap-2" disabled={!user}>
+            <TabsTrigger value="discover" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!user}>
               <UsersIcon className="h-4 w-4" />
-              <span className="hidden sm:inline">Discover</span>
-              <span className="sm:hidden">Discover</span>
+              <span>Discover</span>
             </TabsTrigger>
           </TabsList>
 
           {/* Tab 1: Select Audio Sources */}
           <TabsContent value="select" className="space-y-8">
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-foreground">
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground">
                   Select Audio Sources
                   {totalItems > 0 && <span className="text-primary ml-2">({totalItems} selected)</span>}
                 </h2>
+
                 {user && (
                   <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
                     <Save className="h-3.5 w-3.5 text-green-500" />

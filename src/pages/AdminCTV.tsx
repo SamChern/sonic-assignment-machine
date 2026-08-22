@@ -128,7 +128,7 @@ export default function AdminCTV() {
         <ArrowLeft className="w-4 h-4 mr-2" /> Back to admin
       </Button>
 
-      <h1 className="text-2xl font-bold mb-2">CTV Ingestion</h1>
+      <h1 className="text-xl sm:text-2xl font-bold mb-2">CTV Ingestion</h1>
       <p className="text-muted-foreground mb-6">
         Ingest CTV audio batches. Each row is tagged with taxonomy nodes, scored against
         the ontology with prior calibration from past runs, embedded, and stored alongside
@@ -152,7 +152,7 @@ export default function AdminCTV() {
           value={payload}
           onChange={(e) => setPayload(e.target.value)}
         />
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <Button onClick={submit} disabled={submitting}>
             <Upload className="w-4 h-4 mr-2" />
             {submitting ? "Ingesting…" : "Ingest batch"}

@@ -173,13 +173,13 @@ export function LibrosaHealthPanel() {
 
   return (
     <Card className="p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-primary" />
-          <h3 className="font-semibold">Analysis pipeline health</h3>
-          <span className="text-xs text-muted-foreground">last 24h</span>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <Activity className="h-4 w-4 text-primary shrink-0" />
+          <h3 className="font-semibold truncate">Analysis pipeline health</h3>
+          <span className="text-xs text-muted-foreground shrink-0">last 24h</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
           <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>

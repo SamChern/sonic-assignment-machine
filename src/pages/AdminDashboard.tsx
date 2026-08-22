@@ -516,25 +516,27 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b border-border bg-card/50">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="shrink-0 min-h-11">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
-            <Badge variant="secondary" className="bg-primary/20 text-primary">
+            <h1 className="text-lg sm:text-2xl font-bold text-foreground truncate">Admin Dashboard</h1>
+            <Badge variant="secondary" className="bg-primary/20 text-primary shrink-0">
               Admin
             </Badge>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1 lg:overflow-visible lg:pb-0">
+
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
+              className="gap-2 shrink-0 min-h-11 whitespace-nowrap border-green-500/50 text-green-500 hover:bg-green-500/10"
               onClick={handleHealthCheck}
               disabled={ec2Loading}
+              aria-label="EC2 health check"
             >
               <Activity className={`h-4 w-4 ${ec2Loading ? "animate-pulse" : ""}`} />
               <span className="hidden sm:inline">{ec2Loading ? "Checking..." : "EC2 Health"}</span>
@@ -544,15 +546,16 @@ const AdminDashboard = () => {
               <Button
                 onClick={handleAnalyzeSelected}
                 disabled={isAnalyzing}
-                className="gradient-primary"
+                className="gradient-primary shrink-0 min-h-11 whitespace-nowrap"
               >
                 <Sparkles className="h-4 w-4 mr-2" />
-                {isAnalyzing ? "Analyzing..." : `Analyze ${selectedSourceIds.length} Sources`}
+                {isAnalyzing ? "Analyzing..." : `Analyze ${selectedSourceIds.length}`}
               </Button>
             )}
             <Button
               variant="outline"
               size="sm"
+              className="shrink-0 min-h-11 whitespace-nowrap"
               onClick={() => navigate("/admin/pipeline")}
             >
               <Activity className="h-4 w-4 mr-2" />
@@ -561,6 +564,7 @@ const AdminDashboard = () => {
             <Button
               variant="outline"
               size="sm"
+              className="shrink-0 min-h-11 whitespace-nowrap"
               onClick={() => navigate("/admin/integrations")}
             >
               <Plug className="h-4 w-4 mr-2" />
@@ -571,7 +575,8 @@ const AdminDashboard = () => {
       </div>
 
       {/* Stats Overview */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Card className="p-4 bg-card/80">
             <div className="flex items-center gap-3">
@@ -605,13 +610,14 @@ const AdminDashboard = () => {
         {/* Global meta filter: entity mode + filter picker (applies to all tabs) */}
         <Card className="p-4 mb-6 bg-card/80">
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
               <span className="text-sm font-medium text-muted-foreground">Filter by source</span>
-              <div className="inline-flex rounded-md border border-border p-0.5 bg-muted">
+              <div className="flex w-full sm:w-auto sm:inline-flex overflow-x-auto no-scrollbar rounded-md border border-border p-0.5 bg-muted">
+
                 <Button
                   size="sm"
                   variant={entityMode === "user" ? "default" : "ghost"}
-                  className="h-8 gap-1.5"
+                  className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
                   onClick={() => setEntityMode("user")}
                 >
                   <User className="h-3.5 w-3.5" />
@@ -620,7 +626,7 @@ const AdminDashboard = () => {
                 <Button
                   size="sm"
                   variant={entityMode === "provider" ? "default" : "ghost"}
-                  className="h-8 gap-1.5"
+                  className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
                   onClick={() => setEntityMode("provider")}
                 >
                   <Radio className="h-3.5 w-3.5" />
@@ -629,7 +635,7 @@ const AdminDashboard = () => {
                 <Button
                   size="sm"
                   variant={entityMode === "signal" ? "default" : "ghost"}
-                  className="h-8 gap-1.5"
+                  className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
                   onClick={() => setEntityMode("signal")}
                 >
                   <Layers className="h-3.5 w-3.5" />
@@ -799,8 +805,8 @@ const AdminDashboard = () => {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="users" className="gap-2">
+          <TabsList className="mb-6 flex w-full justify-start overflow-x-auto no-scrollbar">
+            <TabsTrigger value="users" className="gap-2 shrink-0 min-h-11 whitespace-nowrap">
               <Users className="h-4 w-4" />
               {entityMode === "user"
                 ? "Users & Sources"
@@ -808,19 +814,20 @@ const AdminDashboard = () => {
                   ? "Providers & Signals"
                   : "Cohorts & Identifiers"}
             </TabsTrigger>
-            <TabsTrigger value="fingerprints" className="gap-2">
+            <TabsTrigger value="fingerprints" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" aria-label="Aggregate">
               <Fingerprint className="h-4 w-4" />
               <span className="hidden sm:inline">Aggregate</span>
             </TabsTrigger>
-            <TabsTrigger value="compare" className="gap-2">
+            <TabsTrigger value="compare" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" aria-label="Compare">
               <GitCompare className="h-4 w-4" />
               <span className="hidden sm:inline">Compare</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="gap-2" disabled={!analysisResults}>
+            <TabsTrigger value="analysis" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" disabled={!analysisResults} aria-label="Analysis">
               <Network className="h-4 w-4" />
               <span className="hidden sm:inline">Analysis</span>
             </TabsTrigger>
           </TabsList>
+
 
           <TabsContent value="users" className="space-y-4">
             {entityMode === "signal" ? (
@@ -1106,7 +1113,7 @@ const AdminDashboard = () => {
                   <Button
                     size="sm"
                     variant={compareMode === "all" ? "default" : "ghost"}
-                    className="h-8 gap-1.5"
+                    className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
                     onClick={() => setCompareMode("all")}
                   >
                     <History className="h-3.5 w-3.5" />
@@ -1115,7 +1122,7 @@ const AdminDashboard = () => {
                   <Button
                     size="sm"
                     variant={compareMode === "recent" ? "default" : "ghost"}
-                    className="h-8 gap-1.5"
+                    className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
                     onClick={() => setCompareMode("recent")}
                   >
                     <Clock className="h-3.5 w-3.5" />

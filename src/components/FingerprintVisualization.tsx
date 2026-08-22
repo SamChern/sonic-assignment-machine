@@ -88,7 +88,12 @@ export const FingerprintVisualization = ({
           style={{ filter: 'grayscale(100%)' }}
         />
       </div>
-      <svg width={width} height={height} className="mx-auto relative">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        width={width}
+        height={height}
+        className="mx-auto relative max-w-full h-auto"
+      >
         {/* Grid circles */}
         {gridCircles.map((percent) => (
           <circle

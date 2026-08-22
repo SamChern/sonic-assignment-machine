@@ -617,7 +617,7 @@ const AdminDashboard = () => {
                 <Button
                   size="sm"
                   variant={entityMode === "user" ? "default" : "ghost"}
-                  className="h-8 gap-1.5"
+                  className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
                   onClick={() => setEntityMode("user")}
                 >
                   <User className="h-3.5 w-3.5" />
@@ -626,7 +626,7 @@ const AdminDashboard = () => {
                 <Button
                   size="sm"
                   variant={entityMode === "provider" ? "default" : "ghost"}
-                  className="h-8 gap-1.5"
+                  className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
                   onClick={() => setEntityMode("provider")}
                 >
                   <Radio className="h-3.5 w-3.5" />
@@ -635,7 +635,7 @@ const AdminDashboard = () => {
                 <Button
                   size="sm"
                   variant={entityMode === "signal" ? "default" : "ghost"}
-                  className="h-8 gap-1.5"
+                  className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
                   onClick={() => setEntityMode("signal")}
                 >
                   <Layers className="h-3.5 w-3.5" />
@@ -1112,7 +1112,7 @@ const AdminDashboard = () => {
                   <Button
                     size="sm"
                     variant={compareMode === "all" ? "default" : "ghost"}
-                    className="h-8 gap-1.5"
+                    className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
                     onClick={() => setCompareMode("all")}
                   >
                     <History className="h-3.5 w-3.5" />
@@ -1121,7 +1121,7 @@ const AdminDashboard = () => {
                   <Button
                     size="sm"
                     variant={compareMode === "recent" ? "default" : "ghost"}
-                    className="h-8 gap-1.5"
+                    className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
                     onClick={() => setCompareMode("recent")}
                   >
                     <Clock className="h-3.5 w-3.5" />

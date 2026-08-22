@@ -516,19 +516,20 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b border-border bg-card/50">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="shrink-0 min-h-11">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
-            <Badge variant="secondary" className="bg-primary/20 text-primary">
+            <h1 className="text-lg sm:text-2xl font-bold text-foreground truncate">Admin Dashboard</h1>
+            <Badge variant="secondary" className="bg-primary/20 text-primary shrink-0">
               Admin
             </Badge>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1 lg:overflow-visible lg:pb-0">
+
             <Button
               variant="outline"
               size="sm"

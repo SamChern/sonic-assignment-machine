@@ -13,7 +13,7 @@ import {
   activationIdFromKey,
   fetchObjectRows,
   identifierOf,
-  INGEST_PREFIXES,
+  ingestPrefixes,
   isRosterRow,
   isSummaryRow,
   normalizeRow,

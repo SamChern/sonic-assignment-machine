@@ -433,7 +433,14 @@ const enterpriseDriver: S3Driver = {
 // ---------------------------------------------------------------------------
 
 function driver(): S3Driver {
-  return s3Backend() === "enterprise" ? enterpriseDriver : gatewayDriver;
+  switch (s3Backend()) {
+    case "enterprise":
+      return enterpriseDriver;
+    case "direct":
+      return directDriver;
+    default:
+      return gatewayDriver;
+  }
 }
 
 export function s3Configured(): boolean {

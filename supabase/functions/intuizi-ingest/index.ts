@@ -49,7 +49,7 @@ import {
 
 
 
-import { listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";
+import { headObject, listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 
 const corsHeaders = {
@@ -81,6 +81,58 @@ const SIGNAL_COLUMN: Record<ReportType, string> = {
   demographics: "demographics_signals",
   origin: "origin_signals",
 };
+
+// ---- Manual-key ingest helpers ---------------------------------------------
+
+/** Accept a bare key, an `s3://bucket/key` URI, or an https console URL. */
+function normalizeKeyInput(raw: string): string {
+  let v = raw.trim().replace(/^["'<]|["'>]$/g, "");
+  if (!v) return "";
+  if (v.startsWith("s3://")) v = v.slice(5).split("/").slice(1).join("/");
+  else if (/^https?:\/\//i.test(v)) {
+    try {
+      const u = new URL(v);
+      // console links look like /s3/object/<bucket>?prefix=<key>
+      const prefix = u.searchParams.get("prefix");
+      v = prefix ?? u.pathname.replace(/^\//, "").split("/").slice(1).join("/");
+      v = decodeURIComponent(v);
+    } catch { /* fall through with raw value */ }
+  }
+  return v.replace(/^\/+/, "");
+}
+
+function isManifestKey(key: string): boolean {
+  return /(manifest|_keys|filelist)[^/]*\.(json|txt|csv)$/i.test(key);
+}
+
+/** Read a manifest object and pull out the S3 keys it lists. */
+async function readManifestKeys(key: string): Promise<string[]> {
+  const url = await signReadUrl(key);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`manifest read failed [${res.status}]`);
+  const text = await res.text();
+  const out: string[] = [];
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    const walk = (v: unknown) => {
+      if (typeof v === "string") {
+        const k = normalizeKeyInput(v);
+        if (k && /\.[a-z0-9]{2,8}$/i.test(k)) out.push(k);
+      } else if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") Object.values(v).forEach(walk);
+    };
+    walk(JSON.parse(trimmed));
+  } else {
+    for (const line of trimmed.split(/\r?\n/)) {
+      for (const cell of line.split(",")) {
+        const k = normalizeKeyInput(cell);
+        if (k && /\.[a-z0-9]{2,8}$/i.test(k)) out.push(k);
+      }
+    }
+  }
+  return Array.from(new Set(out));
+}
+
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -224,6 +276,182 @@ Deno.serve(async (req) => {
   if (action === "status") {
     return json({ state, s3_configured: s3Configured(), s3: s3BackendInfo() });
   }
+
+  // ---- Access probe --------------------------------------------------------
+  // Reports, per configured prefix, whether s3:ListBucket currently works, so
+  // the admin knows whether auto-discovery or the manual key path is in play.
+  if (action === "probe_access") {
+    if (!s3Configured()) {
+      return json({ error: "Amazon S3 is not configured for this project yet.", prefixes: [] }, 400);
+    }
+    const prefixes: {
+      prefix: string;
+      report_type: ReportType | null;
+      list_ok: boolean;
+      objects_seen: number;
+      error: string | null;
+    }[] = [];
+    for (const { prefix, report_type } of ingestPrefixes()) {
+      try {
+        const objs = await listObjects(prefix, 5);
+        prefixes.push({ prefix, report_type, list_ok: true, objects_seen: objs.length, error: null });
+      } catch (e) {
+        prefixes.push({
+          prefix,
+          report_type,
+          list_ok: false,
+          objects_seen: 0,
+          error: errMsg(e).slice(0, 400),
+        });
+      }
+    }
+    return json({
+      s3: s3BackendInfo(),
+      list_available: prefixes.some((p) => p.list_ok),
+      mode: prefixes.some((p) => p.list_ok) ? "auto-discovery" : "manual keys only",
+      prefixes,
+    });
+  }
+
+  // ---- Validate explicit keys (manual ingest fallback) ---------------------
+  // Uses HeadObject only (same s3:GetObject permission), so it works even when
+  // s3:ListBucket is denied. Accepts raw keys or s3://bucket/key URIs, and can
+  // expand a manifest object that lists the delivery's keys.
+  if (action === "validate_keys") {
+    if (!s3Configured()) {
+      return json({ error: "Amazon S3 is not configured for this project yet.", keys: [] }, 400);
+    }
+    const requested = Array.isArray(body.object_keys)
+      ? (body.object_keys as unknown[]).map((k) => normalizeKeyInput(String(k))).filter(Boolean)
+      : [];
+    if (!requested.length) return json({ error: "object_keys is required", keys: [] }, 400);
+
+    // Manifest expansion: a .json / .txt / .csv listing of keys.
+    const expanded: string[] = [];
+    const manifestNotes: string[] = [];
+    for (const key of requested) {
+      if (body.expand_manifest && isManifestKey(key)) {
+        try {
+          const keys = await readManifestKeys(key);
+          manifestNotes.push(`${key}: expanded to ${keys.length} key(s)`);
+          expanded.push(...keys);
+        } catch (e) {
+          manifestNotes.push(`${key}: manifest could not be read — ${errMsg(e).slice(0, 200)}`);
+        }
+      } else {
+        expanded.push(key);
+      }
+    }
+
+    const unique = Array.from(new Set(expanded)).slice(0, 200);
+    const { data: ledger } = await admin
+      .from("intuizi_ingest_files")
+      .select("object_key,status,total_rows,processed_rows,finished_at")
+      .in("object_key", unique);
+    const ledgerMap = new Map((ledger ?? []).map((l) => [l.object_key, l]));
+
+    const keys = [] as Record<string, unknown>[];
+    for (const key of unique) {
+      const isAudio = isAudioKey(key);
+      const rt = isAudio ? null : reportTypeFromKey(key);
+      const prior = ledgerMap.get(key) ?? null;
+      try {
+        const head = await headObject(key);
+        keys.push({
+          object_key: key,
+          ok: head.size > 0,
+          size: head.size,
+          content_type: head.contentType,
+          last_modified: head.lastModified,
+          is_audio: isAudio,
+          report_type: rt,
+          needs_report_type: !isAudio && !rt,
+          already_ingested: prior?.status === "done",
+          prior_status: prior?.status ?? null,
+          error: head.size > 0 ? null : "object is empty (0 bytes)",
+        });
+      } catch (e) {
+        keys.push({
+          object_key: key,
+          ok: false,
+          size: 0,
+          is_audio: isAudio,
+          report_type: rt,
+          needs_report_type: !isAudio && !rt,
+          already_ingested: prior?.status === "done",
+          prior_status: prior?.status ?? null,
+          error: errMsg(e).slice(0, 400),
+        });
+      }
+    }
+    return json({ keys, manifest_notes: manifestNotes, s3: s3BackendInfo() });
+  }
+
+  // ---- Activation readiness / enrichment coverage --------------------------
+  // Answers "is this activation roster-only, tagged, or scored?" without
+  // needing ListBucket.
+  if (action === "readiness") {
+    const activationId = typeof body.activation_id === "string" ? body.activation_id : null;
+
+    const { data: files } = await admin
+      .from("intuizi_ingest_files")
+      .select("object_key,report_type,status,total_rows,processed_rows,failed_rows,finished_at")
+      .order("discovered_at", { ascending: false })
+      .limit(200);
+
+    const matching = (files ?? []).filter((f) =>
+      !activationId || (activationIdFromKey(f.object_key) ?? "unassigned") === activationId
+    );
+
+    // Identifier-level coverage per activation, read from the signal payloads.
+    const coverage: Record<string, { identifiers: number; tagged: number; scored: number }> = {};
+    const cols = Object.values(SIGNAL_COLUMN);
+    for (const col of cols) {
+      const q = admin
+        .from("intuizi_identifiers")
+        .select(`primary_identifier,tag_codes,${col}`)
+        .not(col, "eq", "{}")
+        .limit(20000);
+      const { data: rows } = activationId
+        ? await q.eq(`${col}->>activation_id`, activationId)
+        : await q;
+      for (const r of (rows ?? []) as Record<string, unknown>[]) {
+        const sig = r[col] as Record<string, unknown> | null;
+        const act = String(sig?.activation_id ?? "unassigned");
+        const bucket = coverage[act] ??= { identifiers: 0, tagged: 0, scored: 0 };
+        bucket.identifiers++;
+        const tagCodes = (r.tag_codes ?? []) as string[];
+        if (tagCodes.length) bucket.tagged++;
+        if (sig && typeof sig === "object" && "scores" in sig) bucket.scored++;
+      }
+    }
+
+    const readinessOf = (c?: { identifiers: number; tagged: number; scored: number }) =>
+      !c || c.identifiers === 0
+        ? "not ingested"
+        : c.scored > 0
+          ? "scored"
+          : c.tagged > 0
+            ? "taxonomy present"
+            : "roster only";
+
+    const activations = Object.entries(coverage).map(([activation_id, c]) => ({
+      activation_id,
+      ...c,
+      tag_coverage: c.identifiers ? c.tagged / c.identifiers : 0,
+      readiness: readinessOf(c),
+    })).sort((a, b) => b.identifiers - a.identifiers);
+
+    return json({
+      activation_id: activationId,
+      readiness: activationId ? readinessOf(coverage[activationId]) : null,
+      coverage: activationId ? (coverage[activationId] ?? null) : null,
+      activations,
+      files: matching,
+      normalization_scope: "intuizi",
+    });
+  }
+
 
   // ---- Activation discovery (guided wizard) --------------------------------
   // Groups every inbound object by the `activation_id<N>` token in its name so
@@ -873,6 +1101,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Roster-only deliveries carry device identifiers but no taxonomy content,
+    // so nothing can be scored until a companion report arrives. Report it
+    // explicitly instead of letting it look like a silent success.
+    const rosterOnly = summary.roster_identifiers > 0 && summary.identifiers_scored === 0;
+    if (rosterOnly) {
+      summary.errors.push(
+        "roster-only delivery: identifiers were registered but no taxonomy columns were present, so no semantic scores were produced. Ingest the matching CTV/apps/visitation/demographics/origin report for this activation.",
+      );
+    }
+    (summary as Json).roster_only = rosterOnly;
+
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),
       last_run_summary: summary,
@@ -880,6 +1119,7 @@ Deno.serve(async (req) => {
     }).eq("id", "singleton");
 
     return json(summary);
+
   } catch (e) {
     const msg = errMsg(e);
     console.error("intuizi-ingest failed:", msg);

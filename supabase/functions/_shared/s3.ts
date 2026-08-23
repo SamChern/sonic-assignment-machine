@@ -17,12 +17,22 @@
 const GATEWAY_BASE = "https://connector-gateway.lovable.dev";
 const CONNECTOR = "aws_s3";
 
-export type S3Backend = "connector_gateway" | "enterprise";
+export type S3Backend = "connector_gateway" | "direct" | "enterprise";
 
-/** Which backend is active. Defaults to the temporary connector gateway. */
+/**
+ * Which backend is active.
+ *
+ * Defaults to "direct" (IAM user access key + SigV4, no connector) whenever
+ * S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY are present; otherwise falls back to
+ * the connector gateway. S3_BACKEND can force a specific driver.
+ */
 export function s3Backend(): S3Backend {
-  return (Deno.env.get("S3_BACKEND") ?? "").trim().toLowerCase() === "enterprise"
-    ? "enterprise"
+  const forced = (Deno.env.get("S3_BACKEND") ?? "").trim().toLowerCase();
+  if (forced === "enterprise") return "enterprise";
+  if (forced === "direct") return "direct";
+  if (forced === "connector_gateway") return "connector_gateway";
+  return Deno.env.get("S3_ACCESS_KEY_ID") && Deno.env.get("S3_SECRET_ACCESS_KEY")
+    ? "direct"
     : "connector_gateway";
 }
 

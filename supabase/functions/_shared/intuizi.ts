@@ -350,6 +350,41 @@ export const INGEST_PREFIXES: { prefix: string; report_type: ReportType | null }
   { prefix: "apps_summary_report/", report_type: null },
 ];
 
+/** Audio file extensions ingested as real audio (scored via librosa + ontology). */
+const AUDIO_EXTENSIONS = [
+  ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".oga", ".opus", ".wma", ".aiff", ".aif",
+];
+
+/** True when an object key points at an audio file rather than a report. */
+export function isAudioKey(key: string): boolean {
+  const lower = key.toLowerCase();
+  return AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+/**
+ * Prefixes to scan for a run.
+ *
+ * Extends the static layout above with:
+ *  - `INTUIZI_S3_PREFIXES` — comma-separated extra prefixes (e.g. a delivery
+ *    folder such as `845ad58c44eee47b75af72c9667bda04/`).
+ *  - a bucket-root scan (`""`) unless `INTUIZI_S3_SCAN_ROOT=false`, so audio
+ *    files and deliveries dropped in any new folder are still discovered.
+ */
+export function ingestPrefixes(): { prefix: string; report_type: ReportType | null }[] {
+  const out = [...INGEST_PREFIXES];
+  const extra = (Deno.env.get("INTUIZI_S3_PREFIXES") ?? "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  for (const p of extra) {
+    const prefix = p.endsWith("/") || p === "" ? p : `${p}/`;
+    if (!out.some((e) => e.prefix === prefix)) out.push({ prefix, report_type: null });
+  }
+  const scanRoot = (Deno.env.get("INTUIZI_S3_SCAN_ROOT") ?? "true").toLowerCase() !== "false";
+  if (scanRoot && !out.some((e) => e.prefix === "")) out.push({ prefix: "", report_type: null });
+  return out;
+}
+
+
+
 
 /** Filename tokens that identify a report type in activation exports. */
 const TYPE_TOKENS: { type: ReportType; tokens: string[] }[] = [

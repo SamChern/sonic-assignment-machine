@@ -117,6 +117,92 @@ function errMsg(e: unknown): string {
   return String(e);
 }
 
+/**
+ * Ingest one audio object from S3.
+ *
+ * 1. Register (or reuse) an `audio_sources` row keyed on the object key.
+ * 2. Measure acoustics on the Librosa service using a short-lived signed URL —
+ *    the bytes never pass through this function.
+ * 3. Cache `librosa_features` + profile embedding, then score through
+ *    `analyze-audio` (which reads the cached features as its evidence tier).
+ */
+// deno-lint-disable-next-line no-explicit-any
+async function ingestAudioObject(admin: any, args: {
+  key: string;
+  ownerId: string;
+  probeOnly: boolean;
+}) {
+  const { key, ownerId, probeOnly } = args;
+  const name = key.split("/").pop() || key;
+
+  const { data: existing } = await admin
+    .from("audio_sources")
+    .select("id,librosa_features")
+    .eq("user_id", ownerId)
+    .eq("source_type", "s3_audio")
+    .contains("ctv_metadata", { object_key: key })
+    .maybeSingle();
+
+  let audioSourceId: string | null = existing?.id ?? null;
+  if (!audioSourceId) {
+    const { data: src, error: srcErr } = await admin
+      .from("audio_sources")
+      .insert({
+        user_id: ownerId,
+        source_type: "s3_audio",
+        name,
+        ctv_metadata: { provider: "s3", object_key: key, ingested_at: new Date().toISOString() },
+      })
+      .select("id").single();
+    if (srcErr) throw srcErr;
+    audioSourceId = src.id;
+  }
+
+  // A probe run only registers the file; it does no paid downstream work.
+  if (probeOnly) return audioSourceId;
+
+  let features: Record<string, unknown> | null = existing?.librosa_features ?? null;
+  if (!features) {
+    const creds = await getUpstreamCreds(admin);
+    if (!creds) throw new Error("Librosa REST credentials are not configured");
+    const audioUrl = await signReadUrl(key);
+    const up = await callUpstream(creds, "/analyze_full", {
+      audio_url: audioUrl,
+      identity: key,
+    });
+    if (!up.ok) {
+      throw Object.assign(new Error(up.error ?? "librosa upstream failed"), {
+        status: up.status,
+      });
+    }
+    features = (up.parsed?.features ?? up.parsed ?? null) as Record<string, unknown> | null;
+    if (features) {
+      await admin.from("audio_sources")
+        .update({ librosa_features: features })
+        .eq("id", audioSourceId);
+      await attachProfileEmbedding(admin, {
+        cacheKey: null,
+        audioSourceId,
+        userId: ownerId,
+        features,
+      });
+    }
+  }
+
+  const { data: ana, error: anaErr } = await admin.functions.invoke("analyze-audio", {
+    body: {
+      sources: [{ name, type: "file", audio_source_id: audioSourceId }],
+      user_id: ownerId,
+      save_results: true,
+    },
+  });
+  if (anaErr) throw anaErr;
+  if (!ana?.sources?.[0]) throw new Error("analyze-audio returned no source");
+
+  return audioSourceId;
+}
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });

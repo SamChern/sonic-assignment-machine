@@ -182,7 +182,197 @@ const gatewayDriver: S3Driver = {
 };
 
 // ---------------------------------------------------------------------------
-// Backend 2: enterprise ingestion path (PLACEHOLDER)
+// Backend 2: direct AWS S3 with an IAM user access key (SigV4)
+//
+// Needs S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET and S3_REGION.
+// No connector, no gateway — the function talks to S3 itself.
+// ---------------------------------------------------------------------------
+
+function directConfig() {
+  const accessKeyId = Deno.env.get("S3_ACCESS_KEY_ID");
+  const secretAccessKey = Deno.env.get("S3_SECRET_ACCESS_KEY");
+  const bucket = Deno.env.get("S3_BUCKET");
+  const region = Deno.env.get("S3_REGION") ?? "us-west-2";
+  if (!accessKeyId || !secretAccessKey || !bucket) {
+    throw new Error(
+      "Direct S3 access needs S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_BUCKET",
+    );
+  }
+  return {
+    accessKeyId,
+    secretAccessKey,
+    bucket,
+    region,
+    host: `${bucket}.s3.${region}.amazonaws.com`,
+  };
+}
+
+const enc = new TextEncoder();
+
+async function sha256Hex(data: string | Uint8Array): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", typeof data === "string" ? enc.encode(data) : data);
+  return hex(new Uint8Array(buf));
+}
+
+function hex(bytes: Uint8Array): string {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function hmac(key: Uint8Array, data: string): Promise<Uint8Array> {
+  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+  ]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(data)));
+}
+
+async function signingKey(secret: string, date: string, region: string): Promise<Uint8Array> {
+  let k = await hmac(enc.encode(`AWS4${secret}`), date);
+  k = await hmac(k, region);
+  k = await hmac(k, "s3");
+  return await hmac(k, "aws4_request");
+}
+
+/** RFC3986-encode a key path, keeping slashes as separators. */
+function encodeKeyPath(key: string): string {
+  return key
+    .split("/")
+    .map((seg) => encodeURIComponent(seg).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`))
+    .join("/");
+}
+
+function amzDates() {
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
+  return { amzDate, dateStamp: amzDate.slice(0, 8) };
+}
+
+/** Sign a request with SigV4 in the Authorization header. */
+async function signedFetch(
+  method: "GET" | "HEAD",
+  path: string,
+  query: Record<string, string> = {},
+): Promise<Response> {
+  const cfg = directConfig();
+  const { amzDate, dateStamp } = amzDates();
+  const payloadHash = await sha256Hex("");
+
+  const canonicalQuery = Object.keys(query)
+    .sort()
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(query[k])}`)
+    .join("&");
+
+  const canonicalHeaders =
+    `host:${cfg.host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  const canonicalRequest =
+    `${method}\n${path}\n${canonicalQuery}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+
+  const scope = `${dateStamp}/${cfg.region}/s3/aws4_request`;
+  const stringToSign =
+    `AWS4-HMAC-SHA256\n${amzDate}\n${scope}\n${await sha256Hex(canonicalRequest)}`;
+  const signature = hex(await hmac(await signingKey(cfg.secretAccessKey, dateStamp, cfg.region), stringToSign));
+
+  const url = `https://${cfg.host}${path}${canonicalQuery ? `?${canonicalQuery}` : ""}`;
+  return await fetch(url, {
+    method,
+    headers: {
+      Authorization:
+        `AWS4-HMAC-SHA256 Credential=${cfg.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+      "x-amz-content-sha256": payloadHash,
+      "x-amz-date": amzDate,
+    },
+  });
+}
+
+/** Build a presigned GET URL (query-string SigV4) valid for expiresIn seconds. */
+async function presignGet(objectKey: string, expiresIn = 900): Promise<string> {
+  const cfg = directConfig();
+  const { amzDate, dateStamp } = amzDates();
+  const scope = `${dateStamp}/${cfg.region}/s3/aws4_request`;
+  const path = `/${encodeKeyPath(objectKey)}`;
+
+  const query: Record<string, string> = {
+    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+    "X-Amz-Credential": `${cfg.accessKeyId}/${scope}`,
+    "X-Amz-Date": amzDate,
+    "X-Amz-Expires": String(expiresIn),
+    "X-Amz-SignedHeaders": "host",
+  };
+  const canonicalQuery = Object.keys(query)
+    .sort()
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(query[k])}`)
+    .join("&");
+
+  const canonicalRequest =
+    `GET\n${path}\n${canonicalQuery}\nhost:${cfg.host}\n\nhost\nUNSIGNED-PAYLOAD`;
+  const stringToSign =
+    `AWS4-HMAC-SHA256\n${amzDate}\n${scope}\n${await sha256Hex(canonicalRequest)}`;
+  const signature = hex(await hmac(await signingKey(cfg.secretAccessKey, dateStamp, cfg.region), stringToSign));
+
+  return `https://${cfg.host}${path}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+}
+
+const directDriver: S3Driver = {
+  name: "direct",
+
+  configured() {
+    return !!Deno.env.get("S3_ACCESS_KEY_ID") && !!Deno.env.get("S3_SECRET_ACCESS_KEY") &&
+      !!Deno.env.get("S3_BUCKET");
+  },
+
+  async listObjects(prefix, maxKeys) {
+    const out: S3Object[] = [];
+    let token: string | null = null;
+
+    do {
+      const query: Record<string, string> = {
+        "list-type": "2",
+        prefix,
+        "max-keys": String(Math.min(1000, maxKeys)),
+      };
+      if (token) query["continuation-token"] = token;
+
+      const res = await signedFetch("GET", "/", query);
+      if (!res.ok) {
+        const body = await res.text();
+        throw Object.assign(new Error(`S3 list failed [${res.status}]: ${body}`), {
+          status: res.status,
+        });
+      }
+      const xml = await res.text();
+      if (parseListXml(xml, out, maxKeys)) return out;
+
+      const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
+      token = truncated
+        ? xml.match(/<NextContinuationToken>([\s\S]*?)<\/NextContinuationToken>/)?.[1] ?? null
+        : null;
+    } while (token);
+
+    return out;
+  },
+
+  signReadUrl(objectKey) {
+    return presignGet(objectKey);
+  },
+
+  async headObject(objectKey) {
+    const res = await signedFetch("HEAD", `/${encodeKeyPath(objectKey)}`);
+    if (!res.ok) {
+      throw Object.assign(new Error(`S3 head failed [${res.status}] for ${objectKey}`), {
+        status: res.status,
+      });
+    }
+    return {
+      size: Number(res.headers.get("Content-Length") ?? 0),
+      contentType: res.headers.get("Content-Type") ?? "application/octet-stream",
+      lastModified: res.headers.get("Last-Modified"),
+      etag: res.headers.get("ETag")?.replace(/"/g, "") ?? null,
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Backend 3: enterprise ingestion path (PLACEHOLDER)
 // ---------------------------------------------------------------------------
 
 function enterpriseConfig() {

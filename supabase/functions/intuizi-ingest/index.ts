@@ -1101,6 +1101,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Roster-only deliveries carry device identifiers but no taxonomy content,
+    // so nothing can be scored until a companion report arrives. Report it
+    // explicitly instead of letting it look like a silent success.
+    const rosterOnly = summary.roster_identifiers > 0 && summary.identifiers_scored === 0;
+    if (rosterOnly) {
+      summary.errors.push(
+        "roster-only delivery: identifiers were registered but no taxonomy columns were present, so no semantic scores were produced. Ingest the matching CTV/apps/visitation/demographics/origin report for this activation.",
+      );
+    }
+    (summary as Json).roster_only = rosterOnly;
+
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),
       last_run_summary: summary,
@@ -1108,6 +1119,7 @@ Deno.serve(async (req) => {
     }).eq("id", "singleton");
 
     return json(summary);
+
   } catch (e) {
     const msg = errMsg(e);
     console.error("intuizi-ingest failed:", msg);

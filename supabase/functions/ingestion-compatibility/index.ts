@@ -13,7 +13,7 @@ import {
   activationIdFromKey,
   fetchObjectRows,
   identifierOf,
-  INGEST_PREFIXES,
+  ingestPrefixes,
   isRosterRow,
   isSummaryRow,
   normalizeRow,
@@ -302,7 +302,7 @@ Deno.serve(async (req) => {
 
   // ----------------------------------------------------- 2. prefix reachability
   clearS3Cache();
-  const prefixes = (body.prefixes?.length ? body.prefixes : INGEST_PREFIXES.map((p) => p.prefix));
+  const prefixes = (body.prefixes?.length ? body.prefixes : ingestPrefixes().map((p) => p.prefix));
   const discovered: S3Object[] = [];
   let anyPrefixOk = false;
 

@@ -419,33 +419,25 @@ Deno.serve(async (req) => {
     for (const act of activationIds) {
       const bucket = coverage[act] = { identifiers: 0, tagged: 0, scored: 0 };
       for (const col of cols) {
-        const scoped = (extra?: (q: ReturnType<typeof buildBase>) => unknown) => {
-          const q = buildBase(col);
+        const base = () => {
+          const q = admin
+            .from("intuizi_identifiers")
+            .select("id", { count: "exact", head: true })
+            .not(col, "eq", "{}");
           return act === "unassigned"
             ? q.is(`${col}->>activation_id`, null)
             : q.eq(`${col}->>activation_id`, act);
         };
-        function buildBase(c: string) {
-          return admin
-            .from("intuizi_identifiers")
-            .select("id", { count: "exact", head: true })
-            .not(c, "eq", "{}");
-        }
         const [all, tagged, scored] = await Promise.all([
-          scoped(),
-          (act === "unassigned"
-            ? buildBase(col).is(`${col}->>activation_id`, null)
-            : buildBase(col).eq(`${col}->>activation_id`, act)
-          ).not("tag_codes", "eq", "{}"),
-          (act === "unassigned"
-            ? buildBase(col).is(`${col}->>activation_id`, null)
-            : buildBase(col).eq(`${col}->>activation_id`, act)
-          ).not(`${col}->>scores`, "is", null),
+          base(),
+          base().not("tag_codes", "eq", "{}"),
+          base().not(`${col}->>scores`, "is", null),
         ]);
-        bucket.identifiers += (all as { count: number | null }).count ?? 0;
-        bucket.tagged += (tagged as { count: number | null }).count ?? 0;
-        bucket.scored += (scored as { count: number | null }).count ?? 0;
+        bucket.identifiers += all.count ?? 0;
+        bucket.tagged += tagged.count ?? 0;
+        bucket.scored += scored.count ?? 0;
       }
+
     }
 
 

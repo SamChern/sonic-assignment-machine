@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
     const byActivation = new Map<string, FileEntry[]>();
     const listErrors: string[] = [];
 
-    for (const { prefix, report_type } of INGEST_PREFIXES) {
+    for (const { prefix, report_type } of ingestPrefixes()) {
       let objects: Awaited<ReturnType<typeof listObjects>> = [];
       try {
         objects = await listObjects(prefix, 200);

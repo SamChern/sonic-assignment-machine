@@ -49,7 +49,7 @@ import {
 
 
 
-import { listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";
+import { headObject, listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 
 const corsHeaders = {

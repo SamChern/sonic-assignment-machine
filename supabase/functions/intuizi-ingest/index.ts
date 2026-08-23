@@ -376,27 +376,67 @@ Deno.serve(async (req) => {
 
     const identifierBudget = probeOnly ? 1 : MAX_IDENTIFIERS_PER_RUN;
 
-    for (const cand of candidates) {
+    for (const rawCand of candidates) {
       if (breakerTripped) break;
 
       const { data: fileRow, error: fileErr } = await admin
         .from("intuizi_ingest_files")
         .upsert({
-          object_key: cand.key,
-          report_type: cand.report_type,
-          etag: cand.etag,
-          size_bytes: cand.size || null,
-          partition_date: partitionDateFromKey(cand.key),
+          object_key: rawCand.key,
+          report_type: rawCand.report_type,
+          etag: rawCand.etag,
+          size_bytes: rawCand.size || null,
+          partition_date: partitionDateFromKey(rawCand.key),
           status: "processing",
           started_at: new Date().toISOString(),
           error_message: null,
         }, { onConflict: "object_key" })
         .select("id,processed_rows").single();
       if (fileErr) {
-        summary.errors.push(`ledger ${cand.key}: ${fileErr.message}`);
+        summary.errors.push(`ledger ${rawCand.key}: ${fileErr.message}`);
         summary.files_failed++;
         continue;
       }
+
+      // ---- Audio file: download + acoustic analysis, then ontology scoring --
+      if (rawCand.report_type === "audio") {
+        try {
+          await ingestAudioObject(admin, {
+            key: rawCand.key,
+            ownerId: ownerId!,
+            probeOnly,
+          });
+          await admin.from("intuizi_ingest_files").update({
+            status: "done",
+            total_rows: 1,
+            processed_rows: 1,
+            failed_rows: 0,
+            cursor_offset: 1,
+            finished_at: new Date().toISOString(),
+            error_message: null,
+          }).eq("id", fileRow.id);
+          summary.files_processed++;
+          summary.audio_files_scored++;
+        } catch (e) {
+          const msg = errMsg(e);
+          await admin.from("intuizi_ingest_files").update({
+            status: "failed",
+            error_message: msg.slice(0, 2000),
+            finished_at: new Date().toISOString(),
+          }).eq("id", fileRow.id);
+          summary.files_failed++;
+          summary.errors.push(`${rawCand.key}: ${msg}`);
+        }
+        continue;
+      }
+
+      const cand = rawCand as {
+        key: string;
+        report_type: ReportType;
+        size: number;
+        etag: string | null;
+      };
+
 
       try {
         const url = await signReadUrl(cand.key);

@@ -31,6 +31,8 @@ import {
   fetchObjectRows,
   identifierOf,
   INGEST_PREFIXES,
+  ingestPrefixes,
+  isAudioKey,
   isRosterRow,
   isSummaryRow,
   normalizeRow,
@@ -40,6 +42,12 @@ import {
   type ReportType,
   reportTypeFromKey,
 } from "../_shared/intuizi.ts";
+import {
+  attachProfileEmbedding,
+  callUpstream,
+  getUpstreamCreds,
+} from "../_shared/librosa.ts";
+
 
 
 import { listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";

@@ -300,24 +300,29 @@ Deno.serve(async (req) => {
     // ---- Discover a bounded set of unprocessed objects --------------------
     const candidates: {
       key: string;
-      report_type: ReportType;
+      report_type: ReportType | "audio";
       size: number;
       etag: string | null;
     }[] = [];
+    const claimed = new Set<string>();
 
     const explicitKey = typeof body.object_key === "string" ? body.object_key : null;
     if (explicitKey) {
-      const requested = body.report_type as ReportType | undefined;
-      const rt = requested ?? reportTypeFromKey(explicitKey) ?? undefined;
-      if (!rt || !REPORT_TYPES.includes(rt)) {
-        throw new Error(
-          `could not infer report_type from "${explicitKey}" — pass report_type ` +
-            `(one of ${REPORT_TYPES.join(", ")})`,
-        );
+      if (isAudioKey(explicitKey)) {
+        candidates.push({ key: explicitKey, report_type: "audio", size: 0, etag: null });
+      } else {
+        const requested = body.report_type as ReportType | undefined;
+        const rt = requested ?? reportTypeFromKey(explicitKey) ?? undefined;
+        if (!rt || !REPORT_TYPES.includes(rt)) {
+          throw new Error(
+            `could not infer report_type from "${explicitKey}" — pass report_type ` +
+              `(one of ${REPORT_TYPES.join(", ")})`,
+          );
+        }
+        candidates.push({ key: explicitKey, report_type: rt, size: 0, etag: null });
       }
-      candidates.push({ key: explicitKey, report_type: rt, size: 0, etag: null });
     } else {
-      for (const { prefix, report_type } of INGEST_PREFIXES) {
+      for (const { prefix, report_type } of ingestPrefixes()) {
         if (candidates.length >= MAX_FILES_PER_RUN) break;
         let objects: Awaited<ReturnType<typeof listObjects>> = [];
         try {
@@ -327,7 +332,9 @@ Deno.serve(async (req) => {
           summary.errors.push(`list ${prefix}: ${msg}`);
           continue;
         }
-        const dataObjects = objects.filter((o) => o.size > 0 && !o.key.endsWith("/"));
+        const dataObjects = objects.filter(
+          (o) => o.size > 0 && !o.key.endsWith("/") && !claimed.has(o.key),
+        );
         if (!dataObjects.length) continue;
 
         const { data: seen } = await admin
@@ -339,18 +346,22 @@ Deno.serve(async (req) => {
         );
 
         for (const o of dataObjects) {
-          if (done.has(o.key)) continue;
-          // Mixed-content prefixes carry the report kind in the filename.
-          const rt = report_type ?? reportTypeFromKey(o.key);
+          if (done.has(o.key) || claimed.has(o.key)) continue;
+          // Audio files are ingested as real audio, not as report rows.
+          const rt: ReportType | "audio" | null = isAudioKey(o.key)
+            ? "audio"
+            : (report_type ?? reportTypeFromKey(o.key));
           if (!rt) {
             summary.errors.push(`skipped ${o.key}: report type not recognizable from the file name`);
             continue;
           }
+          claimed.add(o.key);
           candidates.push({ key: o.key, report_type: rt, size: o.size, etag: o.etag });
           if (candidates.length >= MAX_FILES_PER_RUN) break;
         }
       }
     }
+
 
 
     if (!candidates.length) {

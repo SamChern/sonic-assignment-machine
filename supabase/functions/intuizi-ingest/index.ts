@@ -31,6 +31,8 @@ import {
   fetchObjectRows,
   identifierOf,
   INGEST_PREFIXES,
+  ingestPrefixes,
+  isAudioKey,
   isRosterRow,
   isSummaryRow,
   normalizeRow,
@@ -40,6 +42,12 @@ import {
   type ReportType,
   reportTypeFromKey,
 } from "../_shared/intuizi.ts";
+import {
+  attachProfileEmbedding,
+  callUpstream,
+  getUpstreamCreds,
+} from "../_shared/librosa.ts";
+
 
 
 import { listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";
@@ -108,6 +116,92 @@ function errMsg(e: unknown): string {
   }
   return String(e);
 }
+
+/**
+ * Ingest one audio object from S3.
+ *
+ * 1. Register (or reuse) an `audio_sources` row keyed on the object key.
+ * 2. Measure acoustics on the Librosa service using a short-lived signed URL —
+ *    the bytes never pass through this function.
+ * 3. Cache `librosa_features` + profile embedding, then score through
+ *    `analyze-audio` (which reads the cached features as its evidence tier).
+ */
+// deno-lint-disable-next-line no-explicit-any
+async function ingestAudioObject(admin: any, args: {
+  key: string;
+  ownerId: string;
+  probeOnly: boolean;
+}) {
+  const { key, ownerId, probeOnly } = args;
+  const name = key.split("/").pop() || key;
+
+  const { data: existing } = await admin
+    .from("audio_sources")
+    .select("id,librosa_features")
+    .eq("user_id", ownerId)
+    .eq("source_type", "s3_audio")
+    .contains("ctv_metadata", { object_key: key })
+    .maybeSingle();
+
+  let audioSourceId: string | null = existing?.id ?? null;
+  if (!audioSourceId) {
+    const { data: src, error: srcErr } = await admin
+      .from("audio_sources")
+      .insert({
+        user_id: ownerId,
+        source_type: "s3_audio",
+        name,
+        ctv_metadata: { provider: "s3", object_key: key, ingested_at: new Date().toISOString() },
+      })
+      .select("id").single();
+    if (srcErr) throw srcErr;
+    audioSourceId = src.id;
+  }
+
+  // A probe run only registers the file; it does no paid downstream work.
+  if (probeOnly) return audioSourceId;
+
+  let features: Record<string, unknown> | null = existing?.librosa_features ?? null;
+  if (!features) {
+    const creds = await getUpstreamCreds(admin);
+    if (!creds) throw new Error("Librosa REST credentials are not configured");
+    const audioUrl = await signReadUrl(key);
+    const up = await callUpstream(creds, "/analyze_full", {
+      audio_url: audioUrl,
+      identity: key,
+    });
+    if (!up.ok) {
+      throw Object.assign(new Error(up.error ?? "librosa upstream failed"), {
+        status: up.status,
+      });
+    }
+    features = (up.parsed?.features ?? up.parsed ?? null) as Record<string, unknown> | null;
+    if (features) {
+      await admin.from("audio_sources")
+        .update({ librosa_features: features })
+        .eq("id", audioSourceId);
+      await attachProfileEmbedding(admin, {
+        cacheKey: null,
+        audioSourceId,
+        userId: ownerId,
+        features,
+      });
+    }
+  }
+
+  const { data: ana, error: anaErr } = await admin.functions.invoke("analyze-audio", {
+    body: {
+      sources: [{ name, type: "file", audio_source_id: audioSourceId }],
+      user_id: ownerId,
+      save_results: true,
+    },
+  });
+  if (anaErr) throw anaErr;
+  if (!ana?.sources?.[0]) throw new Error("analyze-audio returned no source");
+
+  return audioSourceId;
+}
+
 
 
 Deno.serve(async (req) => {
@@ -268,6 +362,8 @@ Deno.serve(async (req) => {
     files_failed: 0,
     identifiers_scored: 0,
     roster_identifiers: 0,
+    audio_files_scored: 0,
+
 
     rows_read: 0,
     probe_only: probeOnly,
@@ -292,24 +388,29 @@ Deno.serve(async (req) => {
     // ---- Discover a bounded set of unprocessed objects --------------------
     const candidates: {
       key: string;
-      report_type: ReportType;
+      report_type: ReportType | "audio";
       size: number;
       etag: string | null;
     }[] = [];
+    const claimed = new Set<string>();
 
     const explicitKey = typeof body.object_key === "string" ? body.object_key : null;
     if (explicitKey) {
-      const requested = body.report_type as ReportType | undefined;
-      const rt = requested ?? reportTypeFromKey(explicitKey) ?? undefined;
-      if (!rt || !REPORT_TYPES.includes(rt)) {
-        throw new Error(
-          `could not infer report_type from "${explicitKey}" — pass report_type ` +
-            `(one of ${REPORT_TYPES.join(", ")})`,
-        );
+      if (isAudioKey(explicitKey)) {
+        candidates.push({ key: explicitKey, report_type: "audio", size: 0, etag: null });
+      } else {
+        const requested = body.report_type as ReportType | undefined;
+        const rt = requested ?? reportTypeFromKey(explicitKey) ?? undefined;
+        if (!rt || !REPORT_TYPES.includes(rt)) {
+          throw new Error(
+            `could not infer report_type from "${explicitKey}" — pass report_type ` +
+              `(one of ${REPORT_TYPES.join(", ")})`,
+          );
+        }
+        candidates.push({ key: explicitKey, report_type: rt, size: 0, etag: null });
       }
-      candidates.push({ key: explicitKey, report_type: rt, size: 0, etag: null });
     } else {
-      for (const { prefix, report_type } of INGEST_PREFIXES) {
+      for (const { prefix, report_type } of ingestPrefixes()) {
         if (candidates.length >= MAX_FILES_PER_RUN) break;
         let objects: Awaited<ReturnType<typeof listObjects>> = [];
         try {
@@ -319,7 +420,9 @@ Deno.serve(async (req) => {
           summary.errors.push(`list ${prefix}: ${msg}`);
           continue;
         }
-        const dataObjects = objects.filter((o) => o.size > 0 && !o.key.endsWith("/"));
+        const dataObjects = objects.filter(
+          (o) => o.size > 0 && !o.key.endsWith("/") && !claimed.has(o.key),
+        );
         if (!dataObjects.length) continue;
 
         const { data: seen } = await admin
@@ -331,18 +434,22 @@ Deno.serve(async (req) => {
         );
 
         for (const o of dataObjects) {
-          if (done.has(o.key)) continue;
-          // Mixed-content prefixes carry the report kind in the filename.
-          const rt = report_type ?? reportTypeFromKey(o.key);
+          if (done.has(o.key) || claimed.has(o.key)) continue;
+          // Audio files are ingested as real audio, not as report rows.
+          const rt: ReportType | "audio" | null = isAudioKey(o.key)
+            ? "audio"
+            : (report_type ?? reportTypeFromKey(o.key));
           if (!rt) {
             summary.errors.push(`skipped ${o.key}: report type not recognizable from the file name`);
             continue;
           }
+          claimed.add(o.key);
           candidates.push({ key: o.key, report_type: rt, size: o.size, etag: o.etag });
           if (candidates.length >= MAX_FILES_PER_RUN) break;
         }
       }
     }
+
 
 
     if (!candidates.length) {
@@ -357,27 +464,67 @@ Deno.serve(async (req) => {
 
     const identifierBudget = probeOnly ? 1 : MAX_IDENTIFIERS_PER_RUN;
 
-    for (const cand of candidates) {
+    for (const rawCand of candidates) {
       if (breakerTripped) break;
 
       const { data: fileRow, error: fileErr } = await admin
         .from("intuizi_ingest_files")
         .upsert({
-          object_key: cand.key,
-          report_type: cand.report_type,
-          etag: cand.etag,
-          size_bytes: cand.size || null,
-          partition_date: partitionDateFromKey(cand.key),
+          object_key: rawCand.key,
+          report_type: rawCand.report_type,
+          etag: rawCand.etag,
+          size_bytes: rawCand.size || null,
+          partition_date: partitionDateFromKey(rawCand.key),
           status: "processing",
           started_at: new Date().toISOString(),
           error_message: null,
         }, { onConflict: "object_key" })
         .select("id,processed_rows").single();
       if (fileErr) {
-        summary.errors.push(`ledger ${cand.key}: ${fileErr.message}`);
+        summary.errors.push(`ledger ${rawCand.key}: ${fileErr.message}`);
         summary.files_failed++;
         continue;
       }
+
+      // ---- Audio file: download + acoustic analysis, then ontology scoring --
+      if (rawCand.report_type === "audio") {
+        try {
+          await ingestAudioObject(admin, {
+            key: rawCand.key,
+            ownerId: ownerId!,
+            probeOnly,
+          });
+          await admin.from("intuizi_ingest_files").update({
+            status: "done",
+            total_rows: 1,
+            processed_rows: 1,
+            failed_rows: 0,
+            cursor_offset: 1,
+            finished_at: new Date().toISOString(),
+            error_message: null,
+          }).eq("id", fileRow.id);
+          summary.files_processed++;
+          summary.audio_files_scored++;
+        } catch (e) {
+          const msg = errMsg(e);
+          await admin.from("intuizi_ingest_files").update({
+            status: "failed",
+            error_message: msg.slice(0, 2000),
+            finished_at: new Date().toISOString(),
+          }).eq("id", fileRow.id);
+          summary.files_failed++;
+          summary.errors.push(`${rawCand.key}: ${msg}`);
+        }
+        continue;
+      }
+
+      const cand = rawCand as {
+        key: string;
+        report_type: ReportType;
+        size: number;
+        etag: string | null;
+      };
+
 
       try {
         const url = await signReadUrl(cand.key);

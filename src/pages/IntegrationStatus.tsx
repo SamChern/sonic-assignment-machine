@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import IngestDebugPanel from "@/components/IngestDebugPanel";
+import IngestByKeyPanel from "@/components/IngestByKeyPanel";
+import EnrichmentReadinessPanel from "@/components/EnrichmentReadinessPanel";
+
 
 import {
   ArrowLeft,

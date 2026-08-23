@@ -82,6 +82,58 @@ const SIGNAL_COLUMN: Record<ReportType, string> = {
   origin: "origin_signals",
 };
 
+// ---- Manual-key ingest helpers ---------------------------------------------
+
+/** Accept a bare key, an `s3://bucket/key` URI, or an https console URL. */
+function normalizeKeyInput(raw: string): string {
+  let v = raw.trim().replace(/^["'<]|["'>]$/g, "");
+  if (!v) return "";
+  if (v.startsWith("s3://")) v = v.slice(5).split("/").slice(1).join("/");
+  else if (/^https?:\/\//i.test(v)) {
+    try {
+      const u = new URL(v);
+      // console links look like /s3/object/<bucket>?prefix=<key>
+      const prefix = u.searchParams.get("prefix");
+      v = prefix ?? u.pathname.replace(/^\//, "").split("/").slice(1).join("/");
+      v = decodeURIComponent(v);
+    } catch { /* fall through with raw value */ }
+  }
+  return v.replace(/^\/+/, "");
+}
+
+function isManifestKey(key: string): boolean {
+  return /(manifest|_keys|filelist)[^/]*\.(json|txt|csv)$/i.test(key);
+}
+
+/** Read a manifest object and pull out the S3 keys it lists. */
+async function readManifestKeys(key: string): Promise<string[]> {
+  const url = await signReadUrl(key);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`manifest read failed [${res.status}]`);
+  const text = await res.text();
+  const out: string[] = [];
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    const walk = (v: unknown) => {
+      if (typeof v === "string") {
+        const k = normalizeKeyInput(v);
+        if (k && /\.[a-z0-9]{2,8}$/i.test(k)) out.push(k);
+      } else if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") Object.values(v).forEach(walk);
+    };
+    walk(JSON.parse(trimmed));
+  } else {
+    for (const line of trimmed.split(/\r?\n/)) {
+      for (const cell of line.split(",")) {
+        const k = normalizeKeyInput(cell);
+        if (k && /\.[a-z0-9]{2,8}$/i.test(k)) out.push(k);
+      }
+    }
+  }
+  return Array.from(new Set(out));
+}
+
+
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,

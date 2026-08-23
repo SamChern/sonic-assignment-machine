@@ -669,9 +669,12 @@ const IntegrationStatus = () => {
         </div>
 
 
-        <div className="mt-6">
+        <div className="mt-6 space-y-4">
+          <IngestByKeyPanel />
+          <EnrichmentReadinessPanel />
           <IngestDebugPanel />
         </div>
+
 
       </main>
 

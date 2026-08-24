@@ -23,6 +23,7 @@ const MCP_FIELDS = [
   "MCP_CAP_RESOURCES_READ",
   "MCP_CAP_PROMPTS_READ",
   "MCP_CAP_SAMPLING_WRITE",
+  "MCP_CAP_TOOLS_WRITE",
   // Librosa MCP capabilities:
   "MCP_CAP_FEATURE_EXTRACT",
   "MCP_CAP_TEMPORAL_SEGMENT",
@@ -50,6 +51,7 @@ const ALLOWED_FIELDS: Record<string, string[]> = {
   mcp_notion: MCP_FIELDS,
   mcp_linear: MCP_FIELDS,
   mcp_librosa: MCP_FIELDS,
+  mcp_intuizi: MCP_FIELDS,
 };
 
 Deno.serve(async (req) => {

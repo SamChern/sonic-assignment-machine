@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { McpToolForm } from "@/components/admin/McpToolForm";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -126,6 +127,7 @@ export const IntuiziConsolePanel = () => {
 
   const writeEnabled = caps["tools.write"] === true;
   const toolNames = useMemo(() => tools.map((t) => t.name).sort(), [tools]);
+  const selectedToolDef = useMemo(() => tools.find((t) => t.name === rawTool), [tools, rawTool]);
 
   const log = useCallback((line: string) => {
     setFlowLog((prev) => [...prev, `${new Date().toLocaleTimeString()} · ${line}`]);

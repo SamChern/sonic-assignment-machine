@@ -570,6 +570,15 @@ const AdminDashboard = () => {
               <Plug className="h-4 w-4 mr-2" />
               API Integrations
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 min-h-11 whitespace-nowrap"
+              onClick={() => navigate("/admin/connected")}
+            >
+              <Plug className="h-4 w-4 mr-2" />
+              Connected APIs &amp; MCPs
+            </Button>
           </div>
         </div>
       </div>

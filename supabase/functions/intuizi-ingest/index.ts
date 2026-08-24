@@ -403,28 +403,43 @@ Deno.serve(async (req) => {
       !activationId || (activationIdFromKey(f.object_key) ?? "unassigned") === activationId
     );
 
-    // Identifier-level coverage per activation, read from the signal payloads.
-    const coverage: Record<string, { identifiers: number; tagged: number; scored: number }> = {};
+    // Identifier-level coverage per activation. Counted with head-only count
+    // queries so the 1000-row read cap cannot understate a large delivery.
     const cols = Object.values(SIGNAL_COLUMN);
-    for (const col of cols) {
-      const q = admin
-        .from("intuizi_identifiers")
-        .select(`primary_identifier,tag_codes,${col}`)
-        .not(col, "eq", "{}")
-        .limit(20000);
-      const { data: rows } = activationId
-        ? await q.eq(`${col}->>activation_id`, activationId)
-        : await q;
-      for (const r of (rows ?? []) as Record<string, unknown>[]) {
-        const sig = r[col] as Record<string, unknown> | null;
-        const act = String(sig?.activation_id ?? "unassigned");
-        const bucket = coverage[act] ??= { identifiers: 0, tagged: 0, scored: 0 };
-        bucket.identifiers++;
-        const tagCodes = (r.tag_codes ?? []) as string[];
-        if (tagCodes.length) bucket.tagged++;
-        if (sig && typeof sig === "object" && "scores" in sig) bucket.scored++;
+    const activationIds = activationId
+      ? [activationId]
+      : Array.from(
+        new Set([
+          ...(files ?? []).map((f) => activationIdFromKey(f.object_key) ?? "unassigned"),
+          "unassigned",
+        ]),
+      );
+
+    const coverage: Record<string, { identifiers: number; tagged: number; scored: number }> = {};
+    for (const act of activationIds) {
+      const bucket = coverage[act] = { identifiers: 0, tagged: 0, scored: 0 };
+      for (const col of cols) {
+        const base = () => {
+          const q = admin
+            .from("intuizi_identifiers")
+            .select("id", { count: "exact", head: true })
+            .not(col, "eq", "{}");
+          return act === "unassigned"
+            ? q.is(`${col}->>activation_id`, null)
+            : q.eq(`${col}->>activation_id`, act);
+        };
+        const [all, tagged, scored] = await Promise.all([
+          base(),
+          base().not("tag_codes", "eq", "{}"),
+          base().not(`${col}->>scores`, "is", null),
+        ]);
+        bucket.identifiers += all.count ?? 0;
+        bucket.tagged += tagged.count ?? 0;
+        bucket.scored += scored.count ?? 0;
       }
+
     }
+
 
     const readinessOf = (c?: { identifiers: number; tagged: number; scored: number }) =>
       !c || c.identifiers === 0

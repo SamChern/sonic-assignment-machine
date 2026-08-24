@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +43,8 @@ import {
   Loader2,
   Network,
   Play,
+  Sparkles,
+
   RefreshCw,
   ShieldAlert,
   Terminal,
@@ -91,7 +95,9 @@ interface PendingWrite {
  * Delivery keys hand off to the existing intuizi-ingest pipeline untouched.
  */
 export const IntuiziConsolePanel = () => {
+  const navigate = useNavigate();
   const [tools, setTools] = useState<McpTool[]>([]);
+
   const [caps, setCaps] = useState<Record<string, boolean>>({});
   const [connError, setConnError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
@@ -124,6 +130,8 @@ export const IntuiziConsolePanel = () => {
 
   const [keys, setKeys] = useState<string[]>([]);
   const [ingesting, setIngesting] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
 
   const [rawTool, setRawTool] = useState<string>("");
   const [rawArgs, setRawArgs] = useState<string>("{}");
@@ -386,30 +394,37 @@ export const IntuiziConsolePanel = () => {
     }
   }, [pending, log]);
 
+  /** Validate + ingest a set of delivered S3 keys through the untouched pipeline. */
+  const ingestKeys = useCallback(async (objectKeys: string[]) => {
+    const { data: validated, error: vErr } = await supabase.functions.invoke("intuizi-ingest", {
+      body: { action: "validate_keys", object_keys: objectKeys, expand_manifest: true },
+    });
+    if (vErr) throw vErr;
+    const readable = ((validated as { keys?: Array<{ object_key: string; ok: boolean }> })?.keys ?? [])
+      .filter((k) => k.ok);
+    if (!readable.length) return { done: 0, total: 0 };
+    let done = 0;
+    for (const k of readable) {
+      const { error } = await supabase.functions.invoke("intuizi-ingest", {
+        body: { object_key: k.object_key },
+      });
+      if (!error) done += 1;
+    }
+    return { done, total: readable.length };
+  }, []);
+
   const ingestDelivered = useCallback(async () => {
     if (!keys.length) return;
     setIngesting(true);
     try {
-      const { data: validated, error: vErr } = await supabase.functions.invoke("intuizi-ingest", {
-        body: { action: "validate_keys", object_keys: keys, expand_manifest: true },
-      });
-      if (vErr) throw vErr;
-      const readable = ((validated as { keys?: Array<{ object_key: string; ok: boolean }> })?.keys ?? [])
-        .filter((k) => k.ok);
-      if (!readable.length) {
+      const { done, total } = await ingestKeys(keys);
+      if (!total) {
         toast.error("No delivered object was readable", {
           description: "Check the S3 credentials on Integration Status.",
         });
         return;
       }
-      let done = 0;
-      for (const k of readable) {
-        const { error } = await supabase.functions.invoke("intuizi-ingest", {
-          body: { object_key: k.object_key },
-        });
-        if (!error) done += 1;
-      }
-      toast.success(`Ingested ${done}/${readable.length} delivered object(s)`, {
+      toast.success(`Ingested ${done}/${total} delivered object(s)`, {
         description: "Scoring runs through the existing ontology pipeline.",
       });
     } catch (e) {
@@ -417,7 +432,41 @@ export const IntuiziConsolePanel = () => {
     } finally {
       setIngesting(false);
     }
-  }, [keys]);
+  }, [keys, ingestKeys]);
+
+  /**
+   * Export an activation to the main app: ingest whatever it delivered, then
+   * deep-link into the semantic analysis page scoped to that activation.
+   */
+  const exportToApp = useCallback(async (activationId: string, knownKeys?: string[]) => {
+    const id = String(activationId);
+    setExportingId(id);
+    try {
+      let objectKeys = knownKeys ?? [];
+      if (!objectKeys.length) {
+        const { result } = await callTool("get_activation", { id });
+        objectKeys = deliveredKeys(result);
+      }
+      if (objectKeys.length) {
+        const { done, total } = await ingestKeys(objectKeys);
+        toast.success(`Exported activation ${id}`, {
+          description: total
+            ? `Ingested ${done}/${total} delivered object(s) — opening semantic analysis.`
+            : "Delivered objects were not readable — opening semantic analysis anyway.",
+        });
+      } else {
+        toast.message(`Activation ${id} has no delivery keys yet`, {
+          description: "Opening semantic analysis for whatever is already ingested.",
+        });
+      }
+      navigate(`/admin/semantic?activation=${encodeURIComponent(id)}`);
+    } catch (e) {
+      toast.error("Export failed", { description: (e as Error).message });
+    } finally {
+      setExportingId(null);
+    }
+  }, [ingestKeys, navigate]);
+
 
   const runRaw = useCallback(async () => {
     if (!rawTool) return;
@@ -563,21 +612,42 @@ export const IntuiziConsolePanel = () => {
 
               <div className="space-y-1">
                 {listRows.map((row) => (
-                  <button
+                  <div
                     key={String(row.id)}
-                    onClick={() => void openDetail(row)}
-                    className="w-full rounded-lg border border-border/60 bg-card/60 p-2 text-left transition-colors hover:border-primary/50"
+                    className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 p-2 transition-colors hover:border-primary/50"
                   >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-xs font-medium">{row.name ?? `#${row.id}`}</span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel(row)}</span>
-                    </div>
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      id {String(row.id)}
-                      {row.created_at ? ` · ${new Date(String(row.created_at)).toLocaleDateString()}` : ""}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => void openDetail(row)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-xs font-medium">{row.name ?? `#${row.id}`}</span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel(row)}</span>
+                      </div>
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        id {String(row.id)}
+                        {row.created_at ? ` · ${new Date(String(row.created_at)).toLocaleDateString()}` : ""}
+                      </span>
+                    </button>
+                    {kind === "activations" && row.id != null && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="shrink-0 text-[11px]"
+                        onClick={() => void exportToApp(String(row.id))}
+                        disabled={exportingId !== null}
+                      >
+                        {exportingId === String(row.id) ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="mr-1 h-3 w-3" />
+                        )}
+                        Export
+                      </Button>
+                    )}
+                  </div>
                 ))}
+
                 {!listRows.length && !listing && (
                   <p className="text-[11px] text-muted-foreground">
                     Nothing loaded yet — hit Load to pull the {kind} already in your Intuizi console,
@@ -609,6 +679,26 @@ export const IntuiziConsolePanel = () => {
                       onActivate={(endpointId) => requestActivation(String(detail.row.id), endpointId)}
                     />
                   )}
+                  {detail.kind === "activations" && detail.row.id != null && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => void exportToApp(String(detail.row.id), keys)}
+                        disabled={exportingId !== null}
+                      >
+                        {exportingId === String(detail.row.id) ? (
+                          <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="mr-1 h-4 w-4" />
+                        )}
+                        Export to app for semantic analysis
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">
+                        Ingests delivered objects, then opens semantic analysis scoped to this activation.
+                      </span>
+                    </div>
+                  )}
+
                   <Collapsible>
                     <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground">
                       <ChevronDown className="h-3 w-3" /> raw payload

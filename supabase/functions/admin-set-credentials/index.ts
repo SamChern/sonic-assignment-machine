@@ -51,6 +51,7 @@ const ALLOWED_FIELDS: Record<string, string[]> = {
   mcp_notion: MCP_FIELDS,
   mcp_linear: MCP_FIELDS,
   mcp_librosa: MCP_FIELDS,
+  mcp_intuizi: MCP_FIELDS,
 };
 
 Deno.serve(async (req) => {

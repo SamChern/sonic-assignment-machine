@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -208,6 +208,9 @@ function rowStatus(
 
 const SemanticAnalysis = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Activations exported from the Intuizi MCP console deep-link here.
+  const activationParam = searchParams.get("activation")?.trim() || "5498";
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [rows, setRows] = useState<IdentifierRow[]>([]);
   const [sources, setSources] = useState<Record<string, SourceRow>>({});
@@ -505,7 +508,7 @@ const SemanticAnalysis = () => {
         </div>
 
         <div className="mt-6">
-          <ConfidenceBreakdownPanel defaultActivation="5498" />
+          <ConfidenceBreakdownPanel defaultActivation={activationParam} />
         </div>
 
         <div className="mt-6">

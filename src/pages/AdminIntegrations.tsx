@@ -30,6 +30,7 @@ import {
   Network,
 } from "lucide-react";
 import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
+import IntuiziConsolePanel from "@/components/admin/IntuiziConsolePanel";
 
 interface StatusEntry {
   fields: string[];
@@ -151,6 +152,7 @@ const AdminIntegrations = () => {
           </Card>
         )}
 
+        {kindFilter === "mcp" && <IntuiziConsolePanel />}
         {kindFilter === "mcp" && <LibrosaAudioTester />}
       </main>
     </div>

@@ -95,7 +95,9 @@ interface PendingWrite {
  * Delivery keys hand off to the existing intuizi-ingest pipeline untouched.
  */
 export const IntuiziConsolePanel = () => {
+  const navigate = useNavigate();
   const [tools, setTools] = useState<McpTool[]>([]);
+
   const [caps, setCaps] = useState<Record<string, boolean>>({});
   const [connError, setConnError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);

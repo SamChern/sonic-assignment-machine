@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { McpToolForm } from "@/components/admin/McpToolForm";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
@@ -202,6 +203,8 @@ function ConnectedCard({
   const [loadingTools, setLoadingTools] = useState(false);
   const [selectedTool, setSelectedTool] = useState<string>("");
   const [argsJson, setArgsJson] = useState("{}");
+  const [formArgs, setFormArgs] = useState<Record<string, unknown>>({});
+  const [jsonMode, setJsonMode] = useState(false);
   const [calling, setCalling] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
 
@@ -248,12 +251,14 @@ function ConnectedCard({
   };
 
   const callTool = async () => {
-    let parsed: Record<string, unknown> = {};
-    try {
-      parsed = argsJson.trim() ? JSON.parse(argsJson) : {};
-    } catch {
-      toast.error("Arguments must be valid JSON.");
-      return;
+    let parsed: Record<string, unknown> = formArgs;
+    if (jsonMode) {
+      try {
+        parsed = argsJson.trim() ? JSON.parse(argsJson) : {};
+      } catch {
+        toast.error("Arguments must be valid JSON.");
+        return;
+      }
     }
     setCalling(true);
     setOutput(null);
@@ -341,7 +346,12 @@ function ConnectedCard({
                 <select
                   className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                   value={selectedTool}
-                  onChange={(e) => setSelectedTool(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedTool(e.target.value);
+                    setFormArgs({});
+                    setArgsJson("{}");
+                    setOutput(null);
+                  }}
                 >
                   {tools.map((t) => (
                     <option key={t.name} value={t.name}>
@@ -355,14 +365,35 @@ function ConnectedCard({
                   </p>
                 )}
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Arguments (JSON)</Label>
-                <Textarea
-                  rows={3}
-                  value={argsJson}
-                  onChange={(e) => setArgsJson(e.target.value)}
-                  className="font-mono text-xs"
-                />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs">Arguments</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-[11px]"
+                    onClick={() => {
+                      if (!jsonMode) setArgsJson(JSON.stringify(formArgs, null, 2));
+                      setJsonMode((v) => !v);
+                    }}
+                  >
+                    {jsonMode ? "Use form fields" : "Edit as JSON"}
+                  </Button>
+                </div>
+                {jsonMode ? (
+                  <Textarea
+                    rows={4}
+                    value={argsJson}
+                    onChange={(e) => setArgsJson(e.target.value)}
+                    className="font-mono text-xs"
+                  />
+                ) : (
+                  <McpToolForm
+                    schema={tools.find((t) => t.name === selectedTool)?.inputSchema}
+                    resetKey={selectedTool}
+                    onChange={setFormArgs}
+                  />
+                )}
               </div>
               <Button size="sm" onClick={callTool} disabled={calling || !selectedTool}>
                 {calling ? (

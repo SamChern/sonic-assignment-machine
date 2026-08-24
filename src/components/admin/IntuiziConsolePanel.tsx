@@ -645,14 +645,22 @@ export const IntuiziConsolePanel = () => {
             </CollapsibleContent>
           </Collapsible>
 
-          {/* Raw tool console */}
+          {/* Tool runner — native fields generated from each tool's schema */}
           <Collapsible>
             <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg border border-border bg-card/60 p-2 text-xs font-medium">
-              <Terminal className="h-3.5 w-3.5" /> Raw tool console
+              <Terminal className="h-3.5 w-3.5" /> Tool runner ({toolNames.length} tools)
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-2 space-y-2">
-              <div className="flex flex-wrap gap-2">
-                <Select value={rawTool} onValueChange={setRawTool}>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={rawTool}
+                  onValueChange={(v) => {
+                    setRawTool(v);
+                    setFormArgs({});
+                    setRawArgs("{}");
+                    setRawOut("");
+                  }}
+                >
                   <SelectTrigger className="h-9 w-[260px] text-xs">
                     <SelectValue placeholder="Pick a tool" />
                   </SelectTrigger>
@@ -666,17 +674,55 @@ export const IntuiziConsolePanel = () => {
                   {rawBusy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Play className="mr-1 h-4 w-4" />}
                   Run
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-[11px]"
+                  onClick={() => {
+                    if (!jsonMode) setRawArgs(JSON.stringify(formArgs, null, 2));
+                    setJsonMode((v) => !v);
+                  }}
+                >
+                  {jsonMode ? "Use form fields" : "Edit as JSON"}
+                </Button>
               </div>
-              <Textarea
-                value={rawArgs}
-                onChange={(e) => setRawArgs(e.target.value)}
-                rows={4}
-                spellCheck={false}
-                className="font-mono text-[11px]"
-              />
+
+              {!!selectedToolDef?.description && (
+                <p className="text-[11px] text-muted-foreground">{selectedToolDef.description}</p>
+              )}
+
+              {rawTool ? (
+                jsonMode ? (
+                  <Textarea
+                    value={rawArgs}
+                    onChange={(e) => setRawArgs(e.target.value)}
+                    rows={6}
+                    spellCheck={false}
+                    className="font-mono text-[11px]"
+                  />
+                ) : (
+                  <McpToolForm
+                    schema={selectedToolDef?.inputSchema}
+                    resetKey={rawTool}
+                    onChange={setFormArgs}
+                  />
+                )
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Pick a tool to get its native input fields.
+                </p>
+              )}
+
+              {!jsonMode && !!rawTool && (
+                <pre className="max-h-24 overflow-auto rounded bg-muted/20 p-2 text-[10px] text-muted-foreground">
+                  {JSON.stringify(formArgs, null, 2)}
+                </pre>
+              )}
+
               {!!rawOut && (
                 <pre className="max-h-64 overflow-auto rounded bg-muted/30 p-2 text-[10px]">{rawOut}</pre>
               )}
+
             </CollapsibleContent>
           </Collapsible>
         </>

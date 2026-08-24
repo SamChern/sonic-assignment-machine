@@ -18,6 +18,7 @@ const KNOWN_MCP_INTEGRATIONS = new Set([
   "mcp_notion",
   "mcp_linear",
   "mcp_librosa",
+  "mcp_intuizi",
 ]);
 
 Deno.serve(async (req) => {

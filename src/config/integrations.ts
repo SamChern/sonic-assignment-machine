@@ -402,7 +402,73 @@ export const INTEGRATIONS: Integration[] = [
       },
     ],
   },
+  {
+    id: "mcp_intuizi",
+    kind: "mcp",
+    name: "Intuizi Console MCP",
+    description:
+      "Drive the Intuizi console from SonicSIM Admin: browse projects, audiences, cohorts and POI data, estimate and build audiences, activate them to your S3 endpoint, then hand the delivered files straight to the ingest pipeline. Reads are open; creates and deletes stay behind the write toggle.",
+    docsUrl: "https://console.intuizi.com/mcp/getting-started",
+    setupSteps: [
+      "In the Intuizi console: My Account → MCP Tokens → Generate new token. The token is shown once — copy it now.",
+      "Headless alternative: POST https://console.intuizi.com/api/v2/auth/mcp-token with your console email + password; the token is in data.token.",
+      "Server URL is prefilled (https://console.intuizi.com/api/v2/mcp) and the scheme is Bearer — leave both as-is unless Intuizi tells you otherwise.",
+      "Paste the token below and click Test Connection (JSON-RPC initialize handshake, costs no API call).",
+      "Leave 'Create & modify Intuizi resources' OFF until you actually want to build audiences or activations from here.",
+      "Tokens last one year. Changing your Intuizi password revokes every MCP token and one-click connector immediately — re-paste a fresh token here if that happens.",
+    ],
+    fields: mcpFields.map((f) =>
+      f.key === "MCP_SERVER_URL"
+        ? {
+            ...f,
+            placeholder: "https://console.intuizi.com/api/v2/mcp",
+            helpText:
+              "Stateless Streamable HTTP endpoint of the Intuizi MCP server. Use the default unless Intuizi gives you a tenant-specific URL.",
+          }
+        : f.key === "MCP_AUTH_TOKEN"
+          ? {
+              ...f,
+              label: "Intuizi MCP Token",
+              placeholder: "MCP token from My Account → MCP Tokens",
+              helpText:
+                "Shown once in the Intuizi console. Stored encrypted; only edge functions read it, never the browser.",
+              required: true,
+            }
+          : f,
+    ),
+    testEndpoint: "mcp-test",
+    capabilities: [
+      {
+        key: "tools.read",
+        label: "Read console data",
+        description:
+          "list/get audiences, activations, cohorts, projects, POI data, usage, reference catalogs, and size estimates.",
+        defaultEnabled: true,
+      },
+      {
+        key: "resources.read",
+        label: "Read Intuizi docs resources",
+        description:
+          "Fetch the API contract pages the server publishes (envelope, async model, errors, idempotency). No account data, no API quota.",
+        defaultEnabled: true,
+      },
+      {
+        key: "tools.write",
+        label: "Create & modify Intuizi resources",
+        description:
+          "Allows create_audience, create_activation, cohorts, projects, POI writes and the delete tools. Every call still needs an explicit in-app confirmation.",
+        defaultEnabled: false,
+      },
+      {
+        key: "prompts.read",
+        label: "Use server prompts",
+        description: "Fetch the build_and_activate_audience guided workflow prompt.",
+        defaultEnabled: false,
+      },
+    ],
+  },
 ];
+
 
 // Wire the generic MCP tester to all MCP integrations (additive — doesn't break existing entries).
 for (const integration of INTEGRATIONS) {

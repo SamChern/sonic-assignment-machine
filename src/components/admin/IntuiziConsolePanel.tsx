@@ -124,6 +124,8 @@ export const IntuiziConsolePanel = () => {
 
   const [keys, setKeys] = useState<string[]>([]);
   const [ingesting, setIngesting] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
 
   const [rawTool, setRawTool] = useState<string>("");
   const [rawArgs, setRawArgs] = useState<string>("{}");

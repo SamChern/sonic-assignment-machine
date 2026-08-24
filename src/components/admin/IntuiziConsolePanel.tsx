@@ -100,6 +100,7 @@ export const IntuiziConsolePanel = () => {
   const [listRows, setListRows] = useState<EnvelopeRow[]>([]);
   const [listing, setListing] = useState(false);
 
+  const [lookupId, setLookupId] = useState("");
   const [detail, setDetail] = useState<{ kind: BrowseKind; row: EnvelopeRow; raw: unknown } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -169,7 +170,7 @@ export const IntuiziConsolePanel = () => {
     setListing(true);
     setDetail(null);
     try {
-      const args: Record<string, unknown> = { per_page: 25 };
+      const args: Record<string, unknown> = { per_page: 50 };
       if (search.trim()) args.search = search.trim();
       const { result } = await callTool(BROWSE_TOOL[kind], args);
       setListRows(rows(result));
@@ -196,6 +197,13 @@ export const IntuiziConsolePanel = () => {
       setDetailLoading(false);
     }
   }, [kind]);
+
+  /** Open an activation/audience/cohort straight from an id typed by the admin. */
+  const lookupById = useCallback(async () => {
+    const id = lookupId.trim();
+    if (!id) return;
+    await openDetail({ id });
+  }, [lookupId, openDetail]);
 
   const loadReference = useCallback(async () => {
     const preset = REFERENCE_PRESETS[Number(reference)];

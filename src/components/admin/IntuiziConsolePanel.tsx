@@ -91,7 +91,7 @@ export const IntuiziConsolePanel = () => {
   const [tools, setTools] = useState<McpTool[]>([]);
   const [caps, setCaps] = useState<Record<string, boolean>>({});
   const [connError, setConnError] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState(true);
+  const [connecting, setConnecting] = useState(false);
 
   const [usage, setUsage] = useState<Record<string, unknown> | null>(null);
   const [kind, setKind] = useState<BrowseKind>("audiences");
@@ -144,9 +144,12 @@ export const IntuiziConsolePanel = () => {
     }
   }, []);
 
+  // No auto-connect: without a saved MCP token the bridge answers 400, which
+  // would surface as an error on every page load. Admin connects explicitly.
   useEffect(() => {
-    void connect();
-  }, [connect]);
+    setConnecting(false);
+  }, []);
+
 
   const loadUsage = useCallback(async () => {
     try {
@@ -413,22 +416,29 @@ export const IntuiziConsolePanel = () => {
           </Badge>
         ) : connError ? (
           <Badge variant="destructive" className="text-[11px]">not connected</Badge>
+        ) : !tools.length ? (
+          <Badge variant="outline" className="text-[11px]">idle — hit Connect</Badge>
         ) : (
           <Badge variant="outline" className="text-[11px] text-primary">
             {tools.length} tools
           </Badge>
         )}
-        {!connecting && !connError && (
+        {!connecting && !connError && !!tools.length && (
           <Badge variant={writeEnabled ? "default" : "outline"} className="text-[11px]">
             {writeEnabled ? "writes enabled" : "read-only"}
           </Badge>
         )}
         <div className="ml-auto flex gap-2">
-          <Button variant="outline" size="sm" onClick={loadUsage} disabled={!!connError || connecting}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadUsage}
+            disabled={!!connError || connecting || !tools.length}
+          >
             <Gauge className="mr-1 h-4 w-4" /> Usage
           </Button>
           <Button variant="outline" size="sm" onClick={connect} disabled={connecting}>
-            <RefreshCw className="mr-1 h-4 w-4" /> Reconnect
+            <RefreshCw className="mr-1 h-4 w-4" /> {tools.length ? "Reconnect" : "Connect"}
           </Button>
         </div>
       </div>
@@ -451,7 +461,14 @@ export const IntuiziConsolePanel = () => {
         </div>
       )}
 
-      {!connError && !connecting && (
+      {!connError && !connecting && !tools.length && (
+        <p className="text-xs text-muted-foreground">
+          Not connected yet. Save an Intuizi MCP token in the “Intuizi Console MCP” card above, then
+          hit Connect to load the console tools.
+        </p>
+      )}
+
+      {!connError && !connecting && !!tools.length && (
         <>
           <Tabs value={kind} onValueChange={(v) => setKind(v as BrowseKind)}>
             <TabsList className="grid w-full grid-cols-4">

@@ -679,6 +679,26 @@ export const IntuiziConsolePanel = () => {
                       onActivate={(endpointId) => requestActivation(String(detail.row.id), endpointId)}
                     />
                   )}
+                  {detail.kind === "activations" && detail.row.id != null && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => void exportToApp(String(detail.row.id), keys)}
+                        disabled={exportingId !== null}
+                      >
+                        {exportingId === String(detail.row.id) ? (
+                          <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="mr-1 h-4 w-4" />
+                        )}
+                        Export to app for semantic analysis
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">
+                        Ingests delivered objects, then opens semantic analysis scoped to this activation.
+                      </span>
+                    </div>
+                  )}
+
                   <Collapsible>
                     <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground">
                       <ChevronDown className="h-3 w-3" /> raw payload

@@ -381,11 +381,15 @@ export const IntuiziConsolePanel = () => {
   const runRaw = useCallback(async () => {
     if (!rawTool) return;
     let args: Record<string, unknown> = {};
-    try {
-      args = JSON.parse(rawArgs || "{}");
-    } catch (e) {
-      toast.error("Arguments must be JSON", { description: (e as Error).message });
-      return;
+    if (jsonMode) {
+      try {
+        args = JSON.parse(rawArgs || "{}");
+      } catch (e) {
+        toast.error("Arguments must be JSON", { description: (e as Error).message });
+        return;
+      }
+    } else {
+      args = formArgs;
     }
     setRawBusy(true);
     try {
@@ -406,7 +410,8 @@ export const IntuiziConsolePanel = () => {
     } finally {
       setRawBusy(false);
     }
-  }, [rawTool, rawArgs]);
+  }, [rawTool, rawArgs, formArgs, jsonMode]);
+
 
   return (
     <Card className="p-5 space-y-5 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">

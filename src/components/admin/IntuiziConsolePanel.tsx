@@ -612,21 +612,42 @@ export const IntuiziConsolePanel = () => {
 
               <div className="space-y-1">
                 {listRows.map((row) => (
-                  <button
+                  <div
                     key={String(row.id)}
-                    onClick={() => void openDetail(row)}
-                    className="w-full rounded-lg border border-border/60 bg-card/60 p-2 text-left transition-colors hover:border-primary/50"
+                    className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 p-2 transition-colors hover:border-primary/50"
                   >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-xs font-medium">{row.name ?? `#${row.id}`}</span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel(row)}</span>
-                    </div>
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      id {String(row.id)}
-                      {row.created_at ? ` · ${new Date(String(row.created_at)).toLocaleDateString()}` : ""}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => void openDetail(row)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-xs font-medium">{row.name ?? `#${row.id}`}</span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel(row)}</span>
+                      </div>
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        id {String(row.id)}
+                        {row.created_at ? ` · ${new Date(String(row.created_at)).toLocaleDateString()}` : ""}
+                      </span>
+                    </button>
+                    {kind === "activations" && row.id != null && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="shrink-0 text-[11px]"
+                        onClick={() => void exportToApp(String(row.id))}
+                        disabled={exportingId !== null}
+                      >
+                        {exportingId === String(row.id) ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="mr-1 h-3 w-3" />
+                        )}
+                        Export
+                      </Button>
+                    )}
+                  </div>
                 ))}
+
                 {!listRows.length && !listing && (
                   <p className="text-[11px] text-muted-foreground">
                     Nothing loaded yet — hit Load to pull the {kind} already in your Intuizi console,

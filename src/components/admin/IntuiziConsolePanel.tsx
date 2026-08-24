@@ -205,6 +205,14 @@ export const IntuiziConsolePanel = () => {
     await openDetail({ id });
   }, [lookupId, openDetail]);
 
+  // Once connected, pull the existing console records for the active tab so
+  // audiences/activations already created in Intuizi show up without a click.
+  useEffect(() => {
+    if (!tools.length) return;
+    void browse();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tools.length, kind]);
+
   const loadReference = useCallback(async () => {
     const preset = REFERENCE_PRESETS[Number(reference)];
     try {

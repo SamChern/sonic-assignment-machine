@@ -43,6 +43,8 @@ import {
   Loader2,
   Network,
   Play,
+  Sparkles,
+
   RefreshCw,
   ShieldAlert,
   Terminal,

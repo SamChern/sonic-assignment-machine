@@ -92,12 +92,28 @@ Deno.serve(async (req) => {
           params: { name: toolName, arguments: args },
         };
 
-    const resp = await fetch(serverUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(rpc),
-      signal: AbortSignal.timeout(60_000),
-    });
+    let resp: Response;
+    try {
+      resp = await fetch(serverUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(rpc),
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (netErr) {
+      const detail = netErr instanceof Error ? netErr.message : String(netErr);
+      const unreachable = /dns error|failed to lookup|Connect|refused|timed out|timeout/i.test(detail);
+      return json(
+        {
+          success: false,
+          error: unreachable
+            ? `MCP server unreachable at ${serverUrl}. The saved MCP_SERVER_URL for "${integrationId}" is stale or offline (temporary tunnel URLs expire) — update it on Admin → Integrations → MCP Servers. (${detail.slice(0, 200)})`
+            : `MCP request failed: ${detail.slice(0, 300)}`,
+        },
+        502,
+      );
+    }
+
 
     const text = await resp.text();
     const contentType = resp.headers.get("content-type") ?? "";

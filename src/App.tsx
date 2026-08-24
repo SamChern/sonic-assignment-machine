@@ -12,6 +12,7 @@ import Index from "./pages/Index";
 const Auth = lazy(() => import("./pages/Auth"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminIntegrations = lazy(() => import("./pages/AdminIntegrations"));
+const AdminConnected = lazy(() => import("./pages/AdminConnected"));
 const AdminCTV = lazy(() => import("./pages/AdminCTV"));
 const IntegrationStatus = lazy(() => import("./pages/IntegrationStatus"));
 const IngestionCompatibility = lazy(() => import("./pages/IngestionCompatibility"));
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/integrations" element={<AdminIntegrations />} />
+              <Route path="/admin/connected" element={<AdminConnected />} />
               <Route path="/admin/ctv" element={<AdminCTV />} />
               <Route path="/admin/pipeline" element={<IntegrationStatus />} />
               <Route path="/admin/compatibility" element={<IngestionCompatibility />} />

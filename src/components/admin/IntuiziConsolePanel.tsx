@@ -386,30 +386,37 @@ export const IntuiziConsolePanel = () => {
     }
   }, [pending, log]);
 
+  /** Validate + ingest a set of delivered S3 keys through the untouched pipeline. */
+  const ingestKeys = useCallback(async (objectKeys: string[]) => {
+    const { data: validated, error: vErr } = await supabase.functions.invoke("intuizi-ingest", {
+      body: { action: "validate_keys", object_keys: objectKeys, expand_manifest: true },
+    });
+    if (vErr) throw vErr;
+    const readable = ((validated as { keys?: Array<{ object_key: string; ok: boolean }> })?.keys ?? [])
+      .filter((k) => k.ok);
+    if (!readable.length) return { done: 0, total: 0 };
+    let done = 0;
+    for (const k of readable) {
+      const { error } = await supabase.functions.invoke("intuizi-ingest", {
+        body: { object_key: k.object_key },
+      });
+      if (!error) done += 1;
+    }
+    return { done, total: readable.length };
+  }, []);
+
   const ingestDelivered = useCallback(async () => {
     if (!keys.length) return;
     setIngesting(true);
     try {
-      const { data: validated, error: vErr } = await supabase.functions.invoke("intuizi-ingest", {
-        body: { action: "validate_keys", object_keys: keys, expand_manifest: true },
-      });
-      if (vErr) throw vErr;
-      const readable = ((validated as { keys?: Array<{ object_key: string; ok: boolean }> })?.keys ?? [])
-        .filter((k) => k.ok);
-      if (!readable.length) {
+      const { done, total } = await ingestKeys(keys);
+      if (!total) {
         toast.error("No delivered object was readable", {
           description: "Check the S3 credentials on Integration Status.",
         });
         return;
       }
-      let done = 0;
-      for (const k of readable) {
-        const { error } = await supabase.functions.invoke("intuizi-ingest", {
-          body: { object_key: k.object_key },
-        });
-        if (!error) done += 1;
-      }
-      toast.success(`Ingested ${done}/${readable.length} delivered object(s)`, {
+      toast.success(`Ingested ${done}/${total} delivered object(s)`, {
         description: "Scoring runs through the existing ontology pipeline.",
       });
     } catch (e) {
@@ -417,7 +424,41 @@ export const IntuiziConsolePanel = () => {
     } finally {
       setIngesting(false);
     }
-  }, [keys]);
+  }, [keys, ingestKeys]);
+
+  /**
+   * Export an activation to the main app: ingest whatever it delivered, then
+   * deep-link into the semantic analysis page scoped to that activation.
+   */
+  const exportToApp = useCallback(async (activationId: string, knownKeys?: string[]) => {
+    const id = String(activationId);
+    setExportingId(id);
+    try {
+      let objectKeys = knownKeys ?? [];
+      if (!objectKeys.length) {
+        const { result } = await callTool("get_activation", { id });
+        objectKeys = deliveredKeys(result);
+      }
+      if (objectKeys.length) {
+        const { done, total } = await ingestKeys(objectKeys);
+        toast.success(`Exported activation ${id}`, {
+          description: total
+            ? `Ingested ${done}/${total} delivered object(s) — opening semantic analysis.`
+            : "Delivered objects were not readable — opening semantic analysis anyway.",
+        });
+      } else {
+        toast.message(`Activation ${id} has no delivery keys yet`, {
+          description: "Opening semantic analysis for whatever is already ingested.",
+        });
+      }
+      navigate(`/admin/semantic?activation=${encodeURIComponent(id)}`);
+    } catch (e) {
+      toast.error("Export failed", { description: (e as Error).message });
+    } finally {
+      setExportingId(null);
+    }
+  }, [ingestKeys, navigate]);
+
 
   const runRaw = useCallback(async () => {
     if (!rawTool) return;

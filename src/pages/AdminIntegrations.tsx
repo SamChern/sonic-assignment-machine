@@ -105,9 +105,15 @@ const AdminIntegrations = () => {
               <h1 className="text-xl font-semibold">API Integrations</h1>
             </div>
           </div>
-          <Badge variant="outline" className="gap-1">
-            <ShieldCheck className="h-3 w-3" /> Admin only
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/admin/connected")}>
+              <Network className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Connected only</span>
+            </Button>
+            <Badge variant="outline" className="gap-1">
+              <ShieldCheck className="h-3 w-3" /> Admin only
+            </Badge>
+          </div>
         </div>
       </header>
 

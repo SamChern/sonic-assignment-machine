@@ -144,9 +144,12 @@ export const IntuiziConsolePanel = () => {
     }
   }, []);
 
+  // No auto-connect: without a saved MCP token the bridge answers 400, which
+  // would surface as an error on every page load. Admin connects explicitly.
   useEffect(() => {
-    void connect();
-  }, [connect]);
+    setConnecting(false);
+  }, []);
+
 
   const loadUsage = useCallback(async () => {
     try {

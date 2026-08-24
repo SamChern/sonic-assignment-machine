@@ -566,6 +566,51 @@ export type Database = {
         }
         Relationships: []
       }
+      intuizi_mcp_runs: {
+        Row: {
+          arguments: Json
+          created_at: string
+          delivered_keys: Json
+          error: string | null
+          id: string
+          idempotency_key: string | null
+          resource_id: string | null
+          resource_type: string | null
+          run_by: string | null
+          status: string
+          tool_name: string
+          updated_at: string
+        }
+        Insert: {
+          arguments?: Json
+          created_at?: string
+          delivered_keys?: Json
+          error?: string | null
+          id?: string
+          idempotency_key?: string | null
+          resource_id?: string | null
+          resource_type?: string | null
+          run_by?: string | null
+          status?: string
+          tool_name: string
+          updated_at?: string
+        }
+        Update: {
+          arguments?: Json
+          created_at?: string
+          delivered_keys?: Json
+          error?: string | null
+          id?: string
+          idempotency_key?: string | null
+          resource_id?: string | null
+          resource_type?: string | null
+          run_by?: string | null
+          status?: string
+          tool_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       job_worker_state: {
         Row: {
           created_at: string

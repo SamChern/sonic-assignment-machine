@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { McpToolForm } from "@/components/admin/McpToolForm";
+import { IntuiziCatalogTree } from "@/components/admin/IntuiziCatalogTree";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -58,6 +59,13 @@ import {
   type EnvelopeRow,
   type McpTool,
 } from "@/lib/intuiziMcp";
+import {
+  CATALOG_DATASETS,
+  buildCatalogTree,
+  extractCatalogArray,
+  normalizeCatalogRows,
+  type CatalogNode,
+} from "@/lib/intuiziTaxonomy";
 
 type BrowseKind = "projects" | "audiences" | "activations" | "cohorts";
 
@@ -68,12 +76,6 @@ const BROWSE_TOOL: Record<BrowseKind, string> = {
   cohorts: "list_cohorts",
 };
 
-const REFERENCE_PRESETS = [
-  { label: "Dataset types (common)", dataset: "common", catalog: "dataset-types" },
-  { label: "Signal providers (common)", dataset: "common", catalog: "signal-providers" },
-  { label: "CTV genres", dataset: "ctv", catalog: "genres" },
-  { label: "App categories", dataset: "apps", catalog: "categories" },
-];
 
 interface PendingWrite {
   tool: string;
@@ -104,8 +106,15 @@ export const IntuiziConsolePanel = () => {
   const [detail, setDetail] = useState<{ kind: BrowseKind; row: EnvelopeRow; raw: unknown } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const [reference, setReference] = useState<string>("0");
-  const [refText, setRefText] = useState<string>("");
+  const [refDataset, setRefDataset] = useState<string>("common");
+  const [refCatalog, setRefCatalog] = useState<string>("dataset-types");
+  const [refTree, setRefTree] = useState<{ roots: CatalogNode[]; synthesized: number }>({
+    roots: [],
+    synthesized: 0,
+  });
+  const [refRaw, setRefRaw] = useState<string>("");
+  const [refBusy, setRefBusy] = useState(false);
+  const [refError, setRefError] = useState<string | null>(null);
 
   const [audienceBody, setAudienceBody] = useState<string>(
     JSON.stringify({ name: "SonicSIM test audience", datasets: [] }, null, 2),
@@ -213,18 +222,32 @@ export const IntuiziConsolePanel = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tools.length, kind]);
 
+  /**
+   * Pull a reference catalog and nest it per the Intuizi taxonomy conventions
+   * (CategoryID above TaxonomyID, IAB13-3 under IAB13, path-style labels).
+   */
   const loadReference = useCallback(async () => {
-    const preset = REFERENCE_PRESETS[Number(reference)];
+    setRefBusy(true);
+    setRefError(null);
     try {
       const { result } = await callTool("lookup_reference", {
-        dataset: preset.dataset,
-        catalog: preset.catalog,
+        dataset: refDataset,
+        catalog: refCatalog,
       });
-      setRefText(asText(result).slice(0, 8000));
+      const arr = extractCatalogArray(unwrap(result) ?? result);
+      const tree = buildCatalogTree(normalizeCatalogRows(arr));
+      setRefTree({ roots: tree.roots, synthesized: tree.synthesizedParents });
+      setRefRaw(asText(result).slice(0, 8000));
+      if (!tree.roots.length) {
+        setRefError("The catalog returned no rows — try another catalog for this dataset.");
+      }
     } catch (e) {
-      setRefText(`Error: ${(e as Error).message}`);
+      setRefTree({ roots: [], synthesized: 0 });
+      setRefError((e as Error).message);
+    } finally {
+      setRefBusy(false);
     }
-  }, [reference]);
+  }, [refDataset, refCatalog]);
 
   const parseBody = (): Record<string, unknown> | null => {
     try {
@@ -632,22 +655,75 @@ export const IntuiziConsolePanel = () => {
             )}
           </div>
 
-          {/* Reference catalogs */}
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[220px]">
-              <Label className="text-[11px]">Reference catalog</Label>
-              <Select value={reference} onValueChange={setReference}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {REFERENCE_PRESETS.map((p, i) => (
-                    <SelectItem key={p.label} value={String(i)}>{p.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* Reference catalogs — nested per the Intuizi taxonomy */}
+          <div className="space-y-2 rounded-lg border border-border bg-muted/10 p-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-[160px]">
+                <Label className="text-[11px]">Dataset</Label>
+                <Select
+                  value={refDataset}
+                  onValueChange={(v) => {
+                    setRefDataset(v);
+                    const first = CATALOG_DATASETS.find((d) => d.dataset === v)?.catalogs[0];
+                    if (first) setRefCatalog(first.catalog);
+                    setRefTree({ roots: [], synthesized: 0 });
+                    setRefError(null);
+                  }}
+                >
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATALOG_DATASETS.map((d) => (
+                      <SelectItem key={d.dataset} value={d.dataset}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="min-w-[200px]">
+                <Label className="text-[11px]">Catalog</Label>
+                <Select value={refCatalog} onValueChange={setRefCatalog}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(CATALOG_DATASETS.find((d) => d.dataset === refDataset)?.catalogs ?? []).map((c) => (
+                      <SelectItem key={c.catalog} value={c.catalog}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="outline" size="sm" onClick={loadReference} disabled={refBusy}>
+                {refBusy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Network className="mr-1 h-4 w-4" />}
+                Lookup
+              </Button>
+              {(() => {
+                const hint = CATALOG_DATASETS.find((d) => d.dataset === refDataset)
+                  ?.catalogs.find((c) => c.catalog === refCatalog)?.hint;
+                return hint ? (
+                  <span className="text-[11px] text-muted-foreground">{hint}</span>
+                ) : null;
+              })()}
             </div>
-            <Button variant="outline" size="sm" onClick={loadReference}>Lookup</Button>
-            {!!refText && (
-              <pre className="mt-2 max-h-40 w-full overflow-auto rounded bg-muted/30 p-2 text-[10px]">{refText}</pre>
+
+            {refError && (
+              <p className="text-[11px] text-destructive">{refError}</p>
+            )}
+
+            <IntuiziCatalogTree
+              roots={refTree.roots}
+              synthesizedParents={refTree.synthesized}
+              onPick={(node) => {
+                void navigator.clipboard.writeText(node.id);
+                toast.success(`Copied ${node.label} → ${node.id}`);
+              }}
+            />
+
+            {!!refRaw && (
+              <Collapsible>
+                <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <ChevronDown className="h-3 w-3" /> raw catalog payload
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <pre className="mt-1 max-h-40 overflow-auto rounded bg-muted/30 p-2 text-[10px]">{refRaw}</pre>
+                </CollapsibleContent>
+              </Collapsible>
             )}
           </div>
 

@@ -100,6 +100,7 @@ export const IntuiziConsolePanel = () => {
   const [listRows, setListRows] = useState<EnvelopeRow[]>([]);
   const [listing, setListing] = useState(false);
 
+  const [lookupId, setLookupId] = useState("");
   const [detail, setDetail] = useState<{ kind: BrowseKind; row: EnvelopeRow; raw: unknown } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -169,7 +170,7 @@ export const IntuiziConsolePanel = () => {
     setListing(true);
     setDetail(null);
     try {
-      const args: Record<string, unknown> = { per_page: 25 };
+      const args: Record<string, unknown> = { per_page: 50 };
       if (search.trim()) args.search = search.trim();
       const { result } = await callTool(BROWSE_TOOL[kind], args);
       setListRows(rows(result));
@@ -196,6 +197,21 @@ export const IntuiziConsolePanel = () => {
       setDetailLoading(false);
     }
   }, [kind]);
+
+  /** Open an activation/audience/cohort straight from an id typed by the admin. */
+  const lookupById = useCallback(async () => {
+    const id = lookupId.trim();
+    if (!id) return;
+    await openDetail({ id });
+  }, [lookupId, openDetail]);
+
+  // Once connected, pull the existing console records for the active tab so
+  // audiences/activations already created in Intuizi show up without a click.
+  useEffect(() => {
+    if (!tools.length) return;
+    void browse();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tools.length, kind]);
 
   const loadReference = useCallback(async () => {
     const preset = REFERENCE_PRESETS[Number(reference)];
@@ -492,14 +508,35 @@ export const IntuiziConsolePanel = () => {
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void browse()}
                   placeholder={`Search ${kind}…`}
                   className="h-9 text-xs"
                 />
                 <Button size="sm" onClick={browse} disabled={listing}>
                   {listing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Activity className="mr-1 h-4 w-4" />}
-                  Load
+                  {listRows.length ? "Refresh" : "Load"}
                 </Button>
               </div>
+
+              {kind !== "projects" && (
+                <div className="flex gap-2">
+                  <Input
+                    value={lookupId}
+                    onChange={(e) => setLookupId(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void lookupById()}
+                    placeholder={`Open ${kind.slice(0, -1)} by id (e.g. 5514)`}
+                    className="h-9 font-mono text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={lookupById}
+                    disabled={detailLoading || !lookupId.trim()}
+                  >
+                    Open
+                  </Button>
+                </div>
+              )}
 
               <div className="space-y-1">
                 {listRows.map((row) => (
@@ -512,11 +549,17 @@ export const IntuiziConsolePanel = () => {
                       <span className="truncate text-xs font-medium">{row.name ?? `#${row.id}`}</span>
                       <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel(row)}</span>
                     </div>
-                    <span className="font-mono text-[10px] text-muted-foreground">id {String(row.id)}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      id {String(row.id)}
+                      {row.created_at ? ` · ${new Date(String(row.created_at)).toLocaleDateString()}` : ""}
+                    </span>
                   </button>
                 ))}
                 {!listRows.length && !listing && (
-                  <p className="text-[11px] text-muted-foreground">Nothing loaded yet.</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Nothing loaded yet — hit Load to pull the {kind} already in your Intuizi console,
+                    or open one directly by id.
+                  </p>
                 )}
               </div>
 

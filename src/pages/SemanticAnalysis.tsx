@@ -682,7 +682,25 @@ const SemanticAnalysis = () => {
           </div>
 
 
-          {selectedSaved ? (
+          {savedLoading && !saved.length ? (
+            <div className="mt-4 space-y-3" aria-busy="true">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="space-y-1">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-2.5 w-full" />
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Fetching saved analyses…</p>
+            </div>
+          ) : selectedSaved ? (
+
             <div className="mt-3">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="truncate text-sm font-medium">{selectedSaved.source_name}</p>

@@ -554,7 +554,7 @@ const CategoryProfileEditor = ({
         )}
 
 
-        {!changedRows.length ? (
+        {compareMode === "multi" ? null : !changedRows.length ? (
           <p className="mt-4 rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
             {sideLabel(leftId)} and {sideLabel(rightId)} are identical across all 6 categories.
           </p>

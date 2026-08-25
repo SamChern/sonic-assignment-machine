@@ -228,6 +228,8 @@ const SemanticAnalysis = () => {
   const [filter, setFilter] = useState<IdentifierFilterState>({ ...EMPTY_IDENTIFIER_FILTER });
   const [stage, setStage] = useState<Stage>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedAnalysis[]>([]);
+  const [selectedSavedId, setSelectedSavedId] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

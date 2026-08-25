@@ -47,7 +47,24 @@ import {
   Layers,
   Radio,
   ChevronRight,
+  ArrowUpDown,
+  CalendarRange,
+  Maximize2,
+  Trash2,
+  X,
 } from "lucide-react";
+
+import SavedAnalysisDrawer from "@/components/SavedAnalysisDrawer";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type StepState = "ok" | "pending" | "error";
 
@@ -95,6 +112,40 @@ interface SavedAnalysis extends AnalysisRow {
 
 
 const SAVED_PAGE_SIZE = 25;
+
+type SavedSort =
+  | "newest"
+  | "oldest"
+  | "confidence_desc"
+  | "confidence_asc"
+  | "name_asc"
+  | "name_desc";
+
+const SAVED_SORTS: Array<[SavedSort, string]> = [
+  ["newest", "Newest first"],
+  ["oldest", "Oldest first"],
+  ["confidence_desc", "Highest confidence"],
+  ["confidence_asc", "Lowest confidence"],
+  ["name_asc", "Source A–Z"],
+  ["name_desc", "Source Z–A"],
+];
+
+const SORT_ORDER: Record<SavedSort, [string, boolean]> = {
+  newest: ["created_at", false],
+  oldest: ["created_at", true],
+  confidence_desc: ["confidence", false],
+  confidence_asc: ["confidence", true],
+  name_asc: ["source_name", true],
+  name_desc: ["source_name", false],
+};
+
+/** Quick date-range presets; null = all time. */
+const DATE_PRESETS: Array<[string, number | null]> = [
+  ["All time", null],
+  ["7d", 7],
+  ["30d", 30],
+  ["90d", 90],
+];
 
 const CATEGORY_KEYS = [
   ["emotional_score", "Emo", "bg-category-emotional", "var(--gradient-emotional)"],
@@ -245,7 +296,15 @@ const SemanticAnalysis = () => {
   const [savedTotal, setSavedTotal] = useState(0);
   const [savedLoading, setSavedLoading] = useState(false);
   const [savedQuery, setSavedQuery] = useState("");
+  const [savedSort, setSavedSort] = useState<SavedSort>("newest");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<SavedAnalysis | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const savedQueryRef = useRef("");
+  const savedSortRef = useRef<SavedSort>("newest");
+  const savedRangeRef = useRef({ from: "", to: "" });
   const savedCountRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -315,10 +374,12 @@ const SemanticAnalysis = () => {
     setLoading(false);
   }, []);
 
-  /** Most recent saved analyses (any source), paged + searchable. */
+  /** Saved analyses — paged, searchable, sortable and date-bounded. */
   const loadSaved = useCallback(async (append = false) => {
     const offset = append ? savedCountRef.current : 0;
     const q = savedQueryRef.current.trim();
+    const sort = savedSortRef.current;
+    const { from, to } = savedRangeRef.current;
     setSavedLoading(true);
     let query = supabase
       .from("source_analyses")
@@ -330,9 +391,12 @@ const SemanticAnalysis = () => {
     // against the timestamp; anything else narrows by source name server-side.
     const isDateQuery = /^[\d\-/:. ]+$/.test(q);
     if (q && !isDateQuery) query = query.ilike("source_name", `%${q}%`);
+    if (from) query = query.gte("created_at", new Date(`${from}T00:00:00`).toISOString());
+    if (to) query = query.lte("created_at", new Date(`${to}T23:59:59.999`).toISOString());
 
+    const [column, ascending] = SORT_ORDER[sort];
     const { data, error, count } = await query
-      .order("created_at", { ascending: false })
+      .order(column, { ascending })
       .range(offset, offset + SAVED_PAGE_SIZE - 1);
     setSavedLoading(false);
 
@@ -357,22 +421,77 @@ const SemanticAnalysis = () => {
     );
   }, []);
 
+  /** Remove a saved analysis, then refresh the list immediately. */
+  const deleteSaved = useCallback(async () => {
+    const target = pendingDelete;
+    if (!target) return;
+    setDeleting(true);
+    const { error } = await supabase.from("source_analyses").delete().eq("id", target.id);
+    setDeleting(false);
+    if (error) {
+      toast({
+        title: "Could not delete analysis",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    setPendingDelete(null);
+    setDrawerOpen(false);
+    setSaved((prev) => {
+      const list = prev.filter((a) => a.id !== target.id);
+      savedCountRef.current = list.length;
+      return list;
+    });
+    setSavedTotal((t) => Math.max(0, t - 1));
+    setSelectedSavedId((prev) => (prev === target.id ? "" : prev));
+    toast({ title: "Analysis deleted", description: target.source_name });
+    savedCountRef.current = 0;
+    loadSaved();
+  }, [pendingDelete, loadSaved]);
+
+  const applyPreset = useCallback((days: number | null) => {
+    if (days === null) {
+      setDateFrom("");
+      setDateTo("");
+      return;
+    }
+    const now = new Date();
+    const start = new Date(now.getTime() - (days - 1) * 86400000);
+    setDateFrom(start.toISOString().slice(0, 10));
+    setDateTo(now.toISOString().slice(0, 10));
+  }, []);
+
+  const activePreset = useMemo(() => {
+    if (!dateFrom && !dateTo) return "All time";
+    const today = new Date().toISOString().slice(0, 10);
+    if (dateTo !== today) return null;
+    for (const [label, days] of DATE_PRESETS) {
+      if (days === null) continue;
+      const start = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
+      if (start === dateFrom) return label;
+    }
+    return null;
+  }, [dateFrom, dateTo]);
+
 
   useEffect(() => {
     if (isAdmin) load();
   }, [isAdmin, load]);
 
 
-  /** Debounced server-side search on source name; resets paging. */
+  /** Debounced reload when search, sort or date range changes; resets paging. */
   useEffect(() => {
     if (!isAdmin) return;
     const t = setTimeout(() => {
       savedQueryRef.current = savedQuery;
+      savedSortRef.current = savedSort;
+      savedRangeRef.current = { from: dateFrom, to: dateTo };
       savedCountRef.current = 0;
       loadSaved();
     }, 300);
     return () => clearTimeout(t);
-  }, [savedQuery, isAdmin, loadSaved]);
+  }, [savedQuery, savedSort, dateFrom, dateTo, isAdmin, loadSaved]);
 
 
   const tagList = useMemo(() => tagOptions(rows.map((r) => r.tag_codes)), [rows]);
@@ -629,8 +748,21 @@ const SemanticAnalysis = () => {
                 value={savedQuery}
                 onChange={(e) => setSavedQuery(e.target.value)}
                 placeholder="Search by source name or date…"
-                className="h-9 w-full sm:w-60"
+                className="h-9 w-full sm:w-52"
               />
+              <Select value={savedSort} onValueChange={(v) => setSavedSort(v as SavedSort)}>
+                <SelectTrigger className="h-9 w-full sm:w-44" aria-label="Sort analyses">
+                  <ArrowUpDown className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SAVED_SORTS.map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <div className="w-full sm:w-80">
                 <Select
                   value={selectedSaved?.id ?? ""}
@@ -681,6 +813,57 @@ const SemanticAnalysis = () => {
             </div>
           </div>
 
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/20 p-2">
+            <CalendarRange className="h-3.5 w-3.5 text-primary" />
+            <span className="text-[11px] font-medium text-muted-foreground">Date range</span>
+            {DATE_PRESETS.map(([label, days]) => (
+              <Button
+                key={label}
+                size="sm"
+                variant={activePreset === label ? "secondary" : "ghost"}
+                className="h-7 px-2 text-[11px]"
+                onClick={() => applyPreset(days)}
+              >
+                {label}
+              </Button>
+            ))}
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => setDateFrom(e.target.value)}
+                aria-label="From date"
+                className="h-7 w-[9.5rem] text-[11px]"
+              />
+              <span className="text-[11px] text-muted-foreground">to</span>
+              <Input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                aria-label="To date"
+                className="h-7 w-[9.5rem] text-[11px]"
+              />
+            </div>
+            {(dateFrom || dateTo) && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => {
+                  setDateFrom("");
+                  setDateTo("");
+                }}
+              >
+                <X className="mr-1 h-3 w-3" />
+                Clear dates
+              </Button>
+            )}
+          </div>
+
+
+
 
           {savedLoading && !saved.length ? (
             <div className="mt-4 space-y-3" aria-busy="true">
@@ -722,6 +905,21 @@ const SemanticAnalysis = () => {
                 </span>
               </div>
               <ScoreBars ana={selectedSaved} />
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setDrawerOpen(true)}>
+                  <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
+                  View full details
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setPendingDelete(selectedSaved)}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Delete analysis
+                </Button>
+              </div>
               {savedTotal > 0 && (
                 <p className="mt-2 text-[11px] text-muted-foreground">
                   Showing {saved.length} of {savedTotal} saved analyses
@@ -970,7 +1168,40 @@ const SemanticAnalysis = () => {
         </Card>
 
       </main>
+
+      <SavedAnalysisDrawer
+        analysis={selectedSaved}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+      />
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this saved analysis?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{pendingDelete?.source_name}” ({relative(pendingDelete?.created_at ?? "")}) will be
+              permanently removed from SonicSIM Analysis Results. The underlying audio source stays
+              intact and can be re-scored later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                deleteSaved();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+
   );
 };
 

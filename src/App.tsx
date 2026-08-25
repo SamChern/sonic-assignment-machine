@@ -40,6 +40,30 @@ const RouteFallback = () => (
   </div>
 );
 
+const SESSION_FLAG = "sonicsim.sessionStarted";
+
+/**
+ * A brand-new session (new tab, or an installed PWA relaunch that restores the
+ * last URL) should land on the admin home, never on a deep admin sub-page such
+ * as APIs & MCPs. Within the same session, deep links keep working normally.
+ */
+const FreshSessionAdminHome = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fresh = sessionStorage.getItem(SESSION_FLAG) !== "1";
+    sessionStorage.setItem(SESSION_FLAG, "1");
+    if (fresh && location.pathname.startsWith("/admin/")) {
+      navigate("/admin", { replace: true });
+    }
+    // Intentionally runs once per app load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -48,8 +72,10 @@ const App = () => (
         <Sonner />
         <PwaUpdateBanner />
         <BrowserRouter>
+          <FreshSessionAdminHome />
           <div className="pb-mobile-nav">
           <Suspense fallback={<RouteFallback />}>
+
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />

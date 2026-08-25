@@ -1049,7 +1049,40 @@ const SemanticAnalysis = () => {
         </Card>
 
       </main>
+
+      <SavedAnalysisDrawer
+        analysis={selectedSaved}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+      />
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this saved analysis?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{pendingDelete?.source_name}” ({relative(pendingDelete?.created_at ?? "")}) will be
+              permanently removed from SonicSIM Analysis Results. The underlying audio source stays
+              intact and can be re-scored later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                deleteSaved();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+
   );
 };
 

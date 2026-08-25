@@ -91,6 +91,8 @@ interface SavedAnalysis extends AnalysisRow {
 
 
 
+const SAVED_PAGE_SIZE = 25;
+
 const CATEGORY_KEYS = [
   ["emotional_score", "Emo", "bg-category-emotional", "var(--gradient-emotional)"],
   ["cognitive_score", "Cog", "bg-category-cognitive", "var(--gradient-cognitive)"],

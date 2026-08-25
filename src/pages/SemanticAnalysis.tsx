@@ -694,6 +694,57 @@ const SemanticAnalysis = () => {
             </div>
           </div>
 
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/20 p-2">
+            <CalendarRange className="h-3.5 w-3.5 text-primary" />
+            <span className="text-[11px] font-medium text-muted-foreground">Date range</span>
+            {DATE_PRESETS.map(([label, days]) => (
+              <Button
+                key={label}
+                size="sm"
+                variant={activePreset === label ? "secondary" : "ghost"}
+                className="h-7 px-2 text-[11px]"
+                onClick={() => applyPreset(days)}
+              >
+                {label}
+              </Button>
+            ))}
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => setDateFrom(e.target.value)}
+                aria-label="From date"
+                className="h-7 w-[9.5rem] text-[11px]"
+              />
+              <span className="text-[11px] text-muted-foreground">to</span>
+              <Input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                aria-label="To date"
+                className="h-7 w-[9.5rem] text-[11px]"
+              />
+            </div>
+            {(dateFrom || dateTo) && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => {
+                  setDateFrom("");
+                  setDateTo("");
+                }}
+              >
+                <X className="mr-1 h-3 w-3" />
+                Clear dates
+              </Button>
+            )}
+          </div>
+
+
+
 
           {savedLoading && !saved.length ? (
             <div className="mt-4 space-y-3" aria-busy="true">

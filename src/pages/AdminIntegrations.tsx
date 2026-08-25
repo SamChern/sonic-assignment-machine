@@ -36,6 +36,7 @@ import {
   Settings2,
   RefreshCw,
 } from "lucide-react";
+import { IntegrationDetailsDrawer } from "@/components/admin/IntegrationDetailsDrawer";
 import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
 import IntuiziConsolePanel from "@/components/admin/IntuiziConsolePanel";
 
@@ -223,6 +224,7 @@ function IntegrationCard({
   onSaved: () => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 

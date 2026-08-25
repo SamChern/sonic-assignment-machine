@@ -101,7 +101,7 @@ export function ConnectedIntegrationsPanel({
             <Network className="h-4 w-4" /> MCP servers
           </h2>
           {mcp.map((i) => (
-            <ConnectedCard key={i.id} integration={i} lastTest={lastTest[i.id]} onTested={onRefresh} />
+            <ConnectedCard key={i.id} integration={i} status={status[i.id]} lastTest={lastTest[i.id]} onTested={onRefresh} />
           ))}
         </section>
       )}
@@ -112,7 +112,7 @@ export function ConnectedIntegrationsPanel({
             <Plug className="h-4 w-4" /> REST APIs
           </h2>
           {rest.map((i) => (
-            <ConnectedCard key={i.id} integration={i} lastTest={lastTest[i.id]} onTested={onRefresh} />
+            <ConnectedCard key={i.id} integration={i} status={status[i.id]} lastTest={lastTest[i.id]} onTested={onRefresh} />
           ))}
         </section>
       )}
@@ -128,10 +128,12 @@ interface McpTool {
 
 function ConnectedCard({
   integration,
+  status,
   lastTest,
   onTested,
 }: {
   integration: Integration;
+  status?: StatusEntry;
   lastTest?: TestEntry;
   onTested: () => void;
 }) {
@@ -361,6 +363,7 @@ function ConnectedCard({
 
       <IntegrationDetailsDrawer
         integration={integration}
+        status={status}
         lastTest={lastTest}
         open={detailsOpen}
         onOpenChange={setDetailsOpen}

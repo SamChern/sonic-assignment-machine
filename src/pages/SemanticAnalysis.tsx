@@ -510,7 +510,7 @@ const SemanticAnalysis = () => {
               className="truncate bg-clip-text text-base font-semibold text-transparent sm:text-lg"
               style={{ backgroundImage: "var(--gradient-teal)" }}
             >
-              Data Stream SonicSIM Analysis
+              SonicSIM Analysis Results
             </h1>
           </div>
 

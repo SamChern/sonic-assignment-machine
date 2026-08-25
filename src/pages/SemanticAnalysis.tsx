@@ -326,7 +326,11 @@ const SemanticAnalysis = () => {
         "id, source_name, audio_source_id, category, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
         { count: "exact" },
       );
-    if (q) query = query.ilike("source_name", `%${q}%`);
+    // Date-looking queries (e.g. "2026-08" or "08/25") are matched client-side
+    // against the timestamp; anything else narrows by source name server-side.
+    const isDateQuery = /^[\d\-/:. ]+$/.test(q);
+    if (q && !isDateQuery) query = query.ilike("source_name", `%${q}%`);
+
     const { data, error, count } = await query
       .order("created_at", { ascending: false })
       .range(offset, offset + SAVED_PAGE_SIZE - 1);

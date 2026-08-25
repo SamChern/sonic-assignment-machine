@@ -45,7 +45,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
-import { IntegrationTestPanel } from "@/components/admin/IntegrationTestPanel";
 
 import { AnalysisResults } from "@/components/AnalysisResults";
 import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";
@@ -628,8 +627,6 @@ const AdminDashboard = () => {
 
       {/* Stats Overview */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-
-        <IntegrationTestPanel />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Card className="p-4 bg-card/80">

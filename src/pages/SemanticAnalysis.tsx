@@ -244,8 +244,11 @@ const SemanticAnalysis = () => {
   const [selectedSavedId, setSelectedSavedId] = useState<string>("");
   const [savedTotal, setSavedTotal] = useState(0);
   const [savedLoading, setSavedLoading] = useState(false);
+  const [savedQuery, setSavedQuery] = useState("");
+  const savedQueryRef = useRef("");
   const savedCountRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+
 
 
   useEffect(() => {

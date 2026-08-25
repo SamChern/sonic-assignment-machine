@@ -663,6 +663,14 @@ export const IntuiziConsolePanel = () => {
                 )}
               </div>
 
+              {!!listResult && !!listRows.length && (
+                <McpResultView
+                  result={listResult}
+                  toolName={BROWSE_TOOL[kind]}
+                  onExportKeys={(k) => void ingestKeys(k)}
+                />
+              )}
+
               {detailLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
 
               {detail && (

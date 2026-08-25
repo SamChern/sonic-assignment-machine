@@ -445,8 +445,15 @@ export const IntuiziConsolePanel = () => {
    * deep-link into the semantic analysis page scoped to that activation.
    */
   const exportToApp = useCallback(async (activationId: string, knownKeys?: string[]) => {
-    const id = String(activationId);
+    const id = String(activationId ?? "").trim();
+    if (!id) {
+      toast.error("No activation id on this row", {
+        description: "Open it by id instead, or export from the activation detail view.",
+      });
+      return;
+    }
     setExportingId(id);
+
     try {
       let objectKeys = knownKeys ?? [];
       if (!objectKeys.length) {

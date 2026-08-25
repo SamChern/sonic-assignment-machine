@@ -23,8 +23,10 @@ import {
   compareCategoryProfiles,
   diffCategoryProfiles,
   mapProfileInput,
+  summarizeProfileImpact,
   type CategoryProfileConfig,
 } from "@/lib/categoryProfile";
+
 import { useCategoryProfiles } from "@/hooks/useCategoryProfiles";
 import {
   ArrowRight,

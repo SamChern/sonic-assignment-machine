@@ -43,7 +43,7 @@ const RouteFallback = () => (
 
 const SESSION_FLAG = "sonicsim.sessionStarted";
 
-const stableRefreshPaths = new Set(["/", "/admin", "/auth", "/reset-password"]);
+const stableRefreshPaths = new Set(["/", "/admin", "/auth", "/reset-password", "/workspace"]);
 
 const refreshedPage = () => {
   const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];

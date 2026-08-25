@@ -42,7 +42,7 @@ const TABS = [
   { key: "categories", label: "Categories", icon: Sliders },
   { key: "users", label: "Predict users", icon: Target },
   { key: "outcomes", label: "Predict outcomes", icon: LineChart },
-  { key: "tags", label: "Tracking tags", icon: Tag },
+  { key: "tags", label: "Tracking & pixels", icon: Tag },
 ] as const;
 
 const Workspace = () => {
@@ -50,12 +50,19 @@ const Workspace = () => {
   const navigate = useNavigate();
   const { orgs, active, activeId, setActiveId, canWrite, loading } = useOrganization();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") ?? "analyses";
+  const tabPrefKey = user ? `sonicsim.workspace.tab.${user.id}` : null;
+  const storedTab = tabPrefKey ? localStorage.getItem(tabPrefKey) : null;
+  const validTab = (value: string | null) =>
+    value && TABS.some((t) => t.key === value) ? value : null;
+  const tab = validTab(params.get("tab")) ?? validTab(storedTab) ?? "analyses";
   const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    if (!authLoading && !user) navigate("/auth", { replace: true });
+    if (!authLoading && !user) {
+      // Preserve the workspace destination through sign-in.
+      navigate("/auth?next=%2Fworkspace", { replace: true });
+    }
   }, [authLoading, user, navigate]);
 
   const loadDatasets = useCallback(async () => {
@@ -73,6 +80,13 @@ const Workspace = () => {
   }, [loadDatasets, refreshKey]);
 
   const setTab = (next: string) => {
+    if (tabPrefKey) {
+      try {
+        localStorage.setItem(tabPrefKey, next);
+      } catch {
+        /* storage unavailable */
+      }
+    }
     const p = new URLSearchParams(params);
     p.set("tab", next);
     setParams(p, { replace: true });
@@ -97,9 +111,16 @@ const Workspace = () => {
             Your account is not a member of an enterprise organization. Ask your workspace owner for
             an invite, or contact us to license the enterprise version of SonicSIM.
           </p>
-          <Button asChild variant="outline" className="mt-4">
-            <Link to="/">Back to SonicSIM</Link>
-          </Button>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <Button asChild>
+              <a href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More">
+                Learn about Enterprise
+              </a>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/">Back to SonicSIM</Link>
+            </Button>
+          </div>
         </Card>
       </div>
     );

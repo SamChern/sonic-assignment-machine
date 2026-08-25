@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import { Copy, Loader2, Plus, RefreshCw, Tag } from "lucide-react";
+import AdPlatformPixels from "@/components/enterprise/AdPlatformPixels";
 
 const PIXEL_ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pixel-collect`;
 
@@ -101,6 +102,8 @@ const PixelSetupPanel = ({
 
   return (
     <div className="space-y-4">
+      <AdPlatformPixels organizationId={organizationId} canWrite={canWrite} />
+
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-2">
           <Tag className="h-4 w-4 text-primary" />

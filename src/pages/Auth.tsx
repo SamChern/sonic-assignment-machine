@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,12 @@ const passwordSchema = z.string().min(6, 'Password must be at least 6 characters
 
 export default function Auth() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, signIn, signUp, loading } = useAuth();
+
+  /** Same-origin relative path to return to after auth (e.g. /workspace). */
+  const nextParam = searchParams.get('next');
+  const nextPath = nextParam && /^\/[^/]/.test(nextParam) ? nextParam : '/';
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form state
@@ -58,9 +63,9 @@ export default function Auth() {
 
   useEffect(() => {
     if (user && !loading) {
-      navigate('/');
+      navigate(nextPath, { replace: true });
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, nextPath]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +92,7 @@ export default function Auth() {
       }
     } else {
       toast.success('Welcome back!');
-      navigate('/');
+      navigate(nextPath, { replace: true });
     }
   };
 

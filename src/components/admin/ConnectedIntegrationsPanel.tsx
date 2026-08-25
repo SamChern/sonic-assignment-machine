@@ -9,7 +9,9 @@ import { McpResultView } from "@/components/admin/McpResultView";
 import { McpToolForm } from "@/components/admin/McpToolForm";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { IntegrationDetailsDrawer } from "@/components/admin/IntegrationDetailsDrawer";
 import {
+  Info,
   CheckCircle2,
   XCircle,
   Loader2,
@@ -134,6 +136,7 @@ function ConnectedCard({
   onTested: () => void;
 }) {
   const [testing, setTesting] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [tools, setTools] = useState<McpTool[] | null>(null);
   const [loadingTools, setLoadingTools] = useState(false);
   const [selectedTool, setSelectedTool] = useState<string>("");
@@ -258,6 +261,9 @@ function ConnectedCard({
             Test
           </Button>
         )}
+        <Button size="sm" variant="ghost" onClick={() => setDetailsOpen(true)}>
+          <Info className="h-4 w-4 mr-1" /> Details
+        </Button>
         {integration.kind === "mcp" && (
           <Button size="sm" variant="secondary" onClick={loadTools} disabled={loadingTools}>
             {loadingTools ? (
@@ -352,6 +358,14 @@ function ConnectedCard({
           )}
         </div>
       )}
+
+      <IntegrationDetailsDrawer
+        integration={integration}
+        lastTest={lastTest}
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        onTested={onTested}
+      />
 
       {integration.kind === "rest" && lastTest?.error_message && (
         <p className="text-xs text-destructive break-words">

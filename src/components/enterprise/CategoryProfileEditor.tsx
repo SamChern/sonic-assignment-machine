@@ -20,11 +20,21 @@ import { CATEGORY_KEYS, type CategoryKey } from "@/lib/enterpriseSchema";
 import {
   DEFAULT_CATEGORY_LABELS,
   defaultCategoryProfileConfig,
+  diffCategoryProfiles,
   mapProfileInput,
   type CategoryProfileConfig,
 } from "@/lib/categoryProfile";
 import { useCategoryProfiles } from "@/hooks/useCategoryProfiles";
-import { CheckCircle2, GitBranch, RotateCcw, Save, Sliders, Wand2 } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  GitBranch,
+  GitCompare,
+  RotateCcw,
+  Save,
+  Sliders,
+  Wand2,
+} from "lucide-react";
 
 const SAMPLE_INPUT: Record<CategoryKey, number> = {
   emotional: 72,
@@ -90,6 +100,55 @@ const CategoryProfileEditor = ({
 
   const preview = useMemo(() => mapProfileInput(draft, sample), [draft, sample]);
   const enabledCount = preview.filter((p) => p.enabled).length;
+
+  // Side-by-side comparison. "draft" is the unsaved editor state, "defaults" the
+  // built-in SonicSIM calibration; anything else is a saved version id.
+  const [leftId, setLeftId] = useState<string>("defaults");
+  const [rightId, setRightId] = useState<string>("draft");
+
+  useEffect(() => {
+    if (loading) return;
+    const prior = versions.find((v) => v.id !== selectedId) ?? versions[0];
+    setLeftId(prior ? prior.id : "defaults");
+  }, [loading, versions, selectedId]);
+
+  const configFor = useCallback(
+    (id: string): CategoryProfileConfig => {
+      if (id === "draft") return draft;
+      if (id === "defaults") return defaultCategoryProfileConfig();
+      return versions.find((v) => v.id === id)?.config ?? defaultCategoryProfileConfig();
+    },
+    [draft, versions],
+  );
+
+  const sideLabel = useCallback(
+    (id: string) => {
+      if (id === "draft") return "Current draft (unsaved)";
+      if (id === "defaults") return "SonicSIM defaults";
+      const v = versions.find((x) => x.id === id);
+      return v ? `v${v.version} · ${v.name}` : "Unknown version";
+    },
+    [versions],
+  );
+
+  const diffRows = useMemo(
+    () => diffCategoryProfiles(configFor(leftId), configFor(rightId)),
+    [configFor, leftId, rightId],
+  );
+  const changedRows = diffRows.filter((r) => r.changed);
+
+  const sideOptions = useMemo(
+    () => [
+      { id: "draft", label: "Current draft (unsaved)" },
+      ...versions.map((v) => ({
+        id: v.id,
+        label: `v${v.version} · ${v.name}${v.is_active ? " (active)" : ""}`,
+      })),
+      { id: "defaults", label: "SonicSIM defaults" },
+    ],
+    [versions],
+  );
+
 
   const saveVersion = useCallback(
     async (activate: boolean) => {
@@ -308,6 +367,105 @@ const CategoryProfileEditor = ({
             </span>
           )}
         </div>
+      </Card>
+
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <GitCompare className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Version diff</h3>
+          <Badge variant="outline" className="text-[11px]">
+            {changedRows.length} of 6 categories changed
+          </Badge>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Compare any two calibrations side by side — renamed categories, weight and match-influence
+          shifts, calibration offsets, and anything muted or re-enabled.
+        </p>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+          <Select value={leftId} onValueChange={setLeftId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sideOptions.map((o) => (
+                <SelectItem key={`l-${o.id}`} value={o.id}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <ArrowRight className="mx-auto hidden h-4 w-4 text-muted-foreground sm:block" />
+          <Select value={rightId} onValueChange={setRightId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sideOptions.map((o) => (
+                <SelectItem key={`r-${o.id}`} value={o.id}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {!changedRows.length ? (
+          <p className="mt-4 rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
+            {sideLabel(leftId)} and {sideLabel(rightId)} are identical across all 6 categories.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            <div className="hidden grid-cols-[1fr_1fr_1fr] gap-2 px-2 text-[11px] font-medium text-muted-foreground sm:grid">
+              <span>Category</span>
+              <span className="truncate">{sideLabel(leftId)}</span>
+              <span className="truncate">{sideLabel(rightId)}</span>
+            </div>
+            {diffRows.map((r) => (
+              <div
+                key={r.key}
+                className={`rounded-lg border p-3 ${
+                  r.changed ? "border-primary/40 bg-primary/5" : "border-border/40 bg-muted/10"
+                }`}
+              >
+                <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr]">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium">{r.right.label}</p>
+                    <p className="font-mono text-[11px] text-muted-foreground">{r.key}</p>
+                    {!r.changed && (
+                      <span className="text-[11px] text-muted-foreground">unchanged</span>
+                    )}
+                  </div>
+
+                  {(["left", "right"] as const).map((side) => {
+                    const s = side === "left" ? r.left : r.right;
+                    const influence = side === "left" ? r.leftInfluence : r.rightInfluence;
+                    return (
+                      <div key={side} className="space-y-1 text-[11px]">
+                        <p className="sm:hidden text-muted-foreground">
+                          {sideLabel(side === "left" ? leftId : rightId)}
+                        </p>
+                        <p className={r.labelChanged ? "font-medium text-primary" : ""}>
+                          name: {s.label}
+                        </p>
+                        <p className={r.weightChanged ? "font-medium text-primary" : ""}>
+                          weight ×{s.weight.toFixed(1)} · {(influence * 100).toFixed(0)}% of match
+                        </p>
+                        <p className={r.biasChanged ? "font-medium text-primary" : ""}>
+                          shift {s.bias > 0 ? "+" : ""}
+                          {s.bias.toFixed(0)} pts
+                        </p>
+                        <p className={r.enabledChanged ? "font-medium text-primary" : ""}>
+                          {s.enabled ? "active" : "muted"}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card className="p-4">

@@ -139,3 +139,50 @@ export const profileSimilarity = (
     }, 0) / totalW;
   return Math.max(0, 100 - diff);
 };
+
+export interface CategoryDiffRow {
+  key: CategoryKey;
+  labelChanged: boolean;
+  weightChanged: boolean;
+  biasChanged: boolean;
+  enabledChanged: boolean;
+  changed: boolean;
+  left: CategorySetting;
+  right: CategorySetting;
+  /** Match-influence share in each version, 0-1, so re-weighting is visible. */
+  leftInfluence: number;
+  rightInfluence: number;
+}
+
+const influenceMap = (config: CategoryProfileConfig) => {
+  const total =
+    CATEGORY_KEYS.reduce((s, c) => s + (config[c].enabled ? config[c].weight : 0), 0) || 1;
+  return (c: CategoryKey) => (config[c].enabled ? config[c].weight / total : 0);
+};
+
+/** Per-category comparison of two calibration versions (left = older/base). */
+export const diffCategoryProfiles = (
+  left: CategoryProfileConfig,
+  right: CategoryProfileConfig,
+): CategoryDiffRow[] => {
+  const li = influenceMap(left);
+  const ri = influenceMap(right);
+  return CATEGORY_KEYS.map((c) => {
+    const labelChanged = left[c].label !== right[c].label;
+    const weightChanged = Math.abs(left[c].weight - right[c].weight) > 0.001;
+    const biasChanged = Math.abs(left[c].bias - right[c].bias) > 0.001;
+    const enabledChanged = left[c].enabled !== right[c].enabled;
+    return {
+      key: c,
+      labelChanged,
+      weightChanged,
+      biasChanged,
+      enabledChanged,
+      changed: labelChanged || weightChanged || biasChanged || enabledChanged,
+      left: left[c],
+      right: right[c],
+      leftInfluence: li(c),
+      rightInfluence: ri(c),
+    };
+  });
+};

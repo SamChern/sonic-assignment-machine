@@ -163,6 +163,13 @@ const Workspace = () => {
         <TabsContent value="discover" className="mt-4">
           <DatasetDiscovery key={refreshKey} organizationId={active.organization_id} />
         </TabsContent>
+        <TabsContent value="categories" className="mt-4">
+          <CategoryProfileEditor
+            organizationId={active.organization_id}
+            canWrite={canWrite}
+            onSaved={() => setRefreshKey((k) => k + 1)}
+          />
+        </TabsContent>
         <TabsContent value="users" className="mt-4">
           <PredictUsersPanel
             key={refreshKey}
@@ -170,6 +177,7 @@ const Workspace = () => {
             canWrite={canWrite}
           />
         </TabsContent>
+
         <TabsContent value="outcomes" className="mt-4">
           <PredictOutcomesPanel
             organizationId={active.organization_id}

@@ -644,7 +644,7 @@ export const AggregateNetworkVisualization = ({
       <Card className="relative overflow-hidden bg-gradient-to-br from-card via-card to-card/80 border-border/50">
         {/* Header */}
         <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
-          <img src={samLogo} alt="SAM" className="w-10 h-10" />
+          <img src={samLogo} alt="SonicSIM.ai" className="w-10 h-10" />
           <div>
             <h3 className="text-lg font-bold text-foreground">Aggregate User Fingerprints</h3>
             <p className="text-xs text-muted-foreground">

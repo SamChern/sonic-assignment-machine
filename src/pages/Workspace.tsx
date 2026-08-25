@@ -114,7 +114,7 @@ const Workspace = () => {
             Home
           </Link>
         </Button>
-        <img src={sonicSimLogo} alt="SonicSIM" className="h-8 w-auto" />
+        <img src={sonicSimLogo} alt="SonicSIM.ai" className="h-8 w-auto" />
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold">{active.name} workspace</h1>
           <p className="text-[11px] text-muted-foreground">

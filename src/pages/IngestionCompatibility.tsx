@@ -312,7 +312,7 @@ const IngestionCompatibility = () => {
             <Button variant="ghost" size="sm" onClick={() => navigate("/admin/pipeline")}>
               <ArrowLeft className="mr-1 h-4 w-4" /> Back
             </Button>
-            <img src={sonicSimLogo} alt="SonicSIM" className="h-7 w-auto" />
+            <img src={sonicSimLogo} alt="SonicSIM.ai" className="h-7 w-auto" />
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
               <h1 className="text-lg font-semibold sm:text-xl">Ingestion compatibility</h1>

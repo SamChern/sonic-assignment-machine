@@ -93,11 +93,53 @@ const IntegrationStatus = () => {
   } | null>(null);
   const [running, setRunning] = useState(false);
 
+  const stagePrefsKey = user ? `sonicsim.pipeline.expandedStages.${user.id}` : null;
+
+  // Restore this user's saved collapse/expand choices.
+  useEffect(() => {
+    if (!stagePrefsKey) return;
+    try {
+      const raw = localStorage.getItem(stagePrefsKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") setExpandedStages(parsed as Record<string, boolean>);
+      }
+    } catch {
+      /* ignore malformed prefs */
+    }
+  }, [stagePrefsKey]);
+
+  const persistStages = useCallback(
+    (next: Record<string, boolean>) => {
+      if (!stagePrefsKey) return;
+      try {
+        localStorage.setItem(stagePrefsKey, JSON.stringify(next));
+      } catch {
+        /* storage unavailable */
+      }
+    },
+    [stagePrefsKey],
+  );
+
   const toggle = (key: string) =>
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const toggleStage = (key: string) =>
-    setExpandedStages((prev) => ({ ...prev, [key]: !prev[key] }));
+    setExpandedStages((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      persistStages(next);
+      return next;
+    });
+
+  const setAllStages = (open: boolean) => {
+    const next: Record<string, boolean> = {};
+    stages.forEach((s) => {
+      next[s.key] = open;
+    });
+    setExpandedStages(next);
+    persistStages(next);
+  };
+
 
   useEffect(() => {
     if (!loading) {

@@ -196,7 +196,7 @@ const PredictUsersPanel = ({
       return;
     }
     toast({ title: "Look-alike run saved", description: `${matches.length} matches recorded.` });
-  }, [organizationId, datasetId, target, weights, matches]);
+  }, [organizationId, datasetId, target, weights, matches, activeProfile]);
 
   return (
     <div className="space-y-4">

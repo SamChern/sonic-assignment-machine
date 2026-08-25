@@ -595,12 +595,29 @@ const SemanticAnalysis = () => {
                     placeholder={saved.length ? "Select a saved analysis" : "No saved analyses yet"}
                   />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent
+                  className="max-h-72"
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    if (
+                      !savedLoading &&
+                      saved.length < savedTotal &&
+                      el.scrollTop + el.clientHeight >= el.scrollHeight - 24
+                    ) {
+                      loadSaved(true);
+                    }
+                  }}
+                >
                   {saved.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
                       {a.source_name} — {relative(a.created_at)}
                     </SelectItem>
                   ))}
+                  {saved.length < savedTotal && (
+                    <div className="px-2 py-2 text-center text-[11px] text-muted-foreground">
+                      {savedLoading ? "Loading more…" : `Scroll for more (${saved.length}/${savedTotal})`}
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -628,13 +645,43 @@ const SemanticAnalysis = () => {
                 </span>
               </div>
               <ScoreBars ana={selectedSaved} />
+              {savedTotal > 0 && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Showing {saved.length} of {savedTotal} saved analyses
+                  {saved.length < savedTotal ? " — scroll the picker to load more." : "."}
+                </p>
+              )}
             </div>
           ) : (
-            <p className="mt-3 text-xs text-muted-foreground">
-              No saved analyses yet — run a data stream ingest or analyze a source to populate this
-              panel.
-            </p>
+            <div className="mt-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-5 text-center">
+              <Radio className="mx-auto h-6 w-6 text-primary" />
+              <p className="mt-2 text-sm font-semibold">No saved analyses yet</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                Nothing has been scored through the ontology so far. Run a data stream ingest to
+                create the first activation profile, then its analysis will appear here
+                automatically.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    document
+                      .getElementById("data-stream-wizard")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                  }
+                >
+                  Run a data stream ingest
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => navigate("/admin/pipeline")}>
+                  Open Intuizi Console
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => loadSaved()} disabled={savedLoading}>
+                  Check again
+                </Button>
+              </div>
+            </div>
           )}
+
         </Card>
 
 

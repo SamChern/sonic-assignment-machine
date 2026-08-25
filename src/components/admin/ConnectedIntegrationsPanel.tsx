@@ -361,5 +361,3 @@ function ConnectedCard({
     </Card>
   );
 }
-
-export default AdminConnected;

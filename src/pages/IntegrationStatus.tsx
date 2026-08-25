@@ -20,6 +20,7 @@ import {
   XCircle,
   CircleDashed,
   Activity,
+  Radio,
   ChevronDown,
   PlayCircle,
 } from "lucide-react";

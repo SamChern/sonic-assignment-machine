@@ -203,7 +203,7 @@ export interface MultiVersionRow {
   key: CategoryKey;
   cells: MultiVersionCell[];
   /** Number of transitions where this category changed. */
-  changeCount: boolean extends never ? never : number;
+  changeCount: number;
   /** True when the category differs anywhere across the compared versions. */
   changed: boolean;
 }

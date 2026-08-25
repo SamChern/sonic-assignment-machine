@@ -29,7 +29,11 @@ export function IntegrationTestPanel() {
   const [status, setStatus] = useState<Record<string, DrawerStatusEntry>>({});
   const [lastTest, setLastTest] = useState<Record<string, DrawerTestEntry>>({});
   const [loading, setLoading] = useState(true);
-  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testingIds, setTestingIds] = useState<string[]>([]);
+  const [runningAll, setRunningAll] = useState(false);
+  const [summary, setSummary] = useState<{ passed: number; failed: number; skipped: number } | null>(
+    null,
+  );
   const [drawerFor, setDrawerFor] = useState<Integration | null>(null);
 
   const refresh = async () => {
@@ -47,10 +51,48 @@ export function IntegrationTestPanel() {
   }, []);
 
   const test = async (integration: Integration) => {
-    setTestingId(integration.id);
-    await runIntegrationTest(integration);
-    setTestingId(null);
-    refresh();
+    setTestingIds((ids) => [...ids, integration.id]);
+    const toastId = toast.loading(`Testing ${integration.name}…`);
+    try {
+      await runIntegrationTest(integration);
+    } finally {
+      toast.dismiss(toastId);
+      setTestingIds((ids) => ids.filter((id) => id !== integration.id));
+    }
+    await refresh();
+  };
+
+  const testAll = async () => {
+    const testable = INTEGRATIONS.filter((i) => i.testEndpoint);
+    const skipped = INTEGRATIONS.length - testable.length;
+    setRunningAll(true);
+    setSummary(null);
+    setTestingIds(testable.map((i) => i.id));
+    const toastId = toast.loading(`Testing ${testable.length} integrations…`);
+    let passed = 0;
+    let failed = 0;
+    try {
+      const results = await Promise.all(
+        testable.map(async (i) => {
+          const ok = await runIntegrationTest(i);
+          setTestingIds((ids) => ids.filter((id) => id !== i.id));
+          return ok;
+        }),
+      );
+      passed = results.filter(Boolean).length;
+      failed = results.length - passed;
+    } finally {
+      toast.dismiss(toastId);
+      setTestingIds([]);
+      setRunningAll(false);
+    }
+    setSummary({ passed, failed, skipped });
+    if (failed === 0) {
+      toast.success(`All ${passed} tested integrations passed.`);
+    } else {
+      toast.error(`${failed} of ${passed + failed} integrations failed.`);
+    }
+    await refresh();
   };
 
   return (
@@ -60,10 +102,54 @@ export function IntegrationTestPanel() {
           <Plug className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">APIs &amp; MCPs — connection tests</h2>
         </div>
-        <Button variant="ghost" size="sm" onClick={refresh} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={testAll}
+            disabled={runningAll || loading}
+          >
+            {runningAll ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="mr-1 h-4 w-4" />
+            )}
+            Test all
+          </Button>
+          <Button variant="ghost" size="sm" onClick={refresh} disabled={loading || runningAll}>
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
       </div>
+
+      {(runningAll || summary) && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/30 px-4 py-2 text-xs">
+          {runningAll ? (
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Running {testingIds.length} test{testingIds.length !== 1 ? "s" : ""}…
+            </span>
+          ) : (
+            summary && (
+              <>
+                <Badge className="gap-1 bg-green-600 hover:bg-green-600">
+                  <CheckCircle2 className="h-3 w-3" /> {summary.passed} passed
+                </Badge>
+                {summary.failed > 0 && (
+                  <Badge variant="destructive" className="gap-1">
+                    <XCircle className="h-3 w-3" /> {summary.failed} failed
+                  </Badge>
+                )}
+                {summary.skipped > 0 && (
+                  <Badge variant="secondary">{summary.skipped} without tester</Badge>
+                )}
+              </>
+            )
+          )}
+        </div>
+      )}
+
 
       <div className="divide-y divide-border/60">
         {INTEGRATIONS.map((i) => {

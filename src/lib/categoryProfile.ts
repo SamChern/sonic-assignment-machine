@@ -240,3 +240,118 @@ export const compareCategoryProfiles = (
     return { key: c, cells, changeCount, changed: changeCount > 0 };
   });
 };
+
+export interface ProfileImpactPoint {
+  /** "up" widens the category's pull, "down" narrows it, "flat" is neutral info. */
+  direction: "up" | "down" | "flat";
+  text: string;
+}
+
+export interface ProfileImpact {
+  /** One-line verdict on how much look-alike ranking should move. */
+  headline: string;
+  /** Rough magnitude of ranking movement, 0-100. */
+  magnitude: number;
+  severity: "none" | "low" | "moderate" | "high";
+  points: ProfileImpactPoint[];
+}
+
+/**
+ * Plain-language read on how moving from one calibration to another is likely to
+ * change Predict SonicSIM-Users output: which categories now drive the ranking,
+ * which stopped counting, and how calibration shifts move match scores.
+ */
+export const summarizeProfileImpact = (
+  left: CategoryProfileConfig,
+  right: CategoryProfileConfig,
+): ProfileImpact => {
+  const li = influenceMap(left);
+  const ri = influenceMap(right);
+  const points: ProfileImpactPoint[] = [];
+  let magnitude = 0;
+
+  const muted: string[] = [];
+  const unmuted: string[] = [];
+
+  for (const c of CATEGORY_KEYS) {
+    const name = categoryLabel(right, c);
+    if (left[c].enabled && !right[c].enabled) {
+      muted.push(name);
+      magnitude += li(c) * 120;
+      continue;
+    }
+    if (!left[c].enabled && right[c].enabled) {
+      unmuted.push(name);
+      magnitude += ri(c) * 120;
+      continue;
+    }
+    if (!right[c].enabled) continue;
+
+    const dInf = ri(c) - li(c);
+    if (Math.abs(dInf) >= 0.02) {
+      magnitude += Math.abs(dInf) * 100;
+      points.push({
+        direction: dInf > 0 ? "up" : "down",
+        text: `${name} now carries ${(ri(c) * 100).toFixed(0)}% of match weight (was ${(li(c) * 100).toFixed(0)}%), so look-alikes will be ranked ${dInf > 0 ? "more" : "less"} on ${name.toLowerCase()} closeness.`,
+      });
+    }
+
+    const dBias = right[c].bias - left[c].bias;
+    if (Math.abs(dBias) >= 0.5) {
+      magnitude += Math.min(12, Math.abs(dBias) * ri(c) * 2);
+      points.push({
+        direction: dBias > 0 ? "up" : "down",
+        text: `${name} scores are shifted ${dBias > 0 ? "+" : ""}${dBias.toFixed(0)} pts, lifting records that previously sat ${dBias > 0 ? "below" : "above"} your target band.`,
+      });
+    }
+
+    if (left[c].label !== right[c].label) {
+      points.push({
+        direction: "flat",
+        text: `“${left[c].label}” is now labelled “${right[c].label}” — ranking is unchanged, only the wording in Predict SonicSIM-Users.`,
+      });
+    }
+  }
+
+  if (muted.length) {
+    points.unshift({
+      direction: "down",
+      text: `${muted.join(", ")} ${muted.length > 1 ? "are" : "is"} muted — excluded from matching entirely, and the remaining categories absorb that weight.`,
+    });
+  }
+  if (unmuted.length) {
+    points.unshift({
+      direction: "up",
+      text: `${unmuted.join(", ")} ${unmuted.length > 1 ? "are" : "is"} back in play and will start pulling the top look-alikes.`,
+    });
+  }
+
+  const activeRight = activeCategories(right);
+  if (activeRight.length === 1) {
+    points.push({
+      direction: "flat",
+      text: `Only ${categoryLabel(right, activeRight[0])} is active, so matches become a single-category ranking and scores will cluster tightly.`,
+    });
+  }
+
+  magnitude = Math.max(0, Math.min(100, Math.round(magnitude)));
+  const severity: ProfileImpact["severity"] =
+    !points.length || magnitude < 3
+      ? "none"
+      : magnitude < 15
+        ? "low"
+        : magnitude < 40
+          ? "moderate"
+          : "high";
+
+  const headline =
+    severity === "none"
+      ? "No measurable effect on Predict SonicSIM-Users — ranking stays the same."
+      : severity === "low"
+        ? "Minor effect: the top look-alikes should stay broadly the same, with small score movement."
+        : severity === "moderate"
+          ? "Noticeable effect: expect the order of your top look-alikes to shuffle."
+          : "Large effect: matching priorities changed substantially and top look-alikes will likely differ.";
+
+  return { headline, magnitude, severity, points };
+};

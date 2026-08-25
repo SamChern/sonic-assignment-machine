@@ -2,9 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
+
 import PwaUpdateBanner from "@/components/PwaUpdateBanner";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import Index from "./pages/Index";
@@ -40,6 +41,30 @@ const RouteFallback = () => (
   </div>
 );
 
+const SESSION_FLAG = "sonicsim.sessionStarted";
+
+/**
+ * A brand-new session (new tab, or an installed PWA relaunch that restores the
+ * last URL) should land on the admin home, never on a deep admin sub-page such
+ * as APIs & MCPs. Within the same session, deep links keep working normally.
+ */
+const FreshSessionAdminHome = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fresh = sessionStorage.getItem(SESSION_FLAG) !== "1";
+    sessionStorage.setItem(SESSION_FLAG, "1");
+    if (fresh && location.pathname.startsWith("/admin/")) {
+      navigate("/admin", { replace: true });
+    }
+    // Intentionally runs once per app load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -48,8 +73,10 @@ const App = () => (
         <Sonner />
         <PwaUpdateBanner />
         <BrowserRouter>
+          <FreshSessionAdminHome />
           <div className="pb-mobile-nav">
           <Suspense fallback={<RouteFallback />}>
+
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />

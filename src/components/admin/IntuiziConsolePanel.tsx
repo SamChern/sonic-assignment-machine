@@ -717,6 +717,23 @@ export const IntuiziConsolePanel = () => {
                         Add to semantic analysis
                       </Button>
                     )}
+                    {kind === "activations" && row.id != null && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="shrink-0 text-[11px]"
+                        onClick={() => void exportToApp(String(row.id))}
+                        disabled={exportingId !== null}
+                      >
+                        {exportingId === String(row.id) ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="mr-1 h-3 w-3" />
+                        )}
+                        Export
+                      </Button>
+                    )}
+
 
                   </div>
                 ))}

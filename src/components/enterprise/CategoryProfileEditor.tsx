@@ -630,7 +630,54 @@ const CategoryProfileEditor = ({
             ))}
           </div>
         )}
+
+        {impact && (
+          <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              <h4 className="text-xs font-semibold">Impact on Predict SonicSIM-Users</h4>
+              <Badge
+                variant={impact.severity === "none" ? "outline" : "secondary"}
+                className="text-[10px] capitalize"
+              >
+                {impact.severity === "none" ? "no impact" : `${impact.severity} impact`}
+              </Badge>
+              <span className="ml-auto text-[11px] text-muted-foreground">
+                {sideLabel(impactEnds!.from)} → {sideLabel(impactEnds!.to)}
+              </span>
+            </div>
+
+            <p className="mt-2 text-xs">{impact.headline}</p>
+
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-1.5 flex-1 overflow-hidden rounded bg-muted">
+                <div className="h-full bg-primary" style={{ width: `${impact.magnitude}%` }} />
+              </div>
+              <span className="w-32 text-right text-[11px] text-muted-foreground">
+                {impact.magnitude}/100 expected shuffle
+              </span>
+            </div>
+
+            {impact.points.length > 0 && (
+              <ul className="mt-3 space-y-1.5">
+                {impact.points.map((p, i) => (
+                  <li key={i} className="flex gap-2 text-[11px] text-muted-foreground">
+                    {p.direction === "up" ? (
+                      <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                    ) : p.direction === "down" ? (
+                      <ArrowDownRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                    ) : (
+                      <Minus className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    )}
+                    <span>{p.text}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </Card>
+
 
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-2">

@@ -29,16 +29,21 @@ import {
 
 import { useCategoryProfiles } from "@/hooks/useCategoryProfiles";
 import {
+  ArrowDownRight,
   ArrowRight,
+  ArrowUpRight,
   CheckCircle2,
   GitBranch,
   GitCompare,
   Layers,
+  Minus,
   RotateCcw,
   Save,
   Sliders,
+  TrendingUp,
   Wand2,
 } from "lucide-react";
+
 
 const SAMPLE_INPUT: Record<CategoryKey, number> = {
   emotional: 72,

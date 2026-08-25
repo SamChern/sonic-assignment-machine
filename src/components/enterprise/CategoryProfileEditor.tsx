@@ -101,6 +101,55 @@ const CategoryProfileEditor = ({
   const preview = useMemo(() => mapProfileInput(draft, sample), [draft, sample]);
   const enabledCount = preview.filter((p) => p.enabled).length;
 
+  // Side-by-side comparison. "draft" is the unsaved editor state, "defaults" the
+  // built-in SonicSIM calibration; anything else is a saved version id.
+  const [leftId, setLeftId] = useState<string>("defaults");
+  const [rightId, setRightId] = useState<string>("draft");
+
+  useEffect(() => {
+    if (loading) return;
+    const prior = versions.find((v) => v.id !== selectedId) ?? versions[0];
+    setLeftId(prior ? prior.id : "defaults");
+  }, [loading, versions, selectedId]);
+
+  const configFor = useCallback(
+    (id: string): CategoryProfileConfig => {
+      if (id === "draft") return draft;
+      if (id === "defaults") return defaultCategoryProfileConfig();
+      return versions.find((v) => v.id === id)?.config ?? defaultCategoryProfileConfig();
+    },
+    [draft, versions],
+  );
+
+  const sideLabel = useCallback(
+    (id: string) => {
+      if (id === "draft") return "Current draft (unsaved)";
+      if (id === "defaults") return "SonicSIM defaults";
+      const v = versions.find((x) => x.id === id);
+      return v ? `v${v.version} · ${v.name}` : "Unknown version";
+    },
+    [versions],
+  );
+
+  const diffRows = useMemo(
+    () => diffCategoryProfiles(configFor(leftId), configFor(rightId)),
+    [configFor, leftId, rightId],
+  );
+  const changedRows = diffRows.filter((r) => r.changed);
+
+  const sideOptions = useMemo(
+    () => [
+      { id: "draft", label: "Current draft (unsaved)" },
+      ...versions.map((v) => ({
+        id: v.id,
+        label: `v${v.version} · ${v.name}${v.is_active ? " (active)" : ""}`,
+      })),
+      { id: "defaults", label: "SonicSIM defaults" },
+    ],
+    [versions],
+  );
+
+
   const saveVersion = useCallback(
     async (activate: boolean) => {
       if (!name.trim()) {

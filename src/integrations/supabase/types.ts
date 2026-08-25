@@ -144,6 +144,7 @@ export type Database = {
           id: string
           librosa_features: Json | null
           name: string
+          organization_id: string | null
           preview_url: string | null
           profile_embedding: string | null
           source_type: string
@@ -163,6 +164,7 @@ export type Database = {
           id?: string
           librosa_features?: Json | null
           name: string
+          organization_id?: string | null
           preview_url?: string | null
           profile_embedding?: string | null
           source_type: string
@@ -182,6 +184,7 @@ export type Database = {
           id?: string
           librosa_features?: Json | null
           name?: string
+          organization_id?: string | null
           preview_url?: string | null
           profile_embedding?: string | null
           source_type?: string
@@ -189,7 +192,15 @@ export type Database = {
           spotify_url?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "audio_sources_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       category_calibration: {
         Row: {
@@ -318,6 +329,59 @@ export type Database = {
         }
         Relationships: []
       }
+      dataset_connections: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string | null
+          credential_ref: string | null
+          id: string
+          last_error: string | null
+          last_tested_at: string | null
+          name: string
+          organization_id: string
+          provider: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          credential_ref?: string | null
+          id?: string
+          last_error?: string | null
+          last_tested_at?: string | null
+          name: string
+          organization_id: string
+          provider: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          credential_ref?: string | null
+          id?: string
+          last_error?: string | null
+          last_tested_at?: string | null
+          name?: string
+          organization_id?: string
+          provider?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dataset_connections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       embedding_cache: {
         Row: {
           created_at: string
@@ -338,6 +402,158 @@ export type Database = {
           text_hash?: string
         }
         Relationships: []
+      }
+      enterprise_datasets: {
+        Row: {
+          artistic_avg: number | null
+          cognitive_avg: number | null
+          communication_avg: number | null
+          contextual_avg: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          emotional_avg: number | null
+          id: string
+          name: string
+          organization_id: string
+          row_count: number
+          scored_count: number
+          shared: boolean
+          social_avg: number | null
+          source_kind: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          artistic_avg?: number | null
+          cognitive_avg?: number | null
+          communication_avg?: number | null
+          contextual_avg?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          emotional_avg?: number | null
+          id?: string
+          name: string
+          organization_id: string
+          row_count?: number
+          scored_count?: number
+          shared?: boolean
+          social_avg?: number | null
+          source_kind?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          artistic_avg?: number | null
+          cognitive_avg?: number | null
+          communication_avg?: number | null
+          contextual_avg?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          emotional_avg?: number | null
+          id?: string
+          name?: string
+          organization_id?: string
+          row_count?: number
+          scored_count?: number
+          shared?: boolean
+          social_avg?: number | null
+          source_kind?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enterprise_datasets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enterprise_records: {
+        Row: {
+          analysis_error: string | null
+          analysis_status: string
+          artistic_score: number | null
+          attributes: Json
+          audio_url: string | null
+          cognitive_score: number | null
+          communication_score: number | null
+          contextual_score: number | null
+          created_at: string
+          dataset_id: string
+          emotional_score: number | null
+          external_user_id: string | null
+          id: string
+          kpi: Json
+          organization_id: string
+          score_confidence: number | null
+          social_score: number | null
+          source_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          analysis_error?: string | null
+          analysis_status?: string
+          artistic_score?: number | null
+          attributes?: Json
+          audio_url?: string | null
+          cognitive_score?: number | null
+          communication_score?: number | null
+          contextual_score?: number | null
+          created_at?: string
+          dataset_id: string
+          emotional_score?: number | null
+          external_user_id?: string | null
+          id?: string
+          kpi?: Json
+          organization_id: string
+          score_confidence?: number | null
+          social_score?: number | null
+          source_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          analysis_error?: string | null
+          analysis_status?: string
+          artistic_score?: number | null
+          attributes?: Json
+          audio_url?: string | null
+          cognitive_score?: number | null
+          communication_score?: number | null
+          contextual_score?: number | null
+          created_at?: string
+          dataset_id?: string
+          emotional_score?: number | null
+          external_user_id?: string | null
+          id?: string
+          kpi?: Json
+          organization_id?: string
+          score_confidence?: number | null
+          social_score?: number | null
+          source_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enterprise_records_dataset_id_fkey"
+            columns: ["dataset_id"]
+            isOneToOne: false
+            referencedRelation: "enterprise_datasets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enterprise_records_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       integration_credentials: {
         Row: {
@@ -725,6 +941,221 @@ export type Database = {
         }
         Relationships: []
       }
+      organization_members: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          role: Database["public"]["Enums"]["org_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          role?: Database["public"]["Enums"]["org_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          role?: Database["public"]["Enums"]["org_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_user_id: string
+          plan: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_user_id: string
+          plan?: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_user_id?: string
+          plan?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pixel_events: {
+        Row: {
+          created_at: string
+          event_name: string
+          external_user_id: string | null
+          id: string
+          kpi_metric: string | null
+          kpi_value: number | null
+          occurred_at: string
+          organization_id: string
+          page_url: string | null
+          props: Json
+          referrer: string | null
+          tag_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_name: string
+          external_user_id?: string | null
+          id?: string
+          kpi_metric?: string | null
+          kpi_value?: number | null
+          occurred_at?: string
+          organization_id: string
+          page_url?: string | null
+          props?: Json
+          referrer?: string | null
+          tag_id: string
+        }
+        Update: {
+          created_at?: string
+          event_name?: string
+          external_user_id?: string | null
+          id?: string
+          kpi_metric?: string | null
+          kpi_value?: number | null
+          occurred_at?: string
+          organization_id?: string
+          page_url?: string | null
+          props?: Json
+          referrer?: string | null
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pixel_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pixel_tags: {
+        Row: {
+          active: boolean
+          allowed_origins: string[]
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          organization_id: string
+          tag_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          allowed_origins?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          organization_id: string
+          tag_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          allowed_origins?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          tag_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pixel_tags_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prediction_runs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          error: string | null
+          id: string
+          kind: string
+          kpi: string | null
+          organization_id: string
+          params: Json
+          result: Json | null
+          status: string
+          updated_at: string
+          weights: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          kind: string
+          kpi?: string | null
+          organization_id: string
+          params?: Json
+          result?: Json | null
+          status?: string
+          updated_at?: string
+          weights?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          kind?: string
+          kpi?: string | null
+          organization_id?: string
+          params?: Json
+          result?: Json | null
+          status?: string
+          updated_at?: string
+          weights?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prediction_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -812,6 +1243,7 @@ export type Database = {
           emotional_score: number
           id: string
           normalization: Json | null
+          organization_id: string | null
           raw_scores: Json | null
           social_desc: string | null
           social_score: number
@@ -835,6 +1267,7 @@ export type Database = {
           emotional_score: number
           id?: string
           normalization?: Json | null
+          organization_id?: string | null
           raw_scores?: Json | null
           social_desc?: string | null
           social_score: number
@@ -858,6 +1291,7 @@ export type Database = {
           emotional_score?: number
           id?: string
           normalization?: Json | null
+          organization_id?: string | null
           raw_scores?: Json | null
           social_desc?: string | null
           social_score?: number
@@ -870,6 +1304,13 @@ export type Database = {
             columns: ["audio_source_id"]
             isOneToOne: false
             referencedRelation: "audio_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_analyses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1107,6 +1548,8 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      has_org_access: { Args: { _org: string }; Returns: boolean }
+      has_org_write: { Args: { _org: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1114,6 +1557,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_org_owner: { Args: { _org: string }; Returns: boolean }
       match_audio_profiles: {
         Args: {
           exclude_id?: string
@@ -1162,6 +1606,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      org_role: "owner" | "analyst" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1290,6 +1735,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      org_role: ["owner", "analyst", "viewer"],
     },
   },
 } as const

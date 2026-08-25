@@ -426,7 +426,7 @@ export const IntuiziConsolePanel = () => {
       const { done, total } = await ingestKeys(keys);
       if (!total) {
         toast.error("No delivered object was readable", {
-          description: "Check the S3 credentials on Integration Status.",
+          description: "Check the S3 credentials on Intuizi Console.",
         });
         return;
       }

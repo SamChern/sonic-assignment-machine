@@ -178,6 +178,22 @@ const CategoryProfileEditor = ({
   );
   const multiChangedCount = multiRows.filter((r) => r.changed).length;
 
+  /**
+   * Impact endpoints: in two-way mode it is the chosen pair, in multi-version
+   * mode the oldest → newest calibration in the selected timeline.
+   */
+  const impactEnds = useMemo(() => {
+    if (compareMode === "two") return { from: leftId, to: rightId };
+    if (orderedMultiIds.length < 2) return null;
+    return { from: orderedMultiIds[0], to: orderedMultiIds[orderedMultiIds.length - 1] };
+  }, [compareMode, leftId, rightId, orderedMultiIds]);
+
+  const impact = useMemo(
+    () => (impactEnds ? summarizeProfileImpact(configFor(impactEnds.from), configFor(impactEnds.to)) : null),
+    [impactEnds, configFor],
+  );
+
+
 
 
   const saveVersion = useCallback(

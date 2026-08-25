@@ -82,6 +82,29 @@ const PredictUsersPanel = ({
   });
   const [weights, setWeights] = useState<Weights>(DEFAULT_WEIGHTS);
   const [saving, setSaving] = useState(false);
+  const { config, activeProfile } = useCategoryProfiles(organizationId);
+
+  // Adopt the active organization calibration's weights as the starting point.
+  useEffect(() => {
+    setWeights(
+      Object.fromEntries(CATEGORY_KEYS.map((c) => [c, config[c].weight])) as Weights,
+    );
+  }, [config]);
+
+  /** Active calibration (labels + bias) with the panel's live weight overrides. */
+  const effectiveConfig = useMemo(
+    () =>
+      Object.fromEntries(
+        CATEGORY_KEYS.map((c) => [c, { ...config[c], weight: weights[c] }]),
+      ) as typeof config,
+    [config, weights],
+  );
+
+  const targetPreview = useMemo(
+    () => mapProfileInput(effectiveConfig, target),
+    [effectiveConfig, target],
+  );
+
 
   const load = useCallback(async () => {
     setLoading(true);

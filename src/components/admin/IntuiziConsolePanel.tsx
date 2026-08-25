@@ -445,8 +445,15 @@ export const IntuiziConsolePanel = () => {
    * deep-link into the semantic analysis page scoped to that activation.
    */
   const exportToApp = useCallback(async (activationId: string, knownKeys?: string[]) => {
-    const id = String(activationId);
+    const id = String(activationId ?? "").trim();
+    if (!id) {
+      toast.error("No activation id on this row", {
+        description: "Open it by id instead, or export from the activation detail view.",
+      });
+      return;
+    }
     setExportingId(id);
+
     try {
       let objectKeys = knownKeys ?? [];
       if (!objectKeys.length) {
@@ -501,14 +508,23 @@ export const IntuiziConsolePanel = () => {
           actRows = rows(result).filter((r) => JSON.stringify(r).includes(`"${id}"`) || JSON.stringify(r).includes(`:${id}`));
         }
         for (const r of actRows.slice(0, 5)) {
-          if (r.id == null) continue;
-          const { result } = await callTool("get_activation", { id: r.id });
-          const k = deliveredKeys(result);
-          if (k.length) {
-            objectKeys = objectKeys.concat(k);
-            activationId = activationId ?? String(r.id);
+          // Intuizi rows are not consistent about the id field name.
+          const rec = r as Record<string, unknown>;
+          const raw = rec.id ?? rec.activation_id ?? rec.activationId ?? rec.uuid;
+          const actId = raw == null ? "" : String(raw).trim();
+          if (!actId) continue;
+          try {
+            const { result } = await callTool("get_activation", { id: actId });
+            const k = deliveredKeys(result);
+            if (k.length) {
+              objectKeys = objectKeys.concat(k);
+              activationId = activationId ?? actId;
+            }
+          } catch {
+            /* skip activations the API won't resolve */
           }
         }
+
       }
 
       if (objectKeys.length) {

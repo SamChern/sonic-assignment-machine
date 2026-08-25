@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       strategies: "generateSW",
-      registerType: "prompt",
+      registerType: "autoUpdate",
       filename: "sw.js",
       // The existing public/manifest.webmanifest stays the source of truth.
       manifest: false,
@@ -25,8 +25,9 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        // Wait for the user to accept the in-app update banner.
-        skipWaiting: false,
+        // Activate the latest app shell immediately so installed clients pick up
+        // fresh SonicSIM.ai branding on the next foreground or reload.
+        skipWaiting: true,
         // SPA routes (dashboard, admin, semantic analysis, ...) fall back to the
         // cached app shell when the network is unavailable.
         navigateFallback: "/index.html",

@@ -10,6 +10,7 @@ import { McpToolForm } from "@/components/admin/McpToolForm";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { IntegrationDetailsDrawer } from "@/components/admin/IntegrationDetailsDrawer";
+import { replaceLegacyBrandText } from "@/lib/brandText";
 import {
   Info,
   CheckCircle2,
@@ -159,12 +160,12 @@ function ConnectedCard({
       body: { integration_id: integration.id },
     });
     setTesting(false);
-    if (error) toast.error(`Test failed: ${error.message}`);
+    if (error) toast.error(`Test failed: ${replaceLegacyBrandText(error.message)}`);
     else if ((data as { success?: boolean })?.success) {
       const ms = (data as { latency_ms?: number }).latency_ms;
       toast.success(`Connection OK${ms ? ` (${ms}ms)` : ""}`);
     } else {
-      toast.error(`Test failed: ${(data as { error?: string })?.error ?? "Unknown"}`);
+      toast.error(`Test failed: ${replaceLegacyBrandText((data as { error?: string })?.error) ?? "Unknown"}`);
     }
     onTested();
   };
@@ -372,7 +373,7 @@ function ConnectedCard({
 
       {integration.kind === "rest" && lastTest?.error_message && (
         <p className="text-xs text-destructive break-words">
-          {lastTest.error_message}
+          {replaceLegacyBrandText(lastTest.error_message)}
         </p>
       )}
     </Card>

@@ -43,10 +43,16 @@ const RouteFallback = () => (
 
 const SESSION_FLAG = "sonicsim.sessionStarted";
 
+const stableRefreshPaths = new Set(["/", "/admin", "/auth", "/reset-password"]);
+
+const refreshedPage = () => {
+  const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
+  return entry?.type === "reload" || performance.navigation?.type === 1;
+};
+
 /**
- * A brand-new session (new tab, or an installed PWA relaunch that restores the
- * last URL) should land on the admin home, never on a deep admin sub-page such
- * as APIs & MCPs. Within the same session, deep links keep working normally.
+ * A brand-new session or hard refresh should land on the site home or admin
+ * dashboard, never on a deep tool page such as APIs & MCPs.
  */
 const FreshSessionAdminHome = () => {
   const location = useLocation();
@@ -55,9 +61,15 @@ const FreshSessionAdminHome = () => {
   useEffect(() => {
     const fresh = sessionStorage.getItem(SESSION_FLAG) !== "1";
     sessionStorage.setItem(SESSION_FLAG, "1");
-    if (fresh && location.pathname.startsWith("/admin/")) {
+    const shouldResetRoute = fresh || refreshedPage();
+    if (!shouldResetRoute || stableRefreshPaths.has(location.pathname)) return;
+
+    if (location.pathname.startsWith("/admin")) {
       navigate("/admin", { replace: true });
+      return;
     }
+
+    navigate("/", { replace: true });
     // Intentionally runs once per app load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

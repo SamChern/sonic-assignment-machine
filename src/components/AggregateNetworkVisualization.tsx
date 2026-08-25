@@ -495,7 +495,7 @@ export const AggregateNetworkVisualization = ({
       .attr("stroke", "hsl(var(--background))")
       .attr("stroke-width", 2);
 
-    // SAM logo in center of each user node with cluster-colored glow
+    // SonicSIM.ai logo in center of each user node with cluster-colored glow
     // Use screen blend mode to make black background transparent
     nodeElements.append("image")
       .attr("href", "/images/sam-logo.png")

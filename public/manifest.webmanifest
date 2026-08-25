@@ -1,6 +1,7 @@
 {
   "name": "SonicSIM.ai",
   "short_name": "SonicSIM.ai",
+  "id": "/",
   "description": "AI-powered categorical analysis to predict audio connections to human characteristics",
   "start_url": "/",
   "scope": "/",

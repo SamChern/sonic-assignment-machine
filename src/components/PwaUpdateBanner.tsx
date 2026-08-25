@@ -5,7 +5,8 @@ import { SW_UPDATE_EVENT, applyServiceWorkerUpdate } from "@/pwa/registerService
 
 /**
  * Shows an in-app banner when a newer build has been downloaded by the service
- * worker, letting the user reload into the new version on their own terms.
+ * worker. Updates now activate automatically; the banner remains a fallback
+ * for browsers that still expose a waiting worker.
  */
 const PwaUpdateBanner = () => {
   const [available, setAvailable] = useState(false);

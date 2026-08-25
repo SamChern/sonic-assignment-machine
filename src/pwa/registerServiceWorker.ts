@@ -10,6 +10,7 @@ const SW_URL = "/sw.js";
 export const SW_UPDATE_EVENT = "sonicsim:sw-update-available";
 
 let waitingWorker: ServiceWorker | null = null;
+let reloadingForController = false;
 
 function isPreviewHost(hostname: string): boolean {
   return (
@@ -51,6 +52,12 @@ function announceUpdate(worker: ServiceWorker) {
   window.dispatchEvent(new CustomEvent(SW_UPDATE_EVENT));
 }
 
+function reloadOnNewController(): void {
+  if (reloadingForController) return;
+  reloadingForController = true;
+  window.location.reload();
+}
+
 /** Activate the waiting worker and reload once it takes control. */
 export function applyServiceWorkerUpdate(): void {
   const worker = waitingWorker;
@@ -86,8 +93,12 @@ export function registerServiceWorker(): void {
     void navigator.serviceWorker
       .register(SW_URL, { scope: "/" })
       .then((registration) => {
+        navigator.serviceWorker.addEventListener("controllerchange", reloadOnNewController);
+
         if (registration.waiting && navigator.serviceWorker.controller) {
-          announceUpdate(registration.waiting);
+          waitingWorker = registration.waiting;
+          applyServiceWorkerUpdate();
+          return;
         }
 
         registration.addEventListener("updatefound", () => {
@@ -96,6 +107,7 @@ export function registerServiceWorker(): void {
           installing.addEventListener("statechange", () => {
             if (installing.state === "installed" && navigator.serviceWorker.controller) {
               announceUpdate(installing);
+              installing.postMessage({ type: "SKIP_WAITING" });
             }
           });
         });

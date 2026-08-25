@@ -39,6 +39,7 @@ import {
 import { IntegrationDetailsDrawer } from "@/components/admin/IntegrationDetailsDrawer";
 import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
 import IntuiziConsolePanel from "@/components/admin/IntuiziConsolePanel";
+import { replaceLegacyBrandText } from "@/lib/brandText";
 
 interface StatusEntry {
   fields: string[];
@@ -329,13 +330,13 @@ function IntegrationCard({
     );
     setTesting(false);
     if (error) {
-      toast.error(`Test failed: ${error.message}`);
+      toast.error(`Test failed: ${replaceLegacyBrandText(error.message)}`);
     } else if (data && (data as { success: boolean }).success) {
       const latency = (data as { latency_ms?: number }).latency_ms;
       toast.success(`Connection OK${latency ? ` (${latency}ms)` : ""}`);
     } else {
       toast.error(
-        `Test failed: ${(data as { error?: string })?.error ?? "Unknown"}`,
+        `Test failed: ${replaceLegacyBrandText((data as { error?: string })?.error) ?? "Unknown"}`,
       );
     }
     onSaved();
@@ -367,7 +368,7 @@ function IntegrationCard({
           {lastTest && (
             <p className="text-xs text-muted-foreground mt-1">
               Last test {new Date(lastTest.tested_at).toLocaleString()}
-              {lastTest.error_message && ` — ${lastTest.error_message}`}
+              {lastTest.error_message && ` — ${replaceLegacyBrandText(lastTest.error_message)}`}
             </p>
           )}
         </div>

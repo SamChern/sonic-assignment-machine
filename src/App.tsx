@@ -52,6 +52,8 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/integrations" element={<AdminIntegrations />} />
               <Route path="/admin/connected" element={<AdminConnected />} />

@@ -559,7 +559,7 @@ const AdminDashboard = () => {
               onClick={() => navigate("/admin/pipeline")}
             >
               <Activity className="h-4 w-4 mr-2" />
-              Integration Status
+              Intuizi Console
             </Button>
             <Button
               variant="outline"

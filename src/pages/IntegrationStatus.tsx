@@ -508,7 +508,7 @@ const IntegrationStatus = () => {
             </Button>
             <div className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-primary" />
-              <h1 className="text-lg sm:text-xl font-semibold truncate">Integration Status</h1>
+              <h1 className="text-lg sm:text-xl font-semibold truncate">Intuizi Console</h1>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar -mx-1 px-1">

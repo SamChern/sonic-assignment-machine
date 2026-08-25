@@ -988,6 +988,56 @@ export type Database = {
           },
         ]
       }
+      org_tracking_settings: {
+        Row: {
+          created_at: string
+          google_ads_conversion_id: string | null
+          google_ads_conversion_label: string | null
+          google_tag_id: string | null
+          id: string
+          meta_pixel_id: string | null
+          notes: string | null
+          organization_id: string
+          tiktok_pixel_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          google_ads_conversion_id?: string | null
+          google_ads_conversion_label?: string | null
+          google_tag_id?: string | null
+          id?: string
+          meta_pixel_id?: string | null
+          notes?: string | null
+          organization_id: string
+          tiktok_pixel_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          google_ads_conversion_id?: string | null
+          google_ads_conversion_label?: string | null
+          google_tag_id?: string | null
+          id?: string
+          meta_pixel_id?: string | null
+          notes?: string | null
+          organization_id?: string
+          tiktok_pixel_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_tracking_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_members: {
         Row: {
           created_at: string

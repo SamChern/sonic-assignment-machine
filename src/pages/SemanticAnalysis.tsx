@@ -458,6 +458,10 @@ const SemanticAnalysis = () => {
     };
   }, [analyses]);
 
+  const selectedSaved = useMemo(
+    () => saved.find((a) => a.id === selectedSavedId) ?? saved[0] ?? null,
+    [saved, selectedSavedId],
+  );
 
 
   if (authLoading || !isAdmin) {

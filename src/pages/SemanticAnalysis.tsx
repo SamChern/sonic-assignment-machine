@@ -355,11 +355,9 @@ const SemanticAnalysis = () => {
 
 
   useEffect(() => {
-    if (isAdmin) {
-      load();
-      loadSaved();
-    }
-  }, [isAdmin, load, loadSaved]);
+    if (isAdmin) load();
+  }, [isAdmin, load]);
+
 
   /** Debounced server-side search on source name; resets paging. */
   useEffect(() => {

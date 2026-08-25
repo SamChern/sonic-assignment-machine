@@ -237,7 +237,11 @@ const SemanticAnalysis = () => {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedAnalysis[]>([]);
   const [selectedSavedId, setSelectedSavedId] = useState<string>("");
+  const [savedTotal, setSavedTotal] = useState(0);
+  const [savedLoading, setSavedLoading] = useState(false);
+  const savedCountRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     if (!authLoading && (!user || !isAdmin)) navigate("/");

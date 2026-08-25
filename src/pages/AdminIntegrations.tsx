@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { INTEGRATIONS, type Integration, type IntegrationKind } from "@/config/integrations";
@@ -15,6 +15,10 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  ConnectedIntegrationsPanel,
+  verifiedIntegrations,
+} from "@/components/admin/ConnectedIntegrationsPanel";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
@@ -28,6 +32,9 @@ import {
   ShieldCheck,
   Plug,
   Network,
+  Zap,
+  Settings2,
+  RefreshCw,
 } from "lucide-react";
 import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
 import IntuiziConsolePanel from "@/components/admin/IntuiziConsolePanel";
@@ -56,6 +63,14 @@ const AdminIntegrations = () => {
   >({});
   const [statusLoading, setStatusLoading] = useState(true);
   const [kindFilter, setKindFilter] = useState<IntegrationKind>("rest");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get("view") === "connected" ? "connected" : "setup";
+  const setView = (v: "connected" | "setup") => {
+    const next = new URLSearchParams(searchParams);
+    if (v === "connected") next.set("view", "connected");
+    else next.delete("view");
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     if (!loading) {
@@ -80,6 +95,13 @@ const AdminIntegrations = () => {
     if (isAdmin) refreshStatus();
   }, [isAdmin]);
 
+  const connectedIds = useMemo(
+    () => new Set(verifiedIntegrations(statusByIntegration, lastTestByIntegration).map((i) => i.id)),
+    [statusByIntegration, lastTestByIntegration],
+  );
+  const connectedCount = connectedIds.size;
+  const setupCount = INTEGRATIONS.length - connectedCount;
+
   if (loading || !isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -102,13 +124,12 @@ const AdminIntegrations = () => {
             </Button>
             <div className="flex items-center gap-2">
               <Plug className="h-5 w-5 text-primary" />
-              <h1 className="text-xl font-semibold">API Integrations</h1>
+              <h1 className="text-base sm:text-xl font-semibold truncate">APIs &amp; MCPs</h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate("/admin/connected")}>
-              <Network className="h-4 w-4 sm:mr-1" />
-              <span className="hidden sm:inline">Connected only</span>
+            <Button variant="ghost" size="sm" onClick={refreshStatus} disabled={statusLoading}>
+              <RefreshCw className={`h-4 w-4 ${statusLoading ? "animate-spin" : ""}`} />
             </Button>
             <Badge variant="outline" className="gap-1">
               <ShieldCheck className="h-3 w-3" /> Admin only
@@ -118,6 +139,27 @@ const AdminIntegrations = () => {
       </header>
 
       <main className="container mx-auto px-6 py-8 max-w-3xl space-y-6">
+        <Tabs value={view} onValueChange={(v) => setView(v as "connected" | "setup")}>
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="connected" className="gap-1">
+              <Zap className="h-3.5 w-3.5" /> Connected ({connectedCount})
+            </TabsTrigger>
+            <TabsTrigger value="setup" className="gap-1">
+              <Settings2 className="h-3.5 w-3.5" /> Needs setup ({setupCount})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {view === "connected" ? (
+          <ConnectedIntegrationsPanel
+            status={statusByIntegration}
+            lastTest={lastTestByIntegration}
+            statusLoading={statusLoading}
+            onRefresh={refreshStatus}
+            onOpenSetup={() => setView("setup")}
+          />
+        ) : (
+        <div className="space-y-6">
         <p className="text-sm text-muted-foreground">
           Manage credentials for third-party APIs and Model Context Protocol
           (MCP) servers. Credentials are stored server-side and only readable
@@ -160,6 +202,8 @@ const AdminIntegrations = () => {
 
         {kindFilter === "mcp" && <IntuiziConsolePanel />}
         {kindFilter === "mcp" && <LibrosaAudioTester />}
+        </div>
+        )}
       </main>
     </div>
   );

@@ -33,9 +33,19 @@ import {
   ChevronDown,
   ChevronRight,
   Layers,
-
+  Search,
+  ArrowUpDown,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
+
 import { AnalysisResults } from "@/components/AnalysisResults";
 import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";
 import { FingerprintComparison } from "@/components/FingerprintComparison";
@@ -170,6 +180,37 @@ const AdminDashboard = () => {
   const displayedUsers = filteredUserIds.length > 0 
     ? users.filter(u => filteredUserIds.includes(u.user_id))
     : users;
+
+  /** Streamlined list controls for the Users & Sources tab. */
+  const [userQuery, setUserQuery] = useState("");
+  const [userSort, setUserSort] = useState<"name_asc" | "name_desc" | "sources_desc" | "sources_asc">("name_asc");
+
+  const sourceCountByUser = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of allSources) counts[s.user_id] = (counts[s.user_id] || 0) + 1;
+    return counts;
+  }, [allSources]);
+
+  const listedUsers = useMemo(() => {
+    const q = userQuery.trim().toLowerCase();
+    const list = q
+      ? displayedUsers.filter(u =>
+          (u.username || "anonymous").toLowerCase().includes(q) ||
+          (u.bio || "").toLowerCase().includes(q),
+        )
+      : [...displayedUsers];
+    const name = (u: typeof list[number]) => (u.username || "Anonymous User").toLowerCase();
+    list.sort((a, b) => {
+      switch (userSort) {
+        case "name_desc": return name(b).localeCompare(name(a));
+        case "sources_desc": return (sourceCountByUser[b.user_id] || 0) - (sourceCountByUser[a.user_id] || 0);
+        case "sources_asc": return (sourceCountByUser[a.user_id] || 0) - (sourceCountByUser[b.user_id] || 0);
+        default: return name(a).localeCompare(name(b));
+      }
+    });
+    return list;
+  }, [displayedUsers, userQuery, userSort, sourceCountByUser]);
+
 
   const providerKeys = Array.from(new Set(allSources.map(s => s.source_type))).sort();
   const displayedProviders = filteredProviders.length > 0
@@ -577,17 +618,9 @@ const AdminDashboard = () => {
               onClick={() => navigate("/admin/integrations")}
             >
               <Plug className="h-4 w-4 mr-2" />
-              API Integrations
+              APIs &amp; MCPs
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 min-h-11 whitespace-nowrap"
-              onClick={() => navigate("/admin/connected")}
-            >
-              <Plug className="h-4 w-4 mr-2" />
-              Connected APIs &amp; MCPs
-            </Button>
+
           </div>
         </div>
       </div>
@@ -863,57 +896,102 @@ const AdminDashboard = () => {
                 loading={signalsLoading}
               />
             ) : entityMode === "user" ? (
-              displayedUsers.length === 0 ? (
-                <Card className="p-8 text-center">
-                  <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-lg text-muted-foreground">
-                    {filteredUserIds.length > 0 ? 'No users match your filter' : 'No users yet'}
-                  </p>
-                </Card>
-              ) : (
-                displayedUsers.map(userProfile => {
+              <div className="space-y-3">
+                {/* Streamlined list toolbar: search + sort */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={userQuery}
+                      onChange={(e) => setUserQuery(e.target.value)}
+                      placeholder="Search users by name or bio…"
+                      className="pl-9"
+                      aria-label="Search users"
+                    />
+                  </div>
+                  <Select value={userSort} onValueChange={(v) => setUserSort(v as typeof userSort)}>
+                    <SelectTrigger className="w-full gap-2 sm:w-56" aria-label="Sort users">
+                      <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="name_asc">Name A–Z</SelectItem>
+                      <SelectItem value="name_desc">Name Z–A</SelectItem>
+                      <SelectItem value="sources_desc">Most sources</SelectItem>
+                      <SelectItem value="sources_asc">Fewest sources</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {listedUsers.length} of {displayedUsers.length} user{displayedUsers.length !== 1 ? 's' : ''}
+                </p>
+
+                {listedUsers.length === 0 ? (
+                  <Card className="p-8 text-center">
+                    <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-lg text-muted-foreground">
+                      {userQuery
+                        ? `No users match "${userQuery}"`
+                        : filteredUserIds.length > 0
+                          ? 'No users match your filter'
+                          : 'No users yet'}
+                    </p>
+                    {userQuery && (
+                      <Button variant="ghost" size="sm" className="mt-3" onClick={() => setUserQuery("")}>
+                        Clear search
+                      </Button>
+                    )}
+                  </Card>
+                ) : (
+                <Card className="divide-y divide-border/60 overflow-hidden bg-card/80">
+                {listedUsers.map(userProfile => {
                   const userSources = getSourcesByUser(userProfile.user_id);
                   const allSelected = userSources.length > 0 &&
                     userSources.every(s => selectedSourceIds.includes(s.id));
                   const groupKey = `user:${userProfile.user_id}`;
                   const isExpanded = expandedGroups.includes(groupKey);
+
                   const fp = allFingerprints.find(f => f.user_id === userProfile.user_id);
 
                   return (
-                    <Card key={userProfile.id} className="p-6 bg-card/80">
-                      <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div className="flex items-center gap-4">
+                    <div key={userProfile.id} className="px-4 py-3 transition-colors hover:bg-muted/40">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex min-w-0 items-center gap-3">
                           <Checkbox
                             checked={selectedUserIds.includes(userProfile.user_id)}
                             onCheckedChange={() => toggleUserSelection(userProfile.user_id)}
+                            aria-label={`Select ${userProfile.username || 'Anonymous User'}`}
                           />
-                          <Avatar className="h-12 w-12">
+                          <Avatar className="h-9 w-9 shrink-0">
                             <AvatarImage src={userProfile.avatar_url || undefined} />
                             <AvatarFallback>
-                              <User className="h-6 w-6" />
+                              <User className="h-4 w-4" />
                             </AvatarFallback>
                           </Avatar>
-                          <div>
-                            <h3 className="font-semibold text-foreground">
-                              {userProfile.username || 'Anonymous User'}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {userSources.length} audio source{userSources.length !== 1 ? 's' : ''}
-                            </p>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="truncate text-sm font-semibold text-foreground">
+                                {userProfile.username || 'Anonymous User'}
+                              </h3>
+                              <Badge variant="secondary" className="shrink-0 text-[11px]">
+                                {userSources.length} source{userSources.length !== 1 ? 's' : ''}
+                              </Badge>
+                            </div>
                             {userProfile.bio && (
-                              <p className="text-sm text-muted-foreground mt-1">{userProfile.bio}</p>
+                              <p className="truncate text-xs text-muted-foreground">{userProfile.bio}</p>
                             )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           {userSources.length > 0 && (
                             <>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="gap-1"
+                                className="h-8 gap-1 text-xs"
                                 onClick={() => toggleGroup(groupKey)}
+                                aria-expanded={isExpanded}
                               >
                                 {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                 {isExpanded ? 'Hide' : 'Show'} sources
@@ -921,17 +999,19 @@ const AdminDashboard = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="h-8 text-xs"
                                 onClick={() => selectAllUserSources(userProfile.user_id)}
                               >
-                                {allSelected ? 'Deselect All' : 'Select All Sources'}
+                                {allSelected ? 'Deselect All' : 'Select All'}
                               </Button>
                             </>
                           )}
                         </div>
                       </div>
 
+
                       {isExpanded && userSources.length > 0 && (
-                        <div className="grid gap-2 ml-10 mt-4">
+                        <div className="grid gap-2 ml-8 mt-3">
                           {userSources.map(source => renderSourceRow(source))}
                         </div>
                       )}
@@ -943,14 +1023,14 @@ const AdminDashboard = () => {
                         const isOpen = neighborsOpenFor === userProfile.user_id;
                         const neighbors = isOpen ? getTopNeighbors(userProfile.user_id, 3) : [];
                         return (
-                          <div className="ml-10 mt-3 flex flex-col gap-2">
+                          <div className="ml-8 mt-2 flex flex-col gap-2">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant="secondary" className="gap-1">
+                              <Badge variant="secondary" className="gap-1 text-[11px]">
                                 <ShieldCheck className="h-3 w-3" />
                                 {confLabel} confidence • {fp.total_sources_analyzed} sources
                               </Badge>
                               {fp.recent_sources_analyzed > 0 && (
-                                <Badge variant="outline" className="gap-1">
+                                <Badge variant="outline" className="gap-1 text-[11px]">
                                   <Clock className="h-3 w-3" />
                                   {fp.recent_sources_analyzed} in last 30d
                                 </Badge>
@@ -982,11 +1062,14 @@ const AdminDashboard = () => {
                           </div>
                         );
                       })()}
-                    </Card>
+                    </div>
                   );
-                })
-              )
+                })}
+                </Card>
+                )}
+              </div>
             ) : (
+
               displayedProviders.length === 0 ? (
                 <Card className="p-8 text-center">
                   <Radio className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />

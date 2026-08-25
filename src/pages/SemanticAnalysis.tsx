@@ -245,7 +245,15 @@ const SemanticAnalysis = () => {
   const [savedTotal, setSavedTotal] = useState(0);
   const [savedLoading, setSavedLoading] = useState(false);
   const [savedQuery, setSavedQuery] = useState("");
+  const [savedSort, setSavedSort] = useState<SavedSort>("newest");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<SavedAnalysis | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const savedQueryRef = useRef("");
+  const savedSortRef = useRef<SavedSort>("newest");
+  const savedRangeRef = useRef({ from: "", to: "" });
   const savedCountRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 

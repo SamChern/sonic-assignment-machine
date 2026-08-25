@@ -200,10 +200,15 @@ const PredictUsersPanel = ({
           <Target className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">Predict SonicSIM-Users</h2>
           <Badge variant="outline" className="text-[11px]">{pool.length} scored records</Badge>
+          <Badge variant="outline" className="text-[11px]">
+            <Sliders className="mr-1 h-3 w-3" />
+            {activeProfile ? `calibration v${activeProfile.version}` : "SonicSIM defaults"}
+          </Badge>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           Set the semantic profile you want to reach, then adjust how much each category matters.
-          SonicSIM ranks your records by weighted closeness to that profile.
+          Category names and calibration shifts come from your organization&apos;s active version in
+          the Categories tab.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -235,36 +240,64 @@ const PredictUsersPanel = ({
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          {CATEGORY_KEYS.map((c) => (
-            <div key={c} className="rounded-lg border border-border/60 p-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium capitalize">{c}</span>
-                <span className="text-muted-foreground">target {target[c]}</span>
+          {CATEGORY_KEYS.map((c) => {
+            const mapped = targetPreview.find((p) => p.key === c);
+            return (
+              <div
+                key={c}
+                className={`rounded-lg border p-3 ${
+                  config[c].enabled ? "border-border/60" : "border-dashed border-border/50 opacity-70"
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium">{categoryLabel(config, c)}</span>
+                  <span className="text-muted-foreground">target {target[c]}</span>
+                </div>
+                <Slider
+                  value={[target[c]]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  disabled={!config[c].enabled}
+                  onValueChange={([v]) => setTarget((p) => ({ ...p, [c]: v }))}
+                  className="mt-2"
+                />
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {config[c].enabled ? (
+                    <>
+                      maps to {mapped?.mapped.toFixed(0)}
+                      {mapped && mapped.delta !== 0 && (
+                        <span className="text-primary">
+                          {" "}
+                          ({mapped.delta > 0 ? "+" : ""}
+                          {mapped.delta.toFixed(0)} calibration)
+                        </span>
+                      )}{" "}
+                      · {((mapped?.influence ?? 0) * 100).toFixed(0)}% of match weight
+                    </>
+                  ) : (
+                    "muted in this calibration — excluded from matching"
+                  )}
+                </p>
+                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>importance</span>
+                  <span>×{weights[c].toFixed(1)}</span>
+                </div>
+                <Slider
+                  value={[weights[c]]}
+                  min={0}
+                  max={3}
+                  step={0.1}
+                  disabled={!config[c].enabled}
+                  onValueChange={([v]) => setWeights((p) => ({ ...p, [c]: v }))}
+                  className="mt-1"
+                />
               </div>
-              <Slider
-                value={[target[c]]}
-                min={0}
-                max={100}
-                step={1}
-                onValueChange={([v]) => setTarget((p) => ({ ...p, [c]: v }))}
-                className="mt-2"
-              />
-              <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>importance</span>
-                <span>×{weights[c].toFixed(1)}</span>
-              </div>
-              <Slider
-                value={[weights[c]]}
-                min={0}
-                max={3}
-                step={0.1}
-                onValueChange={([v]) => setWeights((p) => ({ ...p, [c]: v }))}
-                className="mt-1"
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
+
 
       {loading ? (
         <Skeleton className="h-40 w-full" />

@@ -140,7 +140,7 @@ const WorkspaceUpload = ({ organizationId, canWrite, onIngested }: Props) => {
       organization_id: organizationId,
       provider,
       name: connName.trim(),
-      config,
+      config: config as never,
       status: "configured",
     });
     setSavingConn(false);

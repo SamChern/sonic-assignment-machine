@@ -200,10 +200,11 @@ export function IntegrationTestPanel() {
                   size="sm"
                   className="h-8 text-xs"
                   onClick={() => test(i)}
-                  disabled={testingId === i.id || !i.testEndpoint}
+                  disabled={testingIds.includes(i.id) || runningAll || !i.testEndpoint}
                   title={i.testEndpoint ? "Test connection" : "No automated tester"}
                 >
-                  {testingId === i.id ? (
+                  {testingIds.includes(i.id) ? (
+
                     <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                   ) : (
                     <Zap className="h-4 w-4 mr-1" />

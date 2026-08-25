@@ -173,7 +173,12 @@ const PredictUsersPanel = ({
     const { error } = await supabase.from("prediction_runs").insert({
       organization_id: organizationId,
       kind: "users",
-      params: { dataset_id: datasetId, target },
+      params: {
+        dataset_id: datasetId,
+        target,
+        category_profile_id: activeProfile?.id ?? null,
+        category_profile_version: activeProfile?.version ?? null,
+      },
       weights,
       result: {
         matched: matches.length,

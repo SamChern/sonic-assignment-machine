@@ -562,6 +562,64 @@ const SemanticAnalysis = () => {
           ))}
         </div>
 
+        <Card className="mt-6 border-border/60 bg-card/70 p-4 backdrop-blur-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Radio className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold">Latest saved analysis</h2>
+            <div className="ml-auto w-full sm:w-80">
+              <Select
+                value={selectedSaved?.id ?? ""}
+                onValueChange={setSelectedSavedId}
+                disabled={!saved.length}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue
+                    placeholder={saved.length ? "Select a saved analysis" : "No saved analyses yet"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {saved.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.source_name} — {relative(a.created_at)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {selectedSaved ? (
+            <div className="mt-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="truncate text-sm font-medium">{selectedSaved.source_name}</p>
+                {selectedSaved.category && (
+                  <Badge
+                    variant="secondary"
+                    className="text-[11px]"
+                    style={{
+                      backgroundImage:
+                        CATEGORY_GRADIENTS[selectedSaved.category.toLowerCase()] ?? undefined,
+                    }}
+                  >
+                    {selectedSaved.category}
+                  </Badge>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  confidence {Math.round(Number(selectedSaved.confidence ?? 0) * 100)}% ·{" "}
+                  {relative(selectedSaved.created_at)}
+                </span>
+              </div>
+              <ScoreBars ana={selectedSaved} />
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">
+              No saved analyses yet — run a data stream ingest or analyze a source to populate this
+              panel.
+            </p>
+          )}
+        </Card>
+
+
         <div className="mt-6">
           <PostIngestionWizard />
         </div>

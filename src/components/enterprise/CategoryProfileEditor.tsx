@@ -20,6 +20,7 @@ import { CATEGORY_KEYS, type CategoryKey } from "@/lib/enterpriseSchema";
 import {
   DEFAULT_CATEGORY_LABELS,
   defaultCategoryProfileConfig,
+  compareCategoryProfiles,
   diffCategoryProfiles,
   mapProfileInput,
   type CategoryProfileConfig,
@@ -30,6 +31,7 @@ import {
   CheckCircle2,
   GitBranch,
   GitCompare,
+  Layers,
   RotateCcw,
   Save,
   Sliders,

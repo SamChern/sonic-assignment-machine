@@ -565,6 +565,15 @@ const AdminDashboard = () => {
               variant="outline"
               size="sm"
               className="shrink-0 min-h-11 whitespace-nowrap"
+              onClick={() => navigate("/admin/semantic")}
+            >
+              <Radio className="h-4 w-4 mr-2" />
+              Data Stream SonicSIM Analysis
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 min-h-11 whitespace-nowrap"
               onClick={() => navigate("/admin/integrations")}
             >
               <Plug className="h-4 w-4 mr-2" />

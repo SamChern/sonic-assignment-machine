@@ -523,7 +523,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
 
       {notFound && (
         <p className="mt-4 text-sm text-muted-foreground">
-          No ingested profile found for activation {activation}. Run the post-ingestion wizard first.
+          No ingested profile found for activation {activation}. Run the data stream wizard first.
         </p>
       )}
 

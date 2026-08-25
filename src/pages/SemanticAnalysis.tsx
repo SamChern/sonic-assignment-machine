@@ -27,6 +27,14 @@ import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 
 
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import {
   ArrowLeft,
   RefreshCw,
   Loader2,
@@ -34,6 +42,7 @@ import {
   AlertTriangle,
   CircleDashed,
   Layers,
+  Radio,
   ChevronRight,
 } from "lucide-react";
 
@@ -74,6 +83,13 @@ interface AnalysisRow {
   contextual_score: number;
   artistic_score: number;
 }
+
+interface SavedAnalysis extends AnalysisRow {
+  id: string;
+  source_name: string;
+}
+
+
 
 const CATEGORY_KEYS = [
   ["emotional_score", "Emo", "bg-category-emotional", "var(--gradient-emotional)"],
@@ -219,6 +235,8 @@ const SemanticAnalysis = () => {
   const [filter, setFilter] = useState<IdentifierFilterState>({ ...EMPTY_IDENTIFIER_FILTER });
   const [stage, setStage] = useState<Stage>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedAnalysis[]>([]);
+  const [selectedSavedId, setSelectedSavedId] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -285,9 +303,35 @@ const SemanticAnalysis = () => {
     setLoading(false);
   }, []);
 
+  /** Most recent saved analyses (any source) for the headline panel + picker. */
+  const loadSaved = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("source_analyses")
+      .select(
+        "id, source_name, audio_source_id, category, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
+      )
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      toast({
+        title: "Could not load saved analyses",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    const list = (data ?? []) as unknown as SavedAnalysis[];
+    setSaved(list);
+    setSelectedSavedId((prev) => (prev && list.some((a) => a.id === prev) ? prev : list[0]?.id ?? ""));
+  }, []);
+
   useEffect(() => {
-    if (isAdmin) load();
-  }, [isAdmin, load]);
+    if (isAdmin) {
+      load();
+      loadSaved();
+    }
+  }, [isAdmin, load, loadSaved]);
 
   const tagList = useMemo(() => tagOptions(rows.map((r) => r.tag_codes)), [rows]);
 
@@ -414,6 +458,10 @@ const SemanticAnalysis = () => {
     };
   }, [analyses]);
 
+  const selectedSaved = useMemo(
+    () => saved.find((a) => a.id === selectedSavedId) ?? saved[0] ?? null,
+    [saved, selectedSavedId],
+  );
 
 
   if (authLoading || !isAdmin) {
@@ -438,13 +486,13 @@ const SemanticAnalysis = () => {
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-elegant"
               style={{ background: "var(--gradient-teal)" }}
             >
-              <Layers className="h-4 w-4 text-primary-foreground" />
+              <Radio className="h-4 w-4 text-primary-foreground" />
             </span>
             <h1
               className="truncate bg-clip-text text-base font-semibold text-transparent sm:text-lg"
               style={{ backgroundImage: "var(--gradient-teal)" }}
             >
-              Post-ingestion semantic analysis
+              Data Stream SonicSIM Analysis
             </h1>
           </div>
 
@@ -458,11 +506,22 @@ const SemanticAnalysis = () => {
               loading="lazy"
               decoding="async"
             />
-            <Button variant="ghost" size="sm" onClick={() => navigate("/admin/pipeline")}>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
               <ArrowLeft className="mr-1 h-4 w-4" />
+              Admin
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/admin/pipeline")}>
               Intuizi Console
             </Button>
-            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                load();
+                loadSaved();
+              }}
+              disabled={loading}
+            >
               {loading ? (
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" />
               ) : (
@@ -502,6 +561,64 @@ const SemanticAnalysis = () => {
             </Card>
           ))}
         </div>
+
+        <Card className="mt-6 border-border/60 bg-card/70 p-4 backdrop-blur-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Radio className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold">Latest saved analysis</h2>
+            <div className="ml-auto w-full sm:w-80">
+              <Select
+                value={selectedSaved?.id ?? ""}
+                onValueChange={setSelectedSavedId}
+                disabled={!saved.length}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue
+                    placeholder={saved.length ? "Select a saved analysis" : "No saved analyses yet"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {saved.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.source_name} — {relative(a.created_at)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {selectedSaved ? (
+            <div className="mt-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="truncate text-sm font-medium">{selectedSaved.source_name}</p>
+                {selectedSaved.category && (
+                  <Badge
+                    variant="secondary"
+                    className="text-[11px]"
+                    style={{
+                      backgroundImage:
+                        CATEGORY_GRADIENTS[selectedSaved.category.toLowerCase()] ?? undefined,
+                    }}
+                  >
+                    {selectedSaved.category}
+                  </Badge>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  confidence {Math.round(Number(selectedSaved.confidence ?? 0) * 100)}% ·{" "}
+                  {relative(selectedSaved.created_at)}
+                </span>
+              </div>
+              <ScoreBars ana={selectedSaved} />
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">
+              No saved analyses yet — run a data stream ingest or analyze a source to populate this
+              panel.
+            </p>
+          )}
+        </Card>
+
 
         <div className="mt-6">
           <PostIngestionWizard />

@@ -1,6 +1,7 @@
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { PlayCircle, Upload, GitCompare, Shield } from "lucide-react";
+import { PlayCircle, Upload, GitCompare, Shield, Building2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -34,6 +35,13 @@ const ITEMS: NavItem[] = [
     isActive: (p, tab) => p === "/" && tab === "discover",
   },
   {
+    key: "enterprise",
+    label: "Enterprise",
+    to: "/workspace",
+    icon: Building2,
+    isActive: (p) => p === "/workspace",
+  },
+  {
     key: "admin",
     label: "Admin",
     to: "/admin",
@@ -47,11 +55,17 @@ export function MobileBottomNav() {
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const { isAdmin } = useAuth();
+  const { orgs } = useOrganization();
+  const hasOrg = orgs.length > 0;
   const tab = searchParams.get("tab");
 
   if (pathname === "/auth") return null;
 
-  const items = ITEMS.filter((item) => item.key !== "admin" || isAdmin);
+  const items = ITEMS.filter((item) => {
+    if (item.key === "admin") return isAdmin;
+    if (item.key === "enterprise") return hasOrg;
+    return true;
+  });
 
   return (
     <nav

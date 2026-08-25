@@ -67,6 +67,7 @@ const AdminConnected = () => {
     if (isAdmin) refresh();
   }, [isAdmin]);
 
+  // Only providers whose most recent connection test actually succeeded.
   const connected = useMemo(
     () =>
       INTEGRATIONS.filter((i) => {
@@ -74,12 +75,15 @@ const AdminConnected = () => {
         const required = i.fields.filter((f) => f.required).map((f) => f.key);
         const entry = status[i.id];
         if (!entry) return false;
-        return required.length === 0
-          ? entry.fields.length > 0
-          : required.every((k) => entry.fields.includes(k));
+        const hasCreds =
+          required.length === 0
+            ? entry.fields.length > 0
+            : required.every((k) => entry.fields.includes(k));
+        return hasCreds && lastTest[i.id]?.success === true;
       }),
-    [status],
+    [status, lastTest],
   );
+
 
   if (loading || !isAdmin) {
     return (
@@ -126,9 +130,10 @@ const AdminConnected = () => {
 
       <main className="container mx-auto px-4 sm:px-6 py-8 max-w-3xl space-y-6">
         <p className="text-sm text-muted-foreground">
-          Only providers that already have credentials saved. Call them directly —
+          Only providers whose last connection test passed. Call them directly —
           no configuration forms here.
         </p>
+
 
         {statusLoading && connected.length === 0 && (
           <Card className="p-8 flex items-center justify-center">
@@ -139,13 +144,15 @@ const AdminConnected = () => {
         {!statusLoading && connected.length === 0 && (
           <Card className="p-8 text-center space-y-3">
             <p className="text-sm text-muted-foreground">
-              Nothing connected yet. Save credentials on the setup page first.
+              No verified connections yet. Save credentials and run a successful
+              test on the setup page first.
             </p>
             <Button size="sm" onClick={() => navigate("/admin/integrations")}>
               <Settings2 className="h-4 w-4 mr-1" /> Open setup
             </Button>
           </Card>
         )}
+
 
         {mcp.length > 0 && (
           <section className="space-y-4">

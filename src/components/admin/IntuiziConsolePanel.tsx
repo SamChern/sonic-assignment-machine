@@ -138,6 +138,8 @@ export const IntuiziConsolePanel = () => {
   const [formArgs, setFormArgs] = useState<Record<string, unknown>>({});
   const [jsonMode, setJsonMode] = useState(false);
   const [rawOut, setRawOut] = useState<string>("");
+  const [rawResult, setRawResult] = useState<unknown>(null);
+  const [listResult, setListResult] = useState<unknown>(null);
   const [rawBusy, setRawBusy] = useState(false);
 
 

@@ -568,7 +568,7 @@ const AdminDashboard = () => {
               onClick={() => navigate("/admin/semantic")}
             >
               <Radio className="h-4 w-4 mr-2" />
-              Data Stream SonicSIM Analysis
+              SonicSIM Analysis Results
             </Button>
             <Button
               variant="outline"

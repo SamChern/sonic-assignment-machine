@@ -668,7 +668,7 @@ const IntegrationStatus = () => {
           </Button>
           <Button variant="outline" size="sm" onClick={() => navigate("/admin/semantic")}>
             <Radio className="mr-1 h-4 w-4" />
-            Data Stream SonicSIM Analysis
+            SonicSIM Analysis Results
           </Button>
         </div>
 

@@ -4,7 +4,7 @@ import path from "node:path";
 
 /**
  * Label audit: the admin surface must say "Intuizi Console" (never the legacy
- * "Integration Status") and "Data Stream SonicSIM Analysis" (never
+ * "Integration Status") and "SonicSIM Analysis Results" (never
  * "Post-ingestion semantic analysis"). Any reintroduced label fails the suite.
  */
 const SRC = path.resolve(__dirname, "..");

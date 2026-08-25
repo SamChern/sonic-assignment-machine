@@ -5,6 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+
 import { IdentifierFilterBar, type FilterSegment } from "@/components/IdentifierFilterBar";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -241,8 +244,11 @@ const SemanticAnalysis = () => {
   const [selectedSavedId, setSelectedSavedId] = useState<string>("");
   const [savedTotal, setSavedTotal] = useState(0);
   const [savedLoading, setSavedLoading] = useState(false);
+  const [savedQuery, setSavedQuery] = useState("");
+  const savedQueryRef = useRef("");
   const savedCountRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+
 
 
   useEffect(() => {
@@ -309,19 +315,27 @@ const SemanticAnalysis = () => {
     setLoading(false);
   }, []);
 
-  /** Most recent saved analyses (any source), paged for the headline panel + picker. */
+  /** Most recent saved analyses (any source), paged + searchable. */
   const loadSaved = useCallback(async (append = false) => {
     const offset = append ? savedCountRef.current : 0;
+    const q = savedQueryRef.current.trim();
     setSavedLoading(true);
-    const { data, error, count } = await supabase
+    let query = supabase
       .from("source_analyses")
       .select(
         "id, source_name, audio_source_id, category, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
         { count: "exact" },
-      )
+      );
+    // Date-looking queries (e.g. "2026-08" or "08/25") are matched client-side
+    // against the timestamp; anything else narrows by source name server-side.
+    const isDateQuery = /^[\d\-/:. ]+$/.test(q);
+    if (q && !isDateQuery) query = query.ilike("source_name", `%${q}%`);
+
+    const { data, error, count } = await query
       .order("created_at", { ascending: false })
       .range(offset, offset + SAVED_PAGE_SIZE - 1);
     setSavedLoading(false);
+
 
     if (error) {
       toast({
@@ -345,11 +359,21 @@ const SemanticAnalysis = () => {
 
 
   useEffect(() => {
-    if (isAdmin) {
-      load();
+    if (isAdmin) load();
+  }, [isAdmin, load]);
+
+
+  /** Debounced server-side search on source name; resets paging. */
+  useEffect(() => {
+    if (!isAdmin) return;
+    const t = setTimeout(() => {
+      savedQueryRef.current = savedQuery;
+      savedCountRef.current = 0;
       loadSaved();
-    }
-  }, [isAdmin, load, loadSaved]);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [savedQuery, isAdmin, loadSaved]);
+
 
   const tagList = useMemo(() => tagOptions(rows.map((r) => r.tag_codes)), [rows]);
 
@@ -476,10 +500,26 @@ const SemanticAnalysis = () => {
     };
   }, [analyses]);
 
+  /** Loaded page filtered client-side so timestamps are searchable too. */
+  const visibleSaved = useMemo(() => {
+    const q = savedQuery.trim().toLowerCase();
+    if (!q) return saved;
+    return saved.filter((a) => {
+      const stamp = a.created_at ?? "";
+      return (
+        (a.source_name ?? "").toLowerCase().includes(q) ||
+        stamp.toLowerCase().includes(q) ||
+        new Date(stamp).toLocaleString().toLowerCase().includes(q) ||
+        relative(stamp).toLowerCase().includes(q)
+      );
+    });
+  }, [saved, savedQuery]);
+
   const selectedSaved = useMemo(
-    () => saved.find((a) => a.id === selectedSavedId) ?? saved[0] ?? null,
-    [saved, selectedSavedId],
+    () => visibleSaved.find((a) => a.id === selectedSavedId) ?? visibleSaved[0] ?? null,
+    [visibleSaved, selectedSavedId],
   );
+
 
 
   if (authLoading || !isAdmin) {
@@ -510,7 +550,7 @@ const SemanticAnalysis = () => {
               className="truncate bg-clip-text text-base font-semibold text-transparent sm:text-lg"
               style={{ backgroundImage: "var(--gradient-teal)" }}
             >
-              Data Stream SonicSIM Analysis
+              SonicSIM Analysis Results
             </h1>
           </div>
 
@@ -584,46 +624,83 @@ const SemanticAnalysis = () => {
           <div className="flex flex-wrap items-center gap-2">
             <Radio className="h-4 w-4 text-primary" />
             <h2 className="text-sm font-semibold">Latest saved analysis</h2>
-            <div className="ml-auto w-full sm:w-80">
-              <Select
-                value={selectedSaved?.id ?? ""}
-                onValueChange={setSelectedSavedId}
-                disabled={!saved.length}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue
-                    placeholder={saved.length ? "Select a saved analysis" : "No saved analyses yet"}
-                  />
-                </SelectTrigger>
-                <SelectContent
-                  className="max-h-72"
-                  onScroll={(e) => {
-                    const el = e.currentTarget;
-                    if (
-                      !savedLoading &&
-                      saved.length < savedTotal &&
-                      el.scrollTop + el.clientHeight >= el.scrollHeight - 24
-                    ) {
-                      loadSaved(true);
-                    }
-                  }}
+            <div className="ml-auto flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+              <Input
+                value={savedQuery}
+                onChange={(e) => setSavedQuery(e.target.value)}
+                placeholder="Search by source name or date…"
+                className="h-9 w-full sm:w-60"
+              />
+              <div className="w-full sm:w-80">
+                <Select
+                  value={selectedSaved?.id ?? ""}
+                  onValueChange={setSelectedSavedId}
+                  disabled={!visibleSaved.length}
                 >
-                  {saved.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.source_name} — {relative(a.created_at)}
-                    </SelectItem>
-                  ))}
-                  {saved.length < savedTotal && (
-                    <div className="px-2 py-2 text-center text-[11px] text-muted-foreground">
-                      {savedLoading ? "Loading more…" : `Scroll for more (${saved.length}/${savedTotal})`}
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
+                  <SelectTrigger className="h-9">
+                    <SelectValue
+                      placeholder={
+                        savedLoading
+                          ? "Loading analyses…"
+                          : visibleSaved.length
+                            ? "Select a saved analysis"
+                            : savedQuery
+                              ? "No matches"
+                              : "No saved analyses yet"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent
+                    className="max-h-72"
+                    onScroll={(e) => {
+                      const el = e.currentTarget;
+                      if (
+                        !savedLoading &&
+                        saved.length < savedTotal &&
+                        el.scrollTop + el.clientHeight >= el.scrollHeight - 24
+                      ) {
+                        loadSaved(true);
+                      }
+                    }}
+                  >
+                    {visibleSaved.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.source_name} — {relative(a.created_at)}
+                      </SelectItem>
+                    ))}
+                    {saved.length < savedTotal && (
+                      <div className="px-2 py-2 text-center text-[11px] text-muted-foreground">
+                        {savedLoading
+                          ? "Loading more…"
+                          : `Scroll for more (${saved.length}/${savedTotal})`}
+                      </div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
-          {selectedSaved ? (
+
+          {savedLoading && !saved.length ? (
+            <div className="mt-4 space-y-3" aria-busy="true">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="space-y-1">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-2.5 w-full" />
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Fetching saved analyses…</p>
+            </div>
+          ) : selectedSaved ? (
+
             <div className="mt-3">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="truncate text-sm font-medium">{selectedSaved.source_name}</p>
@@ -651,6 +728,17 @@ const SemanticAnalysis = () => {
                   {saved.length < savedTotal ? " — scroll the picker to load more." : "."}
                 </p>
               )}
+            </div>
+          ) : savedQuery.trim() ? (
+            <div className="mt-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-5 text-center">
+              <Radio className="mx-auto h-6 w-6 text-muted-foreground" />
+              <p className="mt-2 text-sm font-semibold">No analyses match “{savedQuery.trim()}”</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                Try a different source name, or a date fragment such as “2026-08”.
+              </p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setSavedQuery("")}>
+                Clear search
+              </Button>
             </div>
           ) : (
             <div className="mt-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-5 text-center">
@@ -680,6 +768,7 @@ const SemanticAnalysis = () => {
                 </Button>
               </div>
             </div>
+
           )}
 
         </Card>

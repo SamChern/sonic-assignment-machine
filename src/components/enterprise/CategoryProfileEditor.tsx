@@ -149,6 +149,32 @@ const CategoryProfileEditor = ({
     [versions],
   );
 
+  // Multi-version compare: any number of calibrations, ordered oldest → newest
+  // by the option list, each column flagged against the column before it.
+  const [compareMode, setCompareMode] = useState<"two" | "multi">("two");
+  const [multiIds, setMultiIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (loading) return;
+    const ordered = [...versions].sort((a, b) => a.version - b.version).map((v) => v.id);
+    setMultiIds(ordered.length >= 2 ? ordered.slice(-3) : ["defaults", ...ordered, "draft"].slice(0, 3));
+  }, [loading, versions]);
+
+  const orderedMultiIds = useMemo(() => {
+    const order = ["defaults", ...[...versions].sort((a, b) => a.version - b.version).map((v) => v.id), "draft"];
+    return order.filter((id) => multiIds.includes(id));
+  }, [multiIds, versions]);
+
+  const toggleMultiId = (id: string) =>
+    setMultiIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const multiRows = useMemo(
+    () => compareCategoryProfiles(orderedMultiIds.map((id) => configFor(id))),
+    [orderedMultiIds, configFor],
+  );
+  const multiChangedCount = multiRows.filter((r) => r.changed).length;
+
+
 
   const saveVersion = useCallback(
     async (activate: boolean) => {

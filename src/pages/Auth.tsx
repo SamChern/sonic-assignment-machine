@@ -20,11 +20,38 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form state
+  const [mode, setMode] = useState<'signin' | 'forgot'>('signin');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupUsername, setSignupUsername] = useState('');
+
+  /** Email a password-reset link that lands on /reset-password. */
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      emailSchema.parse(loginEmail);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        toast.error(err.errors[0].message);
+        return;
+      }
+    }
+    setIsSubmitting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(loginEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setIsSubmitting(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success('Check your email for the password reset link.');
+    setMode('signin');
+  };
+
 
   useEffect(() => {
     if (user && !loading) {

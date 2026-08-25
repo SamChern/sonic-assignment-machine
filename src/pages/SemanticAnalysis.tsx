@@ -315,19 +315,23 @@ const SemanticAnalysis = () => {
     setLoading(false);
   }, []);
 
-  /** Most recent saved analyses (any source), paged for the headline panel + picker. */
+  /** Most recent saved analyses (any source), paged + searchable. */
   const loadSaved = useCallback(async (append = false) => {
     const offset = append ? savedCountRef.current : 0;
+    const q = savedQueryRef.current.trim();
     setSavedLoading(true);
-    const { data, error, count } = await supabase
+    let query = supabase
       .from("source_analyses")
       .select(
         "id, source_name, audio_source_id, category, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
         { count: "exact" },
-      )
+      );
+    if (q) query = query.ilike("source_name", `%${q}%`);
+    const { data, error, count } = await query
       .order("created_at", { ascending: false })
       .range(offset, offset + SAVED_PAGE_SIZE - 1);
     setSavedLoading(false);
+
 
     if (error) {
       toast({

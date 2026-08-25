@@ -36,6 +36,7 @@ import {
   Settings2,
   RefreshCw,
 } from "lucide-react";
+import { IntegrationDetailsDrawer } from "@/components/admin/IntegrationDetailsDrawer";
 import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
 import IntuiziConsolePanel from "@/components/admin/IntuiziConsolePanel";
 
@@ -223,6 +224,7 @@ function IntegrationCard({
   onSaved: () => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
@@ -528,8 +530,21 @@ function IntegrationCard({
           {testing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           {integration.testEndpoint ? "Test connection" : "Test (n/a)"}
         </Button>
+        <Button variant="ghost" onClick={() => setDetailsOpen(true)}>
+          Details
+        </Button>
       </div>
+
+      <IntegrationDetailsDrawer
+        integration={integration}
+        status={status}
+        lastTest={lastTest}
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        onTested={onSaved}
+      />
     </Card>
+
   );
 }
 

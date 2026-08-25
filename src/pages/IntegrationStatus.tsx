@@ -588,9 +588,19 @@ const IntegrationStatus = () => {
       <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-4xl space-y-4">
         <p className="text-sm text-muted-foreground">
           End-to-end pipeline health from the Intuizi console through to outbound
-          segment activation. Stages are collapsed by default; expand any step
-          to inspect its counters and latest records.
+          segment activation. Your expand/collapse choices are saved for next
+          time.
         </p>
+
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setAllStages(true)} disabled={!stages.length}>
+            Expand all
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setAllStages(false)} disabled={!stages.length}>
+            Collapse all
+          </Button>
+        </div>
+
 
         <ol className="space-y-4">
           {stages.map((stage, index) => {

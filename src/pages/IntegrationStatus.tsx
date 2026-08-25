@@ -666,8 +666,8 @@ const IntegrationStatus = () => {
             Ingestion compatibility tests
           </Button>
           <Button variant="outline" size="sm" onClick={() => navigate("/admin/semantic")}>
-            <Activity className="mr-1 h-4 w-4" />
-            Post-ingestion semantic analysis
+            <Radio className="mr-1 h-4 w-4" />
+            Data Stream SonicSIM Analysis
           </Button>
         </div>
 

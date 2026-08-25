@@ -749,7 +749,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
           <div className="flex items-center gap-4">
             <img
               src={sonicSimLogo}
-              alt="SonicSIM"
+              alt="SonicSIM.ai"
               width={1264}
               height={847}
               loading="lazy"

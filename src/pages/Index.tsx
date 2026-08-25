@@ -325,7 +325,7 @@ const Index = () => {
         <div className="relative flex items-center">
           <img
             src={sonicSimLogo}
-            alt="SonicSIM"
+            alt="SonicSIM.ai"
             width={1264}
             height={847}
             decoding="async"
@@ -395,7 +395,7 @@ const Index = () => {
             <div className="relative inline-block">
               <img
                 src={sonicSimLogo}
-                alt="SonicSIM"
+                alt="SonicSIM.ai"
                 width={1264}
                 height={847}
                 {...{ fetchpriority: "high" }}

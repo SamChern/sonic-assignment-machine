@@ -1,6 +1,6 @@
 {
-  "name": "SonicSIM — Sonic Assignment Machine",
-  "short_name": "SonicSIM",
+  "name": "SonicSIM.ai",
+  "short_name": "SonicSIM.ai",
   "description": "AI-powered categorical analysis to predict audio connections to human characteristics",
   "start_url": "/",
   "scope": "/",

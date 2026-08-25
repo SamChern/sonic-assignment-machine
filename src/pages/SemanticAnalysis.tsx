@@ -676,7 +676,7 @@ const SemanticAnalysis = () => {
           <div className="ml-auto flex items-center gap-2">
             <img
               src={sonicSimLogo}
-              alt="SonicSIM"
+              alt="SonicSIM.ai"
               width={1264}
               height={847}
               className="hidden h-6 w-auto max-w-[28vw] object-contain opacity-80 sm:block md:h-7"

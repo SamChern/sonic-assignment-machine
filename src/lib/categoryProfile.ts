@@ -186,3 +186,57 @@ export const diffCategoryProfiles = (
     };
   });
 };
+
+export interface MultiVersionCell {
+  setting: CategorySetting;
+  /** Match-influence share within its own version, 0-1. */
+  influence: number;
+  /** True when this cell differs from the cell immediately to its left. */
+  changedFromPrev: boolean;
+  labelChanged: boolean;
+  weightChanged: boolean;
+  biasChanged: boolean;
+  enabledChanged: boolean;
+}
+
+export interface MultiVersionRow {
+  key: CategoryKey;
+  cells: MultiVersionCell[];
+  /** Number of transitions where this category changed. */
+  changeCount: number;
+  /** True when the category differs anywhere across the compared versions. */
+  changed: boolean;
+}
+
+/**
+ * Compare 2+ calibration versions at once. Each cell is flagged against the
+ * version immediately before it, so a row reads as a change timeline.
+ */
+export const compareCategoryProfiles = (
+  configs: CategoryProfileConfig[],
+): MultiVersionRow[] => {
+  const influences = configs.map((c) => influenceMap(c));
+  return CATEGORY_KEYS.map((c) => {
+    let changeCount = 0;
+    const cells: MultiVersionCell[] = configs.map((config, i) => {
+      const prev = i > 0 ? configs[i - 1][c] : null;
+      const cur = config[c];
+      const labelChanged = !!prev && prev.label !== cur.label;
+      const weightChanged = !!prev && Math.abs(prev.weight - cur.weight) > 0.001;
+      const biasChanged = !!prev && Math.abs(prev.bias - cur.bias) > 0.001;
+      const enabledChanged = !!prev && prev.enabled !== cur.enabled;
+      const changedFromPrev = labelChanged || weightChanged || biasChanged || enabledChanged;
+      if (changedFromPrev) changeCount += 1;
+      return {
+        setting: cur,
+        influence: influences[i](c),
+        changedFromPrev,
+        labelChanged,
+        weightChanged,
+        biasChanged,
+        enabledChanged,
+      };
+    });
+    return { key: c, cells, changeCount, changed: changeCount > 0 };
+  });
+};

@@ -20,6 +20,7 @@ import { CATEGORY_KEYS, type CategoryKey } from "@/lib/enterpriseSchema";
 import {
   DEFAULT_CATEGORY_LABELS,
   defaultCategoryProfileConfig,
+  compareCategoryProfiles,
   diffCategoryProfiles,
   mapProfileInput,
   type CategoryProfileConfig,
@@ -30,6 +31,7 @@ import {
   CheckCircle2,
   GitBranch,
   GitCompare,
+  Layers,
   RotateCcw,
   Save,
   Sliders,
@@ -148,6 +150,32 @@ const CategoryProfileEditor = ({
     ],
     [versions],
   );
+
+  // Multi-version compare: any number of calibrations, ordered oldest → newest
+  // by the option list, each column flagged against the column before it.
+  const [compareMode, setCompareMode] = useState<"two" | "multi">("two");
+  const [multiIds, setMultiIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (loading) return;
+    const ordered = [...versions].sort((a, b) => a.version - b.version).map((v) => v.id);
+    setMultiIds(ordered.length >= 2 ? ordered.slice(-3) : ["defaults", ...ordered, "draft"].slice(0, 3));
+  }, [loading, versions]);
+
+  const orderedMultiIds = useMemo(() => {
+    const order = ["defaults", ...[...versions].sort((a, b) => a.version - b.version).map((v) => v.id), "draft"];
+    return order.filter((id) => multiIds.includes(id));
+  }, [multiIds, versions]);
+
+  const toggleMultiId = (id: string) =>
+    setMultiIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const multiRows = useMemo(
+    () => compareCategoryProfiles(orderedMultiIds.map((id) => configFor(id))),
+    [orderedMultiIds, configFor],
+  );
+  const multiChangedCount = multiRows.filter((r) => r.changed).length;
+
 
 
   const saveVersion = useCallback(
@@ -374,14 +402,130 @@ const CategoryProfileEditor = ({
           <GitCompare className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold">Version diff</h3>
           <Badge variant="outline" className="text-[11px]">
-            {changedRows.length} of 6 categories changed
+            {compareMode === "two" ? changedRows.length : multiChangedCount} of 6 categories changed
           </Badge>
+          <div className="ml-auto flex gap-1">
+            <Button
+              size="sm"
+              variant={compareMode === "two" ? "default" : "outline"}
+              onClick={() => setCompareMode("two")}
+            >
+              Two-way
+            </Button>
+            <Button
+              size="sm"
+              variant={compareMode === "multi" ? "default" : "outline"}
+              onClick={() => setCompareMode("multi")}
+            >
+              <Layers className="mr-1 h-4 w-4" />
+              Multi-version
+            </Button>
+          </div>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Compare any two calibrations side by side — renamed categories, weight and match-influence
-          shifts, calibration offsets, and anything muted or re-enabled.
+          {compareMode === "two"
+            ? "Compare any two calibrations side by side — renamed categories, weight and match-influence shifts, calibration offsets, and anything muted or re-enabled."
+            : "Pick three or more calibrations to see the full timeline. Each column is highlighted where it differs from the column before it."}
         </p>
 
+        {compareMode === "multi" ? (
+          <div className="mt-3 space-y-3">
+            <div className="flex flex-wrap gap-1.5">
+              {sideOptions.map((o) => {
+                const on = multiIds.includes(o.id);
+                return (
+                  <button
+                    key={`m-${o.id}`}
+                    type="button"
+                    onClick={() => toggleMultiId(o.id)}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                      on
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "border-border/60 text-muted-foreground hover:border-primary/40"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {orderedMultiIds.length < 2 ? (
+              <p className="rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
+                Select at least two calibrations to compare.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <div
+                  className="min-w-[560px] space-y-2"
+                  style={{ ["--cols" as string]: orderedMultiIds.length }}
+                >
+                  <div
+                    className="grid gap-2 px-2 text-[11px] font-medium text-muted-foreground"
+                    style={{
+                      gridTemplateColumns: `140px repeat(${orderedMultiIds.length}, minmax(0,1fr))`,
+                    }}
+                  >
+                    <span>Category</span>
+                    {orderedMultiIds.map((id) => (
+                      <span key={`h-${id}`} className="truncate">
+                        {sideLabel(id)}
+                      </span>
+                    ))}
+                  </div>
+
+                  {multiRows.map((r) => (
+                    <div
+                      key={r.key}
+                      className={`rounded-lg border p-3 ${
+                        r.changed ? "border-primary/40 bg-primary/5" : "border-border/40 bg-muted/10"
+                      }`}
+                    >
+                      <div
+                        className="grid gap-2"
+                        style={{
+                          gridTemplateColumns: `140px repeat(${orderedMultiIds.length}, minmax(0,1fr))`,
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-mono text-[11px] text-muted-foreground">{r.key}</p>
+                          <span className="text-[11px] text-muted-foreground">
+                            {r.changed
+                              ? `${r.changeCount} change${r.changeCount === 1 ? "" : "s"}`
+                              : "unchanged"}
+                          </span>
+                        </div>
+                        {r.cells.map((cell, i) => (
+                          <div
+                            key={`${r.key}-${orderedMultiIds[i]}`}
+                            className={`space-y-0.5 rounded-md p-2 text-[11px] ${
+                              cell.changedFromPrev ? "bg-primary/10 ring-1 ring-primary/30" : ""
+                            }`}
+                          >
+                            <p className={cell.labelChanged ? "font-medium text-primary" : ""}>
+                              {cell.setting.label}
+                            </p>
+                            <p className={cell.weightChanged ? "font-medium text-primary" : ""}>
+                              ×{cell.setting.weight.toFixed(1)} ·{" "}
+                              {(cell.influence * 100).toFixed(0)}%
+                            </p>
+                            <p className={cell.biasChanged ? "font-medium text-primary" : ""}>
+                              shift {cell.setting.bias > 0 ? "+" : ""}
+                              {cell.setting.bias.toFixed(0)} pts
+                            </p>
+                            <p className={cell.enabledChanged ? "font-medium text-primary" : ""}>
+                              {cell.setting.enabled ? "active" : "muted"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
           <Select value={leftId} onValueChange={setLeftId}>
             <SelectTrigger>
@@ -409,8 +553,10 @@ const CategoryProfileEditor = ({
             </SelectContent>
           </Select>
         </div>
+        )}
 
-        {!changedRows.length ? (
+
+        {compareMode === "multi" ? null : !changedRows.length ? (
           <p className="mt-4 rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
             {sideLabel(leftId)} and {sideLabel(rightId)} are identical across all 6 categories.
           </p>

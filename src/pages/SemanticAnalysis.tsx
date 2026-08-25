@@ -685,7 +685,8 @@ const SemanticAnalysis = () => {
         </Card>
 
 
-        <div className="mt-6">
+        <div className="mt-6" id="data-stream-wizard">
+
           <PostIngestionWizard />
         </div>
 

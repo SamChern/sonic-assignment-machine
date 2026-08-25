@@ -27,6 +27,14 @@ import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 
 
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import {
   ArrowLeft,
   RefreshCw,
   Loader2,
@@ -34,6 +42,7 @@ import {
   AlertTriangle,
   CircleDashed,
   Layers,
+  Radio,
   ChevronRight,
 } from "lucide-react";
 

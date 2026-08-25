@@ -181,6 +181,37 @@ const AdminDashboard = () => {
     ? users.filter(u => filteredUserIds.includes(u.user_id))
     : users;
 
+  /** Streamlined list controls for the Users & Sources tab. */
+  const [userQuery, setUserQuery] = useState("");
+  const [userSort, setUserSort] = useState<"name_asc" | "name_desc" | "sources_desc" | "sources_asc">("name_asc");
+
+  const sourceCountByUser = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of allSources) counts[s.user_id] = (counts[s.user_id] || 0) + 1;
+    return counts;
+  }, [allSources]);
+
+  const listedUsers = useMemo(() => {
+    const q = userQuery.trim().toLowerCase();
+    const list = q
+      ? displayedUsers.filter(u =>
+          (u.username || "anonymous").toLowerCase().includes(q) ||
+          (u.bio || "").toLowerCase().includes(q),
+        )
+      : [...displayedUsers];
+    const name = (u: typeof list[number]) => (u.username || "Anonymous User").toLowerCase();
+    list.sort((a, b) => {
+      switch (userSort) {
+        case "name_desc": return name(b).localeCompare(name(a));
+        case "sources_desc": return (sourceCountByUser[b.user_id] || 0) - (sourceCountByUser[a.user_id] || 0);
+        case "sources_asc": return (sourceCountByUser[a.user_id] || 0) - (sourceCountByUser[b.user_id] || 0);
+        default: return name(a).localeCompare(name(b));
+      }
+    });
+    return list;
+  }, [displayedUsers, userQuery, userSort, sourceCountByUser]);
+
+
   const providerKeys = Array.from(new Set(allSources.map(s => s.source_type))).sort();
   const displayedProviders = filteredProviders.length > 0
     ? providerKeys.filter(p => filteredProviders.includes(p))

@@ -473,6 +473,70 @@ export const IntuiziConsolePanel = () => {
     }
   }, [ingestKeys, navigate]);
 
+  /**
+   * Add a listed audience to semantic analysis: resolve the activations that
+   * delivered it to S3, ingest their objects through the existing pipeline,
+   * then open semantic analysis scoped to the newest activation.
+   */
+  const exportAudienceToApp = useCallback(async (audienceId: string) => {
+    const id = String(audienceId);
+    setExportingId(`aud:${id}`);
+    try {
+      // 1) Keys sometimes ride along on the audience payload itself.
+      const { result: audRes } = await callTool("get_audience", { id });
+      let objectKeys = deliveredKeys(audRes);
+      let activationId: string | null = null;
+
+      // 2) Otherwise resolve the activations tied to this audience.
+      if (!objectKeys.length) {
+        let actRows: EnvelopeRow[] = [];
+        try {
+          const { result } = await callTool("list_activations", { audience_id: id, per_page: 50 });
+          actRows = rows(result);
+        } catch {
+          /* filter fallback unsupported — fall through to unfiltered list */
+        }
+        if (!actRows.length) {
+          const { result } = await callTool("list_activations", { per_page: 50 });
+          actRows = rows(result).filter((r) => JSON.stringify(r).includes(`"${id}"`) || JSON.stringify(r).includes(`:${id}`));
+        }
+        for (const r of actRows.slice(0, 5)) {
+          if (r.id == null) continue;
+          const { result } = await callTool("get_activation", { id: r.id });
+          const k = deliveredKeys(result);
+          if (k.length) {
+            objectKeys = objectKeys.concat(k);
+            activationId = activationId ?? String(r.id);
+          }
+        }
+      }
+
+      if (objectKeys.length) {
+        const { done, total } = await ingestKeys(Array.from(new Set(objectKeys)));
+        toast.success(`Added audience ${id} to semantic analysis`, {
+          description: total
+            ? `Ingested ${done}/${total} delivered object(s) — opening analysis.`
+            : "Delivered objects were not readable — opening analysis anyway.",
+        });
+      } else {
+        toast.message(`Audience ${id} has no delivered objects yet`, {
+          description: "Activate it to an S3 endpoint first, then add it again.",
+        });
+      }
+      navigate(
+        activationId
+          ? `/admin/semantic?activation=${encodeURIComponent(activationId)}`
+          : "/admin/semantic",
+      );
+    } catch (e) {
+      toast.error("Add to semantic analysis failed", { description: (e as Error).message });
+    } finally {
+      setExportingId(null);
+    }
+  }, [ingestKeys, navigate]);
+
+
+
 
   const runRaw = useCallback(async () => {
     if (!rawTool) return;

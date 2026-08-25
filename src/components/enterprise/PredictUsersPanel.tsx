@@ -137,14 +137,18 @@ const PredictUsersPanel = ({
     [records, datasetId],
   );
 
-  const matches = useMemo(() => {
-    const t = CATEGORY_KEYS.map((c) => target[c]);
-    const w = CATEGORY_KEYS.map((c) => weights[c]);
-    return pool
-      .map((r) => ({ record: r, score: weightedSimilarity(t, vec(r), w) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 50);
-  }, [pool, target, weights]);
+  const matches = useMemo(
+    () =>
+      pool
+        .map((r) => ({
+          record: r,
+          score: profileSimilarity(effectiveConfig, target, recordScores(r)),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 50),
+    [pool, target, effectiveConfig],
+  );
+
 
   const useDatasetAverage = useCallback(async () => {
     if (datasetId === "all") return;

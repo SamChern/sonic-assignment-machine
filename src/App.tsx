@@ -64,8 +64,9 @@ const App = () => (
 
               <Route path="/admin/semantic" element={<SemanticAnalysis />} />
 
-
+              <Route path="/workspace" element={<Workspace />} />
               <Route path="/demo" element={<Demo />} />
+
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

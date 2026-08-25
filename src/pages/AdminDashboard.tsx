@@ -962,40 +962,44 @@ const AdminDashboard = () => {
                   const fp = allFingerprints.find(f => f.user_id === userProfile.user_id);
 
                   return (
-                    <Card key={userProfile.id} className="p-6 bg-card/80">
-                      <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div className="flex items-center gap-4">
+                    <div key={userProfile.id} className="px-4 py-3 transition-colors hover:bg-muted/40">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex min-w-0 items-center gap-3">
                           <Checkbox
                             checked={selectedUserIds.includes(userProfile.user_id)}
                             onCheckedChange={() => toggleUserSelection(userProfile.user_id)}
+                            aria-label={`Select ${userProfile.username || 'Anonymous User'}`}
                           />
-                          <Avatar className="h-12 w-12">
+                          <Avatar className="h-9 w-9 shrink-0">
                             <AvatarImage src={userProfile.avatar_url || undefined} />
                             <AvatarFallback>
-                              <User className="h-6 w-6" />
+                              <User className="h-4 w-4" />
                             </AvatarFallback>
                           </Avatar>
-                          <div>
-                            <h3 className="font-semibold text-foreground">
-                              {userProfile.username || 'Anonymous User'}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {userSources.length} audio source{userSources.length !== 1 ? 's' : ''}
-                            </p>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="truncate text-sm font-semibold text-foreground">
+                                {userProfile.username || 'Anonymous User'}
+                              </h3>
+                              <Badge variant="secondary" className="shrink-0 text-[11px]">
+                                {userSources.length} source{userSources.length !== 1 ? 's' : ''}
+                              </Badge>
+                            </div>
                             {userProfile.bio && (
-                              <p className="text-sm text-muted-foreground mt-1">{userProfile.bio}</p>
+                              <p className="truncate text-xs text-muted-foreground">{userProfile.bio}</p>
                             )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           {userSources.length > 0 && (
                             <>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="gap-1"
+                                className="h-8 gap-1 text-xs"
                                 onClick={() => toggleGroup(groupKey)}
+                                aria-expanded={isExpanded}
                               >
                                 {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                 {isExpanded ? 'Hide' : 'Show'} sources
@@ -1003,14 +1007,16 @@ const AdminDashboard = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="h-8 text-xs"
                                 onClick={() => selectAllUserSources(userProfile.user_id)}
                               >
-                                {allSelected ? 'Deselect All' : 'Select All Sources'}
+                                {allSelected ? 'Deselect All' : 'Select All'}
                               </Button>
                             </>
                           )}
                         </div>
                       </div>
+
 
                       {isExpanded && userSources.length > 0 && (
                         <div className="grid gap-2 ml-10 mt-4">

@@ -361,6 +361,18 @@ const SemanticAnalysis = () => {
     }
   }, [isAdmin, load, loadSaved]);
 
+  /** Debounced server-side search on source name; resets paging. */
+  useEffect(() => {
+    if (!isAdmin) return;
+    const t = setTimeout(() => {
+      savedQueryRef.current = savedQuery;
+      savedCountRef.current = 0;
+      loadSaved();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [savedQuery, isAdmin, loadSaved]);
+
+
   const tagList = useMemo(() => tagOptions(rows.map((r) => r.tag_codes)), [rows]);
 
   const stageOf = useCallback(

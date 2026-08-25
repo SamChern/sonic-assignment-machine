@@ -904,20 +904,61 @@ const AdminDashboard = () => {
                 loading={signalsLoading}
               />
             ) : entityMode === "user" ? (
-              displayedUsers.length === 0 ? (
-                <Card className="p-8 text-center">
-                  <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-lg text-muted-foreground">
-                    {filteredUserIds.length > 0 ? 'No users match your filter' : 'No users yet'}
-                  </p>
-                </Card>
-              ) : (
-                displayedUsers.map(userProfile => {
+              <div className="space-y-3">
+                {/* Streamlined list toolbar: search + sort */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={userQuery}
+                      onChange={(e) => setUserQuery(e.target.value)}
+                      placeholder="Search users by name or bio…"
+                      className="pl-9"
+                      aria-label="Search users"
+                    />
+                  </div>
+                  <Select value={userSort} onValueChange={(v) => setUserSort(v as typeof userSort)}>
+                    <SelectTrigger className="w-full gap-2 sm:w-56" aria-label="Sort users">
+                      <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="name_asc">Name A–Z</SelectItem>
+                      <SelectItem value="name_desc">Name Z–A</SelectItem>
+                      <SelectItem value="sources_desc">Most sources</SelectItem>
+                      <SelectItem value="sources_asc">Fewest sources</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {listedUsers.length} of {displayedUsers.length} user{displayedUsers.length !== 1 ? 's' : ''}
+                </p>
+
+                {listedUsers.length === 0 ? (
+                  <Card className="p-8 text-center">
+                    <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-lg text-muted-foreground">
+                      {userQuery
+                        ? `No users match "${userQuery}"`
+                        : filteredUserIds.length > 0
+                          ? 'No users match your filter'
+                          : 'No users yet'}
+                    </p>
+                    {userQuery && (
+                      <Button variant="ghost" size="sm" className="mt-3" onClick={() => setUserQuery("")}>
+                        Clear search
+                      </Button>
+                    )}
+                  </Card>
+                ) : (
+                <Card className="divide-y divide-border/60 overflow-hidden bg-card/80">
+                {listedUsers.map(userProfile => {
                   const userSources = getSourcesByUser(userProfile.user_id);
                   const allSelected = userSources.length > 0 &&
                     userSources.every(s => selectedSourceIds.includes(s.id));
                   const groupKey = `user:${userProfile.user_id}`;
                   const isExpanded = expandedGroups.includes(groupKey);
+
                   const fp = allFingerprints.find(f => f.user_id === userProfile.user_id);
 
                   return (

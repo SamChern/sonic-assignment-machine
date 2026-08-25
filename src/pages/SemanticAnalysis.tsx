@@ -500,10 +500,26 @@ const SemanticAnalysis = () => {
     };
   }, [analyses]);
 
+  /** Loaded page filtered client-side so timestamps are searchable too. */
+  const visibleSaved = useMemo(() => {
+    const q = savedQuery.trim().toLowerCase();
+    if (!q) return saved;
+    return saved.filter((a) => {
+      const stamp = a.created_at ?? "";
+      return (
+        (a.source_name ?? "").toLowerCase().includes(q) ||
+        stamp.toLowerCase().includes(q) ||
+        new Date(stamp).toLocaleString().toLowerCase().includes(q) ||
+        relative(stamp).toLowerCase().includes(q)
+      );
+    });
+  }, [saved, savedQuery]);
+
   const selectedSaved = useMemo(
-    () => saved.find((a) => a.id === selectedSavedId) ?? saved[0] ?? null,
-    [saved, selectedSavedId],
+    () => visibleSaved.find((a) => a.id === selectedSavedId) ?? visibleSaved[0] ?? null,
+    [visibleSaved, selectedSavedId],
   );
+
 
 
   if (authLoading || !isAdmin) {

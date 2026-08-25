@@ -323,10 +323,12 @@ const SemanticAnalysis = () => {
     setLoading(false);
   }, []);
 
-  /** Most recent saved analyses (any source), paged + searchable. */
+  /** Saved analyses — paged, searchable, sortable and date-bounded. */
   const loadSaved = useCallback(async (append = false) => {
     const offset = append ? savedCountRef.current : 0;
     const q = savedQueryRef.current.trim();
+    const sort = savedSortRef.current;
+    const { from, to } = savedRangeRef.current;
     setSavedLoading(true);
     let query = supabase
       .from("source_analyses")
@@ -338,9 +340,12 @@ const SemanticAnalysis = () => {
     // against the timestamp; anything else narrows by source name server-side.
     const isDateQuery = /^[\d\-/:. ]+$/.test(q);
     if (q && !isDateQuery) query = query.ilike("source_name", `%${q}%`);
+    if (from) query = query.gte("created_at", new Date(`${from}T00:00:00`).toISOString());
+    if (to) query = query.lte("created_at", new Date(`${to}T23:59:59.999`).toISOString());
 
+    const [column, ascending] = SORT_ORDER[sort];
     const { data, error, count } = await query
-      .order("created_at", { ascending: false })
+      .order(column, { ascending })
       .range(offset, offset + SAVED_PAGE_SIZE - 1);
     setSavedLoading(false);
 
@@ -365,22 +370,77 @@ const SemanticAnalysis = () => {
     );
   }, []);
 
+  /** Remove a saved analysis, then refresh the list immediately. */
+  const deleteSaved = useCallback(async () => {
+    const target = pendingDelete;
+    if (!target) return;
+    setDeleting(true);
+    const { error } = await supabase.from("source_analyses").delete().eq("id", target.id);
+    setDeleting(false);
+    if (error) {
+      toast({
+        title: "Could not delete analysis",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    setPendingDelete(null);
+    setDrawerOpen(false);
+    setSaved((prev) => {
+      const list = prev.filter((a) => a.id !== target.id);
+      savedCountRef.current = list.length;
+      return list;
+    });
+    setSavedTotal((t) => Math.max(0, t - 1));
+    setSelectedSavedId((prev) => (prev === target.id ? "" : prev));
+    toast({ title: "Analysis deleted", description: target.source_name });
+    savedCountRef.current = 0;
+    loadSaved();
+  }, [pendingDelete, loadSaved]);
+
+  const applyPreset = useCallback((days: number | null) => {
+    if (days === null) {
+      setDateFrom("");
+      setDateTo("");
+      return;
+    }
+    const now = new Date();
+    const start = new Date(now.getTime() - (days - 1) * 86400000);
+    setDateFrom(start.toISOString().slice(0, 10));
+    setDateTo(now.toISOString().slice(0, 10));
+  }, []);
+
+  const activePreset = useMemo(() => {
+    if (!dateFrom && !dateTo) return "All time";
+    const today = new Date().toISOString().slice(0, 10);
+    if (dateTo !== today) return null;
+    for (const [label, days] of DATE_PRESETS) {
+      if (days === null) continue;
+      const start = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
+      if (start === dateFrom) return label;
+    }
+    return null;
+  }, [dateFrom, dateTo]);
+
 
   useEffect(() => {
     if (isAdmin) load();
   }, [isAdmin, load]);
 
 
-  /** Debounced server-side search on source name; resets paging. */
+  /** Debounced reload when search, sort or date range changes; resets paging. */
   useEffect(() => {
     if (!isAdmin) return;
     const t = setTimeout(() => {
       savedQueryRef.current = savedQuery;
+      savedSortRef.current = savedSort;
+      savedRangeRef.current = { from: dateFrom, to: dateTo };
       savedCountRef.current = 0;
       loadSaved();
     }, 300);
     return () => clearTimeout(t);
-  }, [savedQuery, isAdmin, loadSaved]);
+  }, [savedQuery, savedSort, dateFrom, dateTo, isAdmin, loadSaved]);
 
 
   const tagList = useMemo(() => tagOptions(rows.map((r) => r.tag_codes)), [rows]);

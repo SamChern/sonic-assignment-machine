@@ -303,9 +303,35 @@ const SemanticAnalysis = () => {
     setLoading(false);
   }, []);
 
+  /** Most recent saved analyses (any source) for the headline panel + picker. */
+  const loadSaved = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("source_analyses")
+      .select(
+        "id, source_name, audio_source_id, category, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
+      )
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      toast({
+        title: "Could not load saved analyses",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    const list = (data ?? []) as unknown as SavedAnalysis[];
+    setSaved(list);
+    setSelectedSavedId((prev) => (prev && list.some((a) => a.id === prev) ? prev : list[0]?.id ?? ""));
+  }, []);
+
   useEffect(() => {
-    if (isAdmin) load();
-  }, [isAdmin, load]);
+    if (isAdmin) {
+      load();
+      loadSaved();
+    }
+  }, [isAdmin, load, loadSaved]);
 
   const tagList = useMemo(() => tagOptions(rows.map((r) => r.tag_codes)), [rows]);
 

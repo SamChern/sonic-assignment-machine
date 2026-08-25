@@ -21,13 +21,25 @@ import DatasetDiscovery from "@/components/enterprise/DatasetDiscovery";
 import PredictUsersPanel from "@/components/enterprise/PredictUsersPanel";
 import PredictOutcomesPanel from "@/components/enterprise/PredictOutcomesPanel";
 import PixelSetupPanel from "@/components/enterprise/PixelSetupPanel";
+import CategoryProfileEditor from "@/components/enterprise/CategoryProfileEditor";
 import sonicSimLogo from "@/assets/SonicSIM_transp.png";
-import { ArrowLeft, Building2, Compass, LineChart, Sparkles, Tag, Target, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  Compass,
+  LineChart,
+  Sliders,
+  Sparkles,
+  Tag,
+  Target,
+  Upload,
+} from "lucide-react";
 
 const TABS = [
   { key: "analyses", label: "Analyses", icon: Sparkles },
   { key: "data", label: "My data", icon: Upload },
   { key: "discover", label: "Discovery", icon: Compass },
+  { key: "categories", label: "Categories", icon: Sliders },
   { key: "users", label: "Predict users", icon: Target },
   { key: "outcomes", label: "Predict outcomes", icon: LineChart },
   { key: "tags", label: "Tracking tags", icon: Tag },
@@ -151,6 +163,13 @@ const Workspace = () => {
         <TabsContent value="discover" className="mt-4">
           <DatasetDiscovery key={refreshKey} organizationId={active.organization_id} />
         </TabsContent>
+        <TabsContent value="categories" className="mt-4">
+          <CategoryProfileEditor
+            organizationId={active.organization_id}
+            canWrite={canWrite}
+            onSaved={() => setRefreshKey((k) => k + 1)}
+          />
+        </TabsContent>
         <TabsContent value="users" className="mt-4">
           <PredictUsersPanel
             key={refreshKey}
@@ -158,6 +177,7 @@ const Workspace = () => {
             canWrite={canWrite}
           />
         </TabsContent>
+
         <TabsContent value="outcomes" className="mt-4">
           <PredictOutcomesPanel
             organizationId={active.organization_id}

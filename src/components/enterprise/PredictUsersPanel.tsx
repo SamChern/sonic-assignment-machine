@@ -14,7 +14,9 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { CATEGORY_KEYS, type CategoryKey } from "@/lib/enterpriseSchema";
-import { Save, Target, Users } from "lucide-react";
+import { useCategoryProfiles } from "@/hooks/useCategoryProfiles";
+import { categoryLabel, mapProfileInput, profileSimilarity } from "@/lib/categoryProfile";
+import { Save, Sliders, Target, Users } from "lucide-react";
 
 interface RecordRow {
   id: string;
@@ -45,15 +47,14 @@ const DEFAULT_WEIGHTS: Weights = {
   artistic: 1,
 };
 
-const vec = (r: RecordRow) =>
-  CATEGORY_KEYS.map((c) => Number((r as unknown as Record<string, number | null>)[`${c}_score`] ?? 0));
+const recordScores = (r: RecordRow) =>
+  Object.fromEntries(
+    CATEGORY_KEYS.map((c) => [
+      c,
+      Number((r as unknown as Record<string, number | null>)[`${c}_score`] ?? 0),
+    ]),
+  ) as Record<CategoryKey, number>;
 
-/** Weighted, normalized closeness so category weights actually change ranking. */
-const weightedSimilarity = (a: number[], b: number[], w: number[]) => {
-  const totalW = w.reduce((s, v) => s + v, 0) || 1;
-  const diff = a.reduce((s, v, i) => s + w[i] * Math.abs(v - b[i]), 0) / totalW;
-  return Math.max(0, 100 - diff);
-};
 
 /**
  * Predict SonicSIM-Users: pick a target semantic profile (a dataset average or
@@ -81,6 +82,29 @@ const PredictUsersPanel = ({
   });
   const [weights, setWeights] = useState<Weights>(DEFAULT_WEIGHTS);
   const [saving, setSaving] = useState(false);
+  const { config, activeProfile } = useCategoryProfiles(organizationId);
+
+  // Adopt the active organization calibration's weights as the starting point.
+  useEffect(() => {
+    setWeights(
+      Object.fromEntries(CATEGORY_KEYS.map((c) => [c, config[c].weight])) as Weights,
+    );
+  }, [config]);
+
+  /** Active calibration (labels + bias) with the panel's live weight overrides. */
+  const effectiveConfig = useMemo(
+    () =>
+      Object.fromEntries(
+        CATEGORY_KEYS.map((c) => [c, { ...config[c], weight: weights[c] }]),
+      ) as typeof config,
+    [config, weights],
+  );
+
+  const targetPreview = useMemo(
+    () => mapProfileInput(effectiveConfig, target),
+    [effectiveConfig, target],
+  );
+
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -113,14 +137,18 @@ const PredictUsersPanel = ({
     [records, datasetId],
   );
 
-  const matches = useMemo(() => {
-    const t = CATEGORY_KEYS.map((c) => target[c]);
-    const w = CATEGORY_KEYS.map((c) => weights[c]);
-    return pool
-      .map((r) => ({ record: r, score: weightedSimilarity(t, vec(r), w) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 50);
-  }, [pool, target, weights]);
+  const matches = useMemo(
+    () =>
+      pool
+        .map((r) => ({
+          record: r,
+          score: profileSimilarity(effectiveConfig, target, recordScores(r)),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 50),
+    [pool, target, effectiveConfig],
+  );
+
 
   const useDatasetAverage = useCallback(async () => {
     if (datasetId === "all") return;
@@ -145,7 +173,12 @@ const PredictUsersPanel = ({
     const { error } = await supabase.from("prediction_runs").insert({
       organization_id: organizationId,
       kind: "users",
-      params: { dataset_id: datasetId, target },
+      params: {
+        dataset_id: datasetId,
+        target,
+        category_profile_id: activeProfile?.id ?? null,
+        category_profile_version: activeProfile?.version ?? null,
+      },
       weights,
       result: {
         matched: matches.length,
@@ -163,7 +196,7 @@ const PredictUsersPanel = ({
       return;
     }
     toast({ title: "Look-alike run saved", description: `${matches.length} matches recorded.` });
-  }, [organizationId, datasetId, target, weights, matches]);
+  }, [organizationId, datasetId, target, weights, matches, activeProfile]);
 
   return (
     <div className="space-y-4">
@@ -172,10 +205,15 @@ const PredictUsersPanel = ({
           <Target className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">Predict SonicSIM-Users</h2>
           <Badge variant="outline" className="text-[11px]">{pool.length} scored records</Badge>
+          <Badge variant="outline" className="text-[11px]">
+            <Sliders className="mr-1 h-3 w-3" />
+            {activeProfile ? `calibration v${activeProfile.version}` : "SonicSIM defaults"}
+          </Badge>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           Set the semantic profile you want to reach, then adjust how much each category matters.
-          SonicSIM ranks your records by weighted closeness to that profile.
+          Category names and calibration shifts come from your organization&apos;s active version in
+          the Categories tab.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -207,36 +245,64 @@ const PredictUsersPanel = ({
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          {CATEGORY_KEYS.map((c) => (
-            <div key={c} className="rounded-lg border border-border/60 p-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium capitalize">{c}</span>
-                <span className="text-muted-foreground">target {target[c]}</span>
+          {CATEGORY_KEYS.map((c) => {
+            const mapped = targetPreview.find((p) => p.key === c);
+            return (
+              <div
+                key={c}
+                className={`rounded-lg border p-3 ${
+                  config[c].enabled ? "border-border/60" : "border-dashed border-border/50 opacity-70"
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium">{categoryLabel(config, c)}</span>
+                  <span className="text-muted-foreground">target {target[c]}</span>
+                </div>
+                <Slider
+                  value={[target[c]]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  disabled={!config[c].enabled}
+                  onValueChange={([v]) => setTarget((p) => ({ ...p, [c]: v }))}
+                  className="mt-2"
+                />
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {config[c].enabled ? (
+                    <>
+                      maps to {mapped?.mapped.toFixed(0)}
+                      {mapped && mapped.delta !== 0 && (
+                        <span className="text-primary">
+                          {" "}
+                          ({mapped.delta > 0 ? "+" : ""}
+                          {mapped.delta.toFixed(0)} calibration)
+                        </span>
+                      )}{" "}
+                      · {((mapped?.influence ?? 0) * 100).toFixed(0)}% of match weight
+                    </>
+                  ) : (
+                    "muted in this calibration — excluded from matching"
+                  )}
+                </p>
+                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>importance</span>
+                  <span>×{weights[c].toFixed(1)}</span>
+                </div>
+                <Slider
+                  value={[weights[c]]}
+                  min={0}
+                  max={3}
+                  step={0.1}
+                  disabled={!config[c].enabled}
+                  onValueChange={([v]) => setWeights((p) => ({ ...p, [c]: v }))}
+                  className="mt-1"
+                />
               </div>
-              <Slider
-                value={[target[c]]}
-                min={0}
-                max={100}
-                step={1}
-                onValueChange={([v]) => setTarget((p) => ({ ...p, [c]: v }))}
-                className="mt-2"
-              />
-              <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>importance</span>
-                <span>×{weights[c].toFixed(1)}</span>
-              </div>
-              <Slider
-                value={[weights[c]]}
-                min={0}
-                max={3}
-                step={0.1}
-                onValueChange={([v]) => setWeights((p) => ({ ...p, [c]: v }))}
-                className="mt-1"
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
+
 
       {loading ? (
         <Skeleton className="h-40 w-full" />

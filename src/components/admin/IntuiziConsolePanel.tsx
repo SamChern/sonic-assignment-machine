@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { McpToolForm } from "@/components/admin/McpToolForm";
 import { IntuiziCatalogTree } from "@/components/admin/IntuiziCatalogTree";
+import { McpResultView } from "@/components/admin/McpResultView";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -138,6 +139,8 @@ export const IntuiziConsolePanel = () => {
   const [formArgs, setFormArgs] = useState<Record<string, unknown>>({});
   const [jsonMode, setJsonMode] = useState(false);
   const [rawOut, setRawOut] = useState<string>("");
+  const [rawResult, setRawResult] = useState<unknown>(null);
+  const [listResult, setListResult] = useState<unknown>(null);
   const [rawBusy, setRawBusy] = useState(false);
 
 
@@ -191,9 +194,11 @@ export const IntuiziConsolePanel = () => {
       if (search.trim()) args.search = search.trim();
       const { result } = await callTool(BROWSE_TOOL[kind], args);
       setListRows(rows(result));
+      setListResult(result);
     } catch (e) {
       toast.error(`Could not list ${kind}`, { description: (e as Error).message });
       setListRows([]);
+      setListResult(null);
     } finally {
       setListing(false);
     }
@@ -386,7 +391,8 @@ export const IntuiziConsolePanel = () => {
         idempotencyKey: newIdempotencyKey(),
       });
       toast.success(`${p.tool} ok`, { description: resourceId ? `id ${resourceId}` : undefined });
-      setRawOut(asText(result).slice(0, 8000));
+      setRawResult(result);
+      setRawOut("");
       await p.onDone?.(resourceId, result);
     } catch (e) {
       toast.error(`${p.tool} failed`, { description: (e as Error).message });
@@ -484,7 +490,8 @@ export const IntuiziConsolePanel = () => {
     setRawBusy(true);
     try {
       const { result } = await callTool(rawTool, args);
-      setRawOut(asText(result).slice(0, 12000));
+      setRawResult(result);
+      setRawOut("");
     } catch (e) {
       const msg = (e as Error).message;
       if (msg.toLowerCase().includes("confirm required")) {
@@ -495,6 +502,7 @@ export const IntuiziConsolePanel = () => {
           destructive: rawTool.startsWith("delete_"),
         });
       } else {
+        setRawResult(null);
         setRawOut(`Error: ${msg}`);
       }
     } finally {
@@ -656,6 +664,14 @@ export const IntuiziConsolePanel = () => {
                 )}
               </div>
 
+              {!!listResult && !!listRows.length && (
+                <McpResultView
+                  result={listResult}
+                  toolName={BROWSE_TOOL[kind]}
+                  onExportKeys={(k) => void ingestKeys(k)}
+                />
+              )}
+
               {detailLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
 
               {detail && (
@@ -699,16 +715,11 @@ export const IntuiziConsolePanel = () => {
                     </div>
                   )}
 
-                  <Collapsible>
-                    <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <ChevronDown className="h-3 w-3" /> raw payload
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <pre className="mt-1 max-h-56 overflow-auto rounded bg-background/60 p-2 text-[10px]">
-                        {asText(detail.raw).slice(0, 6000)}
-                      </pre>
-                    </CollapsibleContent>
-                  </Collapsible>
+                  <McpResultView
+                    result={detail.raw}
+                    toolName={`get_${detail.kind}`}
+                    onExportKeys={(k) => void ingestKeys(k)}
+                  />
                 </div>
               )}
             </TabsContent>
@@ -870,6 +881,7 @@ export const IntuiziConsolePanel = () => {
                     setFormArgs({});
                     setRawArgs("{}");
                     setRawOut("");
+                    setRawResult(null);
                   }}
                 >
                   <SelectTrigger className="h-9 w-[260px] text-xs">
@@ -928,6 +940,14 @@ export const IntuiziConsolePanel = () => {
                 <pre className="max-h-24 overflow-auto rounded bg-muted/20 p-2 text-[10px] text-muted-foreground">
                   {JSON.stringify(formArgs, null, 2)}
                 </pre>
+              )}
+
+              {!!rawResult && (
+                <McpResultView
+                  result={rawResult}
+                  toolName={rawTool}
+                  onExportKeys={(k) => void ingestKeys(k)}
+                />
               )}
 
               {!!rawOut && (

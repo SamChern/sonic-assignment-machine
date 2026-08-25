@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { McpResultView } from "@/components/admin/McpResultView";
 import { McpToolForm } from "@/components/admin/McpToolForm";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -214,6 +215,7 @@ function ConnectedCard({
   const [jsonMode, setJsonMode] = useState(false);
   const [calling, setCalling] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
+  const [resultObj, setResultObj] = useState<unknown>(null);
 
   const handleTest = async () => {
     if (!integration.testEndpoint) {
@@ -269,6 +271,7 @@ function ConnectedCard({
     }
     setCalling(true);
     setOutput(null);
+    setResultObj(null);
     const { data, error } = await supabase.functions.invoke("mcp-call", {
       body: {
         integration_id: integration.id,
@@ -287,7 +290,7 @@ function ConnectedCard({
       toast.error("Call failed");
       return;
     }
-    setOutput(JSON.stringify((data as { result?: unknown }).result ?? data, null, 2));
+    setResultObj((data as { result?: unknown }).result ?? data);
     toast.success("Call complete");
   };
 
@@ -410,6 +413,9 @@ function ConnectedCard({
                 )}
                 Call tool
               </Button>
+              {resultObj !== null && (
+                <McpResultView result={resultObj} toolName={selectedTool} />
+              )}
               {output && (
                 <pre className="max-h-64 overflow-auto rounded bg-muted/50 p-3 text-xs whitespace-pre-wrap break-words">
                   {output}

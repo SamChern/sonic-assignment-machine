@@ -20,11 +20,21 @@ import { CATEGORY_KEYS, type CategoryKey } from "@/lib/enterpriseSchema";
 import {
   DEFAULT_CATEGORY_LABELS,
   defaultCategoryProfileConfig,
+  diffCategoryProfiles,
   mapProfileInput,
   type CategoryProfileConfig,
 } from "@/lib/categoryProfile";
 import { useCategoryProfiles } from "@/hooks/useCategoryProfiles";
-import { CheckCircle2, GitBranch, RotateCcw, Save, Sliders, Wand2 } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  GitBranch,
+  GitCompare,
+  RotateCcw,
+  Save,
+  Sliders,
+  Wand2,
+} from "lucide-react";
 
 const SAMPLE_INPUT: Record<CategoryKey, number> = {
   emotional: 72,

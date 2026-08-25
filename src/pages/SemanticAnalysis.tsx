@@ -84,6 +84,13 @@ interface AnalysisRow {
   artistic_score: number;
 }
 
+interface SavedAnalysis extends AnalysisRow {
+  id: string;
+  source_name: string;
+}
+
+
+
 const CATEGORY_KEYS = [
   ["emotional_score", "Emo", "bg-category-emotional", "var(--gradient-emotional)"],
   ["cognitive_score", "Cog", "bg-category-cognitive", "var(--gradient-cognitive)"],

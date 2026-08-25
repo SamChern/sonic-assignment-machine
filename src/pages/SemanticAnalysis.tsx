@@ -303,15 +303,19 @@ const SemanticAnalysis = () => {
     setLoading(false);
   }, []);
 
-  /** Most recent saved analyses (any source) for the headline panel + picker. */
-  const loadSaved = useCallback(async () => {
-    const { data, error } = await supabase
+  /** Most recent saved analyses (any source), paged for the headline panel + picker. */
+  const loadSaved = useCallback(async (append = false) => {
+    const offset = append ? savedCountRef.current : 0;
+    setSavedLoading(true);
+    const { data, error, count } = await supabase
       .from("source_analyses")
       .select(
         "id, source_name, audio_source_id, category, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
+        { count: "exact" },
       )
       .order("created_at", { ascending: false })
-      .limit(50);
+      .range(offset, offset + SAVED_PAGE_SIZE - 1);
+    setSavedLoading(false);
 
     if (error) {
       toast({
@@ -321,10 +325,18 @@ const SemanticAnalysis = () => {
       });
       return;
     }
-    const list = (data ?? []) as unknown as SavedAnalysis[];
-    setSaved(list);
-    setSelectedSavedId((prev) => (prev && list.some((a) => a.id === prev) ? prev : list[0]?.id ?? ""));
+    const page = (data ?? []) as unknown as SavedAnalysis[];
+    setSavedTotal(count ?? 0);
+    setSaved((prev) => {
+      const list = append ? [...prev, ...page] : page;
+      savedCountRef.current = list.length;
+      return list;
+    });
+    setSelectedSavedId((prev) =>
+      prev && (append || page.some((a) => a.id === prev)) ? prev : page[0]?.id ?? "",
+    );
   }, []);
+
 
   useEffect(() => {
     if (isAdmin) {

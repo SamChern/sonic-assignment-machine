@@ -937,6 +937,14 @@ export const IntuiziConsolePanel = () => {
                 </pre>
               )}
 
+              {!!rawResult && (
+                <McpResultView
+                  result={rawResult}
+                  toolName={rawTool}
+                  onExportKeys={(k) => void ingestKeys(k)}
+                />
+              )}
+
               {!!rawOut && (
                 <pre className="max-h-64 overflow-auto rounded bg-muted/30 p-2 text-[10px]">{rawOut}</pre>
               )}

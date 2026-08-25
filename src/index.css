@@ -312,6 +312,62 @@ All colors MUST be HSL.
     background: var(--gradient-teal);
   }
 
+  /* Teal CTA with gloss sheen + glow on hover/focus/press */
+  .btn-teal-glow {
+    position: relative;
+    overflow: hidden;
+    background: var(--gradient-teal);
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 1px 2px hsl(174 62% 20% / 0.35);
+    transition: box-shadow 220ms ease, filter 220ms ease, transform 120ms ease;
+  }
+
+  .btn-teal-glow::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      120deg,
+      transparent 20%,
+      hsl(0 0% 100% / 0.35) 45%,
+      transparent 70%
+    );
+    transform: translateX(-120%);
+    transition: transform 600ms ease;
+    pointer-events: none;
+  }
+
+  .btn-teal-glow:hover,
+  .btn-teal-glow:focus-visible {
+    filter: brightness(1.06);
+    box-shadow:
+      0 0 0 1px hsl(174 62% 47% / 0.5),
+      0 6px 24px -4px hsl(174 62% 47% / 0.55);
+  }
+
+  .btn-teal-glow:hover::after,
+  .btn-teal-glow:focus-visible::after {
+    transform: translateX(120%);
+  }
+
+  .btn-teal-glow:active {
+    transform: translateY(1px);
+    filter: brightness(0.98);
+  }
+
+  .btn-teal-glow:disabled {
+    filter: none;
+    box-shadow: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-teal-glow,
+    .btn-teal-glow::after {
+      transition: none;
+    }
+  }
+
+
   
   .gradient-subtle {
     background: var(--gradient-subtle);

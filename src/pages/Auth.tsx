@@ -152,9 +152,10 @@ export default function Auth() {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                <Button type="submit" className="w-full btn-teal-glow" disabled={isSubmitting}>
                   {isSubmitting ? 'Signing in...' : 'Sign In'}
                 </Button>
+
               </form>
             </TabsContent>
             

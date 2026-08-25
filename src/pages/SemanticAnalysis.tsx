@@ -729,6 +729,17 @@ const SemanticAnalysis = () => {
                 </p>
               )}
             </div>
+          ) : savedQuery.trim() ? (
+            <div className="mt-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-5 text-center">
+              <Radio className="mx-auto h-6 w-6 text-muted-foreground" />
+              <p className="mt-2 text-sm font-semibold">No analyses match “{savedQuery.trim()}”</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                Try a different source name, or a date fragment such as “2026-08”.
+              </p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setSavedQuery("")}>
+                Clear search
+              </Button>
+            </div>
           ) : (
             <div className="mt-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-5 text-center">
               <Radio className="mx-auto h-6 w-6 text-primary" />
@@ -757,6 +768,7 @@ const SemanticAnalysis = () => {
                 </Button>
               </div>
             </div>
+
           )}
 
         </Card>

@@ -193,9 +193,11 @@ export const IntuiziConsolePanel = () => {
       if (search.trim()) args.search = search.trim();
       const { result } = await callTool(BROWSE_TOOL[kind], args);
       setListRows(rows(result));
+      setListResult(result);
     } catch (e) {
       toast.error(`Could not list ${kind}`, { description: (e as Error).message });
       setListRows([]);
+      setListResult(null);
     } finally {
       setListing(false);
     }

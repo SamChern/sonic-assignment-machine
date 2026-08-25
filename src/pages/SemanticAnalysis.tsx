@@ -629,8 +629,21 @@ const SemanticAnalysis = () => {
                 value={savedQuery}
                 onChange={(e) => setSavedQuery(e.target.value)}
                 placeholder="Search by source name or date…"
-                className="h-9 w-full sm:w-60"
+                className="h-9 w-full sm:w-52"
               />
+              <Select value={savedSort} onValueChange={(v) => setSavedSort(v as SavedSort)}>
+                <SelectTrigger className="h-9 w-full sm:w-44" aria-label="Sort analyses">
+                  <ArrowUpDown className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SAVED_SORTS.map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <div className="w-full sm:w-80">
                 <Select
                   value={selectedSaved?.id ?? ""}

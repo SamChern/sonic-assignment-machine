@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Save, Shield, Activity, ChevronDown, ChevronUp, Users as UsersIcon } from "lucide-react";
+import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Save, Shield, Activity, ChevronDown, ChevronUp, Users as UsersIcon, Building2, Upload as UploadIcon, Compass, Target, LineChart } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
@@ -22,6 +22,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
 import { WaveformBackground } from "@/components/WaveformBackground";
 
@@ -35,6 +36,8 @@ import { UploadProgressPanel } from "@/components/UploadProgressPanel";
 
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
+  const { orgs: enterpriseOrgs } = useOrganization();
+  const hasEnterprise = enterpriseOrgs.length > 0;
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
   
   const { myFingerprint, allFingerprints } = useFingerprints();
@@ -345,6 +348,14 @@ const Index = () => {
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           ) : user ? (
             <div className="flex items-center gap-1.5 sm:gap-3">
+              {hasEnterprise && (
+                <Link to="/workspace" aria-label="Enterprise workspace">
+                  <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
+                    <Building2 className="h-4 w-4" />
+                    <span className="hidden sm:inline">Enterprise</span>
+                  </Button>
+                </Link>
+              )}
               {isAdmin && (
                 <Link to="/admin" aria-label="Admin dashboard">
                   <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
@@ -449,6 +460,55 @@ const Index = () => {
 
         </div>
       </div>
+
+      {/* Enterprise Workspace Section */}
+      <section aria-labelledby="enterprise-heading" className="mx-auto max-w-7xl px-4 sm:px-6 pt-8 sm:pt-12">
+        <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-primary/5 p-5 sm:p-8">
+          <Badge className="absolute right-0 top-0 rounded-none rounded-bl-lg bg-primary text-primary-foreground">
+            Enterprise
+          </Badge>
+          <h2 id="enterprise-heading" className="text-xl sm:text-2xl font-semibold text-foreground pr-24">
+            SonicSIM Enterprise workspace
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm sm:text-base text-muted-foreground">
+            Licensed teams get a private dashboard scoped to their own data — recent analyses, their
+            own data uploads, dataset discovery, and predictive modelling on the six-category
+            semantic layer.
+          </p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { icon: Sparkles, title: "Recent analyses", body: "Every SonicSIM analysis your organization has run, permission-scoped." },
+              { icon: UploadIcon, title: "Upload my own data", body: "Batch CSV to the published schema, or connect GCP/BigQuery, AWS S3 or Snowflake." },
+              { icon: Compass, title: "Dataset discovery", body: "Same discovery experience as the home page, but across datasets instead of taste neighbors." },
+              { icon: Target, title: "Predict users & outcomes", body: "Normalize the six categories, find like-minded users, and model KPI outcomes from pixel data." },
+            ].map((item) => (
+              <div key={item.title} className="rounded-xl border border-border/60 bg-background/50 p-4">
+                <item.icon className="h-5 w-5 text-primary" aria-hidden="true" />
+                <h3 className="mt-2 text-sm font-semibold text-foreground">{item.title}</h3>
+                <p className="mt-1 text-xs text-muted-foreground">{item.body}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Button asChild size="lg" className="min-h-12">
+              <Link to="/workspace">
+                <Building2 className="mr-2 h-5 w-5" />
+                {hasEnterprise ? "Open enterprise workspace" : "Enterprise sign in"}
+              </Link>
+            </Button>
+            <a
+              href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More"
+              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Learn More
+            </a>
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <LineChart className="h-3.5 w-3.5" aria-hidden="true" />
+              KPI modelling: traffic, CPC, CTR, page views, VCR, time on site
+            </span>
+          </div>
+        </div>
+      </section>
 
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">

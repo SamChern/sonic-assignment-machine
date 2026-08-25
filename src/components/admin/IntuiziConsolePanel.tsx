@@ -390,7 +390,8 @@ export const IntuiziConsolePanel = () => {
         idempotencyKey: newIdempotencyKey(),
       });
       toast.success(`${p.tool} ok`, { description: resourceId ? `id ${resourceId}` : undefined });
-      setRawOut(asText(result).slice(0, 8000));
+      setRawResult(result);
+      setRawOut("");
       await p.onDone?.(resourceId, result);
     } catch (e) {
       toast.error(`${p.tool} failed`, { description: (e as Error).message });

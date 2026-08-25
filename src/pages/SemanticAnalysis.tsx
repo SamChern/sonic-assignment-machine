@@ -47,7 +47,24 @@ import {
   Layers,
   Radio,
   ChevronRight,
+  ArrowUpDown,
+  CalendarRange,
+  Maximize2,
+  Trash2,
+  X,
 } from "lucide-react";
+
+import SavedAnalysisDrawer from "@/components/SavedAnalysisDrawer";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type StepState = "ok" | "pending" | "error";
 

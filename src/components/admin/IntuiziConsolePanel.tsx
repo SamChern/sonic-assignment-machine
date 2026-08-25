@@ -701,22 +701,23 @@ export const IntuiziConsolePanel = () => {
                         {row.created_at ? ` · ${new Date(String(row.created_at)).toLocaleDateString()}` : ""}
                       </span>
                     </button>
-                    {kind === "activations" && row.id != null && (
+                    {kind === "audiences" && row.id != null && (
                       <Button
                         size="sm"
                         variant="secondary"
                         className="shrink-0 text-[11px]"
-                        onClick={() => void exportToApp(String(row.id))}
+                        onClick={() => void exportAudienceToApp(String(row.id))}
                         disabled={exportingId !== null}
                       >
-                        {exportingId === String(row.id) ? (
+                        {exportingId === `aud:${String(row.id)}` ? (
                           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                         ) : (
                           <Sparkles className="mr-1 h-3 w-3" />
                         )}
-                        Export
+                        Add to semantic analysis
                       </Button>
                     )}
+
                   </div>
                 ))}
 

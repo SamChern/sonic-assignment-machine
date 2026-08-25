@@ -324,7 +324,7 @@ const PostIngestionWizard = () => {
     <Card className="p-5">
       <div className="flex flex-wrap items-center gap-2">
         <Wand2 className="h-5 w-5 text-primary" />
-        <h2 className="text-base font-semibold">Guided post-ingestion wizard</h2>
+        <h2 className="text-base font-semibold">Guided data stream wizard</h2>
         <Badge variant="outline" className="text-[11px]">admin only</Badge>
         <Button
           variant="outline"

@@ -19,6 +19,7 @@ const AdminCTV = lazy(() => import("./pages/AdminCTV"));
 const IntegrationStatus = lazy(() => import("./pages/IntegrationStatus"));
 const IngestionCompatibility = lazy(() => import("./pages/IngestionCompatibility"));
 const SemanticAnalysis = lazy(() => import("./pages/SemanticAnalysis"));
+const Workspace = lazy(() => import("./pages/Workspace"));
 const Demo = lazy(() => import("./pages/Demo"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -63,8 +64,9 @@ const App = () => (
 
               <Route path="/admin/semantic" element={<SemanticAnalysis />} />
 
-
+              <Route path="/workspace" element={<Workspace />} />
               <Route path="/demo" element={<Demo />} />
+
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

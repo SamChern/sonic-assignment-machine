@@ -1019,7 +1019,7 @@ const AdminDashboard = () => {
 
 
                       {isExpanded && userSources.length > 0 && (
-                        <div className="grid gap-2 ml-10 mt-4">
+                        <div className="grid gap-2 ml-8 mt-3">
                           {userSources.map(source => renderSourceRow(source))}
                         </div>
                       )}
@@ -1031,14 +1031,14 @@ const AdminDashboard = () => {
                         const isOpen = neighborsOpenFor === userProfile.user_id;
                         const neighbors = isOpen ? getTopNeighbors(userProfile.user_id, 3) : [];
                         return (
-                          <div className="ml-10 mt-3 flex flex-col gap-2">
+                          <div className="ml-8 mt-2 flex flex-col gap-2">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant="secondary" className="gap-1">
+                              <Badge variant="secondary" className="gap-1 text-[11px]">
                                 <ShieldCheck className="h-3 w-3" />
                                 {confLabel} confidence • {fp.total_sources_analyzed} sources
                               </Badge>
                               {fp.recent_sources_analyzed > 0 && (
-                                <Badge variant="outline" className="gap-1">
+                                <Badge variant="outline" className="gap-1 text-[11px]">
                                   <Clock className="h-3 w-3" />
                                   {fp.recent_sources_analyzed} in last 30d
                                 </Badge>
@@ -1070,11 +1070,14 @@ const AdminDashboard = () => {
                           </div>
                         );
                       })()}
-                    </Card>
+                    </div>
                   );
-                })
-              )
+                })}
+                </Card>
+                )}
+              </div>
             ) : (
+
               displayedProviders.length === 0 ? (
                 <Card className="p-8 text-center">
                   <Radio className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />

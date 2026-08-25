@@ -93,11 +93,53 @@ const IntegrationStatus = () => {
   } | null>(null);
   const [running, setRunning] = useState(false);
 
+  const stagePrefsKey = user ? `sonicsim.pipeline.expandedStages.${user.id}` : null;
+
+  // Restore this user's saved collapse/expand choices.
+  useEffect(() => {
+    if (!stagePrefsKey) return;
+    try {
+      const raw = localStorage.getItem(stagePrefsKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") setExpandedStages(parsed as Record<string, boolean>);
+      }
+    } catch {
+      /* ignore malformed prefs */
+    }
+  }, [stagePrefsKey]);
+
+  const persistStages = useCallback(
+    (next: Record<string, boolean>) => {
+      if (!stagePrefsKey) return;
+      try {
+        localStorage.setItem(stagePrefsKey, JSON.stringify(next));
+      } catch {
+        /* storage unavailable */
+      }
+    },
+    [stagePrefsKey],
+  );
+
   const toggle = (key: string) =>
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const toggleStage = (key: string) =>
-    setExpandedStages((prev) => ({ ...prev, [key]: !prev[key] }));
+    setExpandedStages((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      persistStages(next);
+      return next;
+    });
+
+  const setAllStages = (open: boolean) => {
+    const next: Record<string, boolean> = {};
+    stages.forEach((s) => {
+      next[s.key] = open;
+    });
+    setExpandedStages(next);
+    persistStages(next);
+  };
+
 
   useEffect(() => {
     if (!loading) {
@@ -546,9 +588,19 @@ const IntegrationStatus = () => {
       <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-4xl space-y-4">
         <p className="text-sm text-muted-foreground">
           End-to-end pipeline health from the Intuizi console through to outbound
-          segment activation. Stages are collapsed by default; expand any step
-          to inspect its counters and latest records.
+          segment activation. Your expand/collapse choices are saved for next
+          time.
         </p>
+
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setAllStages(true)} disabled={!stages.length}>
+            Expand all
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setAllStages(false)} disabled={!stages.length}>
+            Collapse all
+          </Button>
+        </div>
+
 
         <ol className="space-y-4">
           {stages.map((stage, index) => {

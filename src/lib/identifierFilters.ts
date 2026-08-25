@@ -1,4 +1,4 @@
-// Shared identifier-level filtering used by the post-ingestion Semantic
+// Shared identifier-level filtering used by the Data Stream SonicSIM Analysis
 // Analysis page and the Admin Dashboard's identifier-signal views.
 //
 // Intuizi feeds arrive with thousands of identifiers per activation, so both

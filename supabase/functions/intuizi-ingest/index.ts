@@ -9,7 +9,7 @@
 //     score through analyze-audio, update calibration priors + embeddings.
 //  5. Mark files/identifiers done in the same step that processes them.
 //
-// Callable by an admin JWT (manual run from Integration Status) or a
+// Callable by an admin JWT (manual run from Intuizi Console) or a
 // service-role bearer token (the scheduled pg_cron trigger).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";

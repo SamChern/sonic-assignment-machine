@@ -871,12 +871,20 @@ const Index = () => {
                 <li>Contextual targeting</li>
                 <li>Predictive analyses</li>
               </ol>
-              <a
-                href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20—%20Learn%20More"
-                className="mt-3 inline-flex items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Learn More
-              </a>
+              <div className="mt-3 flex flex-wrap items-center gap-4">
+                <a
+                  href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20—%20Learn%20More"
+                  className="inline-flex items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Learn More
+                </a>
+                <Link
+                  to="/workspace"
+                  className="inline-flex items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Open enterprise workspace
+                </Link>
+              </div>
             </div>
           </div>
           <div className="flex justify-end">

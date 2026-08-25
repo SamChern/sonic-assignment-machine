@@ -10,6 +10,8 @@ import MobileBottomNav from "@/components/MobileBottomNav";
 import Index from "./pages/Index";
 
 const Auth = lazy(() => import("./pages/Auth"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminIntegrations = lazy(() => import("./pages/AdminIntegrations"));
 const AdminConnected = lazy(() => import("./pages/AdminConnected"));

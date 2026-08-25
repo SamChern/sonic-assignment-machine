@@ -706,16 +706,11 @@ export const IntuiziConsolePanel = () => {
                     </div>
                   )}
 
-                  <Collapsible>
-                    <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <ChevronDown className="h-3 w-3" /> raw payload
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <pre className="mt-1 max-h-56 overflow-auto rounded bg-background/60 p-2 text-[10px]">
-                        {asText(detail.raw).slice(0, 6000)}
-                      </pre>
-                    </CollapsibleContent>
-                  </Collapsible>
+                  <McpResultView
+                    result={detail.raw}
+                    toolName={`get_${detail.kind}`}
+                    onExportKeys={(k) => void ingestKeys(k)}
+                  />
                 </div>
               )}
             </TabsContent>

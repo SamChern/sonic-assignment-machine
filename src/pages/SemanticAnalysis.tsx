@@ -96,6 +96,40 @@ interface SavedAnalysis extends AnalysisRow {
 
 const SAVED_PAGE_SIZE = 25;
 
+type SavedSort =
+  | "newest"
+  | "oldest"
+  | "confidence_desc"
+  | "confidence_asc"
+  | "name_asc"
+  | "name_desc";
+
+const SAVED_SORTS: Array<[SavedSort, string]> = [
+  ["newest", "Newest first"],
+  ["oldest", "Oldest first"],
+  ["confidence_desc", "Highest confidence"],
+  ["confidence_asc", "Lowest confidence"],
+  ["name_asc", "Source A–Z"],
+  ["name_desc", "Source Z–A"],
+];
+
+const SORT_ORDER: Record<SavedSort, [string, boolean]> = {
+  newest: ["created_at", false],
+  oldest: ["created_at", true],
+  confidence_desc: ["confidence", false],
+  confidence_asc: ["confidence", true],
+  name_asc: ["source_name", true],
+  name_desc: ["source_name", false],
+};
+
+/** Quick date-range presets; null = all time. */
+const DATE_PRESETS: Array<[string, number | null]> = [
+  ["All time", null],
+  ["7d", 7],
+  ["30d", 30],
+  ["90d", 90],
+];
+
 const CATEGORY_KEYS = [
   ["emotional_score", "Emo", "bg-category-emotional", "var(--gradient-emotional)"],
   ["cognitive_score", "Cog", "bg-category-cognitive", "var(--gradient-cognitive)"],

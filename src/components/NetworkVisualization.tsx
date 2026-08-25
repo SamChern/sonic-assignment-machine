@@ -863,7 +863,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
           {/* Enhanced Similarity Metrics - Bottom Left */}
           <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-4 shadow-lg z-20 max-w-[400px]">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-xs font-semibold text-foreground">SAM-Based Similarity</div>
+              <div className="text-xs font-semibold text-foreground">SonicSIM.ai Similarity</div>
               {sources.length > 1 && (
                 <button
                   onClick={() => setShowDetails(!showDetails)}

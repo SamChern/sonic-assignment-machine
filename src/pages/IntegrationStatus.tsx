@@ -82,6 +82,7 @@ const IntegrationStatus = () => {
   const [stages, setStages] = useState<Stage[]>([]);
   const [refreshing, setRefreshing] = useState(true);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
+  const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [ingestState, setIngestState] = useState<{
     paused: boolean | null;
@@ -94,6 +95,9 @@ const IntegrationStatus = () => {
 
   const toggle = (key: string) =>
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const toggleStage = (key: string) =>
+    setExpandedStages((prev) => ({ ...prev, [key]: !prev[key] }));
 
   useEffect(() => {
     if (!loading) {
@@ -542,14 +546,15 @@ const IntegrationStatus = () => {
       <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-4xl space-y-4">
         <p className="text-sm text-muted-foreground">
           End-to-end pipeline health from the Intuizi console through to outbound
-          segment activation. Each stage reports its most recent run and the
-          counters used to judge whether it is keeping up.
+          segment activation. Stages are collapsed by default; expand any step
+          to inspect its counters and latest records.
         </p>
 
         <ol className="space-y-4">
           {stages.map((stage, index) => {
             const meta = HEALTH_META[stage.health];
             const Icon = meta.icon;
+            const stageOpen = !!expandedStages[stage.key];
             return (
               <li key={stage.key} className="relative pl-8">
                 {index < stages.length - 1 && (
@@ -567,10 +572,24 @@ const IntegrationStatus = () => {
                       <h2 className="font-semibold">{stage.title}</h2>
                       <p className="text-sm text-muted-foreground">{stage.subtitle}</p>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge variant="outline" className={`gap-1 ${meta.className}`}>
-                        <Icon className="h-3 w-3" /> {meta.label}
-                      </Badge>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Badge variant="outline" className={`gap-1 ${meta.className}`}>
+                          <Icon className="h-3 w-3" /> {meta.label}
+                        </Badge>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1 text-xs"
+                          onClick={() => toggleStage(stage.key)}
+                          aria-expanded={stageOpen}
+                          aria-label={`${stageOpen ? "Collapse" : "Expand"} ${stage.title}`}
+                        >
+                          {stageOpen ? "Collapse" : "Expand"}
+                          <ChevronDown className={`h-4 w-4 transition-transform ${stageOpen ? "rotate-180" : ""}`} />
+                        </Button>
+                      </div>
                       <span
                         className="text-xs text-muted-foreground"
                         title={stage.lastRunAt ? new Date(stage.lastRunAt).toLocaleString() : undefined}
@@ -580,80 +599,84 @@ const IntegrationStatus = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-x-6 gap-y-2">
-                    {stage.metrics.map((m) => (
-                      <div key={m.label}>
-                        <p className="text-xs text-muted-foreground">{m.label}</p>
-                        <p className="text-sm font-medium break-all">{m.value}</p>
+                  {stageOpen && (
+                    <>
+                      <div className="flex flex-wrap gap-x-6 gap-y-2">
+                        {stage.metrics.map((m) => (
+                          <div key={m.label}>
+                            <p className="text-xs text-muted-foreground">{m.label}</p>
+                            <p className="text-sm font-medium break-all">{m.value}</p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
 
-                  {stage.note && (
-                    <p className="text-xs text-muted-foreground border-t border-border pt-2">
-                      {stage.note}
-                    </p>
-                  )}
+                      {stage.note && (
+                        <p className="text-xs text-muted-foreground border-t border-border pt-2">
+                          {stage.note}
+                        </p>
+                      )}
 
-                  <div className="border-t border-border pt-2">
-                    <button
-                      type="button"
-                      onClick={() => toggle(stage.key)}
-                      aria-expanded={!!expanded[stage.key]}
-                      className="flex w-full items-center justify-between gap-2 text-sm font-medium text-primary hover:underline"
-                    >
-                      <span>
-                        {stage.detailsLabel}
-                        {stage.details.length ? ` (${stage.details.length})` : ""}
-                      </span>
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform ${expanded[stage.key] ? "rotate-180" : ""}`}
-                      />
-                    </button>
+                      <div className="border-t border-border pt-2">
+                        <button
+                          type="button"
+                          onClick={() => toggle(stage.key)}
+                          aria-expanded={!!expanded[stage.key]}
+                          className="flex w-full items-center justify-between gap-2 text-sm font-medium text-primary hover:underline"
+                        >
+                          <span>
+                            {stage.detailsLabel}
+                            {stage.details.length ? ` (${stage.details.length})` : ""}
+                          </span>
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${expanded[stage.key] ? "rotate-180" : ""}`}
+                          />
+                        </button>
 
-                    {expanded[stage.key] && (
-                      <div className="mt-3 space-y-2">
-                        {stage.details.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">
-                            No runs recorded for this stage yet.
-                          </p>
-                        ) : (
-                          stage.details.map((row) => (
-                            <div
-                              key={row.id}
-                              className="rounded-md border border-border bg-muted/30 p-3 space-y-1"
-                            >
-                              <div className="flex items-start justify-between gap-3 flex-wrap">
-                                <p className="text-xs font-mono break-all">{row.title}</p>
-                                {row.status && (
-                                  <Badge variant="outline" className="text-xs shrink-0">
-                                    {row.status}
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
-                                <span
-                                  title={
-                                    row.timestamp
-                                      ? new Date(row.timestamp).toLocaleString()
-                                      : undefined
-                                  }
+                        {expanded[stage.key] && (
+                          <div className="mt-3 space-y-2">
+                            {stage.details.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                No runs recorded for this stage yet.
+                              </p>
+                            ) : (
+                              stage.details.map((row) => (
+                                <div
+                                  key={row.id}
+                                  className="rounded-md border border-border bg-muted/30 p-3 space-y-1"
                                 >
-                                  {relative(row.timestamp)}
-                                </span>
-                                {row.meta && <span>{row.meta}</span>}
-                              </div>
-                              {row.error && (
-                                <p className="text-xs text-destructive break-all font-mono">
-                                  {row.error}
-                                </p>
-                              )}
-                            </div>
-                          ))
+                                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                                    <p className="text-xs font-mono break-all">{row.title}</p>
+                                    {row.status && (
+                                      <Badge variant="outline" className="text-xs shrink-0">
+                                        {row.status}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+                                    <span
+                                      title={
+                                        row.timestamp
+                                          ? new Date(row.timestamp).toLocaleString()
+                                          : undefined
+                                      }
+                                    >
+                                      {relative(row.timestamp)}
+                                    </span>
+                                    {row.meta && <span>{row.meta}</span>}
+                                  </div>
+                                  {row.error && (
+                                    <p className="text-xs text-destructive break-all font-mono">
+                                      {row.error}
+                                    </p>
+                                  )}
+                                </div>
+                              ))
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
+                    </>
+                  )}
                 </Card>
 
               </li>

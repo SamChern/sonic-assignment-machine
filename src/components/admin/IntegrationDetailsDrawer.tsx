@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { replaceLegacyBrandText } from "@/lib/brandText";
 import {
   CheckCircle2,
   XCircle,
@@ -47,7 +48,7 @@ export async function runIntegrationTest(integration: Integration) {
     body: { integration_id: integration.id },
   });
   if (error) {
-    toast.error(`${integration.name}: ${error.message}`);
+    toast.error(`${integration.name}: ${replaceLegacyBrandText(error.message)}`);
     return false;
   }
   if ((data as { success?: boolean })?.success) {
@@ -55,7 +56,9 @@ export async function runIntegrationTest(integration: Integration) {
     toast.success(`${integration.name} connection OK${ms ? ` (${ms}ms)` : ""}`);
     return true;
   }
-  toast.error(`${integration.name}: ${(data as { error?: string })?.error ?? "Test failed"}`);
+  toast.error(
+    `${integration.name}: ${replaceLegacyBrandText((data as { error?: string })?.error) ?? "Test failed"}`,
+  );
   return false;
 }
 
@@ -132,7 +135,7 @@ export function IntegrationDetailsDrawer({
                 </div>
                 {lastTest.error_message && (
                   <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-                    {lastTest.error_message}
+                    {replaceLegacyBrandText(lastTest.error_message)}
                   </pre>
                 )}
               </div>

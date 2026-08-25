@@ -22,6 +22,7 @@ import {
   Info,
   AlertTriangle,
 } from "lucide-react";
+import { replaceLegacyBrandText } from "@/lib/brandText";
 
 /**
  * Compact API/MCP tester for the admin dashboard: test any provider and open a
@@ -192,7 +193,9 @@ export function IntegrationTestPanel() {
                   )}
                 </div>
                 {t && !t.success && t.error_message && (
-                  <p className="mt-1 line-clamp-1 text-xs text-destructive">{t.error_message}</p>
+                  <p className="mt-1 line-clamp-1 text-xs text-destructive">
+                    {replaceLegacyBrandText(t.error_message)}
+                  </p>
                 )}
               </div>
 

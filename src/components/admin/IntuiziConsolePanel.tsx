@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { McpToolForm } from "@/components/admin/McpToolForm";
 import { IntuiziCatalogTree } from "@/components/admin/IntuiziCatalogTree";
+import { McpResultView } from "@/components/admin/McpResultView";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -880,6 +881,7 @@ export const IntuiziConsolePanel = () => {
                     setFormArgs({});
                     setRawArgs("{}");
                     setRawOut("");
+                    setRawResult(null);
                   }}
                 >
                   <SelectTrigger className="h-9 w-[260px] text-xs">

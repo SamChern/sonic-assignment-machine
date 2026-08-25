@@ -371,6 +371,105 @@ const CategoryProfileEditor = ({
 
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-2">
+          <GitCompare className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Version diff</h3>
+          <Badge variant="outline" className="text-[11px]">
+            {changedRows.length} of 6 categories changed
+          </Badge>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Compare any two calibrations side by side — renamed categories, weight and match-influence
+          shifts, calibration offsets, and anything muted or re-enabled.
+        </p>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+          <Select value={leftId} onValueChange={setLeftId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sideOptions.map((o) => (
+                <SelectItem key={`l-${o.id}`} value={o.id}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <ArrowRight className="mx-auto hidden h-4 w-4 text-muted-foreground sm:block" />
+          <Select value={rightId} onValueChange={setRightId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sideOptions.map((o) => (
+                <SelectItem key={`r-${o.id}`} value={o.id}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {!changedRows.length ? (
+          <p className="mt-4 rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
+            {sideLabel(leftId)} and {sideLabel(rightId)} are identical across all 6 categories.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            <div className="hidden grid-cols-[1fr_1fr_1fr] gap-2 px-2 text-[11px] font-medium text-muted-foreground sm:grid">
+              <span>Category</span>
+              <span className="truncate">{sideLabel(leftId)}</span>
+              <span className="truncate">{sideLabel(rightId)}</span>
+            </div>
+            {diffRows.map((r) => (
+              <div
+                key={r.key}
+                className={`rounded-lg border p-3 ${
+                  r.changed ? "border-primary/40 bg-primary/5" : "border-border/40 bg-muted/10"
+                }`}
+              >
+                <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr]">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium">{r.right.label}</p>
+                    <p className="font-mono text-[11px] text-muted-foreground">{r.key}</p>
+                    {!r.changed && (
+                      <span className="text-[11px] text-muted-foreground">unchanged</span>
+                    )}
+                  </div>
+
+                  {(["left", "right"] as const).map((side) => {
+                    const s = side === "left" ? r.left : r.right;
+                    const influence = side === "left" ? r.leftInfluence : r.rightInfluence;
+                    return (
+                      <div key={side} className="space-y-1 text-[11px]">
+                        <p className="sm:hidden text-muted-foreground">
+                          {sideLabel(side === "left" ? leftId : rightId)}
+                        </p>
+                        <p className={r.labelChanged ? "font-medium text-primary" : ""}>
+                          name: {s.label}
+                        </p>
+                        <p className={r.weightChanged ? "font-medium text-primary" : ""}>
+                          weight ×{s.weight.toFixed(1)} · {(influence * 100).toFixed(0)}% of match
+                        </p>
+                        <p className={r.biasChanged ? "font-medium text-primary" : ""}>
+                          shift {s.bias > 0 ? "+" : ""}
+                          {s.bias.toFixed(0)} pts
+                        </p>
+                        <p className={r.enabledChanged ? "font-medium text-primary" : ""}>
+                          {s.enabled ? "active" : "muted"}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-2">
           <Wand2 className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold">Input mapping preview</h3>
           <Badge variant="outline" className="text-[11px]">

@@ -624,44 +624,63 @@ const SemanticAnalysis = () => {
           <div className="flex flex-wrap items-center gap-2">
             <Radio className="h-4 w-4 text-primary" />
             <h2 className="text-sm font-semibold">Latest saved analysis</h2>
-            <div className="ml-auto w-full sm:w-80">
-              <Select
-                value={selectedSaved?.id ?? ""}
-                onValueChange={setSelectedSavedId}
-                disabled={!saved.length}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue
-                    placeholder={saved.length ? "Select a saved analysis" : "No saved analyses yet"}
-                  />
-                </SelectTrigger>
-                <SelectContent
-                  className="max-h-72"
-                  onScroll={(e) => {
-                    const el = e.currentTarget;
-                    if (
-                      !savedLoading &&
-                      saved.length < savedTotal &&
-                      el.scrollTop + el.clientHeight >= el.scrollHeight - 24
-                    ) {
-                      loadSaved(true);
-                    }
-                  }}
+            <div className="ml-auto flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+              <Input
+                value={savedQuery}
+                onChange={(e) => setSavedQuery(e.target.value)}
+                placeholder="Search by source name or date…"
+                className="h-9 w-full sm:w-60"
+              />
+              <div className="w-full sm:w-80">
+                <Select
+                  value={selectedSaved?.id ?? ""}
+                  onValueChange={setSelectedSavedId}
+                  disabled={!visibleSaved.length}
                 >
-                  {saved.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.source_name} — {relative(a.created_at)}
-                    </SelectItem>
-                  ))}
-                  {saved.length < savedTotal && (
-                    <div className="px-2 py-2 text-center text-[11px] text-muted-foreground">
-                      {savedLoading ? "Loading more…" : `Scroll for more (${saved.length}/${savedTotal})`}
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
+                  <SelectTrigger className="h-9">
+                    <SelectValue
+                      placeholder={
+                        savedLoading
+                          ? "Loading analyses…"
+                          : visibleSaved.length
+                            ? "Select a saved analysis"
+                            : savedQuery
+                              ? "No matches"
+                              : "No saved analyses yet"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent
+                    className="max-h-72"
+                    onScroll={(e) => {
+                      const el = e.currentTarget;
+                      if (
+                        !savedLoading &&
+                        saved.length < savedTotal &&
+                        el.scrollTop + el.clientHeight >= el.scrollHeight - 24
+                      ) {
+                        loadSaved(true);
+                      }
+                    }}
+                  >
+                    {visibleSaved.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.source_name} — {relative(a.created_at)}
+                      </SelectItem>
+                    ))}
+                    {saved.length < savedTotal && (
+                      <div className="px-2 py-2 text-center text-[11px] text-muted-foreground">
+                        {savedLoading
+                          ? "Loading more…"
+                          : `Scroll for more (${saved.length}/${savedTotal})`}
+                      </div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
+
 
           {selectedSaved ? (
             <div className="mt-3">

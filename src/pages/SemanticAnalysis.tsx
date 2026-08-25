@@ -722,6 +722,21 @@ const SemanticAnalysis = () => {
                 </span>
               </div>
               <ScoreBars ana={selectedSaved} />
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setDrawerOpen(true)}>
+                  <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
+                  View full details
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setPendingDelete(selectedSaved)}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Delete analysis
+                </Button>
+              </div>
               {savedTotal > 0 && (
                 <p className="mt-2 text-[11px] text-muted-foreground">
                   Showing {saved.length} of {savedTotal} saved analyses

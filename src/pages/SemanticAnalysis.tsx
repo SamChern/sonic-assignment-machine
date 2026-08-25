@@ -482,13 +482,13 @@ const SemanticAnalysis = () => {
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-elegant"
               style={{ background: "var(--gradient-teal)" }}
             >
-              <Layers className="h-4 w-4 text-primary-foreground" />
+              <Radio className="h-4 w-4 text-primary-foreground" />
             </span>
             <h1
               className="truncate bg-clip-text text-base font-semibold text-transparent sm:text-lg"
               style={{ backgroundImage: "var(--gradient-teal)" }}
             >
-              Post-ingestion semantic analysis
+              Data Stream SonicSIM Analysis
             </h1>
           </div>
 
@@ -502,11 +502,22 @@ const SemanticAnalysis = () => {
               loading="lazy"
               decoding="async"
             />
-            <Button variant="ghost" size="sm" onClick={() => navigate("/admin/pipeline")}>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
               <ArrowLeft className="mr-1 h-4 w-4" />
+              Admin
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/admin/pipeline")}>
               Intuizi Console
             </Button>
-            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                load();
+                loadSaved();
+              }}
+              disabled={loading}
+            >
               {loading ? (
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" />
               ) : (

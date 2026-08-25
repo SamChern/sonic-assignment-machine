@@ -777,6 +777,26 @@ export const IntuiziConsolePanel = () => {
                       onActivate={(endpointId) => requestActivation(String(detail.row.id), endpointId)}
                     />
                   )}
+                  {detail.kind === "audiences" && detail.row.id != null && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => void exportAudienceToApp(String(detail.row.id))}
+                        disabled={exportingId !== null}
+                      >
+                        {exportingId === `aud:${String(detail.row.id)}` ? (
+                          <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="mr-1 h-4 w-4" />
+                        )}
+                        Add to semantic analysis
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">
+                        Finds this audience's S3 deliveries, ingests them, then opens semantic analysis.
+                      </span>
+                    </div>
+                  )}
+
                   {detail.kind === "activations" && detail.row.id != null && (
                     <div className="flex flex-wrap items-center gap-2">
                       <Button

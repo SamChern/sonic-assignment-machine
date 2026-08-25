@@ -489,7 +489,8 @@ export const IntuiziConsolePanel = () => {
     setRawBusy(true);
     try {
       const { result } = await callTool(rawTool, args);
-      setRawOut(asText(result).slice(0, 12000));
+      setRawResult(result);
+      setRawOut("");
     } catch (e) {
       const msg = (e as Error).message;
       if (msg.toLowerCase().includes("confirm required")) {
@@ -500,6 +501,7 @@ export const IntuiziConsolePanel = () => {
           destructive: rawTool.startsWith("delete_"),
         });
       } else {
+        setRawResult(null);
         setRawOut(`Error: ${msg}`);
       }
     } finally {

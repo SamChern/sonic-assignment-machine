@@ -14,7 +14,9 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { CATEGORY_KEYS, type CategoryKey } from "@/lib/enterpriseSchema";
-import { Save, Target, Users } from "lucide-react";
+import { useCategoryProfiles } from "@/hooks/useCategoryProfiles";
+import { categoryLabel, mapProfileInput, profileSimilarity } from "@/lib/categoryProfile";
+import { Save, Sliders, Target, Users } from "lucide-react";
 
 interface RecordRow {
   id: string;
@@ -45,15 +47,14 @@ const DEFAULT_WEIGHTS: Weights = {
   artistic: 1,
 };
 
-const vec = (r: RecordRow) =>
-  CATEGORY_KEYS.map((c) => Number((r as unknown as Record<string, number | null>)[`${c}_score`] ?? 0));
+const recordScores = (r: RecordRow) =>
+  Object.fromEntries(
+    CATEGORY_KEYS.map((c) => [
+      c,
+      Number((r as unknown as Record<string, number | null>)[`${c}_score`] ?? 0),
+    ]),
+  ) as Record<CategoryKey, number>;
 
-/** Weighted, normalized closeness so category weights actually change ranking. */
-const weightedSimilarity = (a: number[], b: number[], w: number[]) => {
-  const totalW = w.reduce((s, v) => s + v, 0) || 1;
-  const diff = a.reduce((s, v, i) => s + w[i] * Math.abs(v - b[i]), 0) / totalW;
-  return Math.max(0, 100 - diff);
-};
 
 /**
  * Predict SonicSIM-Users: pick a target semantic profile (a dataset average or

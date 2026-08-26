@@ -280,9 +280,11 @@ const Workspace = () => {
         <TabsContent value="tags" className="mt-4">
           <PixelSetupPanel organizationId={active.organization_id} canWrite={canWrite} />
         </TabsContent>
-      </Tabs>
+        </Tabs>
+      </main>
     </div>
   );
+
 };
 
 export default Workspace;

@@ -40,6 +40,8 @@ import {
   RotateCcw,
   Save,
   Sliders,
+  Lock,
+  Unlock,
   TrendingUp,
   Wand2,
 } from "lucide-react";
@@ -337,6 +339,7 @@ const CategoryProfileEditor = ({
             variant="outline"
             size="sm"
             onClick={() => setDraft(defaultCategoryProfileConfig())}
+            disabled={!canEdit}
           >
             <RotateCcw className="mr-1 h-4 w-4" />
             Reset to SonicSIM defaults
@@ -345,7 +348,7 @@ const CategoryProfileEditor = ({
             variant="outline"
             size="sm"
             onClick={activateSelected}
-            disabled={!canWrite || saving || !selectedId || !!versions.find((v) => v.id === selectedId)?.is_active}
+            disabled={!canEdit || saving || !selectedId || !!versions.find((v) => v.id === selectedId)?.is_active}
           >
             <CheckCircle2 className="mr-1 h-4 w-4" />
             Activate selected version
@@ -356,11 +359,13 @@ const CategoryProfileEditor = ({
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
+            disabled={!canEdit}
             placeholder="Version name (e.g. Spoken-word calibration)"
           />
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            disabled={!canEdit}
             rows={2}
             placeholder="What changed and why (optional)"
             className="text-xs"
@@ -379,12 +384,14 @@ const CategoryProfileEditor = ({
                 <Input
                   value={draft[c].label}
                   onChange={(e) => patch(c, { label: e.target.value })}
+                  disabled={!canEdit}
                   className="h-8 text-xs"
                   placeholder={DEFAULT_CATEGORY_LABELS[c]}
                 />
                 <Switch
                   checked={draft[c].enabled}
                   onCheckedChange={(v) => patch(c, { enabled: v })}
+                  disabled={!canEdit}
                 />
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">
@@ -400,7 +407,7 @@ const CategoryProfileEditor = ({
                 min={0}
                 max={3}
                 step={0.1}
-                disabled={!draft[c].enabled}
+                disabled={!canEdit || !draft[c].enabled}
                 onValueChange={([v]) => patch(c, { weight: v })}
                 className="mt-1"
               />
@@ -417,7 +424,7 @@ const CategoryProfileEditor = ({
                 min={-25}
                 max={25}
                 step={1}
-                disabled={!draft[c].enabled}
+                disabled={!canEdit || !draft[c].enabled}
                 onValueChange={([v]) => patch(c, { bias: v })}
                 className="mt-1"
               />
@@ -426,7 +433,7 @@ const CategoryProfileEditor = ({
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => saveVersion(true)} disabled={!canWrite || saving}>
+          <Button size="sm" onClick={() => saveVersion(true)} disabled={!canEdit || saving}>
             <Save className="mr-1 h-4 w-4" />
             Save as v{nextVersion} &amp; activate
           </Button>
@@ -434,14 +441,14 @@ const CategoryProfileEditor = ({
             variant="outline"
             size="sm"
             onClick={() => saveVersion(false)}
-            disabled={!canWrite || saving}
+            disabled={!canEdit || saving}
           >
             <GitBranch className="mr-1 h-4 w-4" />
             Save as draft version
           </Button>
-          {!canWrite && (
+          {!canEdit && (
             <span className="self-center text-[11px] text-muted-foreground">
-              View-only role — ask an owner or analyst to save changes.
+              Locked — only enterprise admins (organization owners) can change the 6 categories.
             </span>
           )}
         </div>

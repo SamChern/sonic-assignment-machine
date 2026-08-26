@@ -1273,9 +1273,47 @@ const AdminDashboard = () => {
               </Card>
             )}
           </TabsContent>
+
+          <TabsContent value="intuizi" className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => navigate("/admin/pipeline")}>
+                <Activity className="mr-1 h-4 w-4" /> Intuizi Console page
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate("/admin/compatibility")}>
+                <ShieldCheck className="mr-1 h-4 w-4" /> Ingestion compatibility
+              </Button>
+            </div>
+            <IntuiziConsolePanel />
+          </TabsContent>
+
+          <TabsContent value="apis" className="space-y-4">
+            <AdminConnectedApisTab />
+          </TabsContent>
+
+          <TabsContent value="ec2" className="space-y-4">
+            <Card className="flex flex-wrap items-center gap-3 border-border/60 bg-card/70 p-4 backdrop-blur-sm">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">EC2 analysis API</p>
+                <p className="text-xs text-muted-foreground">
+                  Run a live health check against the librosa / embedding service.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="ml-auto"
+                onClick={handleHealthCheck}
+                disabled={ec2Loading}
+              >
+                <Activity className={`mr-1 h-4 w-4 ${ec2Loading ? "animate-pulse" : ""}`} />
+                {ec2Loading ? "Checking..." : "Check health"}
+              </Button>
+            </Card>
+            <LibrosaHealthPanel />
+          </TabsContent>
         </Tabs>
-      </div>
+      </main>
     </div>
+
   );
 };
 

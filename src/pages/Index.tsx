@@ -486,11 +486,11 @@ const Index = () => {
           />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
 
-          <div className="relative">
-          <Badge className="absolute right-0 top-0 rounded-none rounded-bl-lg bg-primary text-primary-foreground">
+          <div className="relative min-w-0">
+          <Badge className="mb-3 inline-flex bg-primary text-primary-foreground sm:absolute sm:right-0 sm:top-0 sm:mb-0">
             Enterprise
           </Badge>
-          <h2 id="enterprise-heading" className="text-xl sm:text-2xl font-semibold text-foreground pr-24">
+          <h2 id="enterprise-heading" className="text-xl sm:text-2xl font-semibold text-foreground sm:pr-28">
             {hasEnterprise && activeOrg ? `${activeOrg.name} enterprise workspace` : "SonicSIM Enterprise workspace"}
           </h2>
           <p className="mt-2 max-w-2xl text-sm sm:text-base text-muted-foreground">
@@ -500,21 +500,22 @@ const Index = () => {
           </p>
 
           {hasEnterprise && activeOrg ? (
-            <Tabs defaultValue="analyses" className="mt-5">
-              <TabsList className="flex w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-3">
-                <TabsTrigger value="analyses" className="min-h-11 shrink-0">
-                  <Sparkles className="mr-1 h-4 w-4" />
-                  Recent analyses
+            <Tabs defaultValue="analyses" className="mt-5 w-full min-w-0">
+              <TabsList className="flex w-full max-w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-3">
+                <TabsTrigger value="analyses" className="min-h-11 shrink-0 sm:min-w-0">
+                  <Sparkles className="mr-1 h-4 w-4 shrink-0" />
+                  <span className="truncate">Recent analyses</span>
                 </TabsTrigger>
-                <TabsTrigger value="data" className="min-h-11 shrink-0">
-                  <UploadIcon className="mr-1 h-4 w-4" />
-                  Upload my data
+                <TabsTrigger value="data" className="min-h-11 shrink-0 sm:min-w-0">
+                  <UploadIcon className="mr-1 h-4 w-4 shrink-0" />
+                  <span className="truncate">Upload my data</span>
                 </TabsTrigger>
-                <TabsTrigger value="discover" className="min-h-11 shrink-0">
-                  <Compass className="mr-1 h-4 w-4" />
-                  Dataset discovery
+                <TabsTrigger value="discover" className="min-h-11 shrink-0 sm:min-w-0">
+                  <Compass className="mr-1 h-4 w-4 shrink-0" />
+                  <span className="truncate">Dataset discovery</span>
                 </TabsTrigger>
               </TabsList>
+
               <Suspense fallback={<div className="mt-4 h-32 animate-pulse rounded-xl bg-muted/40" />}>
                 <TabsContent value="analyses" className="mt-4">
                   <WorkspaceAnalyses organizationId={activeOrg.organization_id} />
@@ -543,46 +544,55 @@ const Index = () => {
               ))}
             </div>
           )}
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button asChild size="lg" className="min-h-12">
+          <div className="mt-5 flex flex-wrap items-center gap-3 min-w-0">
+            <Button asChild size="lg" className="min-h-12 w-full sm:w-auto">
               <Link to="/workspace">
-                <Building2 className="mr-2 h-5 w-5" />
-                {hasEnterprise ? "Open enterprise workspace" : "Enterprise sign in"}
+                <Building2 className="mr-2 h-5 w-5 shrink-0" />
+                <span className="truncate">{hasEnterprise ? "Open enterprise workspace" : "Enterprise sign in"}</span>
               </Link>
             </Button>
             {hasEnterprise && (
               <>
-                <Button asChild variant="outline" className="min-h-12">
+                <Button asChild variant="outline" className="min-h-12 w-full sm:w-auto">
                   <Link to="/workspace?tab=categories">
-                    <Sliders className="mr-2 h-4 w-4" />
-                    Adjust 6 categories
+                    <Sliders className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">Adjust 6 categories</span>
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="min-h-12">
+                <Button asChild variant="outline" className="min-h-12 w-full sm:w-auto">
                   <Link to="/workspace?tab=users">
-                    <Target className="mr-2 h-4 w-4" />
-                    Predict SonicSIM-Users
+                    <Target className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">Predict SonicSIM-Users</span>
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="min-h-12">
+                <Button asChild variant="outline" className="min-h-12 w-full sm:w-auto">
                   <Link to="/workspace?tab=outcomes">
-                    <LineChart className="mr-2 h-4 w-4" />
-                    Predict SonicSIM-Outcomes
+                    <LineChart className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">Predict SonicSIM-Outcomes</span>
                   </Link>
                 </Button>
+                <a
+                  href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More"
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Learn More
+                </a>
               </>
             )}
-            <a
-              href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More"
-              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-            >
-              Learn More
-            </a>
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <LineChart className="h-3.5 w-3.5" aria-hidden="true" />
-              KPI modelling: traffic, CPC, CTR, page views, VCR, time on site
-            </span>
+            {!hasEnterprise && (
+              <a
+                href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More"
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Learn More
+              </a>
+            )}
           </div>
+          <p className="mt-3 flex items-start gap-1 text-xs text-muted-foreground">
+            <LineChart className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>KPI modelling: traffic, CPC, CTR, page views, VCR, time on site</span>
+          </p>
+
           </div>
         </div>
       </section>
@@ -590,26 +600,27 @@ const Index = () => {
 
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="mb-6 sm:mb-8 flex w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
-            <TabsTrigger value="select" className="flex shrink-0 items-center gap-2 min-h-11">
-              <FileAudio className="h-4 w-4" />
-              <span className="hidden sm:inline">Select Sources</span>
-              <span className="sm:hidden">Sources</span>
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
+          <TabsList className="mb-6 sm:mb-8 flex w-full max-w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
+            <TabsTrigger value="select" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0">
+              <FileAudio className="h-4 w-4 shrink-0" />
+              <span className="hidden truncate sm:inline">Select Sources</span>
+              <span className="truncate sm:hidden">Sources</span>
             </TabsTrigger>
-            <TabsTrigger value="network" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!results}>
-              <Network className="h-4 w-4" />
-              <span>Network</span>
+            <TabsTrigger value="network" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0" disabled={!results}>
+              <Network className="h-4 w-4 shrink-0" />
+              <span className="truncate">Network</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!results}>
-              <ListTree className="h-4 w-4" />
-              <span>Analysis</span>
+            <TabsTrigger value="analysis" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0" disabled={!results}>
+              <ListTree className="h-4 w-4 shrink-0" />
+              <span className="truncate">Analysis</span>
             </TabsTrigger>
-            <TabsTrigger value="discover" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!user}>
-              <UsersIcon className="h-4 w-4" />
-              <span>Discover</span>
+            <TabsTrigger value="discover" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0" disabled={!user}>
+              <UsersIcon className="h-4 w-4 shrink-0" />
+              <span className="truncate">Discover</span>
             </TabsTrigger>
           </TabsList>
+
 
           {/* Tab 1: Select Audio Sources */}
           <TabsContent value="select" className="space-y-8">

@@ -19,7 +19,6 @@ vi.mock("sonner", () => ({ toast: toastMock }));
 import { IntegrationCrudCard } from "@/components/admin/IntegrationCrudCard";
 import { Ec2StatusPanel } from "@/components/admin/Ec2StatusPanel";
 import { INTEGRATIONS } from "@/config/integrations";
-import { useEC2Api } from "@/hooks/useEC2Api";
 
 const appleMusic = INTEGRATIONS.find((i) => i.id === "apple_music")!;
 
@@ -120,14 +119,7 @@ describe("IntegrationCrudCard RBAC — admin is allowed", () => {
 });
 
 // The EC2 panel reaches the analysis API exclusively through the admin-guarded
-// `aws-proxy` function, so we exercise the real hook against the mocked guard.
-const Ec2Harness = () => {
-  const { get } = useEC2Api();
-  // Re-export the hook under the module the panel imports from.
-  (globalThis as { __ec2get?: unknown }).__ec2get = get;
-  return <Ec2StatusPanel />;
-};
-
+// `aws-proxy` function; here the real hook runs against the mocked guard.
 describe("EC2 RBAC — proxy guard", () => {
   beforeEach(clearMocks);
 
@@ -137,7 +129,7 @@ describe("EC2 RBAC — proxy guard", () => {
     ["moderator", /403/],
   ])("blocks %s from probing or reconnecting", async (role, expected) => {
     mockAdminGuard(role);
-    render(<Ec2Harness />);
+    render(<Ec2StatusPanel />);
 
     await waitFor(() => expect(screen.getByText("Unreachable")).toBeInTheDocument());
     expect(screen.getByText(expected)).toBeInTheDocument();
@@ -151,7 +143,7 @@ describe("EC2 RBAC — proxy guard", () => {
 
   it("lets an admin probe and reconnect", async () => {
     mockAdminGuard("admin", () => ({ data: { status: "healthy", region: "us-east-1" } }));
-    render(<Ec2Harness />);
+    render(<Ec2StatusPanel />);
 
     await waitFor(() => expect(screen.getByText("us-east-1")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /reconnect/i }));

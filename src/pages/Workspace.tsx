@@ -28,12 +28,15 @@ import {
   Building2,
   Compass,
   LineChart,
+  Radio,
+  RefreshCw,
   Sliders,
   Sparkles,
   Tag,
   Target,
   Upload,
 } from "lucide-react";
+
 
 const TABS = [
   { key: "analyses", label: "Analyses", icon: Sparkles },

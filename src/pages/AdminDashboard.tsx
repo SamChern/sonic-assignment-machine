@@ -849,28 +849,41 @@ const AdminDashboard = () => {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6 flex w-full justify-start overflow-x-auto no-scrollbar">
-            <TabsTrigger value="users" className="gap-2 shrink-0 min-h-11 whitespace-nowrap">
-              <Users className="h-4 w-4" />
+          <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 border border-border/60 bg-card/70 p-1 backdrop-blur-sm sm:flex sm:flex-wrap sm:justify-start">
+            <TabsTrigger value="users" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Users className="h-3.5 w-3.5 shrink-0" />
               {entityMode === "user"
                 ? "Users & Sources"
                 : entityMode === "provider"
                   ? "Providers & Signals"
                   : "Cohorts & Identifiers"}
             </TabsTrigger>
-            <TabsTrigger value="fingerprints" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" aria-label="Aggregate">
-              <Fingerprint className="h-4 w-4" />
-              <span className="hidden sm:inline">Aggregate</span>
+            <TabsTrigger value="fingerprints" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Fingerprint className="h-3.5 w-3.5 shrink-0" />
+              Aggregate
             </TabsTrigger>
-            <TabsTrigger value="compare" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" aria-label="Compare">
-              <GitCompare className="h-4 w-4" />
-              <span className="hidden sm:inline">Compare</span>
+            <TabsTrigger value="compare" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <GitCompare className="h-3.5 w-3.5 shrink-0" />
+              Compare
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" disabled={!analysisResults} aria-label="Analysis">
-              <Network className="h-4 w-4" />
-              <span className="hidden sm:inline">Analysis</span>
+            <TabsTrigger value="analysis" disabled={!analysisResults} className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Network className="h-3.5 w-3.5 shrink-0" />
+              Analysis
+            </TabsTrigger>
+            <TabsTrigger value="intuizi" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Layers className="h-3.5 w-3.5 shrink-0" />
+              Intuizi
+            </TabsTrigger>
+            <TabsTrigger value="apis" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Plug className="h-3.5 w-3.5 shrink-0" />
+              APIs &amp; MCPs
+            </TabsTrigger>
+            <TabsTrigger value="ec2" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Activity className="h-3.5 w-3.5 shrink-0" />
+              EC2 status
             </TabsTrigger>
           </TabsList>
+
 
 
           <TabsContent value="users" className="space-y-4">

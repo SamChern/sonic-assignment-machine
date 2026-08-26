@@ -163,7 +163,7 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
             <Card key={r.id} className="p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{r.source_name}</p>
+                  <p className="break-words text-sm font-medium sm:truncate">{r.source_name}</p>
                   <p className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
                     <span>{relative(r.created_at)}</span>
                     {r.category && <span className="text-primary">{r.category}</span>}

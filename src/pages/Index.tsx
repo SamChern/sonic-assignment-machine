@@ -450,7 +450,7 @@ const Index = () => {
             
             {/* Text content */}
             <div className="flex w-full flex-col items-center md:items-start gap-5 sm:gap-6 max-w-md text-center md:text-left">
-              <p className="text-lg sm:text-2xl text-foreground">
+              <p className="text-[0.9rem] leading-relaxed text-foreground sm:text-[1.2rem]">
                 Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
               </p>
               <Button 

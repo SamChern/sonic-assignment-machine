@@ -600,26 +600,27 @@ const Index = () => {
 
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="mb-6 sm:mb-8 flex w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
-            <TabsTrigger value="select" className="flex shrink-0 items-center gap-2 min-h-11">
-              <FileAudio className="h-4 w-4" />
-              <span className="hidden sm:inline">Select Sources</span>
-              <span className="sm:hidden">Sources</span>
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
+          <TabsList className="mb-6 sm:mb-8 flex w-full max-w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
+            <TabsTrigger value="select" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0">
+              <FileAudio className="h-4 w-4 shrink-0" />
+              <span className="hidden truncate sm:inline">Select Sources</span>
+              <span className="truncate sm:hidden">Sources</span>
             </TabsTrigger>
-            <TabsTrigger value="network" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!results}>
-              <Network className="h-4 w-4" />
-              <span>Network</span>
+            <TabsTrigger value="network" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0" disabled={!results}>
+              <Network className="h-4 w-4 shrink-0" />
+              <span className="truncate">Network</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!results}>
-              <ListTree className="h-4 w-4" />
-              <span>Analysis</span>
+            <TabsTrigger value="analysis" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0" disabled={!results}>
+              <ListTree className="h-4 w-4 shrink-0" />
+              <span className="truncate">Analysis</span>
             </TabsTrigger>
-            <TabsTrigger value="discover" className="flex shrink-0 items-center gap-2 min-h-11" disabled={!user}>
-              <UsersIcon className="h-4 w-4" />
-              <span>Discover</span>
+            <TabsTrigger value="discover" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0" disabled={!user}>
+              <UsersIcon className="h-4 w-4 shrink-0" />
+              <span className="truncate">Discover</span>
             </TabsTrigger>
           </TabsList>
+
 
           {/* Tab 1: Select Audio Sources */}
           <TabsContent value="select" className="space-y-8">

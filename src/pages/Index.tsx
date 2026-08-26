@@ -450,7 +450,7 @@ const Index = () => {
             
             {/* Text content */}
             <div className="flex w-full flex-col items-center md:items-start gap-5 sm:gap-6 max-w-md text-center md:text-left">
-              <p className="text-lg sm:text-2xl text-foreground">
+              <p className="text-[0.9rem] leading-relaxed text-foreground sm:text-[1.2rem]">
                 Use advanced multi-modal AI to create your own sonic fingerprint and compare it with others.
               </p>
               <Button 
@@ -503,16 +503,16 @@ const Index = () => {
 
           {hasEnterprise && activeOrg ? (
             <Tabs defaultValue="analyses" className="mt-5 w-full min-w-0 overflow-visible">
-              <TabsList className="flex h-auto min-h-12 w-full max-w-full items-stretch overflow-x-auto no-scrollbar justify-start rounded-lg p-1 sm:grid sm:grid-cols-3">
-                <TabsTrigger value="analyses" className="h-auto min-h-10 shrink-0 px-3 py-2.5 sm:min-w-0">
+              <TabsList className="grid h-auto min-h-12 w-full max-w-full grid-cols-2 items-stretch gap-1 rounded-lg p-1 sm:grid-cols-3">
+                <TabsTrigger value="analyses" className="h-auto min-h-10 min-w-0 px-2 py-2.5 sm:px-3">
                   <Sparkles className="mr-1 h-4 w-4 shrink-0" />
                   <span className="whitespace-normal leading-tight sm:truncate">Recent analyses</span>
                 </TabsTrigger>
-                <TabsTrigger value="data" className="h-auto min-h-10 shrink-0 px-3 py-2.5 sm:min-w-0">
+                <TabsTrigger value="data" className="h-auto min-h-10 min-w-0 px-2 py-2.5 sm:px-3">
                   <UploadIcon className="mr-1 h-4 w-4 shrink-0" />
                   <span className="whitespace-normal leading-tight sm:truncate">Upload my data</span>
                 </TabsTrigger>
-                <TabsTrigger value="discover" className="h-auto min-h-10 shrink-0 px-3 py-2.5 sm:min-w-0">
+                <TabsTrigger value="discover" className="h-auto min-h-10 min-w-0 px-2 py-2.5 sm:px-3">
                   <Compass className="mr-1 h-4 w-4 shrink-0" />
                   <span className="whitespace-normal leading-tight sm:truncate">Dataset discovery</span>
                 </TabsTrigger>
@@ -603,21 +603,21 @@ const Index = () => {
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
-          <TabsList className="mb-6 sm:mb-8 flex h-auto min-h-12 w-full max-w-full items-stretch overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
-            <TabsTrigger value="select" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0">
+          <TabsList className="mb-6 sm:mb-8 grid h-auto min-h-12 w-full max-w-full grid-cols-2 items-stretch gap-1 sm:grid-cols-4">
+            <TabsTrigger value="select" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3">
               <FileAudio className="h-4 w-4 shrink-0" />
               <span className="hidden truncate sm:inline">Select Sources</span>
               <span className="truncate sm:hidden">Sources</span>
             </TabsTrigger>
-            <TabsTrigger value="network" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0" disabled={!results}>
+            <TabsTrigger value="network" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!results}>
               <Network className="h-4 w-4 shrink-0" />
               <span className="truncate">Network</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0" disabled={!results}>
+            <TabsTrigger value="analysis" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!results}>
               <ListTree className="h-4 w-4 shrink-0" />
               <span className="truncate">Analysis</span>
             </TabsTrigger>
-            <TabsTrigger value="discover" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0" disabled={!user}>
+            <TabsTrigger value="discover" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!user}>
               <UsersIcon className="h-4 w-4 shrink-0" />
               <span className="truncate">Discover</span>
             </TabsTrigger>

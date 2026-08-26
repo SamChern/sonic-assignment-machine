@@ -486,11 +486,11 @@ const Index = () => {
           />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
 
-          <div className="relative">
-          <Badge className="absolute right-0 top-0 rounded-none rounded-bl-lg bg-primary text-primary-foreground">
+          <div className="relative min-w-0">
+          <Badge className="mb-3 inline-flex bg-primary text-primary-foreground sm:absolute sm:right-0 sm:top-0 sm:mb-0">
             Enterprise
           </Badge>
-          <h2 id="enterprise-heading" className="text-xl sm:text-2xl font-semibold text-foreground pr-24">
+          <h2 id="enterprise-heading" className="text-xl sm:text-2xl font-semibold text-foreground sm:pr-28">
             {hasEnterprise && activeOrg ? `${activeOrg.name} enterprise workspace` : "SonicSIM Enterprise workspace"}
           </h2>
           <p className="mt-2 max-w-2xl text-sm sm:text-base text-muted-foreground">
@@ -500,21 +500,22 @@ const Index = () => {
           </p>
 
           {hasEnterprise && activeOrg ? (
-            <Tabs defaultValue="analyses" className="mt-5">
-              <TabsList className="flex w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-3">
-                <TabsTrigger value="analyses" className="min-h-11 shrink-0">
-                  <Sparkles className="mr-1 h-4 w-4" />
-                  Recent analyses
+            <Tabs defaultValue="analyses" className="mt-5 w-full min-w-0">
+              <TabsList className="flex w-full max-w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-3">
+                <TabsTrigger value="analyses" className="min-h-11 shrink-0 sm:min-w-0">
+                  <Sparkles className="mr-1 h-4 w-4 shrink-0" />
+                  <span className="truncate">Recent analyses</span>
                 </TabsTrigger>
-                <TabsTrigger value="data" className="min-h-11 shrink-0">
-                  <UploadIcon className="mr-1 h-4 w-4" />
-                  Upload my data
+                <TabsTrigger value="data" className="min-h-11 shrink-0 sm:min-w-0">
+                  <UploadIcon className="mr-1 h-4 w-4 shrink-0" />
+                  <span className="truncate">Upload my data</span>
                 </TabsTrigger>
-                <TabsTrigger value="discover" className="min-h-11 shrink-0">
-                  <Compass className="mr-1 h-4 w-4" />
-                  Dataset discovery
+                <TabsTrigger value="discover" className="min-h-11 shrink-0 sm:min-w-0">
+                  <Compass className="mr-1 h-4 w-4 shrink-0" />
+                  <span className="truncate">Dataset discovery</span>
                 </TabsTrigger>
               </TabsList>
+
               <Suspense fallback={<div className="mt-4 h-32 animate-pulse rounded-xl bg-muted/40" />}>
                 <TabsContent value="analyses" className="mt-4">
                   <WorkspaceAnalyses organizationId={activeOrg.organization_id} />

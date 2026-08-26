@@ -244,6 +244,7 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
 
 
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="space-y-4">
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -260,6 +261,10 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
             <RefreshCw className={`mr-1 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
+        </div>
+
+        <div className="mt-3">
+          <ScoreLegend />
         </div>
 
         {summary && (
@@ -404,6 +409,7 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
         onOpenChange={(open) => !open && setSelected(null)}
       />
     </div>
+    </TooltipProvider>
   );
 };
 

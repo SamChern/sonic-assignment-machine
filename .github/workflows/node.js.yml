@@ -57,3 +57,60 @@ jobs:
 
       - name: Run tests (if defined)
         run: npm test --if-present
+
+  # Mobile layout visual regression: boots the built app and asserts no
+  # clipped badges, overflowing tabs, or misaligned/overlapped sticky nav
+  # across phone/tablet/desktop viewports. Runs on every PR.
+  mobile-layout:
+    name: mobile layout visual regression
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24.x
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Playwright (Chromium)
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Serve built app on :8080
+        run: |
+          npx vite preview --port 8080 --host 127.0.0.1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:8080/ && exit 0
+            sleep 1
+          done
+          echo "preview server did not start" >&2
+          exit 1
+
+      - name: Mobile layout checks
+        env:
+          SONICSIM_BASE_URL: http://localhost:8080
+        run: |
+          python tests/mobile-layout/check_overlap.py
+          python tests/mobile-layout/check_workspace_overflow.py
+
+      - name: Upload layout screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-layout-screenshots
+          path: tests/mobile-layout/screenshots
+          if-no-files-found: ignore

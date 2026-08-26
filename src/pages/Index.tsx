@@ -604,20 +604,20 @@ const Index = () => {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
           <TabsList className="mb-6 sm:mb-8 grid h-auto min-h-12 w-full max-w-full grid-cols-2 items-stretch gap-1 sm:grid-cols-4">
-            <TabsTrigger value="select" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0">
+            <TabsTrigger value="select" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3">
               <FileAudio className="h-4 w-4 shrink-0" />
               <span className="hidden truncate sm:inline">Select Sources</span>
               <span className="truncate sm:hidden">Sources</span>
             </TabsTrigger>
-            <TabsTrigger value="network" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0" disabled={!results}>
+            <TabsTrigger value="network" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!results}>
               <Network className="h-4 w-4 shrink-0" />
               <span className="truncate">Network</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0" disabled={!results}>
+            <TabsTrigger value="analysis" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!results}>
               <ListTree className="h-4 w-4 shrink-0" />
               <span className="truncate">Analysis</span>
             </TabsTrigger>
-            <TabsTrigger value="discover" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0" disabled={!user}>
+            <TabsTrigger value="discover" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!user}>
               <UsersIcon className="h-4 w-4 shrink-0" />
               <span className="truncate">Discover</span>
             </TabsTrigger>

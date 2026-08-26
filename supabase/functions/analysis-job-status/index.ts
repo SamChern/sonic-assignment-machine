@@ -10,9 +10,13 @@
 // librosa-worker exactly once behind a short single-flight lease. Bounded
 // batch size, attempt caps and the circuit breaker all live in the worker.
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const AUTH_HEADER_ALLOWLIST = "authorization, x-client-info, apikey, content-type, x-request-id";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": AUTH_HEADER_ALLOWLIST,
+};
 
 const ACTIVE = ["pending", "processing"];
 

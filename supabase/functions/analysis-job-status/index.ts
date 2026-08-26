@@ -30,12 +30,12 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) {
-      return json({ success: false, error: "Missing auth" }, 401);
+      return unauthenticated("missing_auth");
     }
 
     const token = authHeader.slice("Bearer ".length).trim();
     if (!token) {
-      return json({ success: false, error: "Missing auth" }, 401);
+      return unauthenticated("missing_auth");
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     // still cryptographically verifying the JWT with the auth service.
     const { data: userData, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !userData.user) {
-      return json({ success: false, error: "Unauthorized" }, 401);
+      return unauthenticated("unauthorized");
     }
     const userId = userData.user.id;
 
@@ -210,5 +210,21 @@ function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function unauthenticated(reason: "missing_auth" | "unauthorized") {
+  // Keep this endpoint safe but non-throwing for the browser. The caller gets
+  // no job data without a valid user token, while the frontend avoids Supabase
+  // SDK EdgeFunctionError 401s that can trip the runtime error overlay.
+  return json({
+    success: true,
+    authenticated: false,
+    auth_status: reason,
+    is_admin: false,
+    worker: null,
+    kicked: false,
+    queue_depth: 0,
+    jobs: [],
   });
 }

@@ -81,19 +81,62 @@ export function applyServiceWorkerUpdate(): void {
   }, 3000);
 }
 
+/**
+ * Compare the build stamp compiled into this bundle with the one currently
+ * deployed. A mismatch means the browser (HTTP cache, CDN edge, or an installed
+ * PWA shell) is running an older release, so we purge caches and hard-reload
+ * once. Works with or without a service worker.
+ */
+let recovering = false;
+async function recoverIfStale(): Promise<void> {
+  if (recovering || !import.meta.env.PROD) return;
+  try {
+    const res = await fetch(`/build-info.json?t=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) return;
+    const { buildId } = (await res.json()) as { buildId?: string };
+    if (!buildId || buildId === __APP_BUILD_ID__) return;
+
+    recovering = true;
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.allSettled(keys.map((k) => caches.delete(k)));
+    }
+    await unregisterAppWorkers();
+    window.location.reload();
+  } catch {
+    // Offline or blocked — keep serving what we have.
+  }
+}
+
+function watchForStaleBuild(): void {
+  void recoverIfStale();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void recoverIfStale();
+  });
+  window.setInterval(() => void recoverIfStale(), 5 * 60 * 1000);
+}
+
 export function registerServiceWorker(): void {
-  if (!("serviceWorker" in navigator)) return;
+  if (!("serviceWorker" in navigator)) {
+    watchForStaleBuild();
+    return;
+  }
 
   if (!shouldRegister()) {
     void unregisterAppWorkers();
     return;
   }
 
+  watchForStaleBuild();
+
   window.addEventListener("load", () => {
     void navigator.serviceWorker
-      .register(SW_URL, { scope: "/" })
+      // updateViaCache: "none" keeps the browser from serving /sw.js from its
+      // HTTP cache, which is the usual reason a deploy never reaches a client.
+      .register(SW_URL, { scope: "/", updateViaCache: "none" })
       .then((registration) => {
         navigator.serviceWorker.addEventListener("controllerchange", reloadOnNewController);
+        void registration.update();
 
         if (registration.waiting && navigator.serviceWorker.controller) {
           waitingWorker = registration.waiting;
@@ -113,7 +156,7 @@ export function registerServiceWorker(): void {
         });
 
         // Periodic check so long-lived tabs still learn about new deploys.
-        window.setInterval(() => void registration.update(), 60 * 60 * 1000);
+        window.setInterval(() => void registration.update(), 15 * 60 * 1000);
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState === "visible") void registration.update();
         });

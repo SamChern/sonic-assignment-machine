@@ -1,11 +1,18 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Unique per production build. Emitted to /build-info.json and compiled into the
+// bundle so a running client can detect that it is serving a stale deploy.
+const BUILD_ID = Date.now().toString(36);
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: {
+    __APP_BUILD_ID__: JSON.stringify(BUILD_ID),
+  },
   server: {
     host: "::",
     port: 8080,
@@ -13,6 +20,17 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
+    {
+      name: "sonicsim-build-info",
+      apply: "build",
+      generateBundle() {
+        this.emitFile({
+          type: "asset",
+          fileName: "build-info.json",
+          source: JSON.stringify({ buildId: BUILD_ID, builtAt: new Date().toISOString() }),
+        });
+      },
+    } satisfies Plugin,
     VitePWA({
       strategies: "generateSW",
       registerType: "autoUpdate",
@@ -23,6 +41,8 @@ export default defineConfig(({ mode }) => ({
       devOptions: { enabled: false },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // The build stamp must never be cached — it is the freshness oracle.
+        globIgnores: ["**/build-info.json"],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         // Activate the latest app shell immediately so installed clients pick up
@@ -37,6 +57,11 @@ export default defineConfig(({ mode }) => ({
           /^\/api\//,
         ],
         runtimeCaching: [
+          {
+            // Freshness oracle: always straight to the network.
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname === "/build-info.json",
+            handler: "NetworkOnly",
+          },
           {
             // HTML navigations: always try the network first so deploys land fast.
             urlPattern: ({ request }) => request.mode === "navigate",

@@ -282,7 +282,7 @@ const CategoryProfileEditor = ({
     toast({ title: `Version ${v.version} activated` });
     await reload();
     onSaved?.();
-  }, [selectedId, versions, organizationId, reload, onSaved]);
+  }, [canEdit, selectedId, versions, organizationId, reload, onSaved]);
 
   if (loading) return <Skeleton className="h-64 w-full" />;
 

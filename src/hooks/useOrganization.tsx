@@ -64,6 +64,9 @@ export function useOrganization() {
     setActiveId,
     role: active?.role ?? null,
     canWrite: active ? ["owner", "analyst"].includes(active.role) : false,
+    // Only org owners (enterprise admins) may edit the 6 semantic categories.
+    isOrgAdmin: active ? active.role === "owner" : false,
+
     loading: authLoading || loading,
     reload: load,
   };

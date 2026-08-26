@@ -30,6 +30,13 @@ export interface WorkerState {
 const ACTIVE_POLL_MS = 5000;
 const IDLE_POLL_MS = 60000;
 
+function makeRequestId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 /**
  * Background audio job status.
  *
@@ -67,10 +74,11 @@ export function useAudioJobs(options?: { allUsers?: boolean; limit?: number }) {
           return;
         }
 
+        const requestId = makeRequestId();
         const invokeStatus = (accessToken: string) =>
           supabase.functions.invoke("analysis-job-status", {
             body: { all_users: allUsers, limit, kick },
-            headers: { Authorization: `Bearer ${accessToken}` },
+            headers: { Authorization: `Bearer ${accessToken}`, "x-request-id": requestId },
           });
 
         let { data, error: fnError } = await invokeStatus(token);
@@ -88,8 +96,8 @@ export function useAudioJobs(options?: { allUsers?: boolean; limit?: number }) {
             ({ data, error: fnError } = await invokeStatus(refreshedToken));
           }
         }
-        if (fnError) throw new Error(fnError.message);
-        if (data?.error) throw new Error(data.error);
+        if (fnError) throw new Error(`${fnError.message} (request ${requestId})`);
+        if (data?.error) throw new Error(`${data.error} (request ${data.request_id ?? requestId})`);
         setJobs((data?.jobs ?? []) as AudioJob[]);
         setWorker((data?.worker ?? null) as WorkerState | null);
         setQueueDepth(Number(data?.queue_depth ?? 0));

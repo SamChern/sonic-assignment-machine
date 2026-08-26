@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-ro
 import { AuthProvider } from "@/hooks/useAuth";
 import { Suspense, lazy, useEffect } from "react";
 
-import PwaUpdateBanner from "@/components/PwaUpdateBanner";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import Index from "./pages/Index";
 
@@ -83,7 +82,6 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <PwaUpdateBanner />
         <BrowserRouter>
           <FreshSessionAdminHome />
           <div className="pb-mobile-nav">

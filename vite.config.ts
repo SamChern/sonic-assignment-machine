@@ -58,6 +58,11 @@ export default defineConfig(({ mode }) => ({
         ],
         runtimeCaching: [
           {
+            // Freshness oracle: always straight to the network.
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname === "/build-info.json",
+            handler: "NetworkOnly",
+          },
+          {
             // HTML navigations: always try the network first so deploys land fast.
             urlPattern: ({ request }) => request.mode === "navigate",
             handler: "NetworkFirst",

@@ -41,6 +41,8 @@ export default defineConfig(({ mode }) => ({
       devOptions: { enabled: false },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // The build stamp must never be cached — it is the freshness oracle.
+        globIgnores: ["**/build-info.json"],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         // Activate the latest app shell immediately so installed clients pick up

@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 import { z } from 'zod';
 import heroBackground from '@/assets/hero-background.jpg';
+import sonicSimLogo from '@/assets/SonicSIM_transp.png';
 import { WaveformBackground } from '@/components/WaveformBackground';
 
 const emailSchema = z.string().email('Invalid email address');
@@ -149,10 +150,13 @@ export default function Auth() {
       
       <Card className="relative w-full max-w-md shadow-elegant bg-card/95 backdrop-blur-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">
-            <span className="text-primary">[S]</span>onic{" "}
-            <span className="text-primary">[A]</span>ssignment{" "}
-            <span className="text-primary">[M]</span>achine
+          <CardTitle className="flex justify-center">
+            <img
+              src={sonicSimLogo}
+              alt="SonicSIM.ai"
+              className="h-10 w-auto sm:h-12"
+              loading="eager"
+            />
           </CardTitle>
           <CardDescription>Sign in to save and browse audio collections</CardDescription>
         </CardHeader>

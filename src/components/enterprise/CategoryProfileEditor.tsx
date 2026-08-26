@@ -256,10 +256,12 @@ const CategoryProfileEditor = ({
       await reload();
       onSaved?.();
     },
-    [name, notes, draft, enabledCount, nextVersion, organizationId, reload, onSaved],
+    [canEdit, name, notes, draft, enabledCount, nextVersion, organizationId, reload, onSaved],
   );
 
   const activateSelected = useCallback(async () => {
+    if (!canEdit) return;
+
     const v = versions.find((x) => x.id === selectedId);
     if (!v) return;
     setSaving(true);

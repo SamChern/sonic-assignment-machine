@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2, Clock, Loader2, PauseCircle, RefreshCw, Waves } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Loader2, PauseCircle, RefreshCw, Waves } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,6 +10,8 @@ interface AudioJobsPanelProps {
   /** Admins can watch the whole queue instead of just their own jobs. */
   allUsers?: boolean;
   className?: string;
+  /** Start expanded (defaults to collapsed so the queue stays out of the way). */
+  defaultOpen?: boolean;
 }
 
 function statusMeta(job: AudioJob) {
@@ -40,7 +43,12 @@ function statusMeta(job: AudioJob) {
   }
 }
 
-export const AudioJobsPanel = ({ allUsers = false, className = "" }: AudioJobsPanelProps) => {
+export const AudioJobsPanel = ({
+  allUsers = false,
+  className = "",
+  defaultOpen = false,
+}: AudioJobsPanelProps) => {
+  const [open, setOpen] = useState(defaultOpen);
   const { jobs, worker, activeCount, queueDepth, loading, error, refresh } = useAudioJobs({
     allUsers,
     limit: allUsers ? 50 : 15,
@@ -49,9 +57,15 @@ export const AudioJobsPanel = ({ allUsers = false, className = "" }: AudioJobsPa
   if (!error && jobs.length === 0 && !worker?.paused) return null;
 
   return (
-    <Card className={`border-border/60 bg-card/70 backdrop-blur-md p-5 space-y-4 ${className}`}>
+    <Card className={`border-border/60 bg-card/70 backdrop-blur-md p-4 sm:p-5 space-y-4 ${className}`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-controls="audio-jobs-details"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+        >
           <div className="rounded-lg p-2 gradient-teal">
             <Waves className="h-4 w-4 text-background" />
           </div>
@@ -65,7 +79,12 @@ export const AudioJobsPanel = ({ allUsers = false, className = "" }: AudioJobsPa
                 : "No jobs in flight — you can leave this page and check back later."}
             </p>
           </div>
-        </div>
+          <ChevronDown
+            className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          />
+        </button>
+        {open && (
         <Button
           size="sm"
           variant="outline"
@@ -76,8 +95,11 @@ export const AudioJobsPanel = ({ allUsers = false, className = "" }: AudioJobsPa
           <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
+        )}
       </div>
 
+      {open && (
+      <div id="audio-jobs-details" className="space-y-4">
       {worker?.paused && (
         <div className="flex items-start gap-2 rounded-md border border-amber-400/40 bg-amber-400/10 p-3 text-xs text-amber-200">
           <PauseCircle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -125,6 +147,8 @@ export const AudioJobsPanel = ({ allUsers = false, className = "" }: AudioJobsPa
           );
         })}
       </div>
+      </div>
+      )}
     </Card>
   );
 };

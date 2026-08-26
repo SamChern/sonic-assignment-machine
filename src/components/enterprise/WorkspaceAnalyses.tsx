@@ -14,9 +14,28 @@ import {
 } from "@/components/ui/select";
 import SavedAnalysisDrawer, { type DrawerAnalysis } from "@/components/SavedAnalysisDrawer";
 import { CATEGORY_KEYS } from "@/lib/enterpriseSchema";
-import { Loader2, Maximize2, RefreshCw, Search, Sparkles } from "lucide-react";
+import { WaveformBackground } from "@/components/WaveformBackground";
+import {
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Maximize2,
+  RefreshCw,
+  Search,
+  Sparkles,
+} from "lucide-react";
 
 const PAGE = 25;
+
+/** Short labels + gradients mirroring the admin analysis results bar chart. */
+const CATEGORY_META: Array<{ key: (typeof CATEGORY_KEYS)[number]; short: string; gradient: string }> = [
+  { key: "emotional", short: "Emo", gradient: "var(--gradient-emotional)" },
+  { key: "cognitive", short: "Cog", gradient: "var(--gradient-cognitive)" },
+  { key: "social", short: "Soc", gradient: "var(--gradient-social)" },
+  { key: "communication", short: "Com", gradient: "var(--gradient-communication)" },
+  { key: "contextual", short: "Ctx", gradient: "var(--gradient-contextual)" },
+  { key: "artistic", short: "Art", gradient: "var(--gradient-artistic)" },
+];
 
 type SortKey = "newest" | "oldest" | "confidence_desc" | "source_asc";
 
@@ -32,6 +51,32 @@ const relative = (iso: string) => {
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.round(hrs / 24)}d ago`;
 };
+
+/** Labelled score bars: "Emo ▓▓▓ 40" in a responsive 1/2/3 column grid. */
+const ScoreBars = ({ row }: { row: Row }) => (
+  <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+    {CATEGORY_META.map(({ key, short, gradient }) => {
+      const score = Math.round(Number((row as unknown as Record<string, number>)[`${key}_score`] ?? 0));
+      return (
+        <div key={key} className="flex items-center gap-2">
+          <span className="w-8 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+            {short}
+          </span>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${Math.max(2, Math.min(100, score))}%`, background: gradient }}
+            />
+          </div>
+          <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+            {score}
+          </span>
+        </div>
+      );
+    })}
+  </div>
+);
+
 
 /** Org-scoped mirror of the admin analysis results list. */
 const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {

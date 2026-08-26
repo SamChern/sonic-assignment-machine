@@ -10,12 +10,15 @@ function isAppCacheForThisRegistration(name) {
 }
 
 async function purgeAndReloadClients() {
+  // matchAll before claim() returns only clients that an older worker of this
+  // registration already controlled — freshly loaded pages are skipped, so this
+  // can never turn into a reload loop.
+  const staleClients = await self.clients.matchAll({ type: "window" });
   const cacheNames = await caches.keys();
   const appCacheNames = cacheNames.filter(isAppCacheForThisRegistration);
   await Promise.allSettled(appCacheNames.map((name) => caches.delete(name)));
   await self.clients.claim();
-  const windowClients = await self.clients.matchAll({ type: "window" });
-  await Promise.allSettled(windowClients.map((client) => client.navigate(client.url)));
+  await Promise.allSettled(staleClients.map((client) => client.navigate(client.url)));
 }
 
 self.addEventListener("install", () => self.skipWaiting());

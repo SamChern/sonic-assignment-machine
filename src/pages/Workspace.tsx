@@ -187,9 +187,10 @@ const Workspace = () => {
         <TabsContent value="categories" className="mt-4">
           <CategoryProfileEditor
             organizationId={active.organization_id}
-            canWrite={canWrite}
+            canEdit={isOrgAdmin}
             onSaved={() => setRefreshKey((k) => k + 1)}
           />
+
         </TabsContent>
         <TabsContent value="users" className="mt-4">
           <PredictUsersPanel

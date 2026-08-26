@@ -554,109 +554,102 @@ const AdminDashboard = () => {
   if (!isAdmin) return null;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border bg-card/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="shrink-0 min-h-11">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-            <h1 className="text-lg sm:text-2xl font-bold text-foreground truncate">Admin Dashboard</h1>
-            <Badge variant="secondary" className="bg-primary/20 text-primary shrink-0">
-              Admin
+    <div className="relative min-h-screen gradient-app">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-72 opacity-40 blur-3xl"
+        style={{ background: "var(--gradient-brand)" }}
+      />
+      {/* Header — mirrors the enterprise workspace shell */}
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 shadow-elegant backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-elegant"
+              style={{ background: "var(--gradient-teal)" }}
+            >
+              <Radio className="h-4 w-4 text-primary-foreground" />
+            </span>
+            <h1
+              className="min-w-0 break-words bg-clip-text text-base font-semibold text-transparent sm:truncate sm:text-lg"
+              style={{ backgroundImage: "var(--gradient-teal)" }}
+            >
+              Admin workspace
+            </h1>
+            <Badge variant="outline" className="shrink-0 text-[11px]">
+              admin
             </Badge>
           </div>
-          
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1 lg:overflow-visible lg:pb-0">
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 shrink-0 min-h-11 whitespace-nowrap border-green-500/50 text-green-500 hover:bg-green-500/10"
-              onClick={handleHealthCheck}
-              disabled={ec2Loading}
-              aria-label="EC2 health check"
-            >
-              <Activity className={`h-4 w-4 ${ec2Loading ? "animate-pulse" : ""}`} />
-              <span className="hidden sm:inline">{ec2Loading ? "Checking..." : "EC2 Health"}</span>
-            </Button>
-
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             {selectedSourceIds.length > 0 && (
               <Button
                 onClick={handleAnalyzeSelected}
                 disabled={isAnalyzing}
-                className="gradient-primary shrink-0 min-h-11 whitespace-nowrap"
+                size="sm"
+                className="gradient-primary shrink-0 whitespace-nowrap"
               >
-                <Sparkles className="h-4 w-4 mr-2" />
+                <Sparkles className="mr-1 h-4 w-4" />
                 {isAnalyzing ? "Analyzing..." : `Analyze ${selectedSourceIds.length}`}
               </Button>
             )}
             <Button
               variant="outline"
               size="sm"
-              className="shrink-0 min-h-11 whitespace-nowrap"
-              onClick={() => navigate("/admin/pipeline")}
-            >
-              <Activity className="h-4 w-4 mr-2" />
-              Intuizi Console
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 min-h-11 whitespace-nowrap"
+              className="shrink-0 whitespace-nowrap"
               onClick={() => navigate("/admin/semantic")}
             >
-              <Radio className="h-4 w-4 mr-2" />
-              SonicSIM Analysis Results
+              <Radio className="mr-1 h-4 w-4" />
+              <span className="hidden sm:inline">Analysis results</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Home
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="shrink-0 min-h-11 whitespace-nowrap"
-              onClick={() => navigate("/admin/integrations")}
+              onClick={handleHealthCheck}
+              disabled={ec2Loading}
+              aria-label="EC2 health check"
             >
-              <Plug className="h-4 w-4 mr-2" />
-              APIs &amp; MCPs
+              <Activity className={`mr-1 h-4 w-4 ${ec2Loading ? "animate-pulse" : ""}`} />
+              {ec2Loading ? "Checking..." : "EC2"}
             </Button>
-
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Stats Overview */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main className="relative mx-auto max-w-7xl px-4 py-6 pb-mobile-nav sm:px-6">
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card className="p-4 bg-card/80">
-            <div className="flex items-center gap-3">
-              <Users className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-2xl font-bold text-foreground">{users.length}</p>
-                <p className="text-sm text-muted-foreground">Total Users</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4 bg-card/80">
-            <div className="flex items-center gap-3">
-              <Music className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-2xl font-bold text-foreground">{allSources.length}</p>
-                <p className="text-sm text-muted-foreground">Total Audio Sources</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4 bg-card/80">
-            <div className="flex items-center gap-3">
-              <Network className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-2xl font-bold text-foreground">{selectedSourceIds.length}</p>
-                <p className="text-sm text-muted-foreground">Selected for Analysis</p>
-              </div>
-            </div>
-          </Card>
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {([
+            ["Users", String(users.length), "var(--gradient-cognitive)"],
+            ["Audio sources", String(allSources.length), "var(--gradient-contextual)"],
+            ["Selected", String(selectedSourceIds.length), "var(--gradient-social)"],
+            ["Fingerprints", String(allFingerprints.length), "var(--gradient-artistic)"],
+          ] as const).map(([label, value, gradient]) => (
+            <Card
+              key={label}
+              className="relative overflow-hidden border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth hover:shadow-elegant"
+            >
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-1"
+                style={{ background: gradient }}
+              />
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p
+                className="truncate bg-clip-text text-2xl font-semibold text-transparent sm:text-3xl"
+                style={{ backgroundImage: gradient }}
+              >
+                {value}
+              </p>
+            </Card>
+          ))}
         </div>
+
 
         {/* Global meta filter: entity mode + filter picker (applies to all tabs) */}
         <Card className="p-4 mb-6 bg-card/80">

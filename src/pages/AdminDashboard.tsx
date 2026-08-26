@@ -45,6 +45,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
+import { IntuiziConsolePanel } from "@/components/admin/IntuiziConsolePanel";
+import { AdminConnectedApisTab } from "@/components/admin/AdminConnectedApisTab";
+import { LibrosaHealthPanel } from "@/components/LibrosaHealthPanel";
+
 
 import { AnalysisResults } from "@/components/AnalysisResults";
 import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";
@@ -554,109 +558,102 @@ const AdminDashboard = () => {
   if (!isAdmin) return null;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border bg-card/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="shrink-0 min-h-11">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-            <h1 className="text-lg sm:text-2xl font-bold text-foreground truncate">Admin Dashboard</h1>
-            <Badge variant="secondary" className="bg-primary/20 text-primary shrink-0">
-              Admin
+    <div className="relative min-h-screen gradient-app">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-72 opacity-40 blur-3xl"
+        style={{ background: "var(--gradient-brand)" }}
+      />
+      {/* Header — mirrors the enterprise workspace shell */}
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 shadow-elegant backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-elegant"
+              style={{ background: "var(--gradient-teal)" }}
+            >
+              <Radio className="h-4 w-4 text-primary-foreground" />
+            </span>
+            <h1
+              className="min-w-0 break-words bg-clip-text text-base font-semibold text-transparent sm:truncate sm:text-lg"
+              style={{ backgroundImage: "var(--gradient-teal)" }}
+            >
+              Admin workspace
+            </h1>
+            <Badge variant="outline" className="shrink-0 text-[11px]">
+              admin
             </Badge>
           </div>
-          
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1 lg:overflow-visible lg:pb-0">
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 shrink-0 min-h-11 whitespace-nowrap border-green-500/50 text-green-500 hover:bg-green-500/10"
-              onClick={handleHealthCheck}
-              disabled={ec2Loading}
-              aria-label="EC2 health check"
-            >
-              <Activity className={`h-4 w-4 ${ec2Loading ? "animate-pulse" : ""}`} />
-              <span className="hidden sm:inline">{ec2Loading ? "Checking..." : "EC2 Health"}</span>
-            </Button>
-
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             {selectedSourceIds.length > 0 && (
               <Button
                 onClick={handleAnalyzeSelected}
                 disabled={isAnalyzing}
-                className="gradient-primary shrink-0 min-h-11 whitespace-nowrap"
+                size="sm"
+                className="gradient-primary shrink-0 whitespace-nowrap"
               >
-                <Sparkles className="h-4 w-4 mr-2" />
+                <Sparkles className="mr-1 h-4 w-4" />
                 {isAnalyzing ? "Analyzing..." : `Analyze ${selectedSourceIds.length}`}
               </Button>
             )}
             <Button
               variant="outline"
               size="sm"
-              className="shrink-0 min-h-11 whitespace-nowrap"
-              onClick={() => navigate("/admin/pipeline")}
-            >
-              <Activity className="h-4 w-4 mr-2" />
-              Intuizi Console
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 min-h-11 whitespace-nowrap"
+              className="shrink-0 whitespace-nowrap"
               onClick={() => navigate("/admin/semantic")}
             >
-              <Radio className="h-4 w-4 mr-2" />
-              SonicSIM Analysis Results
+              <Radio className="mr-1 h-4 w-4" />
+              <span className="hidden sm:inline">Analysis results</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Home
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="shrink-0 min-h-11 whitespace-nowrap"
-              onClick={() => navigate("/admin/integrations")}
+              onClick={handleHealthCheck}
+              disabled={ec2Loading}
+              aria-label="EC2 health check"
             >
-              <Plug className="h-4 w-4 mr-2" />
-              APIs &amp; MCPs
+              <Activity className={`mr-1 h-4 w-4 ${ec2Loading ? "animate-pulse" : ""}`} />
+              {ec2Loading ? "Checking..." : "EC2"}
             </Button>
-
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Stats Overview */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main className="relative mx-auto max-w-7xl px-4 py-6 pb-mobile-nav sm:px-6">
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card className="p-4 bg-card/80">
-            <div className="flex items-center gap-3">
-              <Users className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-2xl font-bold text-foreground">{users.length}</p>
-                <p className="text-sm text-muted-foreground">Total Users</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4 bg-card/80">
-            <div className="flex items-center gap-3">
-              <Music className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-2xl font-bold text-foreground">{allSources.length}</p>
-                <p className="text-sm text-muted-foreground">Total Audio Sources</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4 bg-card/80">
-            <div className="flex items-center gap-3">
-              <Network className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-2xl font-bold text-foreground">{selectedSourceIds.length}</p>
-                <p className="text-sm text-muted-foreground">Selected for Analysis</p>
-              </div>
-            </div>
-          </Card>
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {([
+            ["Users", String(users.length), "var(--gradient-cognitive)"],
+            ["Audio sources", String(allSources.length), "var(--gradient-contextual)"],
+            ["Selected", String(selectedSourceIds.length), "var(--gradient-social)"],
+            ["Fingerprints", String(allFingerprints.length), "var(--gradient-artistic)"],
+          ] as const).map(([label, value, gradient]) => (
+            <Card
+              key={label}
+              className="relative overflow-hidden border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth hover:shadow-elegant"
+            >
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-1"
+                style={{ background: gradient }}
+              />
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p
+                className="truncate bg-clip-text text-2xl font-semibold text-transparent sm:text-3xl"
+                style={{ backgroundImage: gradient }}
+              >
+                {value}
+              </p>
+            </Card>
+          ))}
         </div>
+
 
         {/* Global meta filter: entity mode + filter picker (applies to all tabs) */}
         <Card className="p-4 mb-6 bg-card/80">
@@ -856,28 +853,41 @@ const AdminDashboard = () => {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6 flex w-full justify-start overflow-x-auto no-scrollbar">
-            <TabsTrigger value="users" className="gap-2 shrink-0 min-h-11 whitespace-nowrap">
-              <Users className="h-4 w-4" />
+          <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 border border-border/60 bg-card/70 p-1 backdrop-blur-sm sm:flex sm:flex-wrap sm:justify-start">
+            <TabsTrigger value="users" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Users className="h-3.5 w-3.5 shrink-0" />
               {entityMode === "user"
                 ? "Users & Sources"
                 : entityMode === "provider"
                   ? "Providers & Signals"
                   : "Cohorts & Identifiers"}
             </TabsTrigger>
-            <TabsTrigger value="fingerprints" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" aria-label="Aggregate">
-              <Fingerprint className="h-4 w-4" />
-              <span className="hidden sm:inline">Aggregate</span>
+            <TabsTrigger value="fingerprints" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Fingerprint className="h-3.5 w-3.5 shrink-0" />
+              Aggregate
             </TabsTrigger>
-            <TabsTrigger value="compare" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" aria-label="Compare">
-              <GitCompare className="h-4 w-4" />
-              <span className="hidden sm:inline">Compare</span>
+            <TabsTrigger value="compare" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <GitCompare className="h-3.5 w-3.5 shrink-0" />
+              Compare
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="gap-2 shrink-0 min-h-11 whitespace-nowrap" disabled={!analysisResults} aria-label="Analysis">
-              <Network className="h-4 w-4" />
-              <span className="hidden sm:inline">Analysis</span>
+            <TabsTrigger value="analysis" disabled={!analysisResults} className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Network className="h-3.5 w-3.5 shrink-0" />
+              Analysis
+            </TabsTrigger>
+            <TabsTrigger value="intuizi" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Layers className="h-3.5 w-3.5 shrink-0" />
+              Intuizi
+            </TabsTrigger>
+            <TabsTrigger value="apis" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Plug className="h-3.5 w-3.5 shrink-0" />
+              APIs &amp; MCPs
+            </TabsTrigger>
+            <TabsTrigger value="ec2" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Activity className="h-3.5 w-3.5 shrink-0" />
+              EC2 status
             </TabsTrigger>
           </TabsList>
+
 
 
           <TabsContent value="users" className="space-y-4">
@@ -1267,9 +1277,47 @@ const AdminDashboard = () => {
               </Card>
             )}
           </TabsContent>
+
+          <TabsContent value="intuizi" className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => navigate("/admin/pipeline")}>
+                <Activity className="mr-1 h-4 w-4" /> Intuizi Console page
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate("/admin/compatibility")}>
+                <ShieldCheck className="mr-1 h-4 w-4" /> Ingestion compatibility
+              </Button>
+            </div>
+            <IntuiziConsolePanel />
+          </TabsContent>
+
+          <TabsContent value="apis" className="space-y-4">
+            <AdminConnectedApisTab />
+          </TabsContent>
+
+          <TabsContent value="ec2" className="space-y-4">
+            <Card className="flex flex-wrap items-center gap-3 border-border/60 bg-card/70 p-4 backdrop-blur-sm">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">EC2 analysis API</p>
+                <p className="text-xs text-muted-foreground">
+                  Run a live health check against the librosa / embedding service.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="ml-auto"
+                onClick={handleHealthCheck}
+                disabled={ec2Loading}
+              >
+                <Activity className={`mr-1 h-4 w-4 ${ec2Loading ? "animate-pulse" : ""}`} />
+                {ec2Loading ? "Checking..." : "Check health"}
+              </Button>
+            </Card>
+            <LibrosaHealthPanel />
+          </TabsContent>
         </Tabs>
-      </div>
+      </main>
     </div>
+
   );
 };
 

@@ -57,8 +57,11 @@ export const useUiPreference = (key: string, fallback = false) => {
           .select("ui_prefs")
           .eq("user_id", uid)
           .maybeSingle();
-        const prefs = { ...((data?.ui_prefs ?? {}) as Record<string, unknown>), [key]: next };
-        await supabase.from("profiles").update({ ui_prefs: prefs }).eq("user_id", uid);
+        const prefs = { ...((data?.ui_prefs ?? {}) as Record<string, boolean>), [key]: next };
+        await supabase
+          .from("profiles")
+          .update({ ui_prefs: prefs as Record<string, boolean> })
+          .eq("user_id", uid);
       })();
     },
     [key, storageKey],

@@ -36,8 +36,9 @@ import { UploadProgressPanel } from "@/components/UploadProgressPanel";
 
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
-  const { orgs: enterpriseOrgs } = useOrganization();
+  const { orgs: enterpriseOrgs, active: activeOrg, canWrite: orgCanWrite } = useOrganization();
   const hasEnterprise = enterpriseOrgs.length > 0;
+
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
   
   const { myFingerprint, allFingerprints } = useFingerprints();

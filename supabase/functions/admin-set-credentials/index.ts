@@ -72,13 +72,36 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => null);
     const integrationId: string | undefined = body?.integration_id;
+    const action: string = typeof body?.action === "string" ? body.action : "upsert";
     const credentials: Record<string, string> | undefined = body?.credentials;
 
-    if (!integrationId || typeof credentials !== "object") {
-      return json({ error: "Invalid body" }, 400);
-    }
+    if (!integrationId) return json({ error: "Invalid body" }, 400);
     const allowed = ALLOWED_FIELDS[integrationId];
     if (!allowed) return json({ error: "Unknown integration" }, 400);
+
+    // ---- Delete: remove specific fields, or every field for the integration ----
+    if (action === "delete") {
+      const requested: unknown = body?.field_keys;
+      const keys = Array.isArray(requested)
+        ? requested.filter((k): k is string => typeof k === "string")
+        : [];
+      for (const k of keys) {
+        if (!allowed.includes(k)) return json({ error: `Field '${k}' not allowed` }, 400);
+      }
+      let q = admin
+        .from("integration_credentials")
+        .delete()
+        .eq("integration_id", integrationId);
+      if (keys.length > 0) q = q.in("field_key", keys);
+      const { error: delErr } = await q;
+      if (delErr) return json({ error: delErr.message }, 500);
+      return json({ success: true, deleted: keys.length > 0 ? keys.length : "all" });
+    }
+
+    if (typeof credentials !== "object" || credentials === null) {
+      return json({ error: "Invalid body" }, 400);
+    }
+
 
     const rows: Array<Record<string, unknown>> = [];
     for (const [key, value] of Object.entries(credentials)) {

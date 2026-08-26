@@ -469,7 +469,7 @@ const Index = () => {
 
       {/* Enterprise Workspace Section */}
       <section aria-labelledby="enterprise-heading" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-6 pt-8 sm:scroll-mt-28 sm:px-6 sm:pb-8 sm:pt-12">
-        <div className="relative min-h-[28rem] overflow-visible rounded-2xl border border-primary/30 bg-primary/5 p-5 pb-7 sm:min-h-[30rem] sm:p-8 sm:pb-10">
+        <div className="relative min-h-0 overflow-visible rounded-2xl border border-primary/30 bg-primary/5 p-4 pb-5 sm:min-h-[28rem] sm:p-8 sm:pb-10">
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
           {/* Subtle cluster/network texture merged into the frame (static, not animated) */}
           <div
@@ -525,7 +525,7 @@ const Index = () => {
                 <TabsContent value="data" className="mt-4 min-h-40 overflow-visible pb-2 scroll-mt-24 sm:min-h-48 sm:pb-3 sm:scroll-mt-28">
                   <WorkspaceUpload organizationId={activeOrg.organization_id} canWrite={orgCanWrite} />
                 </TabsContent>
-                <TabsContent value="discover" className="mt-4 min-h-40 overflow-visible pb-3 scroll-mt-24 sm:min-h-48 sm:pb-4 sm:scroll-mt-28">
+                <TabsContent value="discover" className="mt-4 min-h-28 overflow-visible pb-3 scroll-mt-24 sm:min-h-48 sm:pb-4 sm:scroll-mt-28">
                   <DatasetDiscovery organizationId={activeOrg.organization_id} />
                 </TabsContent>
               </Suspense>
@@ -546,7 +546,7 @@ const Index = () => {
               ))}
             </div>
           )}
-          <div className="mt-5 flex flex-wrap items-center gap-3 min-w-0">
+          <div className="mt-4 flex flex-wrap items-center gap-3 min-w-0 sm:mt-5">
             <Button asChild size="lg" className="min-h-12 w-full sm:w-auto">
               <Link to="/workspace">
                 <Building2 className="mr-2 h-5 w-5 shrink-0" />

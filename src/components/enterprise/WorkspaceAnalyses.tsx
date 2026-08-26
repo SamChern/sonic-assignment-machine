@@ -175,7 +175,7 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
             />
           </div>
           <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-            <SelectTrigger className="w-[190px]">
+            <SelectTrigger className="w-full sm:w-[190px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -186,6 +186,28 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Latest saved analysis, with the labelled category bar chart. */}
+        {latest && (
+          <div className="mt-4 border-t border-border/60 pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="min-w-0 break-words text-sm font-medium">{latest.source_name}</p>
+              {latest.category && (
+                <Badge variant="secondary" className="text-[11px]">{latest.category}</Badge>
+              )}
+              <span className="text-[11px] text-muted-foreground">
+                confidence {(Number(latest.confidence ?? 0) * 100).toFixed(0)}% · {relative(latest.created_at)}
+              </span>
+            </div>
+            <div className="mt-2">
+              <ScoreBars row={latest} />
+            </div>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => setSelected(latest)}>
+              <Maximize2 className="mr-1 h-3.5 w-3.5" />
+              View full details
+            </Button>
+          </div>
+        )}
       </Card>
 
       {loading ? (
@@ -204,50 +226,68 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
         </Card>
       ) : (
         <div className="space-y-2">
-          {rows.map((r) => (
-            <Card key={r.id} className="p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="break-words text-sm font-medium sm:truncate">{r.source_name}</p>
-                  <p className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
-                    <span>{relative(r.created_at)}</span>
-                    {r.category && <span className="text-primary">{r.category}</span>}
-                    <span>confidence {(Number(r.confidence ?? 0) * 100).toFixed(0)}%</span>
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => setSelected(r)}>
-                  <Maximize2 className="mr-1 h-3.5 w-3.5" />
-                  Details
-                </Button>
-              </div>
-              <div className="mt-2 grid grid-cols-6 gap-1">
-                {CATEGORY_KEYS.map((c) => (
-                  <div key={c} className="h-1.5 overflow-hidden rounded bg-muted">
-                    <div
-                      className="h-full bg-primary"
-                      style={{
-                        width: `${Number((r as unknown as Record<string, number>)[`${c}_score`] ?? 0)}%`,
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </Card>
-          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+          >
+            {expanded ? (
+              <ChevronDown className="mr-1 h-4 w-4" />
+            ) : (
+              <ChevronRight className="mr-1 h-4 w-4" />
+            )}
+            {expanded ? "Hide" : "Show"} all sources &amp; analyses ({count})
+          </Button>
 
-          {rows.length < count && (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => void load(rows.length)}
-              disabled={more}
-            >
-              {more && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              Load more
-            </Button>
+          {expanded && (
+            <div className="relative isolate overflow-hidden rounded-lg">
+              {/* Very transparent waveform texture behind the source rows. */}
+              <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.07]">
+                <WaveformBackground />
+              </div>
+
+              <div className="space-y-2 p-1">
+                {rows.map((r) => (
+                  <Card key={r.id} className="bg-card/70 p-3 backdrop-blur-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-sm font-medium sm:truncate">{r.source_name}</p>
+                        <p className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
+                          <span>{relative(r.created_at)}</span>
+                          {r.category && <span className="text-primary">{r.category}</span>}
+                          <span>confidence {(Number(r.confidence ?? 0) * 100).toFixed(0)}%</span>
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setSelected(r)}>
+                        <Maximize2 className="mr-1 h-3.5 w-3.5" />
+                        Details
+                      </Button>
+                    </div>
+                    <div className="mt-2">
+                      <ScoreBars row={r} />
+                    </div>
+                  </Card>
+                ))}
+
+                {rows.length < count && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => void load(rows.length)}
+                    disabled={more}
+                  >
+                    {more && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                    Load more
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}
+
 
       <SavedAnalysisDrawer
         analysis={selected}

@@ -9,33 +9,59 @@
 // the worker is neither paused nor already leased, this function invokes
 // librosa-worker exactly once behind a short single-flight lease. Bounded
 // batch size, attempt caps and the circuit breaker all live in the worker.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@2.45.0";
+
+const AUTH_HEADER_ALLOWLIST = "authorization, x-client-info, apikey, content-type, x-request-id";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": AUTH_HEADER_ALLOWLIST,
 };
 
 const ACTIVE = ["pending", "processing"];
 
 Deno.serve(async (req) => {
+  const requestId = getRequestId(req);
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    logInfo("preflight", requestId, { method: req.method });
+    return new Response("ok", { headers: responseHeaders(requestId) });
   }
 
   try {
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!SUPABASE_URL || !SERVICE_KEY) {
+      logError("missing_env", requestId, {
+        has_url: Boolean(SUPABASE_URL),
+        has_service_key: Boolean(SERVICE_KEY),
+      });
+      return json({ success: false, error: "Server configuration error", request_id: requestId }, 500, requestId);
+    }
 
     const authHeader = req.headers.get("Authorization") ?? "";
+    logInfo("request_received", requestId, {
+      method: req.method,
+      has_auth_header: authHeader.length > 0,
+      auth_scheme: authHeader.split(/\s+/, 1)[0] || null,
+      user_agent: summarizeUserAgent(req.headers.get("User-Agent")),
+    });
+
     if (!authHeader.startsWith("Bearer ")) {
-      return unauthenticated("missing_auth");
+      logWarn("auth_missing_or_wrong_scheme", requestId, {
+        has_auth_header: authHeader.length > 0,
+        auth_scheme: authHeader.split(/\s+/, 1)[0] || null,
+      });
+      return unauthenticated("missing_auth", requestId);
     }
 
     const token = authHeader.slice("Bearer ".length).trim();
+    const tokenDiagnostics = {
+      token_length: token.length,
+      token_segments: token ? token.split(".").length : 0,
+    };
     if (!token) {
-      return unauthenticated("missing_auth");
+      logWarn("auth_empty_bearer", requestId, tokenDiagnostics);
+      return unauthenticated("missing_auth", requestId);
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -44,9 +70,19 @@ Deno.serve(async (req) => {
     // still cryptographically verifying the JWT with the auth service.
     const { data: userData, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !userData.user) {
-      return unauthenticated("unauthorized");
+      logWarn("auth_validation_failed", requestId, {
+        ...tokenDiagnostics,
+        error_name: userErr?.name ?? null,
+        error_message: userErr?.message ?? null,
+        error_status: getStatus(userErr),
+      });
+      return unauthenticated("unauthorized", requestId);
     }
     const userId = userData.user.id;
+    logInfo("auth_validated", requestId, {
+      user_id: userId,
+      ...tokenDiagnostics,
+    });
 
     const body = req.method === "POST"
       ? await req.json().catch(() => ({}))
@@ -69,6 +105,17 @@ Deno.serve(async (req) => {
       _role: "admin",
     });
     const scopeAll = allUsers && isAdmin === true;
+    logInfo("query_scope_resolved", requestId, {
+      user_id: userId,
+      requested_all_users: allUsers,
+      is_admin: isAdmin === true,
+      scope_all: scopeAll,
+      active_only: activeOnly,
+      limit,
+      job_id_count: jobIds?.length ?? 0,
+      source_id_count: sourceIds?.length ?? 0,
+      kick,
+    });
 
     let q = admin
       .from("analysis_jobs")
@@ -84,7 +131,13 @@ Deno.serve(async (req) => {
     if (sourceIds?.length) q = q.in("audio_source_id", sourceIds);
 
     const { data: jobRows, error: jobErr } = await q;
-    if (jobErr) return json({ success: false, error: jobErr.message }, 500);
+    if (jobErr) {
+      logError("jobs_query_failed", requestId, {
+        user_id: userId,
+        error_message: jobErr.message,
+      });
+      return json({ success: false, error: jobErr.message, request_id: requestId }, 500, requestId);
+    }
 
     const jobs = jobRows ?? [];
 
@@ -137,6 +190,7 @@ Deno.serve(async (req) => {
       });
       if (leased === true) {
         kicked = true;
+        logInfo("worker_kicked", requestId, { user_id: userId });
         // Fire and forget: the worker owns its own bounded batch + breaker.
         admin.functions
           .invoke("librosa-worker", { body: { source: "job-status-kick" } })
@@ -150,8 +204,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    logInfo("request_completed", requestId, {
+      user_id: userId,
+      job_count: jobs.length,
+      queue_depth: (pendingAll ?? []).length,
+      kicked,
+      paused,
+    });
+
     return json({
       success: true,
+      request_id: requestId,
       is_admin: isAdmin === true,
       worker: {
         paused,
@@ -184,10 +247,11 @@ Deno.serve(async (req) => {
           progress: progressFor(j.status as string, j.attempts as number),
         };
       }),
-    });
+    }, 200, requestId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown";
-    return json({ success: false, error: msg }, 500);
+    logError("unhandled_exception", requestId, { error_message: msg });
+    return json({ success: false, error: msg, request_id: requestId }, 500, requestId);
   }
 });
 
@@ -206,19 +270,20 @@ function progressFor(status: string, attempts: number) {
   }
 }
 
-function json(payload: unknown, status = 200) {
+function json(payload: unknown, status = 200, requestId = crypto.randomUUID()) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...responseHeaders(requestId), "Content-Type": "application/json" },
   });
 }
 
-function unauthenticated(reason: "missing_auth" | "unauthorized") {
+function unauthenticated(reason: "missing_auth" | "unauthorized", requestId: string) {
   // Keep this endpoint safe but non-throwing for the browser. The caller gets
   // no job data without a valid user token, while the frontend avoids Supabase
   // SDK EdgeFunctionError 401s that can trip the runtime error overlay.
   return json({
     success: true,
+    request_id: requestId,
     authenticated: false,
     auth_status: reason,
     is_admin: false,
@@ -226,5 +291,48 @@ function unauthenticated(reason: "missing_auth" | "unauthorized") {
     kicked: false,
     queue_depth: 0,
     jobs: [],
-  });
+  }, 200, requestId);
+}
+
+function getRequestId(req: Request) {
+  const fromHeader = req.headers.get("x-request-id") ?? "";
+  const sanitized = fromHeader.replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, 80);
+  return sanitized || crypto.randomUUID();
+}
+
+function responseHeaders(requestId: string) {
+  return {
+    ...corsHeaders,
+    "Access-Control-Allow-Headers": AUTH_HEADER_ALLOWLIST,
+    "Access-Control-Expose-Headers": "x-request-id",
+    "x-request-id": requestId,
+  };
+}
+
+function summarizeUserAgent(value: string | null) {
+  if (!value) return null;
+  if (/iPhone|iPad|Safari/i.test(value)) return "safari_or_ios";
+  if (/Chrome/i.test(value)) return "chrome";
+  if (/Firefox/i.test(value)) return "firefox";
+  return "other";
+}
+
+function getStatus(error: unknown) {
+  if (typeof error === "object" && error && "status" in error) {
+    const status = (error as { status?: unknown }).status;
+    return typeof status === "number" || typeof status === "string" ? status : null;
+  }
+  return null;
+}
+
+function logInfo(event: string, requestId: string, fields: Record<string, unknown> = {}) {
+  console.log(JSON.stringify({ scope: "analysis-job-status", level: "info", event, request_id: requestId, ...fields }));
+}
+
+function logWarn(event: string, requestId: string, fields: Record<string, unknown> = {}) {
+  console.warn(JSON.stringify({ scope: "analysis-job-status", level: "warn", event, request_id: requestId, ...fields }));
+}
+
+function logError(event: string, requestId: string, fields: Record<string, unknown> = {}) {
+  console.error(JSON.stringify({ scope: "analysis-job-status", level: "error", event, request_id: requestId, ...fields }));
 }

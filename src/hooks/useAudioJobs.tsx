@@ -57,9 +57,22 @@ export function useAudioJobs(options?: { allUsers?: boolean; limit?: number }) {
       inFlight.current = true;
       setLoading(true);
       try {
+        // Use a live (auto-refreshed) session token: a stale JWT makes the
+        // edge function reject the call with 401 Unauthorized.
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) {
+          setJobs([]);
+          setError(null);
+          return;
+        }
+
         const { data, error: fnError } = await supabase.functions.invoke(
           "analysis-job-status",
-          { body: { all_users: allUsers, limit, kick } },
+          {
+            body: { all_users: allUsers, limit, kick },
+            headers: { Authorization: `Bearer ${token}` },
+          },
         );
         if (fnError) throw new Error(fnError.message);
         if (data?.error) throw new Error(data.error);
@@ -68,7 +81,15 @@ export function useAudioJobs(options?: { allUsers?: boolean; limit?: number }) {
         setQueueDepth(Number(data?.queue_depth ?? 0));
         setError(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load job status");
+        const msg = e instanceof Error ? e.message : "Failed to load job status";
+        // An auth rejection just means the session is not usable yet/anymore —
+        // stay quiet instead of surfacing a scary error in the UI.
+        if (/unauthorized|missing auth|401/i.test(msg)) {
+          setJobs([]);
+          setError(null);
+        } else {
+          setError(msg);
+        }
       } finally {
         inFlight.current = false;
         setLoading(false);
@@ -76,6 +97,7 @@ export function useAudioJobs(options?: { allUsers?: boolean; limit?: number }) {
     },
     [user, allUsers, limit],
   );
+
 
   const activeCount = jobs.filter(
     (j) => j.status === "pending" || j.status === "processing",

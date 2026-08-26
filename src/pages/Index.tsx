@@ -544,46 +544,55 @@ const Index = () => {
               ))}
             </div>
           )}
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button asChild size="lg" className="min-h-12">
+          <div className="mt-5 flex flex-wrap items-center gap-3 min-w-0">
+            <Button asChild size="lg" className="min-h-12 w-full sm:w-auto">
               <Link to="/workspace">
-                <Building2 className="mr-2 h-5 w-5" />
-                {hasEnterprise ? "Open enterprise workspace" : "Enterprise sign in"}
+                <Building2 className="mr-2 h-5 w-5 shrink-0" />
+                <span className="truncate">{hasEnterprise ? "Open enterprise workspace" : "Enterprise sign in"}</span>
               </Link>
             </Button>
             {hasEnterprise && (
               <>
-                <Button asChild variant="outline" className="min-h-12">
+                <Button asChild variant="outline" className="min-h-12 w-full sm:w-auto">
                   <Link to="/workspace?tab=categories">
-                    <Sliders className="mr-2 h-4 w-4" />
-                    Adjust 6 categories
+                    <Sliders className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">Adjust 6 categories</span>
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="min-h-12">
+                <Button asChild variant="outline" className="min-h-12 w-full sm:w-auto">
                   <Link to="/workspace?tab=users">
-                    <Target className="mr-2 h-4 w-4" />
-                    Predict SonicSIM-Users
+                    <Target className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">Predict SonicSIM-Users</span>
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="min-h-12">
+                <Button asChild variant="outline" className="min-h-12 w-full sm:w-auto">
                   <Link to="/workspace?tab=outcomes">
-                    <LineChart className="mr-2 h-4 w-4" />
-                    Predict SonicSIM-Outcomes
+                    <LineChart className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">Predict SonicSIM-Outcomes</span>
                   </Link>
                 </Button>
+                <a
+                  href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More"
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Learn More
+                </a>
               </>
             )}
-            <a
-              href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More"
-              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-            >
-              Learn More
-            </a>
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <LineChart className="h-3.5 w-3.5" aria-hidden="true" />
-              KPI modelling: traffic, CPC, CTR, page views, VCR, time on site
-            </span>
+            {!hasEnterprise && (
+              <a
+                href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More"
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Learn More
+              </a>
+            )}
           </div>
+          <p className="mt-3 flex items-start gap-1 text-xs text-muted-foreground">
+            <LineChart className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>KPI modelling: traffic, CPC, CTR, page views, VCR, time on site</span>
+          </p>
+
           </div>
         </div>
       </section>

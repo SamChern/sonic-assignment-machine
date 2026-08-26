@@ -137,6 +137,9 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
     return CATEGORY_KEYS.map((c) => ({ key: c, value: avg(`${c}_score`) }));
   }, [rows]);
 
+  const latest = rows[0] ?? null;
+
+
   return (
     <div className="space-y-4">
       <Card className="p-4">

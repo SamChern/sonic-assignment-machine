@@ -156,7 +156,7 @@ export function registerServiceWorker(): void {
         });
 
         // Periodic check so long-lived tabs still learn about new deploys.
-        window.setInterval(() => void registration.update(), 60 * 60 * 1000);
+        window.setInterval(() => void registration.update(), 15 * 60 * 1000);
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState === "visible") void registration.update();
         });

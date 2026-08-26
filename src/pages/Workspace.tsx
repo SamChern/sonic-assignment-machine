@@ -127,46 +127,56 @@ const Workspace = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl p-3 sm:p-6">
-      <header className="flex flex-wrap items-center gap-3">
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Home
-          </Link>
-        </Button>
-        <img src={sonicSimLogo} alt="SonicSIM.ai" className="h-8 w-auto" />
+    <div className="mx-auto max-w-6xl p-3 pb-mobile-nav sm:p-6">
+      <header className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/">
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Home
+            </Link>
+          </Button>
+          <img src={sonicSimLogo} alt="SonicSIM.ai" className="h-7 w-auto shrink-0 sm:h-8" />
+          {!canWrite && (
+            <Badge variant="outline" className="shrink-0 text-[11px]">
+              view only
+            </Badge>
+          )}
+          {orgs.length > 1 && (
+            <Select value={activeId ?? undefined} onValueChange={setActiveId}>
+              <SelectTrigger className="w-full sm:ml-auto sm:w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {orgs.map((o) => (
+                  <SelectItem key={o.organization_id} value={o.organization_id}>
+                    {o.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold">{active.name} workspace</h1>
+          <h1 className="break-words text-base font-semibold sm:text-lg">
+            {active.name} workspace
+          </h1>
           <p className="text-[11px] text-muted-foreground">
             {active.plan} plan · your role: {active.role}
           </p>
         </div>
-        {orgs.length > 1 && (
-          <Select value={activeId ?? undefined} onValueChange={setActiveId}>
-            <SelectTrigger className="ml-auto w-[200px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {orgs.map((o) => (
-                <SelectItem key={o.organization_id} value={o.organization_id}>
-                  {o.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        {!canWrite && (
-          <Badge variant="outline" className="text-[11px]">view only</Badge>
-        )}
       </header>
 
       <Tabs value={tab} onValueChange={setTab} className="mt-4">
-        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:flex sm:flex-wrap sm:justify-start">
           {TABS.map((t) => (
-            <TabsTrigger key={t.key} value={t.key} className="text-xs">
-              <t.icon className="mr-1 h-3.5 w-3.5" />
-              {t.label}
+            <TabsTrigger
+              key={t.key}
+              value={t.key}
+              className="min-w-0 justify-start whitespace-normal px-2 text-center text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs"
+            >
+              <t.icon className="mr-1 h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0">{t.label}</span>
             </TabsTrigger>
           ))}
         </TabsList>

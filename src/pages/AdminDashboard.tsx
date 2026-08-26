@@ -48,6 +48,8 @@ import { NetworkVisualization } from "@/components/NetworkVisualization";
 import { IntuiziConsolePanel } from "@/components/admin/IntuiziConsolePanel";
 import { AdminConnectedApisTab } from "@/components/admin/AdminConnectedApisTab";
 import { LibrosaHealthPanel } from "@/components/LibrosaHealthPanel";
+import { Ec2StatusPanel } from "@/components/admin/Ec2StatusPanel";
+
 
 
 import { AnalysisResults } from "@/components/AnalysisResults";

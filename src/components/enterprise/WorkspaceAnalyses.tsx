@@ -88,6 +88,9 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
   const [debounced, setDebounced] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
   const [selected, setSelected] = useState<DrawerAnalysis | null>(null);
+  /** Sources/analyses list starts collapsed; the latest analysis is always shown. */
+  const [expanded, setExpanded] = useState(false);
+
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 300);

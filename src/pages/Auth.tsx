@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 import { z } from 'zod';
 import heroBackground from '@/assets/hero-background.jpg';
+import sonicSimLogo from '@/assets/SonicSIM_transp.png';
 import { WaveformBackground } from '@/components/WaveformBackground';
 
 const emailSchema = z.string().email('Invalid email address');

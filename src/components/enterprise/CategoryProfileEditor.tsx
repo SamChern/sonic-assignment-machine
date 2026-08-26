@@ -298,6 +298,20 @@ const CategoryProfileEditor = ({
           {activeProfile && (
             <Badge className="text-[11px]">active: v{activeProfile.version}</Badge>
           )}
+          <Badge variant={canEdit ? "secondary" : "outline"} className="text-[11px]">
+            {canEdit ? (
+              <>
+                <Unlock className="mr-1 h-3 w-3" />
+                Admin — editing unlocked
+              </>
+            ) : (
+              <>
+                <Lock className="mr-1 h-3 w-3" />
+                View only
+              </>
+            )}
+          </Badge>
+
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           Rename, re-weight, calibrate, or mute any of the 6 categories for {""}

@@ -113,63 +113,107 @@ const relative = (iso: string) => {
 
 /** Inline legend: maps every short code to its category name (scores are 0-100, relative). */
 const ScoreLegend = () => (
-  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+  <ul
+    className="flex list-none flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground"
+    aria-label="Semantic category legend"
+  >
     {CATEGORY_META.map(({ key, short, label, hint, gradient }) => (
-      <Tooltip key={key}>
-        <TooltipTrigger asChild>
-          <span className="flex cursor-help items-center gap-1" title={`${label} — ${hint}`}>
-            <span className="h-2 w-2 rounded-full" style={{ background: gradient }} />
-            <span className="uppercase tracking-wide">{short}</span>
-            <span className="hidden sm:inline">= {label}</span>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-[220px] text-xs">
-          <p className="font-medium">{label}</p>
-          <p className="mt-0.5 text-muted-foreground">{hint}</p>
-        </TooltipContent>
-      </Tooltip>
-    ))}
-    <span className="opacity-70">Scores 0–100, relative to the analyzed population.</span>
-  </div>
-);
-
-/** Labelled score bars: "Emo ▓▓▓ 40" in a responsive 1/2/3 column grid. */
-const ScoreBars = ({ row }: { row: Row }) => (
-  <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
-    {CATEGORY_META.map(({ key, short, label, hint, gradient }) => {
-      const score = Math.round(Number((row as unknown as Record<string, number>)[`${key}_score`] ?? 0));
-      return (
-        <Tooltip key={key}>
+      <li key={key}>
+        <Tooltip>
           <TooltipTrigger asChild>
-            <div
-              className="flex cursor-help items-center gap-2"
-              title={`${label}: ${score}/100 — ${hint}`}
+            <span
+              tabIndex={0}
+              className="flex cursor-help items-center gap-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              title={`${label} — ${hint}`}
             >
-              <span className="w-8 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span className="h-2 w-2 rounded-full" style={{ background: gradient }} aria-hidden="true" />
+              <span className="uppercase tracking-wide" aria-hidden="true">
                 {short}
               </span>
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${Math.max(2, Math.min(100, score))}%`, background: gradient }}
-                />
-              </div>
-              <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
-                {score}
+              <span className="hidden sm:inline" aria-hidden="true">
+                = {label}
               </span>
-            </div>
+              <span className="sr-only">{`${short} means ${label}. ${hint}`}</span>
+            </span>
           </TooltipTrigger>
           <TooltipContent className="max-w-[220px] text-xs">
-            <p className="font-medium">
-              {label}: {score}/100
-            </p>
+            <p className="font-medium">{label}</p>
             <p className="mt-0.5 text-muted-foreground">{hint}</p>
           </TooltipContent>
         </Tooltip>
-      );
-    })}
-  </div>
+      </li>
+    ))}
+    <li className="opacity-70">Scores 0–100, relative to the analyzed population.</li>
+  </ul>
 );
+
+/** Labelled score bars: "Emo ▓▓▓ 40" in a responsive 1/2/3 column grid. */
+const ScoreBars = ({ row }: { row: Row }) => {
+  const scores = CATEGORY_META.map((meta) => ({
+    ...meta,
+    score: Math.round(Number((row as unknown as Record<string, number>)[`${meta.key}_score`] ?? 0)),
+  }));
+
+  return (
+    <div
+      role="group"
+      aria-label={`Semantic category scores for ${row.source_name}`}
+      className="space-y-1.5"
+    >
+      {/* Screen-reader friendly summary of the whole chart. */}
+      <p className="sr-only">
+        {`Six semantic category scores out of 100 for ${row.source_name}: ` +
+          scores.map((s) => `${s.label} ${s.score}`).join(", ") +
+          `. Highest: ${[...scores].sort((a, b) => b.score - a.score)[0].label}.`}
+      </p>
+
+      <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+        {scores.map(({ key, short, label, hint, gradient, score }) => (
+          <Tooltip key={key}>
+            <TooltipTrigger asChild>
+              <div
+                tabIndex={0}
+                role="meter"
+                aria-valuenow={score}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`${label}: ${score} out of 100. ${hint}`}
+                className="flex cursor-help items-center gap-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                title={`${label}: ${score}/100 — ${hint}`}
+              >
+                <span
+                  className="w-8 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground"
+                  aria-hidden="true"
+                >
+                  {short}
+                </span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${Math.max(2, Math.min(100, score))}%`, background: gradient }}
+                  />
+                </div>
+                <span
+                  className="w-7 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground"
+                  aria-hidden="true"
+                >
+                  {score}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[220px] text-xs">
+              <p className="font-medium">
+                {label}: {score}/100
+              </p>
+              <p className="mt-0.5 text-muted-foreground">{hint}</p>
+            </TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 
 
 

@@ -468,12 +468,13 @@ const Index = () => {
       </div>
 
       {/* Enterprise Workspace Section */}
-      <section aria-labelledby="enterprise-heading" className="mx-auto max-w-7xl px-4 sm:px-6 pt-8 sm:pt-12">
-        <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-primary/5 p-5 sm:p-8">
+      <section aria-labelledby="enterprise-heading" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-6 pt-8 sm:scroll-mt-28 sm:px-6 sm:pb-8 sm:pt-12">
+        <div className="relative min-h-[28rem] overflow-visible rounded-2xl border border-primary/30 bg-primary/5 p-5 pb-7 sm:min-h-[30rem] sm:p-8 sm:pb-10">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
           {/* Subtle cluster/network texture merged into the frame (static, not animated) */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-[0.14] mix-blend-screen"
+            className="absolute inset-0 opacity-[0.14] mix-blend-screen"
             style={{
               backgroundImage: `url(${fingerprintBg})`,
               backgroundSize: "cover",
@@ -484,9 +485,10 @@ const Index = () => {
                 "radial-gradient(120% 90% at 80% 10%, hsl(0 0% 0% / 0.9), transparent 70%)",
             }}
           />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
+          </div>
 
-          <div className="relative min-w-0">
+          <div className="relative min-w-0 overflow-visible">
           <Badge className="mb-3 inline-flex bg-primary text-primary-foreground sm:absolute sm:right-0 sm:top-0 sm:mb-0">
             Enterprise
           </Badge>
@@ -500,7 +502,7 @@ const Index = () => {
           </p>
 
           {hasEnterprise && activeOrg ? (
-            <Tabs defaultValue="analyses" className="mt-5 w-full min-w-0">
+            <Tabs defaultValue="analyses" className="mt-5 w-full min-w-0 overflow-visible">
               <TabsList className="flex h-auto min-h-12 w-full max-w-full items-stretch overflow-x-auto no-scrollbar justify-start rounded-lg p-1 sm:grid sm:grid-cols-3">
                 <TabsTrigger value="analyses" className="h-auto min-h-10 shrink-0 px-3 py-2.5 sm:min-w-0">
                   <Sparkles className="mr-1 h-4 w-4 shrink-0" />
@@ -516,14 +518,14 @@ const Index = () => {
                 </TabsTrigger>
               </TabsList>
 
-              <Suspense fallback={<div className="mt-4 h-32 animate-pulse rounded-xl bg-muted/40" />}>
-                <TabsContent value="analyses" className="mt-4 overflow-visible">
+              <Suspense fallback={<div className="mt-4 min-h-36 animate-pulse rounded-xl bg-muted/40" />}>
+                <TabsContent value="analyses" className="mt-4 min-h-40 overflow-visible pb-2 scroll-mt-24 sm:min-h-48 sm:pb-3 sm:scroll-mt-28">
                   <WorkspaceAnalyses organizationId={activeOrg.organization_id} />
                 </TabsContent>
-                <TabsContent value="data" className="mt-4 overflow-visible">
+                <TabsContent value="data" className="mt-4 min-h-40 overflow-visible pb-2 scroll-mt-24 sm:min-h-48 sm:pb-3 sm:scroll-mt-28">
                   <WorkspaceUpload organizationId={activeOrg.organization_id} canWrite={orgCanWrite} />
                 </TabsContent>
-                <TabsContent value="discover" className="mt-4 overflow-visible">
+                <TabsContent value="discover" className="mt-4 min-h-40 overflow-visible pb-3 scroll-mt-24 sm:min-h-48 sm:pb-4 sm:scroll-mt-28">
                   <DatasetDiscovery organizationId={activeOrg.organization_id} />
                 </TabsContent>
               </Suspense>

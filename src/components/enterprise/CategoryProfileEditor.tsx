@@ -205,11 +205,20 @@ const CategoryProfileEditor = ({
 
   const saveVersion = useCallback(
     async (activate: boolean) => {
+      if (!canEdit) {
+        toast({
+          title: "Only enterprise admins can edit categories",
+          description: "Your role has view-only access to this calibration.",
+          variant: "destructive",
+        });
+        return;
+      }
       if (!name.trim()) {
         toast({ title: "Name this version first", variant: "destructive" });
         return;
       }
       if (!enabledCount) {
+
         toast({
           title: "Keep at least one category on",
           description: "Matching needs one active category.",

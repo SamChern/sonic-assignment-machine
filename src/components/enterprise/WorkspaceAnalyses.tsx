@@ -16,6 +16,12 @@ import SavedAnalysisDrawer, { type DrawerAnalysis } from "@/components/SavedAnal
 import { CATEGORY_KEYS } from "@/lib/enterpriseSchema";
 import { WaveformBackground } from "@/components/WaveformBackground";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   ChevronDown,
   ChevronRight,
   Loader2,
@@ -177,8 +183,16 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
   const [debounced, setDebounced] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
   const [selected, setSelected] = useState<DrawerAnalysis | null>(null);
-  /** Sources/analyses list starts collapsed; the latest analysis is always shown. */
-  const [expanded, setExpanded] = useState(false);
+  /** Collapsed by default, but the user's last choice persists across reloads. */
+  const [expanded, setExpanded] = useState(readExpandPref);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(EXPAND_KEY, expanded ? "1" : "0");
+    } catch {
+      /* storage unavailable */
+    }
+  }, [expanded]);
 
 
   useEffect(() => {

@@ -14,6 +14,11 @@ import heroBackground from "@/assets/hero-background.jpg";
 import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
+import fingerprintBg from "@/assets/fingerprint-bg.webp";
+const WorkspaceAnalyses = lazy(() => import("@/components/enterprise/WorkspaceAnalyses"));
+const WorkspaceUpload = lazy(() => import("@/components/enterprise/WorkspaceUpload"));
+const DatasetDiscovery = lazy(() => import("@/components/enterprise/DatasetDiscovery"));
+
 const NetworkVisualization = lazy(() =>
   import("@/components/NetworkVisualization").then((m) => ({ default: m.NetworkVisualization }))
 );

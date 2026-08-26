@@ -15,6 +15,7 @@ import {
 import SavedAnalysisDrawer, { type DrawerAnalysis } from "@/components/SavedAnalysisDrawer";
 import { CATEGORY_KEYS } from "@/lib/enterpriseSchema";
 import { WaveformBackground } from "@/components/WaveformBackground";
+import { useUiPreference } from "@/hooks/useUiPreference";
 import {
   Tooltip,
   TooltipContent,
@@ -32,17 +33,6 @@ import {
 } from "lucide-react";
 
 const PAGE = 25;
-
-/** Persisted collapse preference — shared by every role that renders this list. */
-const EXPAND_KEY = "sonicsim.analyses.expanded";
-
-const readExpandPref = () => {
-  try {
-    return localStorage.getItem(EXPAND_KEY) === "1";
-  } catch {
-    return false;
-  }
-};
 
 /** Short labels + full names + gradients mirroring the admin analysis results bar chart. */
 const CATEGORY_META: Array<{
@@ -227,16 +217,8 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
   const [debounced, setDebounced] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
   const [selected, setSelected] = useState<DrawerAnalysis | null>(null);
-  /** Collapsed by default, but the user's last choice persists across reloads. */
-  const [expanded, setExpanded] = useState(readExpandPref);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(EXPAND_KEY, expanded ? "1" : "0");
-    } catch {
-      /* storage unavailable */
-    }
-  }, [expanded]);
+  /** Collapsed by default; the choice is stored on the user's profile (cross-device). */
+  const [expanded, setExpanded] = useUiPreference("analysesExpanded", false);
 
 
   useEffect(() => {
@@ -388,7 +370,7 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
             variant="ghost"
             size="sm"
             className="w-full justify-start"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded}
           >
             {expanded ? (

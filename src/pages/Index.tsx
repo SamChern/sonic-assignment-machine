@@ -603,7 +603,7 @@ const Index = () => {
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
-          <TabsList className="mb-6 sm:mb-8 flex h-auto min-h-12 w-full max-w-full items-stretch overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
+          <TabsList className="mb-6 sm:mb-8 grid h-auto min-h-12 w-full max-w-full grid-cols-2 items-stretch gap-1 sm:grid-cols-4">
             <TabsTrigger value="select" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0">
               <FileAudio className="h-4 w-4 shrink-0" />
               <span className="hidden truncate sm:inline">Select Sources</span>

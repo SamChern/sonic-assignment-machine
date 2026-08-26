@@ -26,7 +26,6 @@ Deno.serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -34,10 +33,16 @@ Deno.serve(async (req) => {
       return json({ success: false, error: "Missing auth" }, 401);
     }
 
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    const token = authHeader.slice("Bearer ".length).trim();
+    if (!token) {
+      return json({ success: false, error: "Missing auth" }, 401);
+    }
+
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    // Validate the caller with the trusted backend client. This avoids
+    // coupling user-token validation to the runtime's anon-key binding while
+    // still cryptographically verifying the JWT with the auth service.
+    const { data: userData, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !userData.user) {
       return json({ success: false, error: "Unauthorized" }, 401);
     }
@@ -58,8 +63,6 @@ Deno.serve(async (req) => {
     const allUsers = raw.all_users === true;
     const kick = raw.kick !== false;
     const limit = Math.min(Math.max(Number(raw.limit ?? 25) || 25, 1), 100);
-
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
     const { data: isAdmin } = await admin.rpc("has_role", {
       _user_id: userId,

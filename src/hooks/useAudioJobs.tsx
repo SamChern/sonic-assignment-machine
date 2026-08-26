@@ -67,13 +67,27 @@ export function useAudioJobs(options?: { allUsers?: boolean; limit?: number }) {
           return;
         }
 
-        const { data, error: fnError } = await supabase.functions.invoke(
-          "analysis-job-status",
-          {
+        const invokeStatus = (accessToken: string) =>
+          supabase.functions.invoke("analysis-job-status", {
             body: { all_users: allUsers, limit, kick },
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+
+        let { data, error: fnError } = await invokeStatus(token);
+        const responseStatus = (fnError as { context?: { status?: number } } | null)
+          ?.context?.status;
+
+        // A token can expire between session hydration and this poll. Refresh
+        // and retry once only for an actual auth rejection; never retry other
+        // function failures or loop indefinitely.
+        if (fnError && responseStatus === 401) {
+          const { data: refreshed, error: refreshError } =
+            await supabase.auth.refreshSession();
+          const refreshedToken = refreshed.session?.access_token;
+          if (!refreshError && refreshedToken) {
+            ({ data, error: fnError } = await invokeStatus(refreshedToken));
+          }
+        }
         if (fnError) throw new Error(fnError.message);
         if (data?.error) throw new Error(data.error);
         setJobs((data?.jobs ?? []) as AudioJob[]);

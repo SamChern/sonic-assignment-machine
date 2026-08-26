@@ -16,6 +16,12 @@ import SavedAnalysisDrawer, { type DrawerAnalysis } from "@/components/SavedAnal
 import { CATEGORY_KEYS } from "@/lib/enterpriseSchema";
 import { WaveformBackground } from "@/components/WaveformBackground";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   ChevronDown,
   ChevronRight,
   Loader2,
@@ -27,14 +33,67 @@ import {
 
 const PAGE = 25;
 
-/** Short labels + gradients mirroring the admin analysis results bar chart. */
-const CATEGORY_META: Array<{ key: (typeof CATEGORY_KEYS)[number]; short: string; gradient: string }> = [
-  { key: "emotional", short: "Emo", gradient: "var(--gradient-emotional)" },
-  { key: "cognitive", short: "Cog", gradient: "var(--gradient-cognitive)" },
-  { key: "social", short: "Soc", gradient: "var(--gradient-social)" },
-  { key: "communication", short: "Com", gradient: "var(--gradient-communication)" },
-  { key: "contextual", short: "Ctx", gradient: "var(--gradient-contextual)" },
-  { key: "artistic", short: "Art", gradient: "var(--gradient-artistic)" },
+/** Persisted collapse preference — shared by every role that renders this list. */
+const EXPAND_KEY = "sonicsim.analyses.expanded";
+
+const readExpandPref = () => {
+  try {
+    return localStorage.getItem(EXPAND_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+/** Short labels + full names + gradients mirroring the admin analysis results bar chart. */
+const CATEGORY_META: Array<{
+  key: (typeof CATEGORY_KEYS)[number];
+  short: string;
+  label: string;
+  hint: string;
+  gradient: string;
+}> = [
+  {
+    key: "emotional",
+    short: "Emo",
+    label: "Emotional",
+    hint: "Felt intensity and mood — how strongly the audio moves the listener.",
+    gradient: "var(--gradient-emotional)",
+  },
+  {
+    key: "cognitive",
+    short: "Cog",
+    label: "Cognitive",
+    hint: "Mental engagement — complexity, attention and information load.",
+    gradient: "var(--gradient-cognitive)",
+  },
+  {
+    key: "social",
+    short: "Soc",
+    label: "Social",
+    hint: "Shared or group signal — how communal and collectively coded it is.",
+    gradient: "var(--gradient-social)",
+  },
+  {
+    key: "communication",
+    short: "Com",
+    label: "Communication",
+    hint: "Spoken-word and vocal messaging weight in the signal.",
+    gradient: "var(--gradient-communication)",
+  },
+  {
+    key: "contextual",
+    short: "Ctx",
+    label: "Contextual",
+    hint: "Setting and situational fit — where and when this audio belongs.",
+    gradient: "var(--gradient-contextual)",
+  },
+  {
+    key: "artistic",
+    short: "Art",
+    label: "Artistic",
+    hint: "Craft and aesthetic expression in the production.",
+    gradient: "var(--gradient-artistic)",
+  },
 ];
 
 type SortKey = "newest" | "oldest" | "confidence_desc" | "source_asc";
@@ -52,30 +111,66 @@ const relative = (iso: string) => {
   return `${Math.round(hrs / 24)}d ago`;
 };
 
+/** Inline legend: maps every short code to its category name (scores are 0-100, relative). */
+const ScoreLegend = () => (
+  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+    {CATEGORY_META.map(({ key, short, label, hint, gradient }) => (
+      <Tooltip key={key}>
+        <TooltipTrigger asChild>
+          <span className="flex cursor-help items-center gap-1" title={`${label} — ${hint}`}>
+            <span className="h-2 w-2 rounded-full" style={{ background: gradient }} />
+            <span className="uppercase tracking-wide">{short}</span>
+            <span className="hidden sm:inline">= {label}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[220px] text-xs">
+          <p className="font-medium">{label}</p>
+          <p className="mt-0.5 text-muted-foreground">{hint}</p>
+        </TooltipContent>
+      </Tooltip>
+    ))}
+    <span className="opacity-70">Scores 0–100, relative to the analyzed population.</span>
+  </div>
+);
+
 /** Labelled score bars: "Emo ▓▓▓ 40" in a responsive 1/2/3 column grid. */
 const ScoreBars = ({ row }: { row: Row }) => (
   <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
-    {CATEGORY_META.map(({ key, short, gradient }) => {
+    {CATEGORY_META.map(({ key, short, label, hint, gradient }) => {
       const score = Math.round(Number((row as unknown as Record<string, number>)[`${key}_score`] ?? 0));
       return (
-        <div key={key} className="flex items-center gap-2">
-          <span className="w-8 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
-            {short}
-          </span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+        <Tooltip key={key}>
+          <TooltipTrigger asChild>
             <div
-              className="h-full rounded-full"
-              style={{ width: `${Math.max(2, Math.min(100, score))}%`, background: gradient }}
-            />
-          </div>
-          <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
-            {score}
-          </span>
-        </div>
+              className="flex cursor-help items-center gap-2"
+              title={`${label}: ${score}/100 — ${hint}`}
+            >
+              <span className="w-8 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {short}
+              </span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${Math.max(2, Math.min(100, score))}%`, background: gradient }}
+                />
+              </div>
+              <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+                {score}
+              </span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[220px] text-xs">
+            <p className="font-medium">
+              {label}: {score}/100
+            </p>
+            <p className="mt-0.5 text-muted-foreground">{hint}</p>
+          </TooltipContent>
+        </Tooltip>
       );
     })}
   </div>
 );
+
 
 
 /** Org-scoped mirror of the admin analysis results list. */
@@ -88,8 +183,16 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
   const [debounced, setDebounced] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
   const [selected, setSelected] = useState<DrawerAnalysis | null>(null);
-  /** Sources/analyses list starts collapsed; the latest analysis is always shown. */
-  const [expanded, setExpanded] = useState(false);
+  /** Collapsed by default, but the user's last choice persists across reloads. */
+  const [expanded, setExpanded] = useState(readExpandPref);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(EXPAND_KEY, expanded ? "1" : "0");
+    } catch {
+      /* storage unavailable */
+    }
+  }, [expanded]);
 
 
   useEffect(() => {
@@ -141,6 +244,7 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
 
 
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="space-y-4">
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -157,6 +261,10 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
             <RefreshCw className={`mr-1 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
+        </div>
+
+        <div className="mt-3">
+          <ScoreLegend />
         </div>
 
         {summary && (
@@ -301,6 +409,7 @@ const WorkspaceAnalyses = ({ organizationId }: { organizationId: string }) => {
         onOpenChange={(open) => !open && setSelected(null)}
       />
     </div>
+    </TooltipProvider>
   );
 };
 

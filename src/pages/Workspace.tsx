@@ -48,7 +48,7 @@ const TABS = [
 const Workspace = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { orgs, active, activeId, setActiveId, canWrite, loading } = useOrganization();
+  const { orgs, active, activeId, setActiveId, canWrite, isOrgAdmin, loading } = useOrganization();
   const [params, setParams] = useSearchParams();
   const tabPrefKey = user ? `sonicsim.workspace.tab.${user.id}` : null;
   const storedTab = tabPrefKey ? localStorage.getItem(tabPrefKey) : null;
@@ -187,9 +187,10 @@ const Workspace = () => {
         <TabsContent value="categories" className="mt-4">
           <CategoryProfileEditor
             organizationId={active.organization_id}
-            canWrite={canWrite}
+            canEdit={isOrgAdmin}
             onSaved={() => setRefreshKey((k) => k + 1)}
           />
+
         </TabsContent>
         <TabsContent value="users" className="mt-4">
           <PredictUsersPanel

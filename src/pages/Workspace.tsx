@@ -48,7 +48,7 @@ const TABS = [
 const Workspace = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { orgs, active, activeId, setActiveId, canWrite, loading } = useOrganization();
+  const { orgs, active, activeId, setActiveId, canWrite, isOrgAdmin, loading } = useOrganization();
   const [params, setParams] = useSearchParams();
   const tabPrefKey = user ? `sonicsim.workspace.tab.${user.id}` : null;
   const storedTab = tabPrefKey ? localStorage.getItem(tabPrefKey) : null;

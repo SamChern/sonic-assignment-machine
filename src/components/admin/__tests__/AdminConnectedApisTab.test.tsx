@@ -48,6 +48,13 @@ const statusPayload = {
   },
 };
 
+/** Radix tabs activate on mousedown, so drive both events. */
+const switchView = (name: RegExp) => {
+  const tab = screen.getByRole("tab", { name });
+  fireEvent.mouseDown(tab);
+  fireEvent.click(tab);
+};
+
 const renderTab = () =>
   render(
     <MemoryRouter>
@@ -78,7 +85,7 @@ describe("AdminConnectedApisTab", () => {
     renderTab();
     await waitFor(() => expect(screen.getByText(/REST \(/)).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText(/REST \(/));
+    switchView(/REST \(/);
     await waitFor(() => expect(screen.getByText(appleMusic.name)).toBeInTheDocument());
     expect(screen.getAllByRole("button", { name: /test connection/i }).length).toBeGreaterThan(0);
   });
@@ -88,7 +95,7 @@ describe("AdminConnectedApisTab", () => {
     renderTab();
     await waitFor(() => expect(screen.getByText(/MCP \(/)).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText(/MCP \(/));
+    switchView(/MCP \(/);
     const mcpNames = INTEGRATIONS.filter((i) => i.kind === "mcp").map((i) => i.name);
     await waitFor(() => expect(screen.getByText(mcpNames[0])).toBeInTheDocument());
   });
@@ -98,7 +105,7 @@ describe("AdminConnectedApisTab", () => {
     onInvoke(appleMusic.testEndpoint!, () => ({ data: { success: true, latency_ms: 10 } }));
     renderTab();
     await waitFor(() => expect(screen.getByText(/REST \(/)).toBeInTheDocument());
-    fireEvent.click(screen.getByText(/REST \(/));
+    switchView(/REST \(/);
     await waitFor(() => expect(screen.getByText(appleMusic.name)).toBeInTheDocument());
 
     const before = invokeCalls.filter((c) => c.fn === "admin-get-credential-status").length;

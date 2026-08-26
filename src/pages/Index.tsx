@@ -501,29 +501,29 @@ const Index = () => {
 
           {hasEnterprise && activeOrg ? (
             <Tabs defaultValue="analyses" className="mt-5 w-full min-w-0">
-              <TabsList className="flex w-full max-w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-3">
-                <TabsTrigger value="analyses" className="min-h-11 shrink-0 sm:min-w-0">
+              <TabsList className="flex h-auto min-h-12 w-full max-w-full items-stretch overflow-x-auto no-scrollbar justify-start rounded-lg p-1 sm:grid sm:grid-cols-3">
+                <TabsTrigger value="analyses" className="h-auto min-h-10 shrink-0 px-3 py-2.5 sm:min-w-0">
                   <Sparkles className="mr-1 h-4 w-4 shrink-0" />
-                  <span className="truncate">Recent analyses</span>
+                  <span className="whitespace-normal leading-tight sm:truncate">Recent analyses</span>
                 </TabsTrigger>
-                <TabsTrigger value="data" className="min-h-11 shrink-0 sm:min-w-0">
+                <TabsTrigger value="data" className="h-auto min-h-10 shrink-0 px-3 py-2.5 sm:min-w-0">
                   <UploadIcon className="mr-1 h-4 w-4 shrink-0" />
-                  <span className="truncate">Upload my data</span>
+                  <span className="whitespace-normal leading-tight sm:truncate">Upload my data</span>
                 </TabsTrigger>
-                <TabsTrigger value="discover" className="min-h-11 shrink-0 sm:min-w-0">
+                <TabsTrigger value="discover" className="h-auto min-h-10 shrink-0 px-3 py-2.5 sm:min-w-0">
                   <Compass className="mr-1 h-4 w-4 shrink-0" />
-                  <span className="truncate">Dataset discovery</span>
+                  <span className="whitespace-normal leading-tight sm:truncate">Dataset discovery</span>
                 </TabsTrigger>
               </TabsList>
 
               <Suspense fallback={<div className="mt-4 h-32 animate-pulse rounded-xl bg-muted/40" />}>
-                <TabsContent value="analyses" className="mt-4">
+                <TabsContent value="analyses" className="mt-4 overflow-visible">
                   <WorkspaceAnalyses organizationId={activeOrg.organization_id} />
                 </TabsContent>
-                <TabsContent value="data" className="mt-4">
+                <TabsContent value="data" className="mt-4 overflow-visible">
                   <WorkspaceUpload organizationId={activeOrg.organization_id} canWrite={orgCanWrite} />
                 </TabsContent>
-                <TabsContent value="discover" className="mt-4">
+                <TabsContent value="discover" className="mt-4 overflow-visible">
                   <DatasetDiscovery organizationId={activeOrg.organization_id} />
                 </TabsContent>
               </Suspense>
@@ -601,21 +601,21 @@ const Index = () => {
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
-          <TabsList className="mb-6 sm:mb-8 flex w-full max-w-full overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
-            <TabsTrigger value="select" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0">
+          <TabsList className="mb-6 sm:mb-8 flex h-auto min-h-12 w-full max-w-full items-stretch overflow-x-auto no-scrollbar justify-start sm:grid sm:grid-cols-4">
+            <TabsTrigger value="select" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0">
               <FileAudio className="h-4 w-4 shrink-0" />
               <span className="hidden truncate sm:inline">Select Sources</span>
               <span className="truncate sm:hidden">Sources</span>
             </TabsTrigger>
-            <TabsTrigger value="network" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0" disabled={!results}>
+            <TabsTrigger value="network" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0" disabled={!results}>
               <Network className="h-4 w-4 shrink-0" />
               <span className="truncate">Network</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0" disabled={!results}>
+            <TabsTrigger value="analysis" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0" disabled={!results}>
               <ListTree className="h-4 w-4 shrink-0" />
               <span className="truncate">Analysis</span>
             </TabsTrigger>
-            <TabsTrigger value="discover" className="flex shrink-0 items-center gap-2 min-h-11 sm:min-w-0" disabled={!user}>
+            <TabsTrigger value="discover" className="flex h-auto min-h-10 shrink-0 items-center gap-2 py-2.5 sm:min-w-0" disabled={!user}>
               <UsersIcon className="h-4 w-4 shrink-0" />
               <span className="truncate">Discover</span>
             </TabsTrigger>

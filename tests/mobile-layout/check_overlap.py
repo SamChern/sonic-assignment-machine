@@ -7,11 +7,12 @@ covers the sticky bottom nav, and nothing sits inside the safe-area inset.
 
 import asyncio
 import sys
+import os
 from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-BASE = "http://localhost:8080"
+BASE = os.environ.get("SONICSIM_BASE_URL", "http://localhost:8080")
 SCREENSHOTS = Path(__file__).parent / "screenshots"
 SCREENSHOTS.mkdir(parents=True, exist_ok=True)
 

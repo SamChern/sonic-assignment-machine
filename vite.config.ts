@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => ({
           source: JSON.stringify({ buildId: BUILD_ID, builtAt: new Date().toISOString() }),
         });
       },
-    },
+    } satisfies Plugin,
     VitePWA({
       strategies: "generateSW",
       registerType: "autoUpdate",

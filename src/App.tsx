@@ -112,6 +112,8 @@ const App = () => (
           </Suspense>
           </div>
           <MobileBottomNav />
+          <VersionStatusPanel />
+
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

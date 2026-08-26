@@ -59,6 +59,7 @@ const Workspace = () => {
     value && TABS.some((t) => t.key === value) ? value : null;
   const tab = validTab(params.get("tab")) ?? validTab(storedTab) ?? "analyses";
   const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
+  const [analysisCount, setAnalysisCount] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -78,9 +79,20 @@ const Workspace = () => {
     setDatasets((data ?? []) as { id: string; name: string }[]);
   }, [activeId]);
 
+  const loadAnalysisCount = useCallback(async () => {
+    if (!activeId) return;
+    const { count } = await supabase
+      .from("source_analyses")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", activeId);
+    setAnalysisCount(count ?? 0);
+  }, [activeId]);
+
   useEffect(() => {
     void loadDatasets();
-  }, [loadDatasets, refreshKey]);
+    void loadAnalysisCount();
+  }, [loadDatasets, loadAnalysisCount, refreshKey]);
+
 
   const setTab = (next: string) => {
     if (tabPrefKey) {

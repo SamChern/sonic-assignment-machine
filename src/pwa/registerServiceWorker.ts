@@ -116,6 +116,120 @@ function watchForStaleBuild(): void {
   window.setInterval(() => void recoverIfStale(), 5 * 60 * 1000);
 }
 
+export type VersionStatus = {
+  compiledBuildId: string;
+  deployedBuildId: string | null;
+  swScriptUrl: string | null;
+  swState: "none" | "installing" | "waiting" | "active";
+  swVersion: string | null;
+  controlled: boolean;
+  stale: boolean;
+  checkedAt: number;
+};
+
+async function appRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (!("serviceWorker" in navigator)) return null;
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  return (
+    registrations.find((r) => {
+      const url = r.active?.scriptURL || r.waiting?.scriptURL || r.installing?.scriptURL || "";
+      return url.endsWith(SW_URL);
+    }) ?? null
+  );
+}
+
+function askWorkerVersion(worker: ServiceWorker): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const channel = new MessageChannel();
+      const timer = window.setTimeout(() => resolve(null), 1500);
+      channel.port1.onmessage = (event) => {
+        window.clearTimeout(timer);
+        resolve(typeof event.data?.version === "string" ? event.data.version : null);
+      };
+      worker.postMessage({ type: "GET_VERSION" }, [channel.port2]);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/** Snapshot of build stamps + service worker state for the version status panel. */
+export async function getVersionStatus(): Promise<VersionStatus> {
+  let deployedBuildId: string | null = null;
+  try {
+    const res = await fetch(`/build-info.json?t=${Date.now()}`, { cache: "no-store" });
+    if (res.ok) {
+      const body = (await res.json()) as { buildId?: string };
+      deployedBuildId = body.buildId ?? null;
+    }
+  } catch {
+    deployedBuildId = null;
+  }
+
+  const registration = await appRegistration();
+  const worker = registration?.active ?? registration?.waiting ?? registration?.installing ?? null;
+  const swState: VersionStatus["swState"] = registration?.active
+    ? "active"
+    : registration?.waiting
+      ? "waiting"
+      : registration?.installing
+        ? "installing"
+        : "none";
+
+  return {
+    compiledBuildId: __APP_BUILD_ID__,
+    deployedBuildId,
+    swScriptUrl: worker?.scriptURL ?? null,
+    swState,
+    swVersion: worker ? await askWorkerVersion(worker) : null,
+    controlled: Boolean(navigator.serviceWorker?.controller),
+    stale: Boolean(deployedBuildId && deployedBuildId !== __APP_BUILD_ID__) || swState === "waiting",
+    checkedAt: Date.now(),
+  };
+}
+
+/**
+ * Force update path for installed shells (Safari dock shortcuts, Android PWAs).
+ * Tells every app worker to skipWaiting + clients.claim, purges caches, drops
+ * the registration, then hard-navigates to a cache-busted URL so the shell can
+ * only come back with the newest HTML.
+ */
+export async function forceUpdate(): Promise<void> {
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const registration of registrations) {
+        const url =
+          registration.active?.scriptURL ||
+          registration.waiting?.scriptURL ||
+          registration.installing?.scriptURL ||
+          "";
+        if (!url.endsWith(SW_URL)) continue; // never touch messaging workers
+        for (const worker of [registration.installing, registration.waiting, registration.active]) {
+          worker?.postMessage({ type: "FORCE_UPDATE" });
+        }
+        try {
+          await registration.update();
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.allSettled(
+        keys.filter((k) => k.startsWith("sonicsim-") || /precache-v\d+-|runtime-/.test(k)).map((k) => caches.delete(k)),
+      );
+    }
+    await unregisterAppWorkers();
+  } finally {
+    const url = new URL(window.location.href);
+    url.searchParams.set("v", Date.now().toString(36));
+    window.location.replace(url.toString());
+  }
+}
+
 export function registerServiceWorker(): void {
   if (!("serviceWorker" in navigator)) {
     watchForStaleBuild();
@@ -166,3 +280,4 @@ export function registerServiceWorker(): void {
       });
   });
 }
+

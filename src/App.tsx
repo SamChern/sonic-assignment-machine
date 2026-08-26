@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { Suspense, lazy, useEffect } from "react";
 
 import MobileBottomNav from "@/components/MobileBottomNav";
+import VersionStatusPanel from "@/components/VersionStatusPanel";
 import Index from "./pages/Index";
 
 const Auth = lazy(() => import("./pages/Auth"));
@@ -111,6 +112,8 @@ const App = () => (
           </Suspense>
           </div>
           <MobileBottomNav />
+          <VersionStatusPanel />
+
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

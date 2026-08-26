@@ -62,13 +62,15 @@ const SAMPLE_INPUT: Record<CategoryKey, number> = {
  */
 const CategoryProfileEditor = ({
   organizationId,
-  canWrite,
+  canEdit,
   onSaved,
 }: {
   organizationId: string;
-  canWrite: boolean;
+  /** Only enterprise admins (organization owners) may change the 6 categories. */
+  canEdit: boolean;
   onSaved?: () => void;
 }) => {
+
   const { versions, activeProfile, loading, reload } = useCategoryProfiles(organizationId);
   const [selectedId, setSelectedId] = useState<string>("");
   const [draft, setDraft] = useState<CategoryProfileConfig>(defaultCategoryProfileConfig());

@@ -503,7 +503,7 @@ const Index = () => {
 
           {hasEnterprise && activeOrg ? (
             <Tabs defaultValue="analyses" className="mt-5 w-full min-w-0 overflow-visible">
-              <TabsList className="flex h-auto min-h-12 w-full max-w-full items-stretch overflow-x-auto no-scrollbar justify-start rounded-lg p-1 sm:grid sm:grid-cols-3">
+              <TabsList className="grid h-auto min-h-12 w-full max-w-full grid-cols-2 items-stretch gap-1 rounded-lg p-1 sm:grid-cols-3">
                 <TabsTrigger value="analyses" className="h-auto min-h-10 shrink-0 px-3 py-2.5 sm:min-w-0">
                   <Sparkles className="mr-1 h-4 w-4 shrink-0" />
                   <span className="whitespace-normal leading-tight sm:truncate">Recent analyses</span>

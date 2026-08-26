@@ -45,6 +45,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { NetworkVisualization } from "@/components/NetworkVisualization";
+import { IntuiziConsolePanel } from "@/components/admin/IntuiziConsolePanel";
+import { AdminConnectedApisTab } from "@/components/admin/AdminConnectedApisTab";
+import { LibrosaHealthPanel } from "@/components/LibrosaHealthPanel";
+
 
 import { AnalysisResults } from "@/components/AnalysisResults";
 import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";

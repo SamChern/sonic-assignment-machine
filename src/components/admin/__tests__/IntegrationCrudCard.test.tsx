@@ -11,11 +11,11 @@ import {
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: supabaseMock }));
 
-const toastMock = {
+const toastMock = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
-};
+}));
 vi.mock("sonner", () => ({ toast: toastMock }));
 
 import { IntegrationCrudCard } from "@/components/admin/IntegrationCrudCard";

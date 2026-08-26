@@ -3,12 +3,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const getMock = vi.fn();
+const getMock = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/useEC2Api", () => ({
   useEC2Api: () => ({ get: getMock }),
 }));
 
-const toastMock = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
+const toastMock = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+}));
 vi.mock("sonner", () => ({ toast: toastMock }));
 
 import { Ec2StatusPanel } from "@/components/admin/Ec2StatusPanel";

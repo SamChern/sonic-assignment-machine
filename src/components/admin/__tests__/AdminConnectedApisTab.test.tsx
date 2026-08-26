@@ -12,10 +12,14 @@ import {
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: supabaseMock }));
 
-const toastMock = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
+const toastMock = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+}));
 vi.mock("sonner", () => ({ toast: toastMock }));
 
-const navigateMock = vi.fn();
+const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return { ...actual, useNavigate: () => navigateMock };

@@ -5,7 +5,7 @@
 // rows that already produced semantic output. Also covers the transient-error
 // retry path, which must retry only the failed row groups.
 
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   isTransientParquetError,
   planRowGroupRead,

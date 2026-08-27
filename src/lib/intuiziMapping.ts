@@ -236,6 +236,7 @@ export function inspectRow(
         if (Number.isFinite(d)) {
           confidence = d <= 25 ? 0.9 : d <= 100 ? 0.7 : d <= 250 ? 0.5 : 0.35;
           confidenceReason = `distance=${d}m → ${confidence}`;
+        }
       } else if (reportType === "ctv") {
         const n = Number(hit.value);
         if (Number.isFinite(n) && n > 0) {
@@ -243,8 +244,8 @@ export function inspectRow(
           confidenceReason = `signals=${n} → 0.5 + log10(1+${n})/4`;
         }
       }
-
     }
+
 
     fields.push({
       field: s.field,

@@ -91,6 +91,15 @@ const bytes = (n: number) =>
 
 const fileName = (key: string) => key.split("/").pop() ?? key;
 
+/** Compact ms -> "45s" / "3m 20s" for resume time estimates. */
+const fmtDuration = (ms: number) => {
+  const s = Math.max(1, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem ? `${m}m ${rem}s` : `${m}m`;
+};
+
 const StageIcon = ({ state }: { state: StageState }) => {
   if (state === "running") return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
   if (state === "ok") return <CheckCircle2 className="h-4 w-4 text-primary" />;

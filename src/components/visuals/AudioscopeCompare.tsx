@@ -221,6 +221,27 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
     };
   }, [entities, playing, speed, isStatic, reduced, isMobile, height]);
 
+  const animating = playing && !isStatic;
+
+  // Same semantics as the SonicSIM panel: Play always leaves Static, and
+  // entering Static always halts motion.
+  const togglePlay = () => {
+    setPlaying((prev) => {
+      const next = !prev;
+      if (next) setIsStatic(false);
+      return next;
+    });
+    setIsStatic((prev) => (playing ? prev : false));
+  };
+
+  const toggleStatic = () => {
+    setIsStatic((prev) => {
+      const next = !prev;
+      if (next) setPlaying(false);
+      return next;
+    });
+  };
+
   if (entities.length === 0) return null;
 
   const sim = typeof similarity === "number" ? Math.round(similarity) : null;

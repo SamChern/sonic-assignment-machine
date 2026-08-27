@@ -831,6 +831,7 @@ Deno.serve(async (req) => {
 
     for (const rawCand of candidates) {
       if (breakerTripped) break;
+      if (outOfTime()) { summary.time_budget_exhausted = true; break; }
 
       const { data: fileRow, error: fileErr } = await admin
         .from("intuizi_ingest_files")

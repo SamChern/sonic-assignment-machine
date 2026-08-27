@@ -184,6 +184,19 @@ const PostIngestionWizard = () => {
   const [resumeEstimates, setResumeEstimates] = useState<ResumeEstimate[]>([]);
   /** Budget / deadline telemetry from the last run of each file. */
   const [deadlines, setDeadlines] = useState<DeadlineInfo[]>([]);
+  /**
+   * Rolling per-phase CPU history across invocations (newest last), kept in
+   * localStorage so the chart survives reloads and spans several resume runs.
+   */
+  const [phaseRuns, setPhaseRuns] = useState<PhaseRun[]>(() => {
+    try {
+      const raw = localStorage.getItem(PHASE_HISTORY_KEY);
+      const parsed = raw ? (JSON.parse(raw) as PhaseRun[]) : [];
+      return Array.isArray(parsed) ? parsed.slice(-PHASE_HISTORY_MAX) : [];
+    } catch {
+      return [];
+    }
+  });
   /** The call currently in flight, plus a 1s tick for its countdown. */
   const [liveRun, setLiveRun] = useState<LiveRun | null>(null);
   const [, setTick] = useState(0);
@@ -191,6 +204,15 @@ const PostIngestionWizard = () => {
   const resumeCursors = useRef<Record<string, number>>({});
   /** Last budget the server reported, used for the countdown before it replies. */
   const lastBudgetMs = useRef(70_000);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PHASE_HISTORY_KEY, JSON.stringify(phaseRuns));
+    } catch {
+      /* storage full or blocked — the chart is still live for this session */
+    }
+  }, [phaseRuns]);
+
 
   useEffect(() => {
     if (!liveRun) return;

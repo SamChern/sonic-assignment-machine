@@ -77,9 +77,9 @@ const MOTION_PREF_KEY = "sonicsim.audioscope.motion";
  * back into the panel surface instead of reading as solid buttons.
  */
 const TRANSPORT_CLS =
-  "h-7 gap-1 rounded-md border border-border/40 bg-background/30 px-2 text-[11px] font-normal text-muted-foreground backdrop-blur-sm hover:bg-background/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  "h-7 gap-1 rounded-md border border-border/60 bg-background/60 px-2 text-[11px] font-normal text-foreground/80 shadow-sm backdrop-blur-sm supports-[backdrop-filter]:bg-background/45 hover:bg-background/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const TRANSPORT_CLS_ACTIVE =
-  "h-7 gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-[11px] font-normal text-foreground backdrop-blur-sm hover:bg-primary/25 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  "h-7 gap-1 rounded-md border border-primary/60 bg-primary/20 px-2 text-[11px] font-medium text-foreground shadow-sm backdrop-blur-sm hover:bg-primary/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 /** Deterministic time offset (seconds) the Static view freezes on. */
 const STATIC_FRAME_T = 1.25;

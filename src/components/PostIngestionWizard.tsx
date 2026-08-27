@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import InferenceConfigGuard from "@/components/InferenceConfigGuard";
+import { useInferenceReadiness } from "@/hooks/useInferenceReadiness";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -365,7 +367,7 @@ const PostIngestionWizard = () => {
           </SelectContent>
         </Select>
 
-        <Button onClick={run} disabled={!activation || running}>
+        <Button onClick={run} disabled={!activation || running || inferenceBlocked}>
           {running ? (
             <Loader2 className="mr-1 h-4 w-4 animate-spin" />
           ) : (
@@ -380,6 +382,15 @@ const PostIngestionWizard = () => {
             Clear
           </Button>
         )}
+      </div>
+
+      <div className="mt-3">
+        <InferenceConfigGuard
+          readiness={readiness}
+          loading={inferenceLoading}
+          error={inferenceError}
+          onRecheck={recheck}
+        />
       </div>
 
       <ol className="mt-5 space-y-3">

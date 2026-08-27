@@ -57,16 +57,13 @@ export function signalColumn(reportType: string): string {
 
 
 export function statusOf(e: unknown): number | undefined {
-  const s = (e as { status?: number; statusCode?: number })?.status ??
-    (e as { statusCode?: number })?.statusCode;
-  return typeof s === "number" ? s : undefined;
+  return httpStatusOf(e);
 }
 
 export function errMsg(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  const m = (e as { message?: string })?.message;
-  return m ?? String(e);
+  return messageOf(e);
 }
+
 
 /** Rate-limit / retry telemetry for one invocation. */
 export function createRateMetrics() {

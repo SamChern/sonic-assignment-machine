@@ -718,6 +718,8 @@ Deno.serve(async (req) => {
   rateMetrics.reset();
   const runStart = Date.now();
   const outOfTime = () => Date.now() - runStart > RUN_BUDGET_MS;
+  /** Hard wall for any single object read, so no read outlives the run budget. */
+  const readDeadlineAt = runStart + RUN_BUDGET_MS;
   const summary = {
     files_processed: 0,
     files_failed: 0,
@@ -911,8 +913,31 @@ Deno.serve(async (req) => {
           MAX_ROWS_PER_FILE,
           EXPECTED_ROWS_PER_USER,
           resumeGroup,
+          readDeadlineAt,
         );
         const checkpoint = chunk.checkpoint;
+
+        // The reader stopped early to stay inside the run budget: persist the
+        // unchanged cursor as `partial` and let the wizard's Resume continue.
+        if (chunk.deadlineExceeded) {
+          summary.time_budget_exhausted = true;
+          summary.complete = false;
+          await admin.from("intuizi_ingest_files").update({
+            status: "partial",
+            row_group_cursor: checkpoint?.startRowGroup ?? resumeGroup,
+            row_groups_total: checkpoint?.rowGroupsTotal ?? fileRow.row_groups_total ?? null,
+            error_message: null,
+          }).eq("id", fileRow.id);
+          summary.files.push({
+            object_key: cand.key,
+            status: "partial",
+            complete: false,
+            rows: 0,
+            row_group_cursor: checkpoint?.startRowGroup ?? resumeGroup,
+            row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+          });
+          break;
+        }
         const rawRows = chunk.rows.slice(0, MAX_ROWS_PER_FILE);
 
         summary.rows_read += rawRows.length;

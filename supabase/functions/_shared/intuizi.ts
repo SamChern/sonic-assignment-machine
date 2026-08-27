@@ -76,14 +76,25 @@ export async function fetchObjectChunk(
   maxRows = 5000,
   expectedRowsPerUser?: number,
   startRowGroup = 0,
-): Promise<{ rows: Record<string, unknown>[]; checkpoint: ParquetCheckpoint | null }> {
+  /** Wall-clock ms after which the read gives up and checkpoints instead. */
+  deadlineAt?: number,
+): Promise<{
+  rows: Record<string, unknown>[];
+  checkpoint: ParquetCheckpoint | null;
+  deadlineExceeded?: boolean;
+}> {
   const lower = objectKey.toLowerCase();
 
   if (lower.endsWith(".parquet") || lower.endsWith(".pq")) {
-    return await readParquetChunk(url, maxRows, startRowGroup, expectedRowsPerUser);
+    return await readParquetChunk(url, maxRows, startRowGroup, expectedRowsPerUser, deadlineAt);
   }
 
-  const res = await fetch(url);
+  // Plain object reads are aborted at the deadline so a stalled transfer can
+  // never hold the function open past the gateway's 150s idle limit.
+  const signal = deadlineAt != null
+    ? AbortSignal.timeout(Math.max(1_000, deadlineAt - Date.now()))
+    : undefined;
+  const res = await fetch(url, { signal });
   if (!res.ok) {
     throw new Error(`object fetch failed [${res.status}]: ${await res.text()}`);
   }

@@ -5,7 +5,7 @@
 // rows that already produced semantic output. Also covers the transient-error
 // retry path, which must retry only the failed row groups.
 
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   isTransientParquetError,
   planRowGroupRead,
@@ -125,4 +125,23 @@ Deno.test("transient classifier covers throttling and gateway faults", () => {
   assert(isTransientParquetError(Object.assign(new Error("bad gateway"), { status: 502 })));
   assert(isTransientParquetError(new Error("fetch failed")));
   assertEquals(isTransientParquetError(new Error("corrupt footer magic")), false);
+});
+
+Deno.test("retries stop when the run budget cannot absorb the backoff", async () => {
+  let attempts = 0;
+  const past = Date.now() + 10; // effectively no budget left
+  await assertRejects(
+    () =>
+      retryRowGroups(
+        () => {
+          attempts++;
+          return Promise.reject(new Error("connection reset by peer"));
+        },
+        { attempts: 5, baseDelayMs: 500, deadlineAt: past, sleep: () => Promise.resolve() },
+      ),
+    Error,
+    "connection reset",
+  );
+  // Only the first attempt runs: the backoff would outlive the run budget.
+  assertEquals(attempts, 1);
 });

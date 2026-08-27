@@ -209,9 +209,27 @@ export interface ParquetCheckpoint {
   exhausted: boolean;
 }
 
+/** Thrown when a row-group decode exceeds the caller's remaining run budget. */
+export class ParquetReadTimeout extends Error {
+  constructor(ms: number) {
+    super(`parquet row-group read exceeded the ${Math.round(ms / 1000)}s run budget`);
+    this.name = "ParquetReadTimeout";
+  }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  if (!Number.isFinite(ms)) return p;
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new ParquetReadTimeout(ms)), Math.max(1_000, ms));
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
 export interface ParquetChunk {
   rows: Record<string, unknown>[];
   checkpoint: ParquetCheckpoint;
+  /** True when the read stopped early to stay inside the caller's run budget. */
+  deadlineExceeded?: boolean;
 }
 
 /**
@@ -321,6 +339,8 @@ export async function retryRowGroups<T>(
     label?: string;
     isTransient?: (e: unknown) => boolean;
     sleep?: (ms: number) => Promise<void>;
+    /** Wall-clock ms after which no further retry is attempted. */
+    deadlineAt?: number;
   } = {},
 ): Promise<T> {
   const attempts = opts.attempts ?? 3;
@@ -336,6 +356,9 @@ export async function retryRowGroups<T>(
       lastErr = e;
       if (attempt >= attempts || !transient(e)) throw e;
       const delay = base * 2 ** (attempt - 1);
+      // Never burn the caller's remaining budget on a retry that cannot finish
+      // before the gateway's idle timeout — let the run checkpoint and resume.
+      if (opts.deadlineAt != null && Date.now() + delay >= opts.deadlineAt) throw e;
       console.log(JSON.stringify({
         evt: "parquet_row_group_retry",
         label: opts.label ?? null,
@@ -364,7 +387,25 @@ export async function readParquetChunk(
   maxRows: number,
   startRowGroup = 0,
   expectedRowsPerUser?: number,
+  deadlineAt?: number,
 ): Promise<ParquetChunk> {
+  /** Minimum time a row-group read is given; below this we checkpoint instead. */
+  const MIN_READ_MS = 25_000;
+  const timeLeft = () => (deadlineAt == null ? Infinity : deadlineAt - Date.now());
+  if (timeLeft() <= MIN_READ_MS) {
+    return {
+      rows: [],
+      checkpoint: {
+        startRowGroup,
+        nextRowGroup: startRowGroup,
+        rowGroupsTotal: null,
+        rowsOffset: 0,
+        nextRowsOffset: 0,
+        exhausted: false,
+      },
+      deadlineExceeded: true,
+    };
+  }
   const file = await asyncBufferFromUrl({ url });
   const byteLength = typeof file.byteLength === "number" ? file.byteLength : null;
 
@@ -385,7 +426,7 @@ export async function readParquetChunk(
 
   // Footer first: gives the column list and row count without decoding pages,
   // so an empty or mis-shaped delivery fails with a readable message.
-  const metadata = await parquetMetadataAsync(file);
+  const metadata = await withTimeout(parquetMetadataAsync(file), timeLeft());
   const columns = (metadata.schema ?? [])
     .filter((s: { num_children?: number; name: string }) => !s.num_children)
     .map((s: { name: string }) => s.name);
@@ -406,25 +447,65 @@ export async function readParquetChunk(
 
   const plan = planRowGroupRead(groupRows, startRowGroup, maxRows);
 
+  // Footer/metadata reads can be slow on multi-GB deliveries. If decoding pages
+  // can no longer finish inside the run budget, stop here with the UNCHANGED
+  // cursor so the next run re-reads exactly this range (no rows are skipped).
+  if (timeLeft() <= MIN_READ_MS) {
+    return {
+      rows: [],
+      checkpoint: {
+        ...plan.checkpoint,
+        nextRowGroup: plan.checkpoint.startRowGroup,
+        nextRowsOffset: plan.checkpoint.rowsOffset,
+        exhausted: false,
+      },
+      deadlineExceeded: true,
+    };
+  }
+
   if (plan.checkpoint.exhausted && plan.rowEnd <= plan.rowStart) {
     return { rows: [], checkpoint: plan.checkpoint };
   }
 
   // Transient S3/network faults are retried for THIS row-group range only, so a
   // blip never forces the whole file to be re-transformed from group 0.
-  const raw = await retryRowGroups(
-    () =>
-      parquetReadObjects({
-        file,
-        metadata,
-        compressors,
-        rowStart: plan.rowStart,
-        rowEnd: plan.rowEnd,
-      }),
+  let raw: unknown;
+  try {
+    raw = await retryRowGroups(
+      () =>
+        // Hard cap on the decode itself: a stalled page read must not hold the
+        // function open until the gateway's 150s idle timeout fires.
+        withTimeout(
+          parquetReadObjects({
+            file,
+            metadata,
+            compressors,
+            rowStart: plan.rowStart,
+            rowEnd: plan.rowEnd,
+          }),
+          timeLeft(),
+        ),
     {
       label: `row groups ${plan.checkpoint.startRowGroup}..${plan.checkpoint.nextRowGroup - 1}`,
+      deadlineAt,
     },
-  );
+    );
+  } catch (e) {
+    if (e instanceof ParquetReadTimeout) {
+      // Same contract as the pre-read bail-out: keep the cursor put and resume.
+      return {
+        rows: [],
+        checkpoint: {
+          ...plan.checkpoint,
+          nextRowGroup: plan.checkpoint.startRowGroup,
+          nextRowsOffset: plan.checkpoint.rowsOffset,
+          exhausted: false,
+        },
+        deadlineExceeded: true,
+      };
+    }
+    throw e;
+  }
 
   const rows = (raw as Record<string, unknown>[]).map((row) => {
     const out: Record<string, unknown> = {};
@@ -452,8 +533,9 @@ export async function readParquetRows(
   url: string,
   maxRows: number,
   expectedRowsPerUser?: number,
+  deadlineAt?: number,
 ): Promise<Record<string, unknown>[]> {
-  const { rows } = await readParquetChunk(url, maxRows, 0, expectedRowsPerUser);
+  const { rows } = await readParquetChunk(url, maxRows, 0, expectedRowsPerUser, deadlineAt);
   return rows;
 }
 

@@ -23,6 +23,9 @@ interface AudioscopeCompareProps {
   height?: number;
 }
 
+/** Deterministic time offset (seconds) the Static view freezes on. */
+const STATIC_FRAME_T = 1.25;
+
 const prefersReducedMotion = () =>
   typeof window !== "undefined" &&
   Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -63,6 +66,16 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       Math.abs((Number(pair[0].scores[c]) || 0) - (Number(pair[1].scores[c]) || 0)),
     );
   }, [pair]);
+
+  const staticDeltas = useMemo(
+    () =>
+      AUDIOSCOPE_CATEGORIES.map((c, i) => ({
+        category: c,
+        band: i + 1,
+        delta: Math.round(deltas[i] ?? 0),
+      })).sort((a, b) => b.delta - a.delta),
+    [deltas],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -159,7 +172,7 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
     };
 
     if (isStatic || reduced || !playing) {
-      frame(isStatic ? 1.25 : 0);
+      frame(isStatic ? STATIC_FRAME_T : 0);
       return () => {
         window.removeEventListener("resize", resize);
         io.disconnect();
@@ -307,6 +320,33 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
                 subject scores high on the semantic layer.
               </p>
             </div>
+            {isStatic ? (
+              <div className="sm:col-span-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
+                <p className="mb-1 font-semibold text-foreground">
+                  Static mode — frozen at t = {STATIC_FRAME_T.toFixed(2)}s
+                </p>
+                <p className="mb-2">
+                  Both traces and the divergence band are sampled at that one timestamp, so the gap
+                  you see is a fixed, comparable snapshot. Per-category Δ at this frame, largest
+                  first — the top rows are the ontology nodes lit hardest in the frozen frame:
+                </p>
+                <ul className="grid gap-1 sm:grid-cols-2">
+                  {staticDeltas.map((d) => (
+                    <li key={d.category} className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: `hsl(var(--category-${d.category}))` }}
+                      />
+                      <span className="text-foreground">
+                        Band {d.band} · {CATEGORY_LABELS[d.category] ?? d.category}
+                      </span>
+                      <span>Δ {d.delta}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div>
               <p className="mb-1 font-semibold text-foreground">Divergence &amp; nodes</p>
               <p>

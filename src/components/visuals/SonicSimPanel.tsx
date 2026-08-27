@@ -63,6 +63,9 @@ const prefersReducedMotion = () =>
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3] as const;
 
+/** Deterministic time offset (seconds) the Static view freezes on. */
+const STATIC_FRAME_T = 1.25;
+
 export const SonicSimPanel = ({
   subjects,
   onSubjectChange,
@@ -92,6 +95,18 @@ export const SonicSimPanel = ({
     () => subjects.find((s) => s.id === subjectId) ?? subjects[0] ?? null,
     [subjects, subjectId],
   );
+
+  // Per-band readout for the frozen frame: band order = category order (low to high).
+  const staticBands = useMemo(() => {
+    const scores = subject?.scores ?? ({} as CategoryScores);
+    const rows = AUDIOSCOPE_CATEGORIES.map((c, i) => ({
+      category: c,
+      band: i + 1,
+      score: Math.round(Number(scores[c]) || 0),
+    }));
+    const top = [...rows].sort((a, b) => b.score - a.score).slice(0, 2).map((r) => r.category);
+    return rows.map((r) => ({ ...r, dominant: top.includes(r.category) }));
+  }, [subject]);
 
   useEffect(() => {
     // Switching subject drops any previous real-audio routing.
@@ -281,7 +296,7 @@ export const SonicSimPanel = ({
           mode={mode}
           playing={playing && !isStatic}
           speed={speed}
-          staticFrame={isStatic ? 1.25 : null}
+          staticFrame={isStatic ? STATIC_FRAME_T : null}
           mediaEl={liveEl}
           height={fullscreen ? Math.max(420, Math.round(window.innerHeight * 0.7)) : height}
           caption={subject.sublabel ?? subject.label}
@@ -321,6 +336,39 @@ export const SonicSimPanel = ({
                 calm, contextual one.
               </p>
             </div>
+            {isStatic ? (
+              <div className="sm:col-span-3 rounded-lg border border-primary/40 bg-primary/5 p-3">
+                <p className="mb-1 font-semibold text-foreground">
+                  Static mode — frozen at t = {STATIC_FRAME_T.toFixed(2)}s
+                </p>
+                <p className="mb-2">
+                  Nothing is animating: every band and node below is sampled at that single
+                  timestamp, so the still frame is reproducible and safe to screenshot. Bands are
+                  listed low to high; the marked rows are the partials carrying the frame and the
+                  ontology nodes drawn largest and brightest in it.
+                </p>
+                <ul className="grid gap-1 sm:grid-cols-2">
+                  {staticBands.map((b) => (
+                    <li key={b.category} className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: categoryToken(b.category) }}
+                      />
+                      <span className="text-foreground">
+                        Band {b.band} · {CATEGORY_LABELS[b.category] ?? b.category}
+                      </span>
+                      <span>{b.score}/100</span>
+                      {b.dominant ? (
+                        <span className="rounded border border-primary/50 px-1 text-[10px] text-primary">
+                          node lit
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div>
               <p className="mb-1 font-semibold text-foreground">Ontology node highlights</p>
               <p>

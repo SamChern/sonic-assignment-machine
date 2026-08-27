@@ -236,17 +236,31 @@ const PostIngestionWizard = () => {
     let roster = 0;
 
     const estimates: ResumeEstimate[] = [];
+    const deadlineInfos: DeadlineInfo[] = [];
 
     for (const f of dataFiles) {
       const t0 = Date.now();
+      setLiveRun({ key: f.object_key, startedAt: t0, budgetMs: lastBudgetMs.current });
       const { data, error } = await supabase.functions.invoke("intuizi-ingest", {
         body: { object_key: f.object_key, report_type: f.report_type ?? undefined },
       });
+      setLiveRun(null);
       const wallMs = Date.now() - t0;
       if (error) {
         ingestErrors.push(`${fileName(f.object_key)}: ${error.message}`);
         perFile.push([fileName(f.object_key), "failed · resumable"]);
         stillPartial.push(f);
+        deadlineInfos.push({
+          key: f.object_key,
+          budgetMs: lastBudgetMs.current,
+          defaultBudgetMs: null,
+          budgetReason: null,
+          elapsedMs: wallMs,
+          timeRemainingMs: 0,
+          deadlineExceeded: true,
+          deadlineStep: "gateway timeout / invoke error",
+          phaseMs: null,
+        });
         continue;
       }
       const res = data as {
@@ -256,7 +270,13 @@ const PostIngestionWizard = () => {
         time_budget_exhausted?: boolean;
         complete?: boolean;
         run_budget_ms?: number;
+        default_run_budget_ms?: number;
+        budget_reason?: string;
         elapsed_ms?: number;
+        time_remaining_ms?: number;
+        deadline_exceeded?: boolean;
+        deadline_step?: string | null;
+        phase_ms?: Record<string, number>;
         files?: {
           object_key?: string;
           complete?: boolean;
@@ -265,6 +285,7 @@ const PostIngestionWizard = () => {
         }[];
         errors?: string[];
       };
+
       rowsRead += res.rows_read ?? 0;
       scored += res.identifiers_scored ?? 0;
       roster += res.roster_identifiers ?? 0;

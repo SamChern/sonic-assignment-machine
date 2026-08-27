@@ -390,3 +390,19 @@ All colors MUST be HSL.
     transition: var(--transition-smooth);
   }
 }
+
+/* Audioscope node pulse — opt-in animation for the ontological network graph. */
+@keyframes audioscope-node-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+.audioscope-pulse circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: audioscope-node-pulse 2.4s ease-in-out infinite;
+}
+.audioscope-pulse circle:nth-of-type(3n) { animation-duration: 1.7s; }
+.audioscope-pulse circle:nth-of-type(3n + 1) { animation-duration: 3.1s; }
+@media (prefers-reduced-motion: reduce) {
+  .audioscope-pulse circle { animation: none; }
+}

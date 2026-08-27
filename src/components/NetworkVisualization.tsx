@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ZoomIn, ZoomOut, RotateCcw, Maximize, Tag, EyeOff } from "lucide-react";
+import { Activity, Check, ZoomIn, ZoomOut, RotateCcw, Maximize, Tag, EyeOff } from "lucide-react";
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

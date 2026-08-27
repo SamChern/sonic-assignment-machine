@@ -85,17 +85,22 @@ export function buildVerdict(cfg: InferenceConfig, probe: ProbeResult): VerdictR
         : "By design: semantic scoring runs on Lovable AI (no local scoring model configured)",
   });
 
-  // 3. Embedding model.
+  // 3. Embedding model. Dims without a model means the embedding route is
+  //    half-configured, which is worth flagging (never blocking).
+  const dimsOnly = !cfg.embedModel && cfg.embedDims > 0;
   checks.push({
     id: "embed_model",
     label: "Embedding model",
-    state: cfg.embedModel ? (cfg.embedDims ? "ok" : "warn") : "skipped",
+    state: cfg.embedModel ? (cfg.embedDims ? "ok" : "warn") : dimsOnly ? "warn" : "skipped",
     detail: cfg.embedModel
       ? cfg.embedDims
         ? `EC2_EMBEDDING_MODEL = ${cfg.embedModel} (${cfg.embedDims} dims, padded to 1536)`
         : `EC2_EMBEDDING_MODEL = ${cfg.embedModel} but EC2_EMBEDDING_DIMS is unset — vectors may be stored at the wrong width`
-      : "Embeddings run on Lovable AI — no local embedding model configured",
+      : dimsOnly
+        ? `EC2_EMBEDDING_DIMS = ${cfg.embedDims} but EC2_EMBEDDING_MODEL is not set — embeddings fall back to Lovable AI`
+        : "Embeddings run on Lovable AI — no local embedding model configured",
   });
+
 
   // 4. Live probe results (only meaningful when an endpoint is configured).
   if (cfg.ec2Url) {

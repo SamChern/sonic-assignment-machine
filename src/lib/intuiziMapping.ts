@@ -54,6 +54,34 @@ const slug = (v: string) =>
 const multi = (v: string) =>
   !v ? [] : v.split(/[|,;]/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
 
+const PATH_STOP = new Set([
+  "www", "index", "html", "htm", "php", "amp", "en", "en-us", "us", "news",
+  "article", "articles", "story", "stories", "page", "pages", "p", "id",
+]);
+
+/** Path tokens from a web-report `page` value — max two meaningful segments. */
+export const pathTopics = (page: string): string[] => {
+  if (!page) return [];
+  const path = page.replace(/^https?:\/\/[^/]+/i, "").split(/[?#]/)[0];
+  const out: string[] = [];
+  for (const raw of path.split("/")) {
+    const seg = raw.trim().toLowerCase();
+    if (!seg || seg.length < 3 || /^\d+$/.test(seg) || PATH_STOP.has(seg)) continue;
+    const trimmed = seg.replace(/\.(html?|php|aspx)$/, "").split("-").slice(0, 4).join("-");
+    if (trimmed.length >= 3 && !out.includes(trimmed)) out.push(trimmed);
+    if (out.length === 2) break;
+  }
+  return out;
+};
+
+/** Host portion of a referrer URL, without `www.`. */
+export const hostOf = (ref: string): string => {
+  if (!ref) return "";
+  const m = ref.match(/^(?:https?:\/\/)?([^/?#\s]+)/i);
+  return m ? m[1].replace(/^www\./i, "").toLowerCase() : "";
+};
+
+
 const daypart = (iso: string) => {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";

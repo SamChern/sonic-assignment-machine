@@ -23,6 +23,10 @@ interface AudioscopeCompareProps {
   height?: number;
 }
 
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+
 function readVar(name: string, fallback: string): string {
   if (typeof window === "undefined") return fallback;
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -36,9 +40,10 @@ function readVar(name: string, fallback: string): string {
  */
 export const AudioscopeCompare = ({ entities, similarity, height = 240 }: AudioscopeCompareProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(() => !prefersReducedMotion());
   const [speed, setSpeed] = useState(0.25);
-  const [isStatic, setIsStatic] = useState(false);
+  // Reduced-motion users get the still frame by default; they can opt back into motion.
+  const [isStatic, setIsStatic] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const rafRef = useRef<number | null>(null);
   const visibleRef = useRef(true);

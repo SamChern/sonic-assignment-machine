@@ -57,6 +57,10 @@ const MODES: { key: AudioscopeMode; label: string; icon: typeof Activity }[] = [
   { key: "nodes", label: "Node pulse", icon: Network },
 ];
 
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3] as const;
 
 export const SonicSimPanel = ({
@@ -69,9 +73,10 @@ export const SonicSimPanel = ({
 }: SonicSimPanelProps) => {
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id ?? "");
   const [mode, setMode] = useState<AudioscopeMode>(defaultMode);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(() => !prefersReducedMotion());
   const [speed, setSpeed] = useState(0.25);
-  const [isStatic, setIsStatic] = useState(false);
+  // Reduced-motion users get the still frame by default; they can opt back into motion.
+  const [isStatic, setIsStatic] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const [replayKey, setReplayKey] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);

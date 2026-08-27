@@ -321,6 +321,8 @@ export async function retryRowGroups<T>(
     label?: string;
     isTransient?: (e: unknown) => boolean;
     sleep?: (ms: number) => Promise<void>;
+    /** Wall-clock ms after which no further retry is attempted. */
+    deadlineAt?: number;
   } = {},
 ): Promise<T> {
   const attempts = opts.attempts ?? 3;
@@ -336,6 +338,9 @@ export async function retryRowGroups<T>(
       lastErr = e;
       if (attempt >= attempts || !transient(e)) throw e;
       const delay = base * 2 ** (attempt - 1);
+      // Never burn the caller's remaining budget on a retry that cannot finish
+      // before the gateway's idle timeout — let the run checkpoint and resume.
+      if (opts.deadlineAt != null && Date.now() + delay >= opts.deadlineAt) throw e;
       console.log(JSON.stringify({
         evt: "parquet_row_group_retry",
         label: opts.label ?? null,
@@ -364,7 +369,25 @@ export async function readParquetChunk(
   maxRows: number,
   startRowGroup = 0,
   expectedRowsPerUser?: number,
+  deadlineAt?: number,
 ): Promise<ParquetChunk> {
+  /** Minimum time a row-group read is given; below this we checkpoint instead. */
+  const MIN_READ_MS = 25_000;
+  const timeLeft = () => (deadlineAt == null ? Infinity : deadlineAt - Date.now());
+  if (timeLeft() <= MIN_READ_MS) {
+    return {
+      rows: [],
+      checkpoint: {
+        startRowGroup,
+        nextRowGroup: startRowGroup,
+        rowGroupsTotal: null,
+        rowsOffset: 0,
+        nextRowsOffset: 0,
+        exhausted: false,
+      },
+      deadlineExceeded: true,
+    };
+  }
   const file = await asyncBufferFromUrl({ url });
   const byteLength = typeof file.byteLength === "number" ? file.byteLength : null;
 
@@ -406,6 +429,22 @@ export async function readParquetChunk(
 
   const plan = planRowGroupRead(groupRows, startRowGroup, maxRows);
 
+  // Footer/metadata reads can be slow on multi-GB deliveries. If decoding pages
+  // can no longer finish inside the run budget, stop here with the UNCHANGED
+  // cursor so the next run re-reads exactly this range (no rows are skipped).
+  if (timeLeft() <= MIN_READ_MS) {
+    return {
+      rows: [],
+      checkpoint: {
+        ...plan.checkpoint,
+        nextRowGroup: plan.checkpoint.startRowGroup,
+        nextRowsOffset: plan.checkpoint.rowsOffset,
+        exhausted: false,
+      },
+      deadlineExceeded: true,
+    };
+  }
+
   if (plan.checkpoint.exhausted && plan.rowEnd <= plan.rowStart) {
     return { rows: [], checkpoint: plan.checkpoint };
   }
@@ -423,6 +462,7 @@ export async function readParquetChunk(
       }),
     {
       label: `row groups ${plan.checkpoint.startRowGroup}..${plan.checkpoint.nextRowGroup - 1}`,
+      deadlineAt,
     },
   );
 
@@ -452,8 +492,9 @@ export async function readParquetRows(
   url: string,
   maxRows: number,
   expectedRowsPerUser?: number,
+  deadlineAt?: number,
 ): Promise<Record<string, unknown>[]> {
-  const { rows } = await readParquetChunk(url, maxRows, 0, expectedRowsPerUser);
+  const { rows } = await readParquetChunk(url, maxRows, 0, expectedRowsPerUser, deadlineAt);
   return rows;
 }
 

@@ -1729,11 +1729,17 @@ Deno.serve(async (req) => {
     }
     summary.elapsed_ms = Date.now() - runStart;
     summary.time_remaining_ms = timeLeftMs();
+    summary.phase_usage = meter.snapshot();
+    summary.mem_peak_mb = meter.peakHeapMb();
+    summary.mem_peak_rss_mb = meter.peakRssMb();
     summary.budget_history = [...history, {
       at: new Date().toISOString(),
       budget_ms: budgetMs,
       elapsed_ms: summary.elapsed_ms,
       timed_out: summary.time_budget_exhausted || summary.deadline_exceeded,
+      resource_kill: Boolean(body.after_resource_limit) || summary.memory_pressure,
+      mem_peak_mb: summary.mem_peak_mb ?? undefined,
+      rows_cap: caps.rows,
     }].slice(-10);
     summary.rate_metrics = rateMetrics.snapshot();
     console.log(JSON.stringify({ evt: "ingest_run_summary", ...summary }));
@@ -1751,11 +1757,17 @@ Deno.serve(async (req) => {
     const msg = errMsg(e);
     summary.elapsed_ms = Date.now() - runStart;
     summary.time_remaining_ms = timeLeftMs();
+    summary.phase_usage = meter.snapshot();
+    summary.mem_peak_mb = meter.peakHeapMb();
+    summary.mem_peak_rss_mb = meter.peakRssMb();
     summary.budget_history = [...history, {
       at: new Date().toISOString(),
       budget_ms: budgetMs,
       elapsed_ms: summary.elapsed_ms,
       timed_out: true,
+      resource_kill: Boolean(body.after_resource_limit) || summary.memory_pressure,
+      mem_peak_mb: summary.mem_peak_mb ?? undefined,
+      rows_cap: caps.rows,
     }].slice(-10);
     summary.rate_metrics = rateMetrics.snapshot();
 

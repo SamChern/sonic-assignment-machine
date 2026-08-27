@@ -50,16 +50,18 @@ Deno.test("resume after time_budget_exhausted continues at the saved cursor", ()
 });
 
 Deno.test("multi-run resume never duplicates semantic rows", () => {
-  // Drive the loop the way intuizi-ingest does: 1 row group per run.
+  // Drive the loop the way intuizi-ingest does, persisting group + row offset.
   const scored = new Map<number, number>(); // rowId -> times scored
   let cursor = 0;
+  let rowsOffset = 0;
   let runs = 0;
   for (;;) {
-    const p = planRowGroupRead(GROUPS, cursor, 1); // tiny budget => one group
+    const p = planRowGroupRead(GROUPS, cursor, 100, rowsOffset);
     for (const id of rowIds(p.rowStart, p.rowEnd)) {
       scored.set(id, (scored.get(id) ?? 0) + 1);
     }
     cursor = p.checkpoint.nextRowGroup;
+    rowsOffset = p.checkpoint.nextRowsOffset;
     runs++;
     if (p.checkpoint.exhausted) break;
     assert(runs < 20, "resume loop must terminate");
@@ -76,10 +78,31 @@ Deno.test("an already-exhausted file returns no rows and stays exhausted", () =>
   assertEquals(p.checkpoint.nextRowsOffset, TOTAL);
 });
 
-Deno.test("a row group larger than the budget still makes progress", () => {
+Deno.test("a row group larger than the budget is hard-capped", () => {
   const p = planRowGroupRead([500, 500], 0, 10);
-  assert(p.rowEnd > p.rowStart, "must read at least one row group");
-  assertEquals(p.checkpoint.nextRowGroup, 1);
+  assertEquals(p.rowEnd - p.rowStart, 10);
+  assertEquals(p.checkpoint.nextRowGroup, 0);
+  assertEquals(p.checkpoint.nextRowsOffset, 10);
+});
+
+Deno.test("resume advances inside an oversized row group without overlap", () => {
+  const first = planRowGroupRead([500, 100], 0, 250);
+  const second = planRowGroupRead([500, 100], first.checkpoint.nextRowGroup, 250, first.checkpoint.nextRowsOffset);
+  const third = planRowGroupRead([500, 100], second.checkpoint.nextRowGroup, 250, second.checkpoint.nextRowsOffset);
+
+  assertEquals([first.rowStart, first.rowEnd], [0, 250]);
+  assertEquals([second.rowStart, second.rowEnd], [250, 500]);
+  assertEquals(second.checkpoint.nextRowGroup, 1);
+  assertEquals([third.rowStart, third.rowEnd], [500, 600]);
+  assertEquals(third.checkpoint.exhausted, true);
+
+  const seen = [
+    ...rowIds(first.rowStart, first.rowEnd),
+    ...rowIds(second.rowStart, second.rowEnd),
+    ...rowIds(third.rowStart, third.rowEnd),
+  ];
+  assertEquals(seen.length, 600);
+  assertEquals(new Set(seen).size, 600);
 });
 
 Deno.test("transient errors retry only the failed row-group range", async () => {

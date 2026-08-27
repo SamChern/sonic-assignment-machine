@@ -78,6 +78,8 @@ export async function fetchObjectChunk(
   startRowGroup = 0,
   /** Wall-clock ms after which the read gives up and checkpoints instead. */
   deadlineAt?: number,
+  /** Absolute resume offset, including progress inside an oversized row group. */
+  startRowsOffset?: number,
 ): Promise<{
   rows: Record<string, unknown>[];
   checkpoint: ParquetCheckpoint | null;
@@ -88,7 +90,14 @@ export async function fetchObjectChunk(
   const lower = objectKey.toLowerCase();
 
   if (lower.endsWith(".parquet") || lower.endsWith(".pq")) {
-    return await readParquetChunk(url, maxRows, startRowGroup, expectedRowsPerUser, deadlineAt);
+    return await readParquetChunk(
+      url,
+      maxRows,
+      startRowGroup,
+      expectedRowsPerUser,
+      deadlineAt,
+      startRowsOffset,
+    );
   }
 
   // Plain object reads are aborted at the deadline so a stalled transfer can

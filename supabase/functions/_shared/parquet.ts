@@ -293,10 +293,17 @@ export function planRowGroupRead(
   groupRows: number[],
   startRowGroup: number,
   maxRows: number,
+  startRowsOffset?: number,
 ): { rowStart: number; rowEnd: number; checkpoint: ParquetCheckpoint } {
   const numRows = groupRows.reduce((a, b) => a + b, 0);
   const from = Math.max(0, Math.min(startRowGroup, groupRows.length));
-  const rowsOffset = groupRows.slice(0, from).reduce((a, b) => a + b, 0);
+  const groupStart = groupRows.slice(0, from).reduce((a, b) => a + b, 0);
+  const groupEnd = groupStart + (groupRows[from] ?? 0);
+  // `startRowsOffset` allows a huge row group to be resumed in-place. Clamp it
+  // to the selected group so a stale/corrupt cursor can never skip a group.
+  const rowsOffset = startRowsOffset == null
+    ? groupStart
+    : Math.max(groupStart, Math.min(startRowsOffset, groupEnd));
 
   if (from >= groupRows.length || rowsOffset >= numRows) {
     return {
@@ -313,20 +320,25 @@ export function planRowGroupRead(
     };
   }
 
-  // Consume whole row groups until the row budget is met (at least one group).
+  // Consume complete small groups while they fit, but split any group whose
+  // remaining rows exceed the hard cap. This preserves efficient multi-group
+  // reads without ever decoding hundreds of thousands of rows in one call.
+  const cap = Math.max(1, maxRows);
+  let rowEnd = rowsOffset;
   let nextRowGroup = from;
-  let take = 0;
-  while (
-    nextRowGroup < groupRows.length &&
-    (take === 0 || take + groupRows[nextRowGroup] <= maxRows)
-  ) {
-    take += groupRows[nextRowGroup];
+  while (nextRowGroup < groupRows.length) {
+    const currentStart = groupRows.slice(0, nextRowGroup).reduce((a, b) => a + b, 0);
+    const currentEnd = currentStart + groupRows[nextRowGroup];
+    const remainingInGroup = currentEnd - rowEnd;
+    const remainingBudget = cap - (rowEnd - rowsOffset);
+    if (remainingInGroup > remainingBudget) {
+      rowEnd += remainingBudget;
+      break;
+    }
+    rowEnd = currentEnd;
     nextRowGroup++;
+    if (rowEnd - rowsOffset >= cap) break;
   }
-
-  // Reads are row-group aligned: `maxRows` is a soft budget, so a group is never
-  // half-read (which would silently skip rows when the cursor advances).
-  const rowEnd = Math.min(rowsOffset + take, numRows);
 
   return {
     rowStart: rowsOffset,
@@ -439,6 +451,7 @@ export async function readParquetChunk(
   startRowGroup = 0,
   expectedRowsPerUser?: number,
   deadlineAt?: number,
+  startRowsOffset?: number,
 ): Promise<ParquetChunk> {
   /** Minimum time a row-group read is given; below this we checkpoint instead. */
   const MIN_READ_MS = 25_000;
@@ -556,7 +569,7 @@ export async function readParquetChunk(
     );
   }
 
-  const plan = planRowGroupRead(groupRows, startRowGroup, maxRows);
+  const plan = planRowGroupRead(groupRows, startRowGroup, maxRows, startRowsOffset);
   /** Cursor-preserving checkpoint used whenever the read cannot complete. */
   const heldCheckpoint: ParquetCheckpoint = {
     ...plan.checkpoint,
@@ -574,9 +587,8 @@ export async function readParquetChunk(
     return finish({ rows: [], checkpoint: plan.checkpoint });
   }
 
-  // Oversized row groups are decoded in smaller row slices when the remaining
-  // budget is tight, so each individual read stays well inside the gateway's
-  // idle limit and its cost shows up separately in the timing log.
+  // The planner now returns at most maxRows, including inside oversized row
+  // groups. Splitting remains as a defensive fallback for unusual callers.
   const planned = plan.rowEnd - plan.rowStart;
   const split = planned > SLICE_ROWS && timeLeft() < SPLIT_BELOW_MS;
   const slices = split

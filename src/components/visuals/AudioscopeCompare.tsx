@@ -226,12 +226,9 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
   // Same semantics as the SonicSIM panel: Play always leaves Static, and
   // entering Static always halts motion.
   const togglePlay = () => {
-    setPlaying((prev) => {
-      const next = !prev;
-      if (next) setIsStatic(false);
-      return next;
-    });
-    setIsStatic((prev) => (playing ? prev : false));
+    const next = !animating;
+    setPlaying(next);
+    if (next) setIsStatic(false);
   };
 
   const toggleStatic = () => {

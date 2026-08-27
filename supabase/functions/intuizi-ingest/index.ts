@@ -240,15 +240,12 @@ async function ingestAudioObject(admin: any, args: {
     }
   }
 
-  const { data: ana, error: anaErr } = await admin.functions.invoke("analyze-audio", {
-    body: {
-      sources: [{ name, type: "file", audio_source_id: audioSourceId }],
-      user_id: ownerId,
-      save_results: true,
-    },
+  await invokeAnalyzeAudio(admin, {
+    sources: [{ name, type: "file", audio_source_id: audioSourceId }],
+    user_id: ownerId,
+    save_results: true,
   });
-  if (anaErr) throw anaErr;
-  if (!ana?.sources?.[0]) throw new Error("analyze-audio returned no source");
+
 
   return audioSourceId;
 }

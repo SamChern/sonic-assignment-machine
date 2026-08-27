@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 export interface InferenceCheck {
   id: string;
   label: string;
-  state: "ok" | "warn" | "fail";
+  state: "ok" | "warn" | "fail" | "skipped";
   detail: string;
 }
+
 
 export interface InferenceReadiness {
   verdict: "ok" | "warn" | "blocked";

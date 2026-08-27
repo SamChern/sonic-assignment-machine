@@ -25,6 +25,11 @@ import {
 } from "lucide-react";
 import Audioscope, { type AudioscopeMode } from "./Audioscope";
 import {
+  PANE_ANCHOR_ATTR,
+  SHORTCUT_HINT,
+  useAudioscopeShortcuts,
+} from "@/lib/audioscope/shortcuts";
+import {
   AUDIOSCOPE_CATEGORIES,
   CATEGORY_LABELS,
   categoryToken,
@@ -90,6 +95,7 @@ export const SonicSimPanel = ({
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const staticBtnRef = useRef<HTMLButtonElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
 
   useEffect(() => {
@@ -175,6 +181,13 @@ export const SonicSimPanel = ({
     }
   };
 
+  // S = Static, K = Play/Pause, [ / ] = move between audioscope panes.
+  useAudioscopeShortcuts({
+    containerRef: rootRef,
+    onToggleStatic: toggleStatic,
+    onTogglePlay: () => void togglePlay(),
+  });
+
   const toggleFullscreen = async () => {
     const node = wrapRef.current;
     if (!node) return;
@@ -195,7 +208,10 @@ export const SonicSimPanel = ({
   }
 
   return (
-    <Card className="overflow-hidden border-border/60 bg-card/70 backdrop-blur-sm">
+    <Card
+      ref={rootRef}
+      className="overflow-hidden border-border/60 bg-card/70 backdrop-blur-sm"
+    >
       <div className="flex flex-col gap-3 border-b border-border/50 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
@@ -233,12 +249,17 @@ export const SonicSimPanel = ({
           <Button
             ref={staticBtnRef}
             id="audioscope-static-toggle"
+            {...{ [PANE_ANCHOR_ATTR]: "sonicsim" }}
             size="sm"
             variant={isStatic ? "default" : "outline"}
             className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={toggleStatic}
             aria-pressed={isStatic}
-            aria-describedby={reducedMotion ? "audioscope-motion-notice" : undefined}
+            aria-describedby={
+              reducedMotion
+                ? "audioscope-motion-notice audioscope-shortcut-hint"
+                : "audioscope-shortcut-hint"
+            }
           >
             <ImageIcon className="h-3.5 w-3.5" aria-hidden />
             Static
@@ -324,6 +345,13 @@ export const SonicSimPanel = ({
             : "Synthesized from fingerprint"}
         </Badge>
       </div>
+
+      <p
+        id="audioscope-shortcut-hint"
+        className="px-4 pb-2 text-[11px] text-muted-foreground"
+      >
+        {SHORTCUT_HINT}
+      </p>
 
       {/* Announces mode changes to screen readers without moving focus. */}
       <p aria-live="polite" className="sr-only">

@@ -255,7 +255,9 @@ export function planRowGroupRead(
     nextRowGroup++;
   }
 
-  const rowEnd = Math.min(rowsOffset + Math.min(take, maxRows), numRows);
+  // Reads are row-group aligned: `maxRows` is a soft budget, so a group is never
+  // half-read (which would silently skip rows when the cursor advances).
+  const rowEnd = Math.min(rowsOffset + take, numRows);
 
   return {
     rowStart: rowsOffset,
@@ -296,6 +298,7 @@ export function isTransientParquetError(e: unknown): boolean {
     "temporarily",
     "throttl",
     "slow down",
+    "slowdown",
     "rate limit",
     "503",
     "502",

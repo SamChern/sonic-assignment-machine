@@ -83,9 +83,10 @@ const InferenceConfigGuard = ({ readiness, loading, error, onRecheck, hideWhenOk
         {readiness.selected_chat_model && (
           <Badge variant="secondary" className="text-[10px]">{readiness.selected_chat_model}</Badge>
         )}
-        {readiness.gpu === false && (
+        {readiness.gpu === false && readiness.selected_chat_model && (
           <Badge variant="outline" className="text-[10px] text-destructive">no GPU detected</Badge>
         )}
+
       </AlertTitle>
       <AlertDescription className="text-xs">
         <p>{readiness.summary}</p>

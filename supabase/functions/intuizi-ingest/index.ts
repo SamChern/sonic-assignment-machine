@@ -1187,6 +1187,7 @@ Deno.serve(async (req) => {
         // Resume from the last transformed row group instead of re-reading rows
         // that were already normalized in an earlier (possibly timed-out) run.
         const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
+        const resumeRowsOffset = Number(fileRow.rows_offset ?? 0) || 0;
         const endRead = meter.begin("read");
         const readStart = Date.now();
         const chunk = await fetchObjectChunk(
@@ -1196,6 +1197,7 @@ Deno.serve(async (req) => {
           EXPECTED_ROWS_PER_USER,
           resumeGroup,
           readDeadlineAt,
+          resumeRowsOffset,
         );
         const readMs = Date.now() - readStart;
         summary.phase_ms.read += readMs;
@@ -1386,6 +1388,7 @@ Deno.serve(async (req) => {
 
         let scoredInFile = 0;
         let failedInFile = 0;
+        let unchangedInFile = 0;
         const normalizeMs = Date.now() - normalizeStart;
         summary.phase_ms.normalize += normalizeMs;
         endNormalize({ object_key: cand.key, rows: rawRows.length, identifiers: perIdentifier.size });
@@ -1420,7 +1423,10 @@ Deno.serve(async (req) => {
           const previousCodes: string[] = existing?.tag_codes ?? [];
           const unchanged = previousCodes.length > 0 &&
             tagCodes.every((c) => previousCodes.includes(c));
-          if (unchanged) continue;
+          if (unchanged) {
+            unchangedInFile++;
+            continue;
+          }
 
           const label = `Intuizi ${cand.report_type}: ${entry.labels[0] ?? identifier.slice(0, 12)}`;
 
@@ -1610,7 +1616,7 @@ Deno.serve(async (req) => {
           identifier_cap: identifierBudget,
           row_group_cursor: checkpoint?.startRowGroup ?? null,
         });
-        const remaining = perIdentifier.size - scoredInFile - failedInFile;
+        const remaining = perIdentifier.size - scoredInFile - failedInFile - unchangedInFile;
         // A Parquet file is only "done" once its last row group is transformed.
         const chunkComplete = !checkpoint || checkpoint.exhausted;
         const fileStatus = breakerTripped
@@ -1652,6 +1658,7 @@ Deno.serve(async (req) => {
           identifiers: perIdentifier.size,
           enriched: scoredInFile,
           failed: failedInFile,
+          unchanged: unchangedInFile,
           identifier_only: Math.max(0, remaining),
           row_group_cursor: checkpoint?.nextRowGroup ?? null,
           row_groups_total: checkpoint?.rowGroupsTotal ?? null,

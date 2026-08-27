@@ -76,10 +76,31 @@ Deno.test("an already-exhausted file returns no rows and stays exhausted", () =>
   assertEquals(p.checkpoint.nextRowsOffset, TOTAL);
 });
 
-Deno.test("a row group larger than the budget still makes progress", () => {
+Deno.test("a row group larger than the budget is hard-capped", () => {
   const p = planRowGroupRead([500, 500], 0, 10);
-  assert(p.rowEnd > p.rowStart, "must read at least one row group");
-  assertEquals(p.checkpoint.nextRowGroup, 1);
+  assertEquals(p.rowEnd - p.rowStart, 10);
+  assertEquals(p.checkpoint.nextRowGroup, 0);
+  assertEquals(p.checkpoint.nextRowsOffset, 10);
+});
+
+Deno.test("resume advances inside an oversized row group without overlap", () => {
+  const first = planRowGroupRead([500, 100], 0, 250);
+  const second = planRowGroupRead([500, 100], first.checkpoint.nextRowGroup, 250, first.checkpoint.nextRowsOffset);
+  const third = planRowGroupRead([500, 100], second.checkpoint.nextRowGroup, 250, second.checkpoint.nextRowsOffset);
+
+  assertEquals([first.rowStart, first.rowEnd], [0, 250]);
+  assertEquals([second.rowStart, second.rowEnd], [250, 500]);
+  assertEquals(second.checkpoint.nextRowGroup, 1);
+  assertEquals([third.rowStart, third.rowEnd], [500, 600]);
+  assertEquals(third.checkpoint.exhausted, true);
+
+  const seen = [
+    ...rowIds(first.rowStart, first.rowEnd),
+    ...rowIds(second.rowStart, second.rowEnd),
+    ...rowIds(third.rowStart, third.rowEnd),
+  ];
+  assertEquals(seen.length, 600);
+  assertEquals(new Set(seen).size, 600);
 });
 
 Deno.test("transient errors retry only the failed row-group range", async () => {

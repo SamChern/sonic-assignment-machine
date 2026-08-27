@@ -1187,7 +1187,11 @@ Deno.serve(async (req) => {
 
         let scoredInFile = 0;
         let failedInFile = 0;
+        const normalizeMs = Date.now() - normalizeStart;
+        summary.phase_ms.normalize += normalizeMs;
         const scoreStart = Date.now();
+
+
 
 
 

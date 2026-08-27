@@ -115,11 +115,47 @@ Deno.serve(async (req) => {
 
     for (const activationId of requested) {
       const grant = granted.find((g) => g.activation_id === activationId)!;
-      const sources = await sourcesForActivation(admin, activationId);
+
+      // Audit trail: one row per activation per sync, opened before work starts
+      // so an interrupted run is still visible as "running".
+      const { data: runRow } = await admin
+        .from("org_intuizi_sync_runs")
+        .insert({
+          organization_id: organizationId,
+          activation_id: activationId,
+          started_by: caller.userId,
+          status: "running",
+          details: { requested_activations: requested, actor_role: caller.role },
+        })
+        .select("id")
+        .single();
+      const runId: string | null = runRow?.id ?? null;
+
+      const finishRun = async (patch: Record<string, unknown>) => {
+        if (!runId) return;
+        await admin.from("org_intuizi_sync_runs")
+          .update({ finished_at: new Date().toISOString(), ...patch })
+          .eq("id", runId);
+      };
+
+      let sources: Record<string, unknown>[] = [];
+      try {
+        sources = await sourcesForActivation(admin, activationId);
+      } catch (e) {
+        await finishRun({ status: "failed", error: (e as Error).message.slice(0, 500) });
+        throw e;
+      }
 
       if (!sources.length) {
+        await finishRun({
+          status: "empty",
+          profiles_found: 0,
+          coverage_pct: 0,
+          error: "No ingested profiles found for this activation yet.",
+        });
         results.push({
           activation_id: activationId,
+          run_id: runId,
           rows_synced: 0,
           scored: 0,
           note: "No ingested profiles found for this activation yet.",

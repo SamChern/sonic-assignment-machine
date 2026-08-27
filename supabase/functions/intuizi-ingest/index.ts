@@ -253,6 +253,38 @@ async function ingestAudioObject(admin: any, args: {
   return audioSourceId;
 }
 
+/**
+ * Invoke `analyze-audio` with bounded backoff. The AI gateway rate-limits the
+ * whole workspace (`429` / `RateLimitError` with `retryAfterMs`), which used to
+ * land rows in `failed_rows` even though the taxonomy mapped fine. Retryable:
+ * 429 + 5xx. Terminal: 400/401/402/403 — re-sending returns the same error.
+ */
+// deno-lint-ignore no-explicit-any
+async function invokeAnalyzeAudio(admin: any, body: Json): Promise<any> {
+  const MAX_ATTEMPTS = 4;
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const { data, error } = await admin.functions.invoke("analyze-audio", { body });
+    if (!error) {
+      if (!data?.sources?.[0]) throw new Error("analyze-audio returned no source");
+      return data;
+    }
+    lastErr = error;
+    const msg = String(error?.message ?? error);
+    const status = Number((error as { status?: number })?.status ?? 0);
+    const terminal = [400, 401, 402, 403].includes(status) ||
+      /InsufficientCredits|PaymentRequired|Forbidden|Unauthorized/i.test(msg);
+    const retryable = !terminal &&
+      (status === 429 || status >= 500 || /RateLimit|rate limit|timeout|503|502/i.test(msg));
+    if (!retryable || attempt === MAX_ATTEMPTS) break;
+    const hinted = Number(msg.match(/"retryAfterMs"\s*:\s*(\d+)/)?.[1] ?? 0);
+    const backoff = Math.max(hinted, 400 * 2 ** (attempt - 1));
+    const jitter = Math.floor(Math.random() * 250);
+    console.log(`analyze-audio retry ${attempt}/${MAX_ATTEMPTS} in ${backoff + jitter}ms: ${msg}`);
+    await new Promise((r) => setTimeout(r, backoff + jitter));
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
 
 
 Deno.serve(async (req) => {

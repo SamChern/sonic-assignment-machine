@@ -61,15 +61,19 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 // ---- Work bounds (every run ends, even with work remaining) ----------------
-const MAX_FILES_PER_RUN = 3;
-const MAX_IDENTIFIERS_PER_RUN = 40;
-const MAX_ROWS_PER_FILE = 5000;
-// The edge gateway kills a request after 150s of idle time. Stop taking new work
-// well before that and return a partial summary; remaining work resumes next run.
-const RUN_BUDGET_MS = 105_000;
+// The worker is killed with WORKER_RESOURCE_LIMIT when it burns too much CPU in
+// one invocation. Parquet page decoding + scoring are both CPU-bound, so a run
+// takes ONE file and a small identifier slice, then checkpoints and resumes.
+const MAX_FILES_PER_RUN = 1;
+const MAX_IDENTIFIERS_PER_RUN = 20;
+const MAX_ROWS_PER_FILE = 2500;
+// The edge gateway kills a request after 150s of idle time, and CPU quota bites
+// sooner than that. Stop taking new work early and return a partial summary.
+const RUN_BUDGET_MS = 70_000;
 /** Floor/ceiling for the auto-tuned wall-clock budget. */
-const MIN_RUN_BUDGET_MS = 45_000;
-const MAX_RUN_BUDGET_MS = 105_000;
+const MIN_RUN_BUDGET_MS = 35_000;
+const MAX_RUN_BUDGET_MS = 70_000;
+
 
 /** One historical run, kept in intuizi_ingest_state.last_run_summary. */
 export interface BudgetHistoryEntry {

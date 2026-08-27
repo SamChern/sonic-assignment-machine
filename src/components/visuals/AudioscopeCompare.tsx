@@ -326,20 +326,43 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       </div>
 
       <div className="p-4">
+        {/* Announces mode changes to screen readers without moving focus. */}
+        <p aria-live="polite" className="sr-only">
+          {isStatic
+            ? `Comparison is static — one frame at ${STATIC_FRAME_T.toFixed(2)} seconds.`
+            : playing
+            ? `Comparison is animating at ${speed}x speed.`
+            : "Comparison is paused."}
+        </p>
         {reducedMotion ? (
           <div
-            role="status"
+            id="audioscope-compare-motion-notice"
+            role="note"
+            aria-labelledby="audioscope-compare-motion-title"
             className="mb-3 flex items-start gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-xs text-muted-foreground"
           >
             <Accessibility className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-            <p>
-              <span className="font-semibold text-foreground">Reduced motion is on.</span> Because
-              your system requests <em>prefers-reduced-motion</em>, this comparison starts as a
-              static frame at t = {STATIC_FRAME_T.toFixed(2)}s. Press <strong>Play</strong> to
-              animate it — the divergence band and Δ values are identical either way.
-            </p>
+            <div>
+              <p>
+                <span id="audioscope-compare-motion-title" className="font-semibold text-foreground">
+                  Reduced motion is on.
+                </span>{" "}
+                Because your system requests <em>prefers-reduced-motion</em>, this comparison starts
+                as a static frame at t = {STATIC_FRAME_T.toFixed(2)}s. Press <strong>Play</strong> to
+                animate it — the divergence band and Δ values are identical either way.
+              </p>
+              <Button
+                size="sm"
+                variant="link"
+                className="h-auto p-0 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                onClick={() => staticBtnRef.current?.focus()}
+              >
+                Go to the Static toggle
+              </Button>
+            </div>
           </div>
         ) : null}
+
         <canvas
           ref={canvasRef}
           role="img"

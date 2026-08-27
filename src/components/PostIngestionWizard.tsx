@@ -405,6 +405,37 @@ const PostIngestionWizard = () => {
         phaseMs: res.phase_ms ?? null,
       });
 
+      // Per-phase CPU/heap sample for the chart. Prefer the richer phase_usage
+      // payload and fall back to phase_ms when only durations came back.
+      const usage = res.phase_usage ?? null;
+      const phases: PhaseRun["phases"] = {};
+      if (usage) {
+        for (const [phase, u] of Object.entries(usage)) {
+          if (!u?.ms) continue;
+          phases[phase] = {
+            ms: u.ms,
+            peakHeapMb: u.peak_heap_mb ?? null,
+            heapDeltaMb: u.heap_delta_mb ?? null,
+          };
+        }
+      } else if (res.phase_ms) {
+        for (const [phase, ms] of Object.entries(res.phase_ms)) {
+          if (ms > 0) phases[phase] = { ms, peakHeapMb: null, heapDeltaMb: null };
+        }
+      }
+      if (Object.keys(phases).length) {
+        phaseSamples.push({
+          key: f.object_key,
+          at: Date.now(),
+          elapsedMs: res.elapsed_ms ?? wallMs,
+          phases,
+          resourceLimit: retries > 0,
+          memoryPressure: Boolean(res.memory_pressure),
+          culprit: res.deadline_step ?? null,
+        });
+      }
+
+
       const total = fileState?.row_groups_total ?? null;
       const cursor = fileState?.row_group_cursor ?? 0;
       const groupsThisRun = Math.max(0, cursor - (resumeCursors.current[f.object_key] ?? 0));

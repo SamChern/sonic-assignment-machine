@@ -225,18 +225,18 @@ export const SonicSimPanel = ({
         <div
           role="group"
           aria-label="Audioscope playback controls"
-          className="flex shrink-0 flex-wrap items-center gap-2"
+          className="flex shrink-0 flex-wrap items-center gap-1.5"
         >
           <Button
             size="sm"
-            variant="outline"
-            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            variant="ghost"
+            className={TRANSPORT_CLS}
             onClick={togglePlay}
             aria-pressed={playing && !isStatic}
             aria-keyshortcuts="K"
             aria-describedby="audioscope-shortcut-hint audioscope-status"
           >
-            {playing ? <Pause className="h-3.5 w-3.5" aria-hidden /> : <Play className="h-3.5 w-3.5" aria-hidden />}
+            {playing ? <Pause className="h-3 w-3" aria-hidden /> : <Play className="h-3 w-3" aria-hidden />}
             {playing ? "Pause" : "Play"}
             <span className="sr-only">
               {playing
@@ -246,11 +246,11 @@ export const SonicSimPanel = ({
           </Button>
           <Button
             size="sm"
-            variant="outline"
-            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            variant="ghost"
+            className={TRANSPORT_CLS}
             onClick={() => setReplayKey((k) => k + 1)}
           >
-            <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+            <RotateCcw className="h-3 w-3" aria-hidden />
             Replay
             <span className="sr-only"> — restart the audioscope from the beginning</span>
           </Button>
@@ -259,8 +259,8 @@ export const SonicSimPanel = ({
             id="audioscope-static-toggle"
             {...{ [PANE_ANCHOR_ATTR]: "sonicsim" }}
             size="sm"
-            variant={isStatic ? "default" : "outline"}
-            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            variant="ghost"
+            className={isStatic ? TRANSPORT_CLS_ACTIVE : TRANSPORT_CLS}
             onClick={toggleStatic}
             aria-pressed={isStatic}
             aria-keyshortcuts="S"
@@ -270,7 +270,7 @@ export const SonicSimPanel = ({
                 : "audioscope-shortcut-hint audioscope-status"
             }
           >
-            <ImageIcon className="h-3.5 w-3.5" aria-hidden />
+            <ImageIcon className="h-3 w-3" aria-hidden />
             Static
             <span className="sr-only">
               {isStatic
@@ -280,8 +280,8 @@ export const SonicSimPanel = ({
           </Button>
 
 
-          <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
-            <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+          <div className="flex h-7 items-center gap-1.5 rounded-md border border-border/40 bg-background/30 px-2 backdrop-blur-sm">
+            <Gauge className="h-3 w-3 text-muted-foreground/70" aria-hidden />
             <label className="sr-only" htmlFor="audioscope-speed">
               Animation speed
             </label>
@@ -290,7 +290,7 @@ export const SonicSimPanel = ({
               value={String(speed)}
               disabled={isStatic}
               onChange={(e) => setSpeed(Number(e.target.value))}
-              className="bg-transparent text-xs text-foreground outline-none disabled:opacity-50"
+              className="bg-transparent text-[11px] text-muted-foreground outline-none disabled:opacity-50"
             >
               {SPEEDS.map((v) => (
                 <option key={v} value={v}>
@@ -301,19 +301,24 @@ export const SonicSimPanel = ({
           </div>
           <Button
             size="sm"
-            variant={showLegend ? "default" : "outline"}
-            className="gap-1.5"
+            variant="ghost"
+            className={showLegend ? TRANSPORT_CLS_ACTIVE : TRANSPORT_CLS}
             onClick={() => setShowLegend((v) => !v)}
             aria-expanded={showLegend}
           >
-            <Info className="h-3.5 w-3.5" />
+            <Info className="h-3 w-3" aria-hidden />
             <span className="hidden sm:inline">How to read this</span>
           </Button>
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={toggleFullscreen}>
-            {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          <Button size="sm" variant="ghost" className={TRANSPORT_CLS} onClick={toggleFullscreen}>
+            {fullscreen ? (
+              <Minimize2 className="h-3 w-3" aria-hidden />
+            ) : (
+              <Maximize2 className="h-3 w-3" aria-hidden />
+            )}
             <span className="hidden sm:inline">{fullscreen ? "Exit" : "Present"}</span>
           </Button>
         </div>
+
       </div>
 
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">

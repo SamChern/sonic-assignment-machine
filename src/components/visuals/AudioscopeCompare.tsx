@@ -283,11 +283,16 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
             variant="outline"
             className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={togglePlay}
+            aria-pressed={animating}
+            aria-keyshortcuts="K"
+            aria-describedby="audioscope-compare-shortcut-hint audioscope-compare-status"
           >
             {animating ? <Pause className="h-3.5 w-3.5" aria-hidden /> : <Play className="h-3.5 w-3.5" aria-hidden />}
             {animating ? "Pause" : "Play"}
             <span className="sr-only">
-              {animating ? " — pause the animated comparison" : " — animate the comparison"}
+              {animating
+                ? ` — on. The comparison is animating at ${speed}x speed. Activate to pause it. Shortcut: K.`
+                : " — off. Activate to animate the comparison. Shortcut: K."}
             </span>
           </Button>
           <Button
@@ -299,20 +304,22 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
             className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={toggleStatic}
             aria-pressed={isStatic}
+            aria-keyshortcuts="S"
             aria-describedby={
               reducedMotion
-                ? "audioscope-compare-motion-notice audioscope-compare-shortcut-hint"
-                : "audioscope-compare-shortcut-hint"
+                ? "audioscope-compare-motion-notice audioscope-compare-shortcut-hint audioscope-compare-status"
+                : "audioscope-compare-shortcut-hint audioscope-compare-status"
             }
           >
             <ImageIcon className="h-3.5 w-3.5" aria-hidden />
             Static
             <span className="sr-only">
               {isStatic
-                ? ` — on. Showing one still frame at ${STATIC_FRAME_T.toFixed(2)} seconds. Activate to resume motion.`
-                : " — off. Activate to freeze the comparison on a single still frame."}
+                ? ` — on. Showing one still frame at ${STATIC_FRAME_T.toFixed(2)} seconds. Activate to resume motion. Shortcut: S.`
+                : " — off. Activate to freeze the comparison on a single still frame. Shortcut: S."}
             </span>
           </Button>
+
 
           <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
             <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />

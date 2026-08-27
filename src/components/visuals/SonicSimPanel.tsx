@@ -392,10 +392,12 @@ export const SonicSimPanel = ({
               size="sm"
               variant="link"
               className="h-auto p-0 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onClick={() => staticBtnRef.current?.focus()}
+              aria-keyshortcuts="M"
+              onClick={() => focusMotionControls(rootRef.current)}
             >
-              Jump to motion controls
+              Jump to motion controls (M)
             </Button>
+
           </div>
         </div>
       ) : null}

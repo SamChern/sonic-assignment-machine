@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
       // Strictly sequential: one AI gateway request in flight at a time.
       for (const task of tasks) {
         const t0 = Date.now();
-        const traceId = task.trace_id ?? newTraceId("score");
+        const traceId = task.trace_id ?? `${runTraceId}.${task.id.slice(0, 8)}`;
         const stepScale = Number(task.step_scale ?? 1) || 1;
         let lastStage = "lookup";
         let outcome = "ok";

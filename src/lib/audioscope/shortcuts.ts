@@ -27,7 +27,11 @@ const cycleFocus = (direction: 1 | -1) => {
   if (typeof document === "undefined") return;
   const panes = Array.from(
     document.querySelectorAll<HTMLElement>(`[${PANE_ANCHOR_ATTR}]`),
-  ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+  ).filter(
+    (el) =>
+      el === document.activeElement ||
+      (!el.hasAttribute("hidden") && !el.closest("[hidden], [aria-hidden='true']")),
+  );
   if (panes.length === 0) return;
   const active = document.activeElement as HTMLElement | null;
   const current = panes.findIndex((el) => el === active || el.contains(active));

@@ -17,6 +17,7 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminIntegrations = lazy(() => import("./pages/AdminIntegrations"));
 const AdminConnected = lazy(() => import("./pages/AdminConnected"));
 const AdminCTV = lazy(() => import("./pages/AdminCTV"));
+const AdminActivationGrants = lazy(() => import("./pages/AdminActivationGrants"));
 const IntegrationStatus = lazy(() => import("./pages/IntegrationStatus"));
 const IngestionCompatibility = lazy(() => import("./pages/IngestionCompatibility"));
 const SemanticAnalysis = lazy(() => import("./pages/SemanticAnalysis"));
@@ -97,6 +98,7 @@ const App = () => (
               <Route path="/admin/integrations" element={<AdminIntegrations />} />
               <Route path="/admin/connected" element={<AdminConnected />} />
               <Route path="/admin/ctv" element={<AdminCTV />} />
+              <Route path="/admin/activations" element={<AdminActivationGrants />} />
               <Route path="/admin/pipeline" element={<IntegrationStatus />} />
               <Route path="/admin/compatibility" element={<IngestionCompatibility />} />
 

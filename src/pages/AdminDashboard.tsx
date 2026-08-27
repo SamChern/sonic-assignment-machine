@@ -1288,6 +1288,9 @@ const AdminDashboard = () => {
               <Button size="sm" variant="outline" onClick={() => navigate("/admin/compatibility")}>
                 <ShieldCheck className="mr-1 h-4 w-4" /> Ingestion compatibility
               </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate("/admin/activations")}>
+                <ShieldCheck className="mr-1 h-4 w-4" /> Activation access
+              </Button>
             </div>
             <IntuiziConsolePanel />
           </TabsContent>

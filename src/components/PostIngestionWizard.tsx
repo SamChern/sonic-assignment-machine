@@ -95,6 +95,8 @@ const PostIngestionWizard = () => {
   const [selected, setSelected] = useState<string>("");
   const [discovering, setDiscovering] = useState(false);
   const [running, setRunning] = useState(false);
+  /** Files that still have untransformed row groups — the Resume target. */
+  const [partialFiles, setPartialFiles] = useState<ActivationFile[]>([]);
   const {
     readiness,
     loading: inferenceLoading,

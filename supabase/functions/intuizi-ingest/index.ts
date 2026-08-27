@@ -767,9 +767,25 @@ Deno.serve(async (req) => {
 
   rateMetrics.reset();
   const runStart = Date.now();
-  const outOfTime = () => Date.now() - runStart > RUN_BUDGET_MS;
+  // Wall-clock budget is tuned from recent run history so a resume that keeps
+  // overrunning gets more headroom before the gateway's 150s idle limit.
+  const prevSummary = (state?.last_run_summary ?? {}) as Record<string, unknown>;
+  const history = Array.isArray(prevSummary.budget_history)
+    ? (prevSummary.budget_history as BudgetHistoryEntry[])
+    : [];
+  const tuned = tuneRunBudget(history);
+  const budgetMs = tuned.budgetMs;
+  const outOfTime = () => Date.now() - runStart > budgetMs;
   /** Hard wall for any single object read, so no read outlives the run budget. */
-  const readDeadlineAt = runStart + RUN_BUDGET_MS;
+  const readDeadlineAt = runStart + budgetMs;
+  const timeLeftMs = () => Math.max(0, readDeadlineAt - Date.now());
+  console.log(JSON.stringify({
+    evt: "ingest_budget_tuned",
+    budget_ms: budgetMs,
+    default_budget_ms: RUN_BUDGET_MS,
+    reason: tuned.reason,
+    history_len: history.length,
+  }));
   const summary = {
     files_processed: 0,
     files_failed: 0,
@@ -784,9 +800,23 @@ Deno.serve(async (req) => {
     pause_reason: null as string | null,
     time_budget_exhausted: false,
     /** Server-side run budget (ms) the wizard uses to estimate remaining time. */
-    run_budget_ms: RUN_BUDGET_MS,
+    run_budget_ms: budgetMs,
+    /** Default budget before auto-tuning, for comparison in the wizard. */
+    default_run_budget_ms: RUN_BUDGET_MS,
+    /** Why the tuner picked this budget. */
+    budget_reason: tuned.reason,
+    /** Ms left in the budget when the run returned. */
+    time_remaining_ms: budgetMs,
+    /** True when a single Parquet read had to abort at the deadline. */
+    deadline_exceeded: false,
+    /** Which step ran out of budget, when one did. */
+    deadline_step: null as string | null,
     /** Wall-clock duration of this run (ms). */
     elapsed_ms: 0,
+    /** Per-step duration breakdown (ms). */
+    phase_ms: { discover: 0, sign: 0, read: 0, normalize: 0, score: 0, persist: 0 },
+    /** Rolling history the budget tuner reads on the next run. */
+    budget_history: [] as BudgetHistoryEntry[],
     /** False when any file still has untransformed row groups or identifiers. */
     complete: true,
     /** Per-file resume state, so the caller can show partial/complete status. */
@@ -795,6 +825,7 @@ Deno.serve(async (req) => {
     // Rate-limit telemetry for this run, filled in before responding.
     rate_metrics: null as Record<string, unknown> | null,
   };
+
   let breakerTripped = false;
 
 

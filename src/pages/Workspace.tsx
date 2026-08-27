@@ -269,6 +269,11 @@ const Workspace = () => {
               void loadDatasets();
             }}
           />
+          <IntuiziSyncStatusPanel
+            organizationId={active.organization_id}
+            refreshKey={refreshKey}
+          />
+
           <WorkspaceUpload
             organizationId={active.organization_id}
             canWrite={canWrite}

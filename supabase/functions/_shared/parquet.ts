@@ -320,11 +320,25 @@ export function planRowGroupRead(
     };
   }
 
-  // Never let an oversized row group bypass the hard row cap. The checkpoint
-  // remains on this group until its final slice is returned, then advances.
-  const rowEnd = Math.min(rowsOffset + Math.max(1, maxRows), groupEnd, numRows);
-  const groupFinished = rowEnd >= groupEnd;
-  const nextRowGroup = groupFinished ? Math.min(from + 1, groupRows.length) : from;
+  // Consume complete small groups while they fit, but split any group whose
+  // remaining rows exceed the hard cap. This preserves efficient multi-group
+  // reads without ever decoding hundreds of thousands of rows in one call.
+  const cap = Math.max(1, maxRows);
+  let rowEnd = rowsOffset;
+  let nextRowGroup = from;
+  while (nextRowGroup < groupRows.length) {
+    const currentStart = groupRows.slice(0, nextRowGroup).reduce((a, b) => a + b, 0);
+    const currentEnd = currentStart + groupRows[nextRowGroup];
+    const remainingInGroup = currentEnd - rowEnd;
+    const remainingBudget = cap - (rowEnd - rowsOffset);
+    if (remainingInGroup > remainingBudget) {
+      rowEnd += remainingBudget;
+      break;
+    }
+    rowEnd = currentEnd;
+    nextRowGroup++;
+    if (rowEnd - rowsOffset >= cap) break;
+  }
 
   return {
     rowStart: rowsOffset,

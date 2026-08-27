@@ -136,22 +136,22 @@ const PostIngestionWizard = () => {
     if (!list.some((a) => a.activation_id === selected)) setSelected(list[0].activation_id);
   }, [selected]);
 
-  /** Steps 1-4 — run the semantic pipeline for the selected activation. */
-  const run = useCallback(async () => {
+  /** Steps 1-4 — run the semantic pipeline for the given files of the activation. */
+  const runFiles = useCallback(async (files: ActivationFile[], resuming = false) => {
     if (!activation) return;
     setRunning(true);
     setResults({});
 
-    const dataFiles = activation.files.filter((f) => f.size > 64);
-    const emptyFiles = activation.files.filter((f) => f.size <= 64);
+    const dataFiles = files.filter((f) => f.size > 64);
+    const emptyFiles = files.filter((f) => f.size <= 64);
 
     // --- Stage: discover ---------------------------------------------------
     setStage("discover", {
       state: dataFiles.length ? "ok" : "warn",
       summary: dataFiles.length
-        ? `${dataFiles.length} file${dataFiles.length === 1 ? "" : "s"} with rows · ${bytes(activation.total_bytes)}`
+        ? `${resuming ? "resuming " : ""}${dataFiles.length} file${dataFiles.length === 1 ? "" : "s"} with rows · ${bytes(activation.total_bytes)}`
         : "every file in this activation is header-only — nothing to process",
-      outputs: activation.files.map((f) => [
+      outputs: files.map((f) => [
         fileName(f.object_key),
         `${f.report_type ?? "?"} · ${bytes(f.size)}${f.size <= 64 ? " · empty" : ""}`,
       ]),
@@ -169,6 +169,7 @@ const PostIngestionWizard = () => {
     setStage("ingest", { state: "running", summary: "processing files…" });
     const perFile: [string, string][] = [];
     const ingestErrors: string[] = [];
+    const stillPartial: ActivationFile[] = [];
     let rowsRead = 0;
     let scored = 0;
     let roster = 0;
@@ -179,7 +180,8 @@ const PostIngestionWizard = () => {
       });
       if (error) {
         ingestErrors.push(`${fileName(f.object_key)}: ${error.message}`);
-        perFile.push([fileName(f.object_key), "failed"]);
+        perFile.push([fileName(f.object_key), "failed · resumable"]);
+        stillPartial.push(f);
         continue;
       }
       const res = data as {
@@ -187,26 +189,45 @@ const PostIngestionWizard = () => {
         identifiers_scored?: number;
         roster_identifiers?: number;
         time_budget_exhausted?: boolean;
+        complete?: boolean;
+        files?: {
+          object_key?: string;
+          complete?: boolean;
+          row_group_cursor?: number | null;
+          row_groups_total?: number | null;
+        }[];
         errors?: string[];
       };
       rowsRead += res.rows_read ?? 0;
       scored += res.identifiers_scored ?? 0;
       roster += res.roster_identifiers ?? 0;
       if (res.errors?.length) ingestErrors.push(...res.errors);
+
+      const fileState = res.files?.find((x) => x.object_key === f.object_key);
+      const complete = fileState?.complete ?? (res.complete !== false);
+      if (!complete) stillPartial.push(f);
       if (res.time_budget_exhausted) {
         ingestErrors.push(
-          `${fileName(f.object_key)}: stopped at the run time budget — remaining rows resume on the next run.`,
+          `${fileName(f.object_key)}: stopped at the run time budget — press Resume to continue from row group ${fileState?.row_group_cursor ?? 0}.`,
         );
       }
+      const progress =
+        fileState?.row_groups_total != null
+          ? ` · row group ${fileState.row_group_cursor ?? 0}/${fileState.row_groups_total}`
+          : "";
       perFile.push([
         fileName(f.object_key),
-        `${res.rows_read ?? 0} rows · ${res.identifiers_scored ?? 0} scored · ${res.roster_identifiers ?? 0} roster${res.time_budget_exhausted ? " · partial" : ""}`,
+        `${res.rows_read ?? 0} rows · ${res.identifiers_scored ?? 0} scored · ${res.roster_identifiers ?? 0} roster${progress} · ${complete ? "complete" : "partial"}`,
       ]);
     }
 
+    setPartialFiles(stillPartial);
+
     setStage("ingest", {
-      state: ingestErrors.length ? (rowsRead ? "warn" : "error") : "ok",
-      summary: `${rowsRead} rows read · ${scored} profile(s) scored · ${roster} identifier(s) registered`,
+      state: ingestErrors.length || stillPartial.length ? (rowsRead ? "warn" : "error") : "ok",
+      summary: `${rowsRead} rows read · ${scored} profile(s) scored · ${roster} identifier(s) registered · ${
+        stillPartial.length ? `${stillPartial.length} file(s) partial` : "all files complete"
+      }`,
       outputs: perFile,
       notes: ingestErrors.length ? ingestErrors : undefined,
     });

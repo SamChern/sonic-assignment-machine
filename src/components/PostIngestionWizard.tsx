@@ -57,6 +57,27 @@ interface ResumeEstimate {
   runsRemaining: number | null;
 }
 
+/** What the last edge-function run reported about its own time budget. */
+interface DeadlineInfo {
+  key: string;
+  budgetMs: number;
+  defaultBudgetMs: number | null;
+  budgetReason: string | null;
+  elapsedMs: number | null;
+  timeRemainingMs: number | null;
+  deadlineExceeded: boolean;
+  deadlineStep: string | null;
+  phaseMs: Record<string, number> | null;
+}
+
+/** In-flight run, used to tick a live "aborts in Ns" countdown. */
+interface LiveRun {
+  key: string;
+  startedAt: number;
+  budgetMs: number;
+}
+
+
 type StageState = "idle" | "running" | "ok" | "warn" | "error";
 
 interface StageResult {

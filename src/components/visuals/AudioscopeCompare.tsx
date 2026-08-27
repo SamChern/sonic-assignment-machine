@@ -362,7 +362,7 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
         </p>
 
         {/* Announces mode changes to screen readers without moving focus. */}
-        <p aria-live="polite" className="sr-only">
+        <p id="audioscope-compare-status" aria-live="polite" className="sr-only">
           {isStatic
             ? `Comparison is static — one frame at ${STATIC_FRAME_T.toFixed(2)} seconds.`
             : playing

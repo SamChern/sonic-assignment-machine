@@ -244,30 +244,15 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
               {lock} · {sim}% similar
             </span>
           ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5"
-            onClick={() => {
-              setPlaying((p) => {
-                if (!p) setIsStatic(false);
-                return !p;
-              });
-            }}
-          >
-            {playing && !isStatic ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-            {playing && !isStatic ? "Pause" : "Play"}
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={togglePlay}>
+            {animating ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            {animating ? "Pause" : "Play"}
           </Button>
           <Button
             size="sm"
             variant={isStatic ? "default" : "outline"}
             className="gap-1.5"
-            onClick={() =>
-              setIsStatic((prev) => {
-                if (!prev) setPlaying(false);
-                return !prev;
-              })
-            }
+            onClick={toggleStatic}
             aria-pressed={isStatic}
             title="Freeze the dual audioscope on a single still frame"
           >

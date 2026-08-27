@@ -95,6 +95,13 @@ const PostIngestionWizard = () => {
   const [selected, setSelected] = useState<string>("");
   const [discovering, setDiscovering] = useState(false);
   const [running, setRunning] = useState(false);
+  const {
+    readiness,
+    loading: inferenceLoading,
+    error: inferenceError,
+    blocked: inferenceBlocked,
+    recheck,
+  } = useInferenceReadiness();
   const [results, setResults] = useState<Partial<Record<StageKey, StageResult>>>({});
 
   const activation = useMemo(

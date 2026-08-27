@@ -61,6 +61,13 @@ const WorkspaceUpload = ({ organizationId, canWrite, onIngested }: Props) => {
   const [report, setReport] = useState<ParseReport | null>(null);
   const [uploading, setUploading] = useState(false);
   const [scoring, setScoring] = useState(false);
+  const {
+    readiness,
+    loading: inferenceLoading,
+    error: inferenceError,
+    blocked: inferenceBlocked,
+    recheck,
+  } = useInferenceReadiness();
   const [datasetId, setDatasetId] = useState<string | null>(null);
 
   const [provider, setProvider] = useState<string>("gcs");

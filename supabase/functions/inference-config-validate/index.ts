@@ -110,10 +110,12 @@ Deno.serve(async (req) => {
         : {
             id: "chat_model",
             label: "Selected scoring model",
-            state: EC2_REQUIRED ? "fail" : "warn",
-            detail:
-              "EC2_INFERENCE_MODEL is not set — semantic scoring runs on the Lovable AI Gateway, not on your EC2 GPU",
+            state: EC2_REQUIRED ? "fail" : "ok",
+            detail: EC2_REQUIRED
+              ? "EC2_INFERENCE_REQUIRED=true but EC2_INFERENCE_MODEL is not set"
+              : "By design: semantic scoring runs on the Lovable AI Gateway (no local scoring model configured)",
           },
+
     );
     checks.push(
       EC2_EMBED_MODEL
@@ -196,18 +198,23 @@ Deno.serve(async (req) => {
               : false;
         gpuDetail = gpu
           ? "Health endpoint reports GPU/CUDA acceleration"
-          : "Health endpoint reports no GPU/CUDA device (CPU-only instance)";
+          : EC2_CHAT_MODEL
+            ? "Health endpoint reports no GPU/CUDA device (CPU-only instance)"
+            : "No GPU needed: no local scoring model is configured";
       } else {
-        gpuDetail = "Health endpoint did not report accelerator info";
+        gpuDetail = EC2_CHAT_MODEL
+          ? "Health endpoint did not report accelerator info"
+          : "No GPU needed: no local scoring model is configured";
       }
 
       checks.push({
         id: "gpu",
         label: "GPU acceleration",
-        state: gpu === true ? "ok" : EC2_CHAT_MODEL ? "fail" : "warn",
+        state: gpu === true ? "ok" : EC2_CHAT_MODEL ? "fail" : "ok",
         detail: gpuDetail,
       });
     }
+
 
     // 4. Fallback availability.
     checks.push(
@@ -254,8 +261,11 @@ Deno.serve(async (req) => {
         verdict === "blocked"
           ? "Semantic analysis is blocked: EC2 GPU inference is not correctly configured for the selected model and no fallback is available."
           : verdict === "warn"
-            ? "Semantic analysis can run, but not entirely on your EC2 GPU inference server."
-            : "EC2 GPU inference is correctly configured for the selected model.",
+            ? "Semantic analysis can run. Some inference does not run on EC2."
+            : EC2_CHAT_MODEL
+              ? "EC2 GPU inference is correctly configured for the selected model."
+              : "Inference routing is as configured: scoring on Lovable AI, embeddings/DSP on EC2.",
+
     });
   } catch (e) {
     console.error("inference-config-validate failed:", (e as Error).message);

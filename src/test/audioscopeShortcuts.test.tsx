@@ -123,7 +123,7 @@ describe("Audioscope keyboard shortcuts", () => {
     await user.keyboard("]");
     expect(document.activeElement).toBe(compare);
 
-    await user.keyboard("[");
+    await user.keyboard("[[");
     expect(document.activeElement).toBe(single);
   });
 

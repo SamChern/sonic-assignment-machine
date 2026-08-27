@@ -769,6 +769,24 @@ const PostIngestionWizard = () => {
           </div>
         )}
 
+        {!running && !!phaseRuns.length && (
+          <div className="w-full space-y-1">
+            <PhaseCpuChart runs={phaseRuns} />
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px] text-muted-foreground"
+                onClick={() => setPhaseRuns([])}
+              >
+                Clear phase history
+              </Button>
+            </div>
+          </div>
+        )}
+
+
+
         {!running && !!resumeEstimates.length && (
 
           <div className="w-full rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">

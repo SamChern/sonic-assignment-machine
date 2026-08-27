@@ -75,13 +75,172 @@ const MIN_RUN_BUDGET_MS = 35_000;
 const MAX_RUN_BUDGET_MS = 70_000;
 
 
+/** Heap ceiling (MB) that counts as compute pressure and ends the run early. */
+const MEM_SOFT_LIMIT_MB = Number(Deno.env.get("INTUIZI_MEM_SOFT_LIMIT_MB") ?? "220");
+/** Absolute floors so a shrinking cap still makes forward progress. */
+const MIN_ROWS_PER_FILE = 250;
+const MIN_IDENTIFIERS_PER_RUN = 4;
+
 /** One historical run, kept in intuizi_ingest_state.last_run_summary. */
 export interface BudgetHistoryEntry {
   at: string;
   budget_ms: number;
   elapsed_ms: number;
   timed_out: boolean;
+  /** Set when the caller reported a WORKER_RESOURCE_LIMIT kill for the last run. */
+  resource_kill?: boolean;
+  /** Peak heap seen during the run (MB), when the runtime exposes it. */
+  mem_peak_mb?: number;
+  /** Row cap this run actually used, so the tuner can keep shrinking. */
+  rows_cap?: number;
 }
+
+/** Per-invocation work caps, tuned down when compute pressure is detected. */
+export interface WorkCaps {
+  rows: number;
+  identifiers: number;
+  files: number;
+  reason: string;
+  shrink: number;
+}
+
+/**
+ * Choose row / identifier / file caps for this invocation.
+ *
+ * A WORKER_RESOURCE_LIMIT kill leaves no summary behind, so the caller reports
+ * it on the retry (`after_resource_limit`, optionally with an explicit
+ * `shrink`). Recorded kills and budget overruns in recent history also pull the
+ * caps down; clean runs let them drift back to the defaults.
+ */
+export function planWorkCaps(
+  history: BudgetHistoryEntry[],
+  opts: {
+    shrink?: number;
+    afterResourceLimit?: boolean;
+    maxRows?: number;
+    maxIdentifiers?: number;
+    memPeakMb?: number | null;
+  } = {},
+): WorkCaps {
+  const recent = history.slice(-3);
+  const kills = recent.filter((r) => r.resource_kill).length +
+    (opts.afterResourceLimit ? 1 : 0);
+  const overruns = recent.filter((r) => r.timed_out).length;
+  const memPressure = recent.some((r) => (r.mem_peak_mb ?? 0) >= MEM_SOFT_LIMIT_MB) ||
+    (opts.memPeakMb ?? 0) >= MEM_SOFT_LIMIT_MB;
+
+  let shrink = 1;
+  const why: string[] = [];
+  if (kills) {
+    shrink *= Math.max(0.2, 0.5 ** kills);
+    why.push(`${kills} recent compute kill${kills === 1 ? "" : "s"}`);
+  }
+  if (overruns) {
+    shrink *= Math.max(0.5, 1 - 0.2 * overruns);
+    why.push(`${overruns} recent budget overrun${overruns === 1 ? "" : "s"}`);
+  }
+  if (memPressure) {
+    shrink *= 0.6;
+    why.push(`heap peaked at or above ${MEM_SOFT_LIMIT_MB} MB`);
+  }
+  if (opts.shrink && opts.shrink > 0 && opts.shrink < 1) {
+    shrink *= opts.shrink;
+    why.push(`caller requested ${Math.round(opts.shrink * 100)}% workload`);
+  }
+  shrink = Math.max(0.1, Math.min(1, shrink));
+
+  let rows = Math.max(MIN_ROWS_PER_FILE, Math.round((MAX_ROWS_PER_FILE * shrink) / 50) * 50);
+  let identifiers = Math.max(MIN_IDENTIFIERS_PER_RUN, Math.round(MAX_IDENTIFIERS_PER_RUN * shrink));
+  if (opts.maxRows && opts.maxRows > 0) rows = Math.min(rows, Math.max(MIN_ROWS_PER_FILE, opts.maxRows));
+  if (opts.maxIdentifiers && opts.maxIdentifiers > 0) {
+    identifiers = Math.min(identifiers, Math.max(1, opts.maxIdentifiers));
+  }
+
+  return {
+    rows,
+    identifiers,
+    files: MAX_FILES_PER_RUN,
+    shrink: Number(shrink.toFixed(2)),
+    reason: why.length ? why.join("; ") : "defaults — no compute pressure detected",
+  };
+}
+
+/** Heap/RSS snapshot in MB, or null when the runtime hides memory usage. */
+export function memSnapshot(): { heap_mb: number; rss_mb: number; external_mb: number } | null {
+  try {
+    const m = Deno.memoryUsage();
+    const mb = (n: number) => Number((n / 1048576).toFixed(1));
+    return { heap_mb: mb(m.heapUsed), rss_mb: mb(m.rss), external_mb: mb(m.external) };
+  } catch {
+    return null;
+  }
+}
+
+export type PhaseName = "discover" | "sign" | "read" | "normalize" | "score" | "persist";
+
+/**
+ * Records wall/CPU-ish duration plus heap growth for each pipeline phase, so a
+ * compute kill can be attributed to the exact step (and row group) that caused it.
+ */
+export function createPhaseMeter() {
+  const phases: Record<string, {
+    ms: number;
+    calls: number;
+    heap_delta_mb: number;
+    heap_after_mb: number | null;
+    peak_heap_mb: number;
+  }> = {};
+  let peakHeap = 0;
+  let peakRss = 0;
+
+  return {
+    /** Call at the START of a phase; returns a closer that records the phase. */
+    begin(phase: PhaseName) {
+      const before = memSnapshot();
+      const t0 = Date.now();
+      return (extra?: Record<string, unknown>) => {
+        const after = memSnapshot();
+        const ms = Date.now() - t0;
+        const slot = phases[phase] ??= {
+          ms: 0, calls: 0, heap_delta_mb: 0, heap_after_mb: null, peak_heap_mb: 0,
+        };
+        slot.ms += ms;
+        slot.calls++;
+        if (before && after) {
+          slot.heap_delta_mb = Number((slot.heap_delta_mb + (after.heap_mb - before.heap_mb)).toFixed(1));
+          slot.heap_after_mb = after.heap_mb;
+          slot.peak_heap_mb = Math.max(slot.peak_heap_mb, after.heap_mb);
+          peakHeap = Math.max(peakHeap, after.heap_mb, before.heap_mb);
+          peakRss = Math.max(peakRss, after.rss_mb, before.rss_mb);
+        }
+        console.log(JSON.stringify({
+          evt: "ingest_phase_usage",
+          phase,
+          ms,
+          heap_before_mb: before?.heap_mb ?? null,
+          heap_after_mb: after?.heap_mb ?? null,
+          heap_delta_mb: before && after ? Number((after.heap_mb - before.heap_mb).toFixed(1)) : null,
+          rss_mb: after?.rss_mb ?? null,
+          external_mb: after?.external_mb ?? null,
+          ...(extra ?? {}),
+        }));
+        return ms;
+      };
+    },
+    /** True once the heap crosses the soft limit — the run should checkpoint. */
+    underPressure() {
+      const now = memSnapshot();
+      if (!now) return false;
+      peakHeap = Math.max(peakHeap, now.heap_mb);
+      peakRss = Math.max(peakRss, now.rss_mb);
+      return now.heap_mb >= MEM_SOFT_LIMIT_MB;
+    },
+    peakHeapMb: () => (peakHeap > 0 ? peakHeap : null),
+    peakRssMb: () => (peakRss > 0 ? peakRss : null),
+    snapshot: () => JSON.parse(JSON.stringify(phases)) as typeof phases,
+  };
+}
+
 
 /**
  * Choose this run's wall-clock budget from recent history.

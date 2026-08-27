@@ -842,6 +842,8 @@ Deno.serve(async (req) => {
     if (!ownerId) throw new Error("No admin user exists to own ingested sources");
 
     // ---- Discover a bounded set of unprocessed objects --------------------
+    const discoverStart = Date.now();
+
     const candidates: {
       key: string;
       report_type: ReportType | "audio";

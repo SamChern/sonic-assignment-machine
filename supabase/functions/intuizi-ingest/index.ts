@@ -845,7 +845,7 @@ Deno.serve(async (req) => {
           started_at: new Date().toISOString(),
           error_message: null,
         }, { onConflict: "object_key" })
-        .select("id,processed_rows").single();
+        .select("id,report_type,processed_rows,row_group_cursor,rows_offset,row_groups_total").single();
       if (fileErr) {
         summary.errors.push(`ledger ${rawCand.key}: ${fileErr.message}`);
         summary.files_failed++;

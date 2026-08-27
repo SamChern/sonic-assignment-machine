@@ -362,7 +362,7 @@ export const SonicSimPanel = ({
       </p>
 
       {/* Announces mode changes to screen readers without moving focus. */}
-      <p aria-live="polite" className="sr-only">
+      <p id="audioscope-status" aria-live="polite" className="sr-only">
         {isStatic
           ? `Audioscope is static — one frame at ${STATIC_FRAME_T.toFixed(2)} seconds.`
           : playing

@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import InferenceConfigGuard from "@/components/InferenceConfigGuard";
+import PhaseCpuChart, { type PhaseRun } from "@/components/PhaseCpuChart";
 import { useInferenceReadiness } from "@/hooks/useInferenceReadiness";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+
 import {
   Select,
   SelectContent,
@@ -88,6 +90,9 @@ interface StageResult {
   notes?: string[];
 }
 
+const PHASE_HISTORY_KEY = "sonicsim.ingest.phaseCpuHistory.v1";
+const PHASE_HISTORY_MAX = 12;
+
 const STAGES = [
   ["discover", "Discover delivery"],
   ["ingest", "Ingest + normalize"],
@@ -95,6 +100,7 @@ const STAGES = [
   ["score", "Semantic scoring"],
   ["link", "Audience linkage"],
 ] as const;
+
 
 type StageKey = typeof STAGES[number][0];
 
@@ -182,6 +188,19 @@ const PostIngestionWizard = () => {
   const [resumeEstimates, setResumeEstimates] = useState<ResumeEstimate[]>([]);
   /** Budget / deadline telemetry from the last run of each file. */
   const [deadlines, setDeadlines] = useState<DeadlineInfo[]>([]);
+  /**
+   * Rolling per-phase CPU history across invocations (newest last), kept in
+   * localStorage so the chart survives reloads and spans several resume runs.
+   */
+  const [phaseRuns, setPhaseRuns] = useState<PhaseRun[]>(() => {
+    try {
+      const raw = localStorage.getItem(PHASE_HISTORY_KEY);
+      const parsed = raw ? (JSON.parse(raw) as PhaseRun[]) : [];
+      return Array.isArray(parsed) ? parsed.slice(-PHASE_HISTORY_MAX) : [];
+    } catch {
+      return [];
+    }
+  });
   /** The call currently in flight, plus a 1s tick for its countdown. */
   const [liveRun, setLiveRun] = useState<LiveRun | null>(null);
   const [, setTick] = useState(0);
@@ -189,6 +208,15 @@ const PostIngestionWizard = () => {
   const resumeCursors = useRef<Record<string, number>>({});
   /** Last budget the server reported, used for the countdown before it replies. */
   const lastBudgetMs = useRef(70_000);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PHASE_HISTORY_KEY, JSON.stringify(phaseRuns));
+    } catch {
+      /* storage full or blocked — the chart is still live for this session */
+    }
+  }, [phaseRuns]);
+
 
   useEffect(() => {
     if (!liveRun) return;
@@ -277,6 +305,8 @@ const PostIngestionWizard = () => {
 
     const estimates: ResumeEstimate[] = [];
     const deadlineInfos: DeadlineInfo[] = [];
+    const phaseSamples: PhaseRun[] = [];
+
 
     for (const f of dataFiles) {
       const t0 = Date.now();
@@ -375,6 +405,37 @@ const PostIngestionWizard = () => {
         phaseMs: res.phase_ms ?? null,
       });
 
+      // Per-phase CPU/heap sample for the chart. Prefer the richer phase_usage
+      // payload and fall back to phase_ms when only durations came back.
+      const usage = res.phase_usage ?? null;
+      const phases: PhaseRun["phases"] = {};
+      if (usage) {
+        for (const [phase, u] of Object.entries(usage)) {
+          if (!u?.ms) continue;
+          phases[phase] = {
+            ms: u.ms,
+            peakHeapMb: u.peak_heap_mb ?? null,
+            heapDeltaMb: u.heap_delta_mb ?? null,
+          };
+        }
+      } else if (res.phase_ms) {
+        for (const [phase, ms] of Object.entries(res.phase_ms)) {
+          if (ms > 0) phases[phase] = { ms, peakHeapMb: null, heapDeltaMb: null };
+        }
+      }
+      if (Object.keys(phases).length) {
+        phaseSamples.push({
+          key: f.object_key,
+          at: Date.now(),
+          elapsedMs: res.elapsed_ms ?? wallMs,
+          phases,
+          resourceLimit: retries > 0,
+          memoryPressure: Boolean(res.memory_pressure),
+          culprit: res.deadline_step ?? null,
+        });
+      }
+
+
       const total = fileState?.row_groups_total ?? null;
       const cursor = fileState?.row_group_cursor ?? 0;
       const groupsThisRun = Math.max(0, cursor - (resumeCursors.current[f.object_key] ?? 0));
@@ -419,6 +480,10 @@ const PostIngestionWizard = () => {
     setPartialFiles(stillPartial);
     setResumeEstimates(estimates);
     setDeadlines(deadlineInfos);
+    if (phaseSamples.length) {
+      setPhaseRuns((prev) => [...prev, ...phaseSamples].slice(-PHASE_HISTORY_MAX));
+    }
+
 
 
     setStage("ingest", {
@@ -703,6 +768,24 @@ const PostIngestionWizard = () => {
             </ul>
           </div>
         )}
+
+        {!running && !!phaseRuns.length && (
+          <div className="w-full space-y-1">
+            <PhaseCpuChart runs={phaseRuns} />
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px] text-muted-foreground"
+                onClick={() => setPhaseRuns([])}
+              >
+                Clear phase history
+              </Button>
+            </div>
+          </div>
+        )}
+
+
 
         {!running && !!resumeEstimates.length && (
 

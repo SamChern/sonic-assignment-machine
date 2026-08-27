@@ -202,31 +202,51 @@ export const SonicSimPanel = ({
           </h3>
           <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{description}</p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={togglePlay}>
-            {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+        <div
+          role="group"
+          aria-label="Audioscope playback controls"
+          className="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={togglePlay}
+          >
+            {playing ? <Pause className="h-3.5 w-3.5" aria-hidden /> : <Play className="h-3.5 w-3.5" aria-hidden />}
             {playing ? "Pause" : "Play"}
+            <span className="sr-only">
+              {playing ? " — pause the animated audioscope" : " — animate the audioscope"}
+            </span>
           </Button>
           <Button
             size="sm"
             variant="outline"
-            className="gap-1.5"
+            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={() => setReplayKey((k) => k + 1)}
           >
-            <RotateCcw className="h-3.5 w-3.5" />
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden />
             Replay
           </Button>
           <Button
+            ref={staticBtnRef}
+            id="audioscope-static-toggle"
             size="sm"
             variant={isStatic ? "default" : "outline"}
-            className="gap-1.5"
+            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={toggleStatic}
             aria-pressed={isStatic}
-            title="Freeze the audioscope on a single still frame"
+            aria-describedby={reducedMotion ? "audioscope-motion-notice" : undefined}
           >
-            <ImageIcon className="h-3.5 w-3.5" />
+            <ImageIcon className="h-3.5 w-3.5" aria-hidden />
             Static
+            <span className="sr-only">
+              {isStatic
+                ? ` — on. Showing one still frame at ${STATIC_FRAME_T.toFixed(2)} seconds. Activate to resume motion.`
+                : " — off. Activate to freeze the audioscope on a single still frame."}
+            </span>
           </Button>
+
           <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
             <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
             <label className="sr-only" htmlFor="audioscope-speed">

@@ -251,16 +251,69 @@ async function ingestAudioObject(admin: any, args: {
 }
 
 /**
+ * Rate-limit telemetry for one invocation. Emitted as a single structured JSON
+ * log line per file and per run so an activation failure can be diagnosed
+ * without replaying the ingest.
+ */
+const rateMetrics = {
+  attempts: 0,
+  retries: 0,
+  terminal: 0,
+  rateLimited: 0,
+  byReport: {} as Record<string, number>,
+  retryAfterMs: [] as number[],
+  reset() {
+    this.attempts = 0;
+    this.retries = 0;
+    this.terminal = 0;
+    this.rateLimited = 0;
+    this.byReport = {};
+    this.retryAfterMs = [];
+  },
+  /** Percentile summary of the observed `retryAfterMs` hints. */
+  retryAfterSummary() {
+    const v = [...this.retryAfterMs].sort((a, b) => a - b);
+    if (!v.length) return null;
+    const at = (p: number) => v[Math.min(v.length - 1, Math.floor(p * v.length))];
+    return {
+      n: v.length,
+      min: v[0],
+      p50: at(0.5),
+      p95: at(0.95),
+      max: v[v.length - 1],
+      mean: Math.round(v.reduce((a, b) => a + b, 0) / v.length),
+    };
+  },
+  snapshot() {
+    return {
+      analyze_attempts: this.attempts,
+      analyze_retries: this.retries,
+      rate_limited_calls: this.rateLimited,
+      terminal_errors: this.terminal,
+      rate_limits_by_report_type: this.byReport,
+      retry_after_ms: this.retryAfterSummary(),
+    };
+  },
+};
+
+/**
  * Invoke `analyze-audio` with bounded backoff. The AI gateway rate-limits the
  * whole workspace (`429` / `RateLimitError` with `retryAfterMs`), which used to
  * land rows in `failed_rows` even though the taxonomy mapped fine. Retryable:
  * 429 + 5xx. Terminal: 400/401/402/403 — re-sending returns the same error.
  */
 // deno-lint-ignore no-explicit-any
-async function invokeAnalyzeAudio(admin: any, body: Json): Promise<any> {
+async function invokeAnalyzeAudio(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  body: Json,
+  reportType = "unknown",
+  // deno-lint-ignore no-explicit-any
+): Promise<any> {
   const MAX_ATTEMPTS = 4;
   let lastErr: unknown = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    rateMetrics.attempts++;
     const { data, error } = await admin.functions.invoke("analyze-audio", { body });
     if (!error) {
       if (!data?.sources?.[0]) throw new Error("analyze-audio returned no source");
@@ -271,17 +324,48 @@ async function invokeAnalyzeAudio(admin: any, body: Json): Promise<any> {
     const status = Number((error as { status?: number })?.status ?? 0);
     const terminal = [400, 401, 402, 403].includes(status) ||
       /InsufficientCredits|PaymentRequired|Forbidden|Unauthorized/i.test(msg);
+    const isRateLimit = !terminal && (status === 429 || /RateLimit|rate limit/i.test(msg));
     const retryable = !terminal &&
-      (status === 429 || status >= 500 || /RateLimit|rate limit|timeout|503|502/i.test(msg));
-    if (!retryable || attempt === MAX_ATTEMPTS) break;
+      (isRateLimit || status >= 500 || /timeout|503|502/i.test(msg));
+    if (isRateLimit) {
+      rateMetrics.rateLimited++;
+      rateMetrics.byReport[reportType] = (rateMetrics.byReport[reportType] ?? 0) + 1;
+    }
+    if (terminal) rateMetrics.terminal++;
     const hinted = Number(msg.match(/"retryAfterMs"\s*:\s*(\d+)/)?.[1] ?? 0);
+    if (hinted > 0) rateMetrics.retryAfterMs.push(hinted);
+    if (!retryable || attempt === MAX_ATTEMPTS) {
+      console.log(JSON.stringify({
+        evt: "analyze_audio_giving_up",
+        report_type: reportType,
+        attempt,
+        status,
+        terminal,
+        rate_limited: isRateLimit,
+        retry_after_ms: hinted || null,
+        message: msg.slice(0, 300),
+      }));
+      break;
+    }
     const backoff = Math.max(hinted, 400 * 2 ** (attempt - 1));
     const jitter = Math.floor(Math.random() * 250);
-    console.log(`analyze-audio retry ${attempt}/${MAX_ATTEMPTS} in ${backoff + jitter}ms: ${msg}`);
+    rateMetrics.retries++;
+    console.log(JSON.stringify({
+      evt: "analyze_audio_retry",
+      report_type: reportType,
+      attempt,
+      max_attempts: MAX_ATTEMPTS,
+      status,
+      rate_limited: isRateLimit,
+      retry_after_ms: hinted || null,
+      wait_ms: backoff + jitter,
+      message: msg.slice(0, 200),
+    }));
     await new Promise((r) => setTimeout(r, backoff + jitter));
   }
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
+
 
 
 Deno.serve(async (req) => {

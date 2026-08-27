@@ -1347,6 +1347,9 @@ Deno.serve(async (req) => {
     }
     (summary as Json).roster_only = rosterOnly;
 
+    if (summary.time_budget_exhausted || summary.files_failed || breakerTripped) {
+      summary.complete = false;
+    }
     summary.rate_metrics = rateMetrics.snapshot();
     console.log(JSON.stringify({ evt: "ingest_run_summary", ...summary }));
     await admin.from("intuizi_ingest_state").update({

@@ -984,10 +984,14 @@ Deno.serve(async (req) => {
 
 
       try {
+        const signStart = Date.now();
         const url = await signReadUrl(cand.key);
+        const signMs = Date.now() - signStart;
+        summary.phase_ms.sign += signMs;
         // Resume from the last transformed row group instead of re-reading rows
         // that were already normalized in an earlier (possibly timed-out) run.
         const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
+        const readStart = Date.now();
         const chunk = await fetchObjectChunk(
           url,
           cand.key,
@@ -996,12 +1000,28 @@ Deno.serve(async (req) => {
           resumeGroup,
           readDeadlineAt,
         );
+        const readMs = Date.now() - readStart;
+        summary.phase_ms.read += readMs;
         const checkpoint = chunk.checkpoint;
+        const readTimings = (chunk.timings ?? null) as Record<string, unknown> | null;
+        console.log(JSON.stringify({
+          evt: "ingest_file_read_timings",
+          object_key: cand.key,
+          resume_at_group: resumeGroup,
+          sign_ms: signMs,
+          read_ms: readMs,
+          rows: chunk.rows.length,
+          deadline_exceeded: Boolean(chunk.deadlineExceeded),
+          time_remaining_ms: timeLeftMs(),
+          ...(readTimings ?? {}),
+        }));
 
         // The reader stopped early to stay inside the run budget: persist the
         // unchanged cursor as `partial` and let the wizard's Resume continue.
         if (chunk.deadlineExceeded) {
           summary.time_budget_exhausted = true;
+          summary.deadline_exceeded = true;
+          summary.deadline_step = String(readTimings?.abortedAt ?? "decode");
           summary.complete = false;
           await admin.from("intuizi_ingest_files").update({
             status: "partial",
@@ -1016,9 +1036,14 @@ Deno.serve(async (req) => {
             rows: 0,
             row_group_cursor: checkpoint?.startRowGroup ?? resumeGroup,
             row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+            deadline_exceeded: true,
+            deadline_step: summary.deadline_step,
+            read_ms: readMs,
+            timings: readTimings,
           });
           break;
         }
+
         const rawRows = chunk.rows.slice(0, MAX_ROWS_PER_FILE);
 
         summary.rows_read += rawRows.length;

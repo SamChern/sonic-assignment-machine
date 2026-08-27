@@ -23,20 +23,38 @@ const isTypingTarget = (el: EventTarget | null): boolean => {
   return Boolean(node.closest("input, textarea, select, [contenteditable='true']"));
 };
 
-const cycleFocus = (direction: 1 | -1) => {
-  if (typeof document === "undefined") return;
-  const panes = Array.from(
-    document.querySelectorAll<HTMLElement>(`[${PANE_ANCHOR_ATTR}]`),
-  ).filter(
+const paneAnchors = (): HTMLElement[] => {
+  if (typeof document === "undefined") return [];
+  return Array.from(document.querySelectorAll<HTMLElement>(`[${PANE_ANCHOR_ATTR}]`)).filter(
     (el) =>
       el === document.activeElement ||
       (!el.hasAttribute("hidden") && !el.closest("[hidden], [aria-hidden='true']")),
   );
+};
+
+const cycleFocus = (direction: 1 | -1) => {
+  const panes = paneAnchors();
   if (panes.length === 0) return;
   const active = document.activeElement as HTMLElement | null;
   const current = panes.findIndex((el) => el === active || el.contains(active));
   const next = panes[(((current === -1 ? 0 : current + direction) % panes.length) + panes.length) % panes.length];
   next?.focus();
+};
+
+/**
+ * Jump focus to the motion controls (the Static toggle) of the pane the user is
+ * in — or, when focus sits outside every pane, the first pane on the page.
+ * Exported so notices and links can reuse the exact same behaviour as `M`.
+ */
+export const focusMotionControls = (container?: HTMLElement | null): boolean => {
+  const panes = paneAnchors();
+  if (panes.length === 0) return false;
+  const active = document.activeElement as HTMLElement | null;
+  const inPane = panes.find((el) => el === active || el.contains(active));
+  const scoped = container ? panes.find((el) => container.contains(el)) : undefined;
+  const target = inPane ?? scoped ?? panes[0];
+  target?.focus();
+  return Boolean(target);
 };
 
 export type AudioscopeShortcutHandlers = {
@@ -47,6 +65,7 @@ export type AudioscopeShortcutHandlers = {
   /** Set false to detach (e.g. panel has nothing to visualize). */
   enabled?: boolean;
 };
+
 
 /**
  * A panel owns the keystroke when focus sits inside it, or when nothing is

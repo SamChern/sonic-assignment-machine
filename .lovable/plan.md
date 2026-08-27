@@ -15,7 +15,7 @@ Both feed one shared renderer, so visuals look identical regardless of source.
 ## What gets built
 
 ### 1. Shared engine
-- `src/lib/audioscope/` — signal providers (`liveAudio`, `mic`, `synthetic`) exposing one interface: `getWaveform()` / `getSpectrum()`.
+- `src/lib/audioscope/` — signal providers (`liveAudio`, `synthetic`) exposing one interface: `getWaveform()` / `getSpectrum()`.
 - `src/components/visuals/Audioscope.tsx` — canvas renderer with three modes:
   - **Scope**: the line wave from your snippet (grid, horizon line, glow trail).
   - **Radial**: waveform wrapped into a circle around the fingerprint — reads as a "SonicSIM" identity ring.

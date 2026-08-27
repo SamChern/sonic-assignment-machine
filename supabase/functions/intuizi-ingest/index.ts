@@ -1108,11 +1108,17 @@ Deno.serve(async (req) => {
       return json({ ...summary, idle: true });
     }
 
-    const identifierBudget = probeOnly ? 1 : MAX_IDENTIFIERS_PER_RUN;
+    const identifierBudget = probeOnly ? 1 : caps.identifiers;
 
     for (const rawCand of candidates) {
       if (breakerTripped) break;
       if (outOfTime()) { summary.time_budget_exhausted = true; break; }
+      if (meter.underPressure()) {
+        summary.memory_pressure = true;
+        summary.time_budget_exhausted = true;
+        summary.complete = false;
+        break;
+      }
 
       const { data: fileRow, error: fileErr } = await admin
         .from("intuizi_ingest_files")
@@ -1181,17 +1187,19 @@ Deno.serve(async (req) => {
         // Resume from the last transformed row group instead of re-reading rows
         // that were already normalized in an earlier (possibly timed-out) run.
         const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
+        const endRead = meter.begin("read");
         const readStart = Date.now();
         const chunk = await fetchObjectChunk(
           url,
           cand.key,
-          MAX_ROWS_PER_FILE,
+          caps.rows,
           EXPECTED_ROWS_PER_USER,
           resumeGroup,
           readDeadlineAt,
         );
         const readMs = Date.now() - readStart;
         summary.phase_ms.read += readMs;
+        endRead({ object_key: cand.key, resume_at_group: resumeGroup, rows: chunk.rows.length, row_cap: caps.rows });
         const checkpoint = chunk.checkpoint;
         const readTimings = (chunk.timings ?? null) as Record<string, unknown> | null;
         console.log(JSON.stringify({
@@ -1234,7 +1242,8 @@ Deno.serve(async (req) => {
           break;
         }
 
-        const rawRows = chunk.rows.slice(0, MAX_ROWS_PER_FILE);
+        const rawRows = chunk.rows.slice(0, caps.rows);
+        const endNormalize = meter.begin("normalize");
         const normalizeStart = Date.now();
 
         summary.rows_read += rawRows.length;
@@ -1379,6 +1388,8 @@ Deno.serve(async (req) => {
         let failedInFile = 0;
         const normalizeMs = Date.now() - normalizeStart;
         summary.phase_ms.normalize += normalizeMs;
+        endNormalize({ object_key: cand.key, rows: rawRows.length, identifiers: perIdentifier.size });
+        const endScore = meter.begin("score");
         const scoreStart = Date.now();
 
 
@@ -1388,6 +1399,13 @@ Deno.serve(async (req) => {
         for (const [identifier, entry] of perIdentifier) {
           if (summary.identifiers_scored >= identifierBudget) break;
           if (outOfTime()) { summary.time_budget_exhausted = true; break; }
+          if (meter.underPressure()) {
+            // Heap is close to the worker ceiling: checkpoint now instead of
+            // being killed with WORKER_RESOURCE_LIMIT mid-profile.
+            summary.memory_pressure = true;
+            summary.time_budget_exhausted = true;
+            break;
+          }
 
           const { data: existing } = await admin
             .from("intuizi_identifiers")
@@ -1585,12 +1603,20 @@ Deno.serve(async (req) => {
 
         const scoreMs = Date.now() - scoreStart;
         summary.phase_ms.score += scoreMs;
+        endScore({
+          object_key: cand.key,
+          scored: scoredInFile,
+          failed: failedInFile,
+          identifier_cap: identifierBudget,
+          row_group_cursor: checkpoint?.startRowGroup ?? null,
+        });
         const remaining = perIdentifier.size - scoredInFile - failedInFile;
         // A Parquet file is only "done" once its last row group is transformed.
         const chunkComplete = !checkpoint || checkpoint.exhausted;
         const fileStatus = breakerTripped
           ? "paused"
           : (remaining > 0 || !chunkComplete ? "partial" : "done");
+        const endPersist = meter.begin("persist");
         const persistStart = Date.now();
         await admin.from("intuizi_ingest_files").update({
 
@@ -1613,6 +1639,7 @@ Deno.serve(async (req) => {
         }).eq("id", fileRow.id);
 
         summary.phase_ms.persist += Date.now() - persistStart;
+        endPersist({ object_key: cand.key });
 
         // Structured per-file coverage + timing + rate-limit metrics.
         console.log(JSON.stringify({

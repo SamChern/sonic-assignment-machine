@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,27 @@ interface ResumeEstimate {
   etaMs: number | null;
   runsRemaining: number | null;
 }
+
+/** What the last edge-function run reported about its own time budget. */
+interface DeadlineInfo {
+  key: string;
+  budgetMs: number;
+  defaultBudgetMs: number | null;
+  budgetReason: string | null;
+  elapsedMs: number | null;
+  timeRemainingMs: number | null;
+  deadlineExceeded: boolean;
+  deadlineStep: string | null;
+  phaseMs: Record<string, number> | null;
+}
+
+/** In-flight run, used to tick a live "aborts in Ns" countdown. */
+interface LiveRun {
+  key: string;
+  startedAt: number;
+  budgetMs: number;
+}
+
 
 type StageState = "idle" | "running" | "ok" | "warn" | "error";
 
@@ -119,8 +140,22 @@ const PostIngestionWizard = () => {
   const [partialFiles, setPartialFiles] = useState<ActivationFile[]>([]);
   /** Row-group progress + time estimates for the next resume run. */
   const [resumeEstimates, setResumeEstimates] = useState<ResumeEstimate[]>([]);
+  /** Budget / deadline telemetry from the last run of each file. */
+  const [deadlines, setDeadlines] = useState<DeadlineInfo[]>([]);
+  /** The call currently in flight, plus a 1s tick for its countdown. */
+  const [liveRun, setLiveRun] = useState<LiveRun | null>(null);
+  const [, setTick] = useState(0);
   /** Row-group cursor at the start of the previous run, for throughput math. */
   const resumeCursors = useRef<Record<string, number>>({});
+  /** Last budget the server reported, used for the countdown before it replies. */
+  const lastBudgetMs = useRef(105_000);
+
+  useEffect(() => {
+    if (!liveRun) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [liveRun]);
+
   const {
     readiness,
     loading: inferenceLoading,
@@ -201,17 +236,31 @@ const PostIngestionWizard = () => {
     let roster = 0;
 
     const estimates: ResumeEstimate[] = [];
+    const deadlineInfos: DeadlineInfo[] = [];
 
     for (const f of dataFiles) {
       const t0 = Date.now();
+      setLiveRun({ key: f.object_key, startedAt: t0, budgetMs: lastBudgetMs.current });
       const { data, error } = await supabase.functions.invoke("intuizi-ingest", {
         body: { object_key: f.object_key, report_type: f.report_type ?? undefined },
       });
+      setLiveRun(null);
       const wallMs = Date.now() - t0;
       if (error) {
         ingestErrors.push(`${fileName(f.object_key)}: ${error.message}`);
         perFile.push([fileName(f.object_key), "failed · resumable"]);
         stillPartial.push(f);
+        deadlineInfos.push({
+          key: f.object_key,
+          budgetMs: lastBudgetMs.current,
+          defaultBudgetMs: null,
+          budgetReason: null,
+          elapsedMs: wallMs,
+          timeRemainingMs: 0,
+          deadlineExceeded: true,
+          deadlineStep: "gateway timeout / invoke error",
+          phaseMs: null,
+        });
         continue;
       }
       const res = data as {
@@ -221,7 +270,13 @@ const PostIngestionWizard = () => {
         time_budget_exhausted?: boolean;
         complete?: boolean;
         run_budget_ms?: number;
+        default_run_budget_ms?: number;
+        budget_reason?: string;
         elapsed_ms?: number;
+        time_remaining_ms?: number;
+        deadline_exceeded?: boolean;
+        deadline_step?: string | null;
+        phase_ms?: Record<string, number>;
         files?: {
           object_key?: string;
           complete?: boolean;
@@ -230,6 +285,7 @@ const PostIngestionWizard = () => {
         }[];
         errors?: string[];
       };
+
       rowsRead += res.rows_read ?? 0;
       scored += res.identifiers_scored ?? 0;
       roster += res.roster_identifiers ?? 0;
@@ -242,7 +298,20 @@ const PostIngestionWizard = () => {
       // Estimate how much of the file the NEXT run finishes under the server's
       // 105s budget, from this run's throughput (groups per elapsed ms).
       const budgetMs = res.run_budget_ms ?? 105_000;
+      lastBudgetMs.current = budgetMs;
       const elapsed = res.elapsed_ms ?? wallMs;
+      deadlineInfos.push({
+        key: f.object_key,
+        budgetMs,
+        defaultBudgetMs: res.default_run_budget_ms ?? null,
+        budgetReason: res.budget_reason ?? null,
+        elapsedMs: elapsed,
+        timeRemainingMs: res.time_remaining_ms ?? null,
+        deadlineExceeded: Boolean(res.deadline_exceeded || res.time_budget_exhausted),
+        deadlineStep: res.deadline_step ?? null,
+        phaseMs: res.phase_ms ?? null,
+      });
+
       const total = fileState?.row_groups_total ?? null;
       const cursor = fileState?.row_group_cursor ?? 0;
       const groupsThisRun = Math.max(0, cursor - (resumeCursors.current[f.object_key] ?? 0));
@@ -286,6 +355,8 @@ const PostIngestionWizard = () => {
 
     setPartialFiles(stillPartial);
     setResumeEstimates(estimates);
+    setDeadlines(deadlineInfos);
+
 
     setStage("ingest", {
       state: ingestErrors.length || stillPartial.length ? (rowsRead ? "warn" : "error") : "ok",
@@ -498,7 +569,80 @@ const PostIngestionWizard = () => {
           )
         )}
 
+        {liveRun && (() => {
+          const elapsed = Date.now() - liveRun.startedAt;
+          const left = Math.max(0, liveRun.budgetMs - elapsed);
+          const pct = Math.min(100, Math.round((elapsed / liveRun.budgetMs) * 100));
+          return (
+            <div
+              className="w-full rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="font-mono text-foreground/90">{fileName(liveRun.key)}</span>
+                <span className="text-muted-foreground">
+                  {fmtDuration(elapsed)} elapsed
+                </span>
+                <Badge variant="outline" className="text-[10px]">
+                  {left > 0
+                    ? `aborts in ~${fmtDuration(left)}`
+                    : "past budget — checkpointing"}
+                </Badge>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })()}
+
+        {!running && !!deadlines.length && (
+          <div className="w-full rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
+            <p className="mb-2 font-medium text-foreground/90">Run budget &amp; deadline</p>
+            <ul className="space-y-1.5">
+              {deadlines.map((d) => (
+                <li key={d.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+                  <span className="font-mono text-foreground/90">{fileName(d.key)}</span>
+                  <Badge variant="outline" className="text-[10px]">
+                    budget {Math.round(d.budgetMs / 1000)}s
+                    {d.defaultBudgetMs != null && d.defaultBudgetMs !== d.budgetMs
+                      ? ` (default ${Math.round(d.defaultBudgetMs / 1000)}s)`
+                      : ""}
+                  </Badge>
+                  {d.elapsedMs != null && <span>{fmtDuration(d.elapsedMs)} used</span>}
+                  {d.timeRemainingMs != null && (
+                    <span>· {fmtDuration(Math.max(0, d.timeRemainingMs))} left at finish</span>
+                  )}
+                  {d.deadlineExceeded ? (
+                    <Badge variant="outline" className="border-amber-500/50 text-[10px] text-amber-600 dark:text-amber-400">
+                      deadline exceeded{d.deadlineStep ? ` at ${d.deadlineStep}` : ""}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-emerald-500/50 text-[10px] text-emerald-600 dark:text-emerald-400">
+                      finished inside budget
+                    </Badge>
+                  )}
+                  {d.phaseMs && (
+                    <span className="font-mono text-[10px]">
+                      {Object.entries(d.phaseMs)
+                        .filter(([, v]) => v > 0)
+                        .map(([k, v]) => `${k} ${Math.round(v / 100) / 10}s`)
+                        .join(" · ")}
+                    </span>
+                  )}
+                  {d.budgetReason && <span className="italic">{d.budgetReason}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {!running && !!resumeEstimates.length && (
+
           <div className="w-full rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
             <p className="mb-2 font-medium text-amber-600 dark:text-amber-400">
               Resume forecast — each run stops at the 105s budget

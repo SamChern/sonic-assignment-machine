@@ -5,7 +5,7 @@
 // precise geo/device values are carried as metadata and never used as features.
 
 import type { OntologyTag } from "./ontology.ts";
-import { readParquetChunk, type ParquetCheckpoint } from "./parquet.ts";
+import { readParquetChunk, type ParquetCheckpoint, type ParquetTimings } from "./parquet.ts";
 export type { ParquetCheckpoint };
 
 
@@ -82,7 +82,9 @@ export async function fetchObjectChunk(
   rows: Record<string, unknown>[];
   checkpoint: ParquetCheckpoint | null;
   deadlineExceeded?: boolean;
+  timings?: Record<string, unknown> | ParquetTimings;
 }> {
+
   const lower = objectKey.toLowerCase();
 
   if (lower.endsWith(".parquet") || lower.endsWith(".pq")) {
@@ -91,10 +93,12 @@ export async function fetchObjectChunk(
 
   // Plain object reads are aborted at the deadline so a stalled transfer can
   // never hold the function open past the gateway's 150s idle limit.
+  const fetchStart = Date.now();
   const signal = deadlineAt != null
     ? AbortSignal.timeout(Math.max(1_000, deadlineAt - Date.now()))
     : undefined;
   const res = await fetch(url, { signal });
+
   if (!res.ok) {
     throw new Error(`object fetch failed [${res.status}]: ${await res.text()}`);
   }
@@ -108,6 +112,9 @@ export async function fetchObjectChunk(
     text = await res.text();
   }
 
+  const downloadMs = Date.now() - fetchStart;
+
+  const parseStart = Date.now();
   let rows: Record<string, unknown>[];
   if (lower.includes(".jsonl") || lower.includes(".ndjson")) {
     rows = text.split(/\r?\n/).filter((l) => l.trim()).map((l) => JSON.parse(l));
@@ -117,7 +124,15 @@ export async function fetchObjectChunk(
   } else {
     rows = parseCsv(text);
   }
-  return { rows, checkpoint: null };
+  const timings = {
+    downloadMs,
+    parseMs: Date.now() - parseStart,
+    totalMs: Date.now() - fetchStart,
+    bytes: text.length,
+  };
+  console.log(JSON.stringify({ evt: "object_read_timings", object_key: objectKey, ...timings }));
+  return { rows, checkpoint: null, timings };
+
 }
 
 /** Backwards-compatible whole-object read (no checkpointing). */

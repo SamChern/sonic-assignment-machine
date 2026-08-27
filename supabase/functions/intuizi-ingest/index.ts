@@ -67,6 +67,56 @@ const MAX_ROWS_PER_FILE = 5000;
 // The edge gateway kills a request after 150s of idle time. Stop taking new work
 // well before that and return a partial summary; remaining work resumes next run.
 const RUN_BUDGET_MS = 105_000;
+/** Floor/ceiling for the auto-tuned wall-clock budget. */
+const MIN_RUN_BUDGET_MS = 45_000;
+const MAX_RUN_BUDGET_MS = 105_000;
+
+/** One historical run, kept in intuizi_ingest_state.last_run_summary. */
+export interface BudgetHistoryEntry {
+  at: string;
+  budget_ms: number;
+  elapsed_ms: number;
+  timed_out: boolean;
+}
+
+/**
+ * Choose this run's wall-clock budget from recent history.
+ *
+ * A run that burned its whole budget and still had to checkpoint means the last
+ * read overran — shrink the budget so the next resume leaves more headroom
+ * before the gateway's 150s idle limit. Runs that finished comfortably inside
+ * the budget grow it back toward the ceiling.
+ */
+export function tuneRunBudget(
+  history: BudgetHistoryEntry[],
+  fallback = MAX_RUN_BUDGET_MS,
+): { budgetMs: number; reason: string } {
+  const recent = history.slice(-5);
+  if (!recent.length) return { budgetMs: fallback, reason: "no history" };
+
+  const last = recent[recent.length - 1];
+  const overruns = recent.filter((r) => r.timed_out).length;
+  const clamp = (n: number) =>
+    Math.max(MIN_RUN_BUDGET_MS, Math.min(MAX_RUN_BUDGET_MS, Math.round(n / 1000) * 1000));
+
+  if (last.timed_out) {
+    const shrink = 1 - Math.min(0.4, 0.15 * overruns);
+    return {
+      budgetMs: clamp((last.budget_ms || fallback) * shrink),
+      reason: `last run exhausted its budget (${overruns} of ${recent.length} recent runs)`,
+    };
+  }
+
+  const worst = Math.max(...recent.map((r) => r.elapsed_ms || 0));
+  if (worst > 0 && worst < (last.budget_ms || fallback) * 0.6) {
+    return {
+      budgetMs: clamp(Math.max(last.budget_ms || fallback, worst * 1.8)),
+      reason: `recent runs finished in ${Math.round(worst / 1000)}s — growing budget`,
+    };
+  }
+  return { budgetMs: clamp(last.budget_ms || fallback), reason: "holding steady" };
+}
+
 // Expected rows per user/device in an Intuizi activation delivery. Used only by
 // the pre-ingest parquet validation log to flag deliveries whose shape drifted.
 const EXPECTED_ROWS_PER_USER = Number(
@@ -717,9 +767,25 @@ Deno.serve(async (req) => {
 
   rateMetrics.reset();
   const runStart = Date.now();
-  const outOfTime = () => Date.now() - runStart > RUN_BUDGET_MS;
+  // Wall-clock budget is tuned from recent run history so a resume that keeps
+  // overrunning gets more headroom before the gateway's 150s idle limit.
+  const prevSummary = (state?.last_run_summary ?? {}) as Record<string, unknown>;
+  const history = Array.isArray(prevSummary.budget_history)
+    ? (prevSummary.budget_history as BudgetHistoryEntry[])
+    : [];
+  const tuned = tuneRunBudget(history);
+  const budgetMs = tuned.budgetMs;
+  const outOfTime = () => Date.now() - runStart > budgetMs;
   /** Hard wall for any single object read, so no read outlives the run budget. */
-  const readDeadlineAt = runStart + RUN_BUDGET_MS;
+  const readDeadlineAt = runStart + budgetMs;
+  const timeLeftMs = () => Math.max(0, readDeadlineAt - Date.now());
+  console.log(JSON.stringify({
+    evt: "ingest_budget_tuned",
+    budget_ms: budgetMs,
+    default_budget_ms: RUN_BUDGET_MS,
+    reason: tuned.reason,
+    history_len: history.length,
+  }));
   const summary = {
     files_processed: 0,
     files_failed: 0,
@@ -734,9 +800,23 @@ Deno.serve(async (req) => {
     pause_reason: null as string | null,
     time_budget_exhausted: false,
     /** Server-side run budget (ms) the wizard uses to estimate remaining time. */
-    run_budget_ms: RUN_BUDGET_MS,
+    run_budget_ms: budgetMs,
+    /** Default budget before auto-tuning, for comparison in the wizard. */
+    default_run_budget_ms: RUN_BUDGET_MS,
+    /** Why the tuner picked this budget. */
+    budget_reason: tuned.reason,
+    /** Ms left in the budget when the run returned. */
+    time_remaining_ms: budgetMs,
+    /** True when a single Parquet read had to abort at the deadline. */
+    deadline_exceeded: false,
+    /** Which step ran out of budget, when one did. */
+    deadline_step: null as string | null,
     /** Wall-clock duration of this run (ms). */
     elapsed_ms: 0,
+    /** Per-step duration breakdown (ms). */
+    phase_ms: { discover: 0, sign: 0, read: 0, normalize: 0, score: 0, persist: 0 },
+    /** Rolling history the budget tuner reads on the next run. */
+    budget_history: [] as BudgetHistoryEntry[],
     /** False when any file still has untransformed row groups or identifiers. */
     complete: true,
     /** Per-file resume state, so the caller can show partial/complete status. */
@@ -745,6 +825,7 @@ Deno.serve(async (req) => {
     // Rate-limit telemetry for this run, filled in before responding.
     rate_metrics: null as Record<string, unknown> | null,
   };
+
   let breakerTripped = false;
 
 
@@ -761,6 +842,8 @@ Deno.serve(async (req) => {
     if (!ownerId) throw new Error("No admin user exists to own ingested sources");
 
     // ---- Discover a bounded set of unprocessed objects --------------------
+    const discoverStart = Date.now();
+
     const candidates: {
       key: string;
       report_type: ReportType | "audio";
@@ -824,10 +907,10 @@ Deno.serve(async (req) => {
         }
       }
     }
-
-
+    summary.phase_ms.discover = Date.now() - discoverStart;
 
     if (!candidates.length) {
+
       // Idle path stops here — it does not kick more work.
       await admin.from("intuizi_ingest_state").update({
         last_run_at: new Date().toISOString(),
@@ -903,10 +986,14 @@ Deno.serve(async (req) => {
 
 
       try {
+        const signStart = Date.now();
         const url = await signReadUrl(cand.key);
+        const signMs = Date.now() - signStart;
+        summary.phase_ms.sign += signMs;
         // Resume from the last transformed row group instead of re-reading rows
         // that were already normalized in an earlier (possibly timed-out) run.
         const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
+        const readStart = Date.now();
         const chunk = await fetchObjectChunk(
           url,
           cand.key,
@@ -915,12 +1002,28 @@ Deno.serve(async (req) => {
           resumeGroup,
           readDeadlineAt,
         );
+        const readMs = Date.now() - readStart;
+        summary.phase_ms.read += readMs;
         const checkpoint = chunk.checkpoint;
+        const readTimings = (chunk.timings ?? null) as Record<string, unknown> | null;
+        console.log(JSON.stringify({
+          evt: "ingest_file_read_timings",
+          object_key: cand.key,
+          resume_at_group: resumeGroup,
+          sign_ms: signMs,
+          read_ms: readMs,
+          rows: chunk.rows.length,
+          deadline_exceeded: Boolean(chunk.deadlineExceeded),
+          time_remaining_ms: timeLeftMs(),
+          ...(readTimings ?? {}),
+        }));
 
         // The reader stopped early to stay inside the run budget: persist the
         // unchanged cursor as `partial` and let the wizard's Resume continue.
         if (chunk.deadlineExceeded) {
           summary.time_budget_exhausted = true;
+          summary.deadline_exceeded = true;
+          summary.deadline_step = String(readTimings?.abortedAt ?? "decode");
           summary.complete = false;
           await admin.from("intuizi_ingest_files").update({
             status: "partial",
@@ -935,12 +1038,19 @@ Deno.serve(async (req) => {
             rows: 0,
             row_group_cursor: checkpoint?.startRowGroup ?? resumeGroup,
             row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+            deadline_exceeded: true,
+            deadline_step: summary.deadline_step,
+            read_ms: readMs,
+            timings: readTimings,
           });
           break;
         }
+
         const rawRows = chunk.rows.slice(0, MAX_ROWS_PER_FILE);
+        const normalizeStart = Date.now();
 
         summary.rows_read += rawRows.length;
+
 
         if (checkpoint && !rawRows.length && checkpoint.exhausted) {
           // Every row group has already been transformed — close the file out.
@@ -1079,6 +1189,13 @@ Deno.serve(async (req) => {
 
         let scoredInFile = 0;
         let failedInFile = 0;
+        const normalizeMs = Date.now() - normalizeStart;
+        summary.phase_ms.normalize += normalizeMs;
+        const scoreStart = Date.now();
+
+
+
+
 
         for (const [identifier, entry] of perIdentifier) {
           if (summary.identifiers_scored >= identifierBudget) break;
@@ -1278,13 +1395,17 @@ Deno.serve(async (req) => {
           }
         }
 
+        const scoreMs = Date.now() - scoreStart;
+        summary.phase_ms.score += scoreMs;
         const remaining = perIdentifier.size - scoredInFile - failedInFile;
         // A Parquet file is only "done" once its last row group is transformed.
         const chunkComplete = !checkpoint || checkpoint.exhausted;
         const fileStatus = breakerTripped
           ? "paused"
           : (remaining > 0 || !chunkComplete ? "partial" : "done");
+        const persistStart = Date.now();
         await admin.from("intuizi_ingest_files").update({
+
           status: fileStatus,
           total_rows: rawRows.length,
           processed_rows: (fileRow.processed_rows ?? 0) + scoredInFile,
@@ -1303,7 +1424,9 @@ Deno.serve(async (req) => {
           error_message: failedInFile ? summary.errors.slice(-3).join("\n").slice(0, 2000) : null,
         }).eq("id", fileRow.id);
 
-        // Structured per-file coverage + rate-limit metrics.
+        summary.phase_ms.persist += Date.now() - persistStart;
+
+        // Structured per-file coverage + timing + rate-limit metrics.
         console.log(JSON.stringify({
           evt: "ingest_file_coverage",
           object_key: cand.key,
@@ -1320,11 +1443,22 @@ Deno.serve(async (req) => {
           coverage_pct: perIdentifier.size
             ? Math.round((scoredInFile / perIdentifier.size) * 100)
             : null,
+          sign_ms: signMs,
+          read_ms: readMs,
+          normalize_ms: normalizeMs,
+          score_ms: scoreMs,
+          read_timings: readTimings,
+          time_remaining_ms: timeLeftMs(),
           ...rateMetrics.snapshot(),
         }));
 
         summary.files.push({
           object_key: cand.key,
+          read_ms: readMs,
+          normalize_ms: normalizeMs,
+          score_ms: scoreMs,
+          timings: readTimings,
+
           status: fileStatus,
           complete: fileStatus === "done",
           rows: rawRows.length,
@@ -1379,8 +1513,16 @@ Deno.serve(async (req) => {
       summary.complete = false;
     }
     summary.elapsed_ms = Date.now() - runStart;
+    summary.time_remaining_ms = timeLeftMs();
+    summary.budget_history = [...history, {
+      at: new Date().toISOString(),
+      budget_ms: budgetMs,
+      elapsed_ms: summary.elapsed_ms,
+      timed_out: summary.time_budget_exhausted || summary.deadline_exceeded,
+    }].slice(-10);
     summary.rate_metrics = rateMetrics.snapshot();
     console.log(JSON.stringify({ evt: "ingest_run_summary", ...summary }));
+
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),
       last_run_summary: summary,
@@ -1392,7 +1534,16 @@ Deno.serve(async (req) => {
 
   } catch (e) {
     const msg = errMsg(e);
+    summary.elapsed_ms = Date.now() - runStart;
+    summary.time_remaining_ms = timeLeftMs();
+    summary.budget_history = [...history, {
+      at: new Date().toISOString(),
+      budget_ms: budgetMs,
+      elapsed_ms: summary.elapsed_ms,
+      timed_out: true,
+    }].slice(-10);
     summary.rate_metrics = rateMetrics.snapshot();
+
     console.error(JSON.stringify({ evt: "ingest_run_failed", error: msg, ...summary }));
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),

@@ -222,6 +222,7 @@ export const SonicSimPanel = ({
   return (
     <Card
       ref={rootRef}
+      data-audioscope-panel="sonicsim"
       className="overflow-hidden border-border/60 bg-card/70 backdrop-blur-sm"
     >
       <div className="flex flex-col gap-3 border-b border-border/50 p-4 sm:flex-row sm:items-center sm:justify-between">

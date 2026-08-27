@@ -270,7 +270,11 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
   const lock = sim == null ? null : sim >= 80 ? "In phase" : sim >= 55 ? "Partial lock" : "Out of phase";
 
   return (
-    <Card ref={rootRef} className="overflow-hidden border-border/60 bg-card/70 backdrop-blur-sm">
+    <Card
+      ref={rootRef}
+      data-audioscope-panel="compare"
+      className="overflow-hidden border-border/60 bg-card/70 backdrop-blur-sm"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 p-4">
         <div className="min-w-0">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">

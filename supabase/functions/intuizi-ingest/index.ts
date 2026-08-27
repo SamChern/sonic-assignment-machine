@@ -712,6 +712,7 @@ Deno.serve(async (req) => {
   if (leaseErr) return json({ error: `lease error: ${leaseErr.message}` }, 500);
   if (!acquired) return json({ skipped: "another run holds the lease" });
 
+  rateMetrics.reset();
   const summary = {
     files_processed: 0,
     files_failed: 0,
@@ -725,8 +726,11 @@ Deno.serve(async (req) => {
     paused: false,
     pause_reason: null as string | null,
     errors: [] as string[],
+    // Rate-limit telemetry for this run, filled in before responding.
+    rate_metrics: null as Record<string, unknown> | null,
   };
   let breakerTripped = false;
+
 
   // audio_sources.user_id is required — attribute generated rows to an admin.
   let ownerId = actorId;

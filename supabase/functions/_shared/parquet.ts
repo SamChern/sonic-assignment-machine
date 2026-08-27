@@ -215,6 +215,64 @@ export interface ParquetChunk {
 }
 
 /**
+ * Pure row-group read planner. Given the per-row-group row counts, a resume
+ * cursor and a row budget, decide which absolute row range to read and what
+ * checkpoint to persist. Kept side-effect free so resume behaviour is testable
+ * without a real Parquet object.
+ */
+export function planRowGroupRead(
+  groupRows: number[],
+  startRowGroup: number,
+  maxRows: number,
+): { rowStart: number; rowEnd: number; checkpoint: ParquetCheckpoint } {
+  const numRows = groupRows.reduce((a, b) => a + b, 0);
+  const from = Math.max(0, Math.min(startRowGroup, groupRows.length));
+  const rowsOffset = groupRows.slice(0, from).reduce((a, b) => a + b, 0);
+
+  if (from >= groupRows.length || rowsOffset >= numRows) {
+    return {
+      rowStart: rowsOffset,
+      rowEnd: rowsOffset,
+      checkpoint: {
+        startRowGroup: from,
+        nextRowGroup: groupRows.length,
+        rowGroupsTotal: groupRows.length,
+        rowsOffset,
+        nextRowsOffset: numRows,
+        exhausted: true,
+      },
+    };
+  }
+
+  // Consume whole row groups until the row budget is met (at least one group).
+  let nextRowGroup = from;
+  let take = 0;
+  while (
+    nextRowGroup < groupRows.length &&
+    (take === 0 || take + groupRows[nextRowGroup] <= maxRows)
+  ) {
+    take += groupRows[nextRowGroup];
+    nextRowGroup++;
+  }
+
+  const rowEnd = Math.min(rowsOffset + Math.min(take, maxRows), numRows);
+
+  return {
+    rowStart: rowsOffset,
+    rowEnd,
+    checkpoint: {
+      startRowGroup: from,
+      nextRowGroup,
+      rowGroupsTotal: groupRows.length,
+      rowsOffset,
+      nextRowsOffset: rowEnd,
+      exhausted: nextRowGroup >= groupRows.length || rowEnd >= numRows,
+    },
+  };
+}
+
+
+/**
  * Read a bounded chunk of rows from a Parquet object, starting at a row-group
  * checkpoint. Reads are aligned to row-group boundaries so the returned
  * checkpoint can be persisted and a later run resumes exactly where this one

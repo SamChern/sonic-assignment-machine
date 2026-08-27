@@ -185,18 +185,45 @@ export interface ScoreTask {
   tags: OntologyTag[];
   signals: Json[];
   confidence: number;
+  /** Correlates ingest, the queue row and every worker attempt in the logs. */
+  trace_id?: string | null;
+  /** <1 shrinks the per-identifier workload after a compute/timeout failure. */
+  step_scale?: number | null;
 }
 
 export interface ScoreOutcome {
   status: "scored" | "unchanged";
   audio_source_id: string | null;
   scores?: Record<string, number>;
+  /** Last stage completed — persisted so a resume can skip finished work. */
+  stage: ScoreStage;
+  trace_id: string;
+}
+
+export type ScoreStage =
+  | "lookup"
+  | "source"
+  | "tags"
+  | "context"
+  | "analyze"
+  | "normalize"
+  | "learn"
+  | "persist"
+  | "done";
+
+export interface ScoreOptions {
+  traceId?: string;
+  stepScale?: number;
+  onStage?: (stage: ScoreStage) => void;
 }
 
 /**
  * Score one identifier through the ontology and persist everything the app and
  * the continuous-learning loop need. Idempotent: an identifier whose tag set is
  * already covered short-circuits as `unchanged`.
+ *
+ * Every error that escapes carries the stage it failed in (`e.stage`) and the
+ * run's `trace_id`, so the queue row and the logs point at the same identifier.
  */
 // deno-lint-ignore no-explicit-any
 export async function scoreIdentifier(
@@ -204,7 +231,49 @@ export async function scoreIdentifier(
   admin: any,
   task: ScoreTask,
   metrics: RateMetrics = createRateMetrics(),
+  opts: ScoreOptions = {},
 ): Promise<ScoreOutcome> {
+  const traceId = opts.traceId ?? task.trace_id ?? newTraceId();
+  const stepScale = Math.min(Math.max(opts.stepScale ?? task.step_scale ?? 1, 0.25), 1);
+  let stage: ScoreStage = "lookup";
+  const enter = (s: ScoreStage) => {
+    stage = s;
+    opts.onStage?.(s);
+  };
+
+  try {
+    return await runScore(admin, task, metrics, { traceId, stepScale, enter, stageRef: () => stage });
+  } catch (e) {
+    tagStage(e, stage);
+    console.error(JSON.stringify({
+      evt: "score_identifier_failed",
+      trace_id: traceId,
+      identifier: task.identifier,
+      report_type: task.report_type,
+      stage,
+      step_scale: stepScale,
+      failure_kind: classifyFailure(e).kind,
+      message: errMsg(e).slice(0, 300),
+    }));
+    throw e;
+  }
+}
+
+// deno-lint-ignore no-explicit-any
+async function runScore(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  task: ScoreTask,
+  metrics: RateMetrics,
+  ctx: {
+    traceId: string;
+    stepScale: number;
+    enter: (s: ScoreStage) => void;
+    stageRef: () => ScoreStage;
+  },
+): Promise<ScoreOutcome> {
+  const { traceId, stepScale, enter } = ctx;
+  enter("lookup");
   const { data: existing } = await admin
     .from("intuizi_identifiers")
     .select("id,audio_source_id,tag_codes,observation_count")
@@ -217,8 +286,15 @@ export async function scoreIdentifier(
   const unchanged = previousCodes.length > 0 &&
     tagCodes.every((c) => previousCodes.includes(c));
   if (unchanged) {
-    return { status: "unchanged", audio_source_id: existing?.audio_source_id ?? null };
+    return {
+      status: "unchanged",
+      audio_source_id: existing?.audio_source_id ?? null,
+      stage: "done",
+      trace_id: traceId,
+    };
   }
+  enter("source");
+
 
   const label = task.label ??
     `Intuizi ${task.report_type}: ${task.identifier.slice(0, 12)}`;

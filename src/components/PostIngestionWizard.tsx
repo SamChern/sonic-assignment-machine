@@ -140,8 +140,22 @@ const PostIngestionWizard = () => {
   const [partialFiles, setPartialFiles] = useState<ActivationFile[]>([]);
   /** Row-group progress + time estimates for the next resume run. */
   const [resumeEstimates, setResumeEstimates] = useState<ResumeEstimate[]>([]);
+  /** Budget / deadline telemetry from the last run of each file. */
+  const [deadlines, setDeadlines] = useState<DeadlineInfo[]>([]);
+  /** The call currently in flight, plus a 1s tick for its countdown. */
+  const [liveRun, setLiveRun] = useState<LiveRun | null>(null);
+  const [, setTick] = useState(0);
   /** Row-group cursor at the start of the previous run, for throughput math. */
   const resumeCursors = useRef<Record<string, number>>({});
+  /** Last budget the server reported, used for the countdown before it replies. */
+  const lastBudgetMs = useRef(105_000);
+
+  useEffect(() => {
+    if (!liveRun) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [liveRun]);
+
   const {
     readiness,
     loading: inferenceLoading,

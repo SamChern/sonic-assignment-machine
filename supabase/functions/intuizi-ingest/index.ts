@@ -27,6 +27,8 @@ import {
   loadNormalization,
 } from "../_shared/normalization.ts";
 import { scoreIdentifier } from "../_shared/scoreIdentifier.ts";
+import { newTraceId } from "../_shared/failure.ts";
+
 import {
   activationIdFromKey,
   fetchObjectChunk,

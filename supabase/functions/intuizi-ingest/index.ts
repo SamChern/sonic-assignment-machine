@@ -1274,13 +1274,15 @@ Deno.serve(async (req) => {
 
   } catch (e) {
     const msg = errMsg(e);
-    console.error("intuizi-ingest failed:", msg);
+    summary.rate_metrics = rateMetrics.snapshot();
+    console.error(JSON.stringify({ evt: "ingest_run_failed", error: msg, ...summary }));
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),
       last_run_summary: summary,
       last_error: msg.slice(0, 1000),
     }).eq("id", "singleton");
     return json({ ...summary, error: msg }, 500);
+
   } finally {
     // Always release the lease so a stuck run cannot block the schedule.
     try {

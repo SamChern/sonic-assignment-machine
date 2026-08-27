@@ -105,18 +105,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    const result = buildVerdict(
-      {
-        ec2Url: EC2_URL,
-        ec2Key: EC2_KEY,
-        chatModel: EC2_CHAT_MODEL,
-        embedModel: EC2_EMBED_MODEL,
-        embedDims: EC2_EMBED_DIMS,
-        ec2Required: EC2_REQUIRED,
-        lovableApiKey: LOVABLE_API_KEY,
-      },
-      probeResult,
-    );
+    const result = buildVerdict(CFG, probeResult);
+
 
     // Structured metrics: one JSON line per validation so verdicts and the
     // chosen scoring route can be counted over time from edge function logs.

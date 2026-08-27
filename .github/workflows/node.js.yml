@@ -52,8 +52,14 @@ jobs:
       - name: Lint (advisory)
         run: npm run lint || true
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Build
         run: npm run build
+
+      - name: Check bundle size
+        run: npm run check:bundle
 
       # `npm run test --if-present` (not `npm test --if-present`) is the form npm
       # actually honors — the bare `npm test` alias treats the flag as a test arg.
@@ -104,7 +110,7 @@ jobs:
           preview_pid=$!
           trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
           ready=""
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl -sf -o /dev/null http://localhost:8080/; then ready="yes"; break; fi
             sleep 1
           done

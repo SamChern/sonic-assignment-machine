@@ -10,7 +10,9 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "check:bundle": "node scripts/check-bundle-size.mjs",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "preview": "vite preview"
   },

@@ -925,6 +925,14 @@ Deno.serve(async (req) => {
             error_message: null,
           }).eq("id", fileRow.id);
           summary.files_processed++;
+          summary.files.push({
+            object_key: cand.key,
+            status: "done",
+            complete: true,
+            rows: 0,
+            row_group_cursor: checkpoint.nextRowGroup,
+            row_groups_total: checkpoint.rowGroupsTotal,
+          });
           continue;
         }
 

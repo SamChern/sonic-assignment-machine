@@ -305,6 +305,8 @@ const PostIngestionWizard = () => {
 
     const estimates: ResumeEstimate[] = [];
     const deadlineInfos: DeadlineInfo[] = [];
+    const phaseSamples: PhaseRun[] = [];
+
 
     for (const f of dataFiles) {
       const t0 = Date.now();

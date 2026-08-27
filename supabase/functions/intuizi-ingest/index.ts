@@ -1202,7 +1202,26 @@ Deno.serve(async (req) => {
           error_message: failedInFile ? summary.errors.slice(-3).join("\n").slice(0, 2000) : null,
         }).eq("id", fileRow.id);
 
+        // Structured per-file coverage + rate-limit metrics.
+        console.log(JSON.stringify({
+          evt: "ingest_file_coverage",
+          object_key: cand.key,
+          report_type: fileRow.report_type ?? "unknown",
+          activation_id: cand.key.toLowerCase().match(/activation[_-]?id(\d+)/)?.[1] ?? null,
+          status: breakerTripped ? "paused" : (remaining > 0 ? "partial" : "done"),
+          rows: rawRows.length,
+          identifiers: perIdentifier.size,
+          enriched: scoredInFile,
+          failed: failedInFile,
+          identifier_only: Math.max(0, remaining),
+          coverage_pct: perIdentifier.size
+            ? Math.round((scoredInFile / perIdentifier.size) * 100)
+            : null,
+          ...rateMetrics.snapshot(),
+        }));
+
         summary.files_processed++;
+
       } catch (e) {
         const st = statusOf(e);
         const msg = errMsg(e);

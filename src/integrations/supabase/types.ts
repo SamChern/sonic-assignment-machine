@@ -1035,6 +1035,74 @@ export type Database = {
           },
         ]
       }
+      org_intuizi_sync_runs: {
+        Row: {
+          activation_id: string
+          coverage_pct: number | null
+          created_at: string
+          dataset_id: string | null
+          details: Json
+          error: string | null
+          finished_at: string | null
+          id: string
+          organization_id: string
+          profiles_found: number
+          rows_failed: number
+          rows_scored: number
+          rows_synced: number
+          started_at: string
+          started_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          activation_id: string
+          coverage_pct?: number | null
+          created_at?: string
+          dataset_id?: string | null
+          details?: Json
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          organization_id: string
+          profiles_found?: number
+          rows_failed?: number
+          rows_scored?: number
+          rows_synced?: number
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          activation_id?: string
+          coverage_pct?: number | null
+          created_at?: string
+          dataset_id?: string | null
+          details?: Json
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          organization_id?: string
+          profiles_found?: number
+          rows_failed?: number
+          rows_scored?: number
+          rows_synced?: number
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_intuizi_sync_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_tracking_settings: {
         Row: {
           created_at: string

@@ -1416,7 +1416,9 @@ Deno.serve(async (req) => {
           error_message: failedInFile ? summary.errors.slice(-3).join("\n").slice(0, 2000) : null,
         }).eq("id", fileRow.id);
 
-        // Structured per-file coverage + rate-limit metrics.
+        summary.phase_ms.persist += Date.now() - persistStart;
+
+        // Structured per-file coverage + timing + rate-limit metrics.
         console.log(JSON.stringify({
           evt: "ingest_file_coverage",
           object_key: cand.key,
@@ -1433,11 +1435,22 @@ Deno.serve(async (req) => {
           coverage_pct: perIdentifier.size
             ? Math.round((scoredInFile / perIdentifier.size) * 100)
             : null,
+          sign_ms: signMs,
+          read_ms: readMs,
+          normalize_ms: normalizeMs,
+          score_ms: scoreMs,
+          read_timings: readTimings,
+          time_remaining_ms: timeLeftMs(),
           ...rateMetrics.snapshot(),
         }));
 
         summary.files.push({
           object_key: cand.key,
+          read_ms: readMs,
+          normalize_ms: normalizeMs,
+          score_ms: scoreMs,
+          timings: readTimings,
+
           status: fileStatus,
           complete: fileStatus === "done",
           rows: rawRows.length,

@@ -322,13 +322,20 @@ async function runScore(
   }
 
   // 2. Taxonomy tags
+  enter("tags");
   const nodeIds: string[] = [];
   for (const t of tags) {
     try {
       nodeIds.push(await resolveTag(admin, t));
     } catch (e) {
-      if ([402, 403, 429].includes(statusOf(e) ?? 0)) throw e;
-      console.warn("tag resolve failed", t.code, errMsg(e));
+      const verdict = classifyFailure(e);
+      // Credits / policy / rate limits must stop the task; a single unresolved
+      // tag code is not worth failing the whole identifier over.
+      if (!verdict.retryable || verdict.kind === "rate_limit") {
+        if (verdict.kind === "schema") {
+          console.warn("tag resolve schema error", t.code, verdict.reason);
+        } else throw e;
+      } else console.warn("tag resolve failed", t.code, errMsg(e));
     }
   }
   if (nodeIds.length) {
@@ -342,15 +349,19 @@ async function runScore(
     );
   }
 
-  // 3. Calibration priors + kNN warm start
+  // 3. Calibration priors + kNN warm start.
+  //    `stepScale` < 1 means a previous attempt was killed for compute: keep the
+  //    warm start smaller (fewer neighbours, shorter context) so the retry fits.
+  enter("context");
   let taxonomyContext = await buildTaxonomyContext(admin, nodeIds);
-  const queryEmbedding = await embed(
-    `intuizi ${task.report_type}; tags: ${tagCodes.join(",")}`,
-  );
+  const neighbourCount = Math.max(1, Math.round(5 * stepScale));
+  const queryEmbedding = stepScale >= 0.5
+    ? await embed(`intuizi ${task.report_type}; tags: ${tagCodes.join(",")}`)
+    : null;
   if (queryEmbedding) {
     const { data: neighbors } = await admin.rpc("match_audio_profiles", {
       query_embedding: queryEmbedding,
-      match_count: 5,
+      match_count: neighbourCount,
       exclude_id: audioSourceId,
     });
     if (neighbors?.length) {
@@ -366,6 +377,7 @@ async function runScore(
   }
 
   // 4. Score through the same ontology path as music sources
+  enter("analyze");
   const ana = await invokeAnalyzeAudio(admin, {
     sources: [{
       name: label,
@@ -375,7 +387,7 @@ async function runScore(
     }],
     user_id: task.owner_id,
     save_results: true,
-  }, task.report_type, metrics);
+  }, task.report_type, metrics, { traceId, stepScale });
 
   const sourceOut = ana.sources[0];
   const scoreMap = {} as Record<Category, number>;
@@ -384,6 +396,7 @@ async function runScore(
   }
 
   // 4b. Speech-skew normalization for vocal-heavy Intuizi feeds.
+  enter("normalize");
   const normCfg = await loadNormalization(admin, "intuizi");
   const normScores = await applyNormalizationToAnalysis(
     admin,
@@ -394,6 +407,7 @@ async function runScore(
   for (const c of CATEGORIES) scoreMap[c] = normScores[c] ?? scoreMap[c];
 
   // 5. Continuous learning: calibration + profile embedding
+  enter("learn");
   await updateCalibration(admin, nodeIds, scoreMap);
   const profileEmbedding = await embed(
     `intuizi ${task.report_type}; tags: ${tagCodes.join(",")}; ` +
@@ -406,6 +420,7 @@ async function runScore(
   }
 
   // 6. Idempotent progress marking, in the same step as the work
+  enter("persist");
   const mergedCodes = Array.from(new Set([...previousCodes, ...tagCodes]));
   await admin.from("intuizi_identifiers").upsert({
     primary_identifier: task.identifier,
@@ -414,6 +429,7 @@ async function runScore(
       confidence: task.confidence,
       scores: scoreMap,
       object_key: task.object_key,
+      trace_id: traceId,
       scored_at: new Date().toISOString(),
     },
     tag_codes: mergedCodes,
@@ -422,5 +438,13 @@ async function runScore(
     last_seen_at: new Date().toISOString(),
   }, { onConflict: "primary_identifier" });
 
-  return { status: "scored", audio_source_id: audioSourceId, scores: scoreMap };
+  enter("done");
+  return {
+    status: "scored",
+    audio_source_id: audioSourceId,
+    scores: scoreMap,
+    stage: "done",
+    trace_id: traceId,
+  };
+
 }

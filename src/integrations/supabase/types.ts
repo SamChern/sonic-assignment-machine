@@ -842,18 +842,25 @@ export type Database = {
           attempts: number
           confidence: number
           created_at: string
+          dead_lettered_at: string | null
+          failure_kind: string | null
           finished_at: string | null
           id: string
           identifier: string
           label: string | null
           last_error: string | null
+          last_stage: string | null
+          max_attempts: number
+          next_attempt_at: string
           object_key: string
           owner_id: string | null
           report_type: string
           signals: Json
           started_at: string | null
           status: string
+          step_scale: number
           tags: Json
+          trace_id: string | null
           updated_at: string
         }
         Insert: {
@@ -861,18 +868,25 @@ export type Database = {
           attempts?: number
           confidence?: number
           created_at?: string
+          dead_lettered_at?: string | null
+          failure_kind?: string | null
           finished_at?: string | null
           id?: string
           identifier: string
           label?: string | null
           last_error?: string | null
+          last_stage?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
           object_key: string
           owner_id?: string | null
           report_type: string
           signals?: Json
           started_at?: string | null
           status?: string
+          step_scale?: number
           tags?: Json
+          trace_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -880,18 +894,25 @@ export type Database = {
           attempts?: number
           confidence?: number
           created_at?: string
+          dead_lettered_at?: string | null
+          failure_kind?: string | null
           finished_at?: string | null
           id?: string
           identifier?: string
           label?: string | null
           last_error?: string | null
+          last_stage?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
           object_key?: string
           owner_id?: string | null
           report_type?: string
           signals?: Json
           started_at?: string | null
           status?: string
+          step_scale?: number
           tags?: Json
+          trace_id?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1839,18 +1860,25 @@ export type Database = {
           attempts: number
           confidence: number
           created_at: string
+          dead_lettered_at: string | null
+          failure_kind: string | null
           finished_at: string | null
           id: string
           identifier: string
           label: string | null
           last_error: string | null
+          last_stage: string | null
+          max_attempts: number
+          next_attempt_at: string
           object_key: string
           owner_id: string | null
           report_type: string
           signals: Json
           started_at: string | null
           status: string
+          step_scale: number
           tags: Json
+          trace_id: string | null
           updated_at: string
         }[]
         SetofOptions: {
@@ -1909,6 +1937,18 @@ export type Database = {
       release_job_worker_lease: {
         Args: { p_owner: string }
         Returns: undefined
+      }
+      requeue_intuizi_score_failures: {
+        Args: {
+          p_activation_id?: string
+          p_extra_attempts?: number
+          p_include_dead_letter?: boolean
+          p_object_key?: string
+        }
+        Returns: {
+          remaining_dead_letter: number
+          requeued: number
+        }[]
       }
       require_admin: { Args: never; Returns: undefined }
       touch_audio_profile_embedding: {

@@ -1,7 +1,8 @@
 import { readdir, stat } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const DIST_DIR = new URL("../dist/", import.meta.url);
+const DIST_DIR = fileURLToPath(new URL("../dist/", import.meta.url));
 const KiB = 1024;
 const MiB = 1024 * KiB;
 
@@ -44,7 +45,7 @@ const measurements = [
   ["Total dist", sum(sizes), budgets.total],
   ["Total JavaScript", sum(js), budgets.javascript],
   ["Total CSS", sum(css), budgets.css],
-  [`Largest JavaScript (${relative(DIST_DIR.pathname, largestJs.path) || "none"})`, largestJs.bytes, budgets.largestJavaScript],
+  [`Largest JavaScript (${relative(DIST_DIR, largestJs.path) || "none"})`, largestJs.bytes, budgets.largestJavaScript],
 ];
 
 console.log("Bundle size budget:");

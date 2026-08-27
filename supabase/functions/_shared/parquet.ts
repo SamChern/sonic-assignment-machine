@@ -426,7 +426,7 @@ export async function readParquetChunk(
 
   // Footer first: gives the column list and row count without decoding pages,
   // so an empty or mis-shaped delivery fails with a readable message.
-  const metadata = await parquetMetadataAsync(file);
+  const metadata = await withTimeout(parquetMetadataAsync(file), timeLeft());
   const columns = (metadata.schema ?? [])
     .filter((s: { num_children?: number; name: string }) => !s.num_children)
     .map((s: { name: string }) => s.name);

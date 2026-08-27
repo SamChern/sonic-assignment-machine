@@ -85,19 +85,27 @@ const invoke = vi.fn(async (name: string, opts?: { body?: unknown }) => {
   return { data: { success: true }, error: null };
 });
 
+// Chainable query-builder stub: every method returns the same builder, and the
+// builder resolves to an empty result, so any query shape the wizard uses
+// (select/eq/order/limit/maybeSingle/single/in/...) works without extra mocks.
+const emptyResult = { data: null, error: null };
+const queryBuilder: Record<string, unknown> = {
+  then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve),
+  maybeSingle: async () => emptyResult,
+  single: async () => emptyResult,
+};
+for (const method of ["select", "eq", "neq", "in", "order", "limit", "range", "filter", "insert", "update", "upsert", "delete", "not", "is", "gte", "lte", "contains", "or", "match"]) {
+  queryBuilder[method] = () => queryBuilder;
+}
+
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke: (...args: unknown[]) => invoke(...(args as [string, { body?: unknown }])) },
-    from: () => ({
-      select: () => ({
-        eq: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }),
-        order: () => ({ limit: async () => ({ data: [], error: null }) }),
-        limit: async () => ({ data: [], error: null }),
-      }),
-    }),
+    from: () => queryBuilder,
     auth: { getSession: async () => ({ data: { session: { access_token: "t" } } }) },
   },
 }));
+
 
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn(), useToast: () => ({ toast: vi.fn() }) }));
 

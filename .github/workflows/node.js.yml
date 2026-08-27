@@ -55,8 +55,10 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Run tests (if defined)
-        run: npm test --if-present
+      # `npm run test --if-present` (not `npm test --if-present`) is the form npm
+      # actually honors — the bare `npm test` alias treats the flag as a test arg.
+      - name: Run tests
+        run: npm run test --if-present
 
   # Mobile layout visual regression: boots the built app and asserts no
   # clipped badges, overflowing tabs, or misaligned/overlapped sticky nav
@@ -90,20 +92,27 @@ jobs:
           pip install playwright
           python -m playwright install --with-deps chromium
 
-      - name: Serve built app on :8080
-        run: |
-          npx vite preview --port 8080 --host 127.0.0.1 &
-          for i in $(seq 1 60); do
-            curl -sf -o /dev/null http://localhost:8080/ && exit 0
-            sleep 1
-          done
-          echo "preview server did not start" >&2
-          exit 1
-
-      - name: Mobile layout checks
+      # Serve and assert in ONE step: a process backgrounded in its own step is
+      # killed when that step's shell exits, so the previous split made the
+      # layout checks fail with a connection error.
+      - name: Serve built app and run mobile layout checks
         env:
           SONICSIM_BASE_URL: http://localhost:8080
         run: |
+          set -euo pipefail
+          npx vite preview --port 8080 --host 127.0.0.1 > /tmp/vite-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          ready=""
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:8080/; then ready="yes"; break; fi
+            sleep 1
+          done
+          if [ -z "$ready" ]; then
+            echo "preview server did not start" >&2
+            cat /tmp/vite-preview.log >&2 || true
+            exit 1
+          fi
           python tests/mobile-layout/check_overlap.py
           python tests/mobile-layout/check_workspace_overflow.py
 

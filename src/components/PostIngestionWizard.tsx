@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,17 @@ interface Activation {
   empty_files: number;
   total_bytes: number;
   done_files: number;
+}
+
+/** Per-file resume forecast shown while an ingestion is partial. */
+interface ResumeEstimate {
+  key: string;
+  cursor: number;
+  total: number | null;
+  groupsRemaining: number | null;
+  groupsNextRun: number | null;
+  etaMs: number | null;
+  runsRemaining: number | null;
 }
 
 type StageState = "idle" | "running" | "ok" | "warn" | "error";

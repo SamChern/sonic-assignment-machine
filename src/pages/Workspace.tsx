@@ -259,7 +259,15 @@ const Workspace = () => {
         <TabsContent value="analyses" className="mt-4">
           <WorkspaceAnalyses key={refreshKey} organizationId={active.organization_id} />
         </TabsContent>
-        <TabsContent value="data" className="mt-4">
+        <TabsContent value="data" className="mt-4 space-y-4">
+          <IntuiziSyncPanel
+            organizationId={active.organization_id}
+            canWrite={canWrite}
+            onSynced={() => {
+              setRefreshKey((k) => k + 1);
+              void loadDatasets();
+            }}
+          />
           <WorkspaceUpload
             organizationId={active.organization_id}
             canWrite={canWrite}

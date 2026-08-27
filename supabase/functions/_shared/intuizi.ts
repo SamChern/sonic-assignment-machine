@@ -82,8 +82,9 @@ export async function fetchObjectChunk(
   rows: Record<string, unknown>[];
   checkpoint: ParquetCheckpoint | null;
   deadlineExceeded?: boolean;
-  timings?: Record<string, unknown>;
+  timings?: Record<string, unknown> | ParquetTimings;
 }> {
+
   const lower = objectKey.toLowerCase();
 
   if (lower.endsWith(".parquet") || lower.endsWith(".pq")) {

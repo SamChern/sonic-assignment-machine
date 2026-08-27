@@ -1273,17 +1273,34 @@ Deno.serve(async (req) => {
           object_key: cand.key,
           report_type: fileRow.report_type ?? "unknown",
           activation_id: cand.key.toLowerCase().match(/activation[_-]?id(\d+)/)?.[1] ?? null,
-          status: breakerTripped ? "paused" : (remaining > 0 ? "partial" : "done"),
+          status: fileStatus,
           rows: rawRows.length,
           identifiers: perIdentifier.size,
           enriched: scoredInFile,
           failed: failedInFile,
           identifier_only: Math.max(0, remaining),
+          row_group_cursor: checkpoint?.nextRowGroup ?? null,
+          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
           coverage_pct: perIdentifier.size
             ? Math.round((scoredInFile / perIdentifier.size) * 100)
             : null,
           ...rateMetrics.snapshot(),
         }));
+
+        summary.files.push({
+          object_key: cand.key,
+          status: fileStatus,
+          complete: fileStatus === "done",
+          rows: rawRows.length,
+          identifiers: perIdentifier.size,
+          enriched: scoredInFile,
+          failed: failedInFile,
+          row_group_cursor: checkpoint
+            ? (remaining > 0 || breakerTripped ? checkpoint.startRowGroup : checkpoint.nextRowGroup)
+            : null,
+          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+        });
+        if (fileStatus !== "done") summary.complete = false;
 
         summary.files_processed++;
 

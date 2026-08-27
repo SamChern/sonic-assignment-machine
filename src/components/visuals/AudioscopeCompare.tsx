@@ -281,22 +281,22 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
             Overlaid waveforms per fingerprint — the red band is the divergence the similarity score measures.
           </p>
         </div>
-        <div role="group" aria-label="Comparison playback controls" className="flex items-center gap-2">
+        <div role="group" aria-label="Comparison playback controls" className="flex items-center gap-1.5">
           {lock ? (
-            <span className="rounded-md border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+            <span className="rounded-md border border-border/40 bg-background/30 px-2 py-1 text-[11px] text-muted-foreground">
               {lock} · {sim}% similar
             </span>
           ) : null}
           <Button
             size="sm"
-            variant="outline"
-            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            variant="ghost"
+            className={TRANSPORT_CLS}
             onClick={togglePlay}
             aria-pressed={animating}
             aria-keyshortcuts="K"
             aria-describedby="audioscope-compare-shortcut-hint audioscope-compare-status"
           >
-            {animating ? <Pause className="h-3.5 w-3.5" aria-hidden /> : <Play className="h-3.5 w-3.5" aria-hidden />}
+            {animating ? <Pause className="h-3 w-3" aria-hidden /> : <Play className="h-3 w-3" aria-hidden />}
             {animating ? "Pause" : "Play"}
             <span className="sr-only">
               {animating
@@ -309,8 +309,8 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
             id="audioscope-compare-static-toggle"
             {...{ [PANE_ANCHOR_ATTR]: "compare" }}
             size="sm"
-            variant={isStatic ? "default" : "outline"}
-            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            variant="ghost"
+            className={isStatic ? TRANSPORT_CLS_ACTIVE : TRANSPORT_CLS}
             onClick={toggleStatic}
             aria-pressed={isStatic}
             aria-keyshortcuts="S"
@@ -320,7 +320,7 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
                 : "audioscope-compare-shortcut-hint audioscope-compare-status"
             }
           >
-            <ImageIcon className="h-3.5 w-3.5" aria-hidden />
+            <ImageIcon className="h-3 w-3" aria-hidden />
             Static
             <span className="sr-only">
               {isStatic
@@ -330,8 +330,8 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
           </Button>
 
 
-          <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
-            <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+          <div className="flex h-7 items-center gap-1.5 rounded-md border border-border/40 bg-background/30 px-2 backdrop-blur-sm">
+            <Gauge className="h-3 w-3 text-muted-foreground/70" aria-hidden />
             <label className="sr-only" htmlFor="audioscope-compare-speed">
               Comparison animation speed
             </label>
@@ -340,7 +340,7 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
               value={String(speed)}
               disabled={isStatic}
               onChange={(e) => setSpeed(Number(e.target.value))}
-              className="bg-transparent text-xs text-foreground outline-none disabled:opacity-50"
+              className="bg-transparent text-[11px] text-muted-foreground outline-none disabled:opacity-50"
             >
               {[0.25, 0.5, 1, 1.5, 2, 3].map((v) => (
                 <option key={v} value={v}>
@@ -351,13 +351,14 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
           </div>
           <Button
             size="sm"
-            variant={showLegend ? "default" : "outline"}
-            className="gap-1.5"
+            variant="ghost"
+            className={showLegend ? TRANSPORT_CLS_ACTIVE : TRANSPORT_CLS}
             onClick={() => setShowLegend((v) => !v)}
             aria-expanded={showLegend}
           >
-            <Info className="h-3.5 w-3.5" />
+            <Info className="h-3 w-3" aria-hidden />
             <span className="hidden sm:inline">How to read this</span>
+
           </Button>
         </div>
       </div>

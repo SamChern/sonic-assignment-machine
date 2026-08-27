@@ -480,6 +480,10 @@ const PostIngestionWizard = () => {
     setPartialFiles(stillPartial);
     setResumeEstimates(estimates);
     setDeadlines(deadlineInfos);
+    if (phaseSamples.length) {
+      setPhaseRuns((prev) => [...prev, ...phaseSamples].slice(-PHASE_HISTORY_MAX));
+    }
+
 
 
     setStage("ingest", {

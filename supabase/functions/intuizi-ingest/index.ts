@@ -716,6 +716,8 @@ Deno.serve(async (req) => {
   if (!acquired) return json({ skipped: "another run holds the lease" });
 
   rateMetrics.reset();
+  const runStart = Date.now();
+  const outOfTime = () => Date.now() - runStart > RUN_BUDGET_MS;
   const summary = {
     files_processed: 0,
     files_failed: 0,
@@ -728,6 +730,7 @@ Deno.serve(async (req) => {
     probe_only: probeOnly,
     paused: false,
     pause_reason: null as string | null,
+    time_budget_exhausted: false,
     errors: [] as string[],
     // Rate-limit telemetry for this run, filled in before responding.
     rate_metrics: null as Record<string, unknown> | null,

@@ -7,17 +7,13 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Save, Shield, Activity, ChevronDown, ChevronUp, Users as UsersIcon, Building2, Upload as UploadIcon, Compass, Target, LineChart, Sliders } from "lucide-react";
+import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Save, Shield, Activity, ChevronDown, ChevronUp, Users as UsersIcon, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
 import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
-import fingerprintBg from "@/assets/fingerprint-bg.webp";
-const WorkspaceAnalyses = lazy(() => import("@/components/enterprise/WorkspaceAnalyses"));
-const WorkspaceUpload = lazy(() => import("@/components/enterprise/WorkspaceUpload"));
-const DatasetDiscovery = lazy(() => import("@/components/enterprise/DatasetDiscovery"));
 
 const NetworkVisualization = lazy(() =>
   import("@/components/NetworkVisualization").then((m) => ({ default: m.NetworkVisualization }))
@@ -45,7 +41,7 @@ import { analysisToScores, fingerprintToScores } from "@/lib/audioscope";
 
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
-  const { orgs: enterpriseOrgs, active: activeOrg, canWrite: orgCanWrite } = useOrganization();
+  const { orgs: enterpriseOrgs } = useOrganization();
   const hasEnterprise = enterpriseOrgs.length > 0;
 
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();

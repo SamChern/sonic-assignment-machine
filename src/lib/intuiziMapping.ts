@@ -179,6 +179,19 @@ export function inspectRow(
           for (const c of cats)
             fieldTags.push({ code: `iab.${slug(c)}`, label: `IAB category ${c}`, parent_code: "iab" });
         }
+        if (s.field === "page") {
+          const topics = pathTopics(hit.value);
+          value = topics.length ? topics : hit.value;
+          for (const t of topics)
+            fieldTags.push({ code: `web.topic.${slug(t)}`, label: `Web topic: ${t}`, parent_code: "web.topic" });
+        }
+        if (s.field === "ref") {
+          const host = hostOf(hit.value);
+          value = host || hit.value;
+          if (host)
+            fieldTags.push({ code: `web.referrer.${slug(host)}`, label: `Referrer: ${host}`, parent_code: "web.referrer" });
+        }
+
       } else if (reportType === "apps") {
         if (s.field === "CategoryName")
           fieldTags.push({ code: `app.category.${slug(hit.value)}`, label: `App category: ${hit.value}`, parent_code: "app.category" });

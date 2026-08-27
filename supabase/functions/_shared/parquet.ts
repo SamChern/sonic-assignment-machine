@@ -323,40 +323,27 @@ export async function readParquetChunk(
     );
   }
 
-  const from = Math.max(0, Math.min(startRowGroup, groupRows.length));
-  const rowsOffset = groupRows.slice(0, from).reduce((a, b) => a + b, 0);
+  const plan = planRowGroupRead(groupRows, startRowGroup, maxRows);
 
-  if (from >= groupRows.length || rowsOffset >= numRows) {
-    return {
-      rows: [],
-      checkpoint: {
-        startRowGroup: from,
-        nextRowGroup: groupRows.length,
-        rowGroupsTotal: groupRows.length,
-        rowsOffset,
-        nextRowsOffset: numRows,
-        exhausted: true,
-      },
-    };
+  if (plan.checkpoint.exhausted && plan.rowEnd <= plan.rowStart) {
+    return { rows: [], checkpoint: plan.checkpoint };
   }
 
-  // Consume whole row groups until the row budget is met (at least one group).
-  let nextRowGroup = from;
-  let take = 0;
-  while (nextRowGroup < groupRows.length && (take === 0 || take + groupRows[nextRowGroup] <= maxRows)) {
-    take += groupRows[nextRowGroup];
-    nextRowGroup++;
-  }
-
-  const rowEnd = Math.min(rowsOffset + Math.min(take, maxRows), numRows);
-
-  const raw = await parquetReadObjects({
-    file,
-    metadata,
-    compressors,
-    rowStart: rowsOffset,
-    rowEnd,
-  });
+  // Transient S3/network faults are retried for THIS row-group range only, so a
+  // blip never forces the whole file to be re-transformed from group 0.
+  const raw = await retryRowGroups(
+    () =>
+      parquetReadObjects({
+        file,
+        metadata,
+        compressors,
+        rowStart: plan.rowStart,
+        rowEnd: plan.rowEnd,
+      }),
+    {
+      label: `row groups ${plan.checkpoint.startRowGroup}..${plan.checkpoint.nextRowGroup - 1}`,
+    },
+  );
 
   const rows = (raw as Record<string, unknown>[]).map((row) => {
     const out: Record<string, unknown> = {};
@@ -372,17 +359,7 @@ export async function readParquetChunk(
     expectedRowsPerUser,
   );
 
-  return {
-    rows,
-    checkpoint: {
-      startRowGroup: from,
-      nextRowGroup,
-      rowGroupsTotal: groupRows.length,
-      rowsOffset,
-      nextRowsOffset: rowEnd,
-      exhausted: nextRowGroup >= groupRows.length || rowEnd >= numRows,
-    },
-  };
+  return { rows, checkpoint: plan.checkpoint };
 }
 
 /**

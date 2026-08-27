@@ -111,6 +111,9 @@ export async function fetchObjectChunk(
     text = await res.text();
   }
 
+  const downloadMs = Date.now() - fetchStart;
+
+  const parseStart = Date.now();
   let rows: Record<string, unknown>[];
   if (lower.includes(".jsonl") || lower.includes(".ndjson")) {
     rows = text.split(/\r?\n/).filter((l) => l.trim()).map((l) => JSON.parse(l));
@@ -120,7 +123,15 @@ export async function fetchObjectChunk(
   } else {
     rows = parseCsv(text);
   }
-  return { rows, checkpoint: null };
+  const timings = {
+    downloadMs,
+    parseMs: Date.now() - parseStart,
+    totalMs: Date.now() - fetchStart,
+    bytes: text.length,
+  };
+  console.log(JSON.stringify({ evt: "object_read_timings", object_key: objectKey, ...timings }));
+  return { rows, checkpoint: null, timings };
+
 }
 
 /** Backwards-compatible whole-object read (no checkpointing). */

@@ -189,6 +189,9 @@ const PostIngestionWizard = () => {
   const [selected, setSelected] = useState<string>("");
   const [discovering, setDiscovering] = useState(false);
   const [running, setRunning] = useState(false);
+  /** Stages the user chose to expand — collapsed by default (progress bar only). */
+  const [expandedStages, setExpandedStages] = useState<StageKey[]>([]);
+
   /** Files that still have untransformed row groups — the Resume target. */
   const [partialFiles, setPartialFiles] = useState<ActivationFile[]>([]);
   /** Row-group progress + time estimates for the next resume run. */

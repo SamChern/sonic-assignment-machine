@@ -942,13 +942,28 @@ Deno.serve(async (req) => {
   /** Hard wall for any single object read, so no read outlives the run budget. */
   const readDeadlineAt = runStart + budgetMs;
   const timeLeftMs = () => Math.max(0, readDeadlineAt - Date.now());
+
+  // ---- Dynamic work caps --------------------------------------------------
+  // A WORKER_RESOURCE_LIMIT kill never gets to write a summary, so the caller
+  // reports it on the retry and we re-run the same checkpoint with less work.
+  const meter = createPhaseMeter();
+  const caps = planWorkCaps(history, {
+    shrink: Number(body.shrink ?? 0) || undefined,
+    afterResourceLimit: Boolean(body.after_resource_limit),
+    maxRows: Number(body.max_rows ?? 0) || undefined,
+    maxIdentifiers: Number(body.max_identifiers ?? 0) || undefined,
+    memPeakMb: Number(prevSummary.mem_peak_mb ?? 0) || null,
+  });
   console.log(JSON.stringify({
     evt: "ingest_budget_tuned",
     budget_ms: budgetMs,
     default_budget_ms: RUN_BUDGET_MS,
     reason: tuned.reason,
     history_len: history.length,
+    caps,
+    mem: memSnapshot(),
   }));
+
   const summary = {
     files_processed: 0,
     files_failed: 0,

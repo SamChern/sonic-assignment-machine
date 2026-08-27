@@ -51,6 +51,8 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const rafRef = useRef<number | null>(null);
+  const staticBtnRef = useRef<HTMLButtonElement | null>(null);
+
   const visibleRef = useRef(true);
 
   const reduced = useMemo(

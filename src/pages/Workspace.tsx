@@ -18,6 +18,7 @@ import {
 import WorkspaceAnalyses from "@/components/enterprise/WorkspaceAnalyses";
 import WorkspaceUpload from "@/components/enterprise/WorkspaceUpload";
 import IntuiziSyncPanel from "@/components/enterprise/IntuiziSyncPanel";
+import IntuiziSyncStatusPanel from "@/components/enterprise/IntuiziSyncStatusPanel";
 import DatasetDiscovery from "@/components/enterprise/DatasetDiscovery";
 import PredictUsersPanel from "@/components/enterprise/PredictUsersPanel";
 import PredictOutcomesPanel from "@/components/enterprise/PredictOutcomesPanel";

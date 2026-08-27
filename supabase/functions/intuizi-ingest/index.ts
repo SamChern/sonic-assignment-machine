@@ -1185,6 +1185,9 @@ Deno.serve(async (req) => {
 
         let scoredInFile = 0;
         let failedInFile = 0;
+        const scoreStart = Date.now();
+
+
 
         for (const [identifier, entry] of perIdentifier) {
           if (summary.identifiers_scored >= identifierBudget) break;

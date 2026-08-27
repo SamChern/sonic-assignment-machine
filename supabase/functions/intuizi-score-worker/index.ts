@@ -1,0 +1,177 @@
+// Background drain for public.intuizi_score_queue.
+//
+// The Intuizi ingest run stops at "ingest + normalize": it enqueues one scoring
+// task per identifier and returns. This worker does the expensive tail (taxonomy
+// resolution, analyze-audio, normalization, calibration, embeddings) in small
+// claimed batches and then RE-INVOKES ITSELF while work remains. Total pipeline
+// time is therefore unbounded, while every single invocation stays far inside the
+// wall-clock and CPU limits that previously produced 504 / 546 failures.
+//
+// Callable by an admin JWT (Intuizi Console / wizard) or a service-role token
+// (scheduled tick + self-chaining).
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { AuthzError, requireAdmin } from "../_shared/admin.ts";
+import {
+  createRateMetrics,
+  errMsg,
+  scoreIdentifier,
+  type ScoreTask,
+  statusOf,
+} from "../_shared/scoreIdentifier.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+/** Wall-clock ceiling per invocation; well under the 150s gateway idle limit. */
+const RUN_BUDGET_MS = 60_000;
+/** Tasks claimed per batch. Small batches keep peak memory flat. */
+const BATCH = 3;
+/** Stop claiming when a single task took longer than this share of the budget. */
+const SAFETY_MS = 12_000;
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const startedAt = Date.now();
+  const timeLeft = () => RUN_BUDGET_MS - (Date.now() - startedAt);
+
+  try {
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    try {
+      await requireAdmin(req, admin);
+    } catch (e) {
+      if (e instanceof AuthzError) return json({ success: false, error: e.message }, e.status);
+      throw e;
+    }
+
+    // Never fan out beyond one worker: a paused/parked ingest state means the AI
+    // gateway is out of credits or rate limiting, so scoring must wait too.
+    const { data: state } = await admin
+      .from("intuizi_ingest_state")
+      .select("paused,pause_reason,parked_until,consecutive_rate_limits")
+      .eq("id", "singleton").maybeSingle();
+    if (state?.paused) {
+      return json({ success: true, skipped: "paused", reason: state.pause_reason, processed: 0 });
+    }
+    if (state?.parked_until && new Date(state.parked_until) > new Date()) {
+      return json({ success: true, skipped: "parked", processed: 0 });
+    }
+
+    const metrics = createRateMetrics();
+    let scored = 0;
+    let unchanged = 0;
+    let failed = 0;
+    let paused = false;
+
+    while (timeLeft() > SAFETY_MS && !paused) {
+      const { data: claimed, error: claimErr } = await admin.rpc(
+        "claim_intuizi_score_jobs",
+        { p_limit: BATCH },
+      );
+      if (claimErr) return json({ success: false, error: claimErr.message }, 500);
+      const tasks = (claimed ?? []) as Array<ScoreTask & { id: string; attempts: number }>;
+      if (!tasks.length) break;
+
+      // Strictly sequential: one AI gateway request in flight at a time.
+      for (const task of tasks) {
+        const t0 = Date.now();
+        try {
+          const out = await scoreIdentifier(admin, task, metrics);
+          if (out.status === "scored") scored++;
+          else unchanged++;
+          await admin.from("intuizi_score_queue").update({
+            status: out.status === "scored" ? "done" : "skipped",
+            finished_at: new Date().toISOString(),
+            last_error: null,
+          }).eq("id", task.id);
+        } catch (e) {
+          failed++;
+          const st = statusOf(e);
+          const msg = errMsg(e);
+          const terminal = st === 402 || st === 403 || task.attempts >= 5;
+          await admin.from("intuizi_score_queue").update({
+            status: terminal ? "failed" : "pending",
+            last_error: msg.slice(0, 1000),
+            finished_at: terminal ? new Date().toISOString() : null,
+          }).eq("id", task.id);
+
+          // Credit / policy / sustained rate-limit failures pause the pipeline
+          // instead of burning every remaining queue item on the same error.
+          if (st === 402 || st === 403) {
+            paused = true;
+            await admin.from("intuizi_ingest_state").update({
+              paused: true,
+              pause_reason: msg.slice(0, 500),
+              paused_at: new Date().toISOString(),
+            }).eq("id", "singleton");
+          } else if (st === 429) {
+            const next = (state?.consecutive_rate_limits ?? 0) + 1;
+            await admin.from("intuizi_ingest_state").update({
+              consecutive_rate_limits: next,
+              last_error: msg.slice(0, 500),
+              ...(next >= 3
+                ? { parked_until: new Date(Date.now() + 30 * 60 * 1000).toISOString() }
+                : {}),
+            }).eq("id", "singleton");
+            if (next >= 3) paused = true;
+            else await new Promise((r) => setTimeout(r, 2000 * next));
+          }
+        }
+        console.log(JSON.stringify({
+          evt: "intuizi_score_task",
+          identifier: task.identifier,
+          report_type: task.report_type,
+          activation_id: (task as { activation_id?: string }).activation_id ?? null,
+          duration_ms: Date.now() - t0,
+          time_remaining_ms: timeLeft(),
+        }));
+        if (timeLeft() <= SAFETY_MS || paused) break;
+      }
+    }
+
+    // How much work is left, and should another invocation pick it up?
+    const { count: pending } = await admin
+      .from("intuizi_score_queue")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["pending", "processing"]);
+
+    const remaining = pending ?? 0;
+    const willChain = remaining > 0 && !paused;
+    if (willChain) {
+      // Self-chaining: fire and forget, so this response returns immediately.
+      admin.functions.invoke("intuizi-score-worker", { body: { source: "chain" } })
+        .catch((e: unknown) => console.warn("chain failed", errMsg(e)));
+    }
+
+    const body = {
+      success: true,
+      scored,
+      unchanged,
+      failed,
+      paused,
+      pending: remaining,
+      chained: willChain,
+      elapsed_ms: Date.now() - startedAt,
+      ...metrics.snapshot(),
+    };
+    console.log(JSON.stringify({ evt: "intuizi_score_worker_run", ...body }));
+    return json(body);
+  } catch (e) {
+    console.error("intuizi-score-worker failed", e);
+    return json({ success: false, error: errMsg(e) }, 500);
+  }
+});

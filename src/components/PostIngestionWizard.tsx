@@ -91,6 +91,9 @@ interface StageResult {
 }
 
 const PHASE_HISTORY_KEY = "sonicsim.ingest.phaseCpuHistory.v1";
+/** How long the wizard waits on the background scorer before handing off. */
+const SCORE_WAIT_MS = 4 * 60_000;
+
 const PHASE_HISTORY_MAX = 12;
 
 const STAGES = [
@@ -265,8 +268,66 @@ const PostIngestionWizard = () => {
     if (!list.some((a) => a.activation_id === selected)) setSelected(list[0].activation_id);
   }, [selected]);
 
+
+
+  /**
+   * Wait for the background scorer to drain this activation's queue.
+   *
+   * Scoring no longer runs inside the ingest invocation (that is what made runs
+   * hit the 150s gateway limit and the worker CPU ceiling). `intuizi-score-worker`
+   * processes small batches and self-chains; this only kicks it once and polls
+   * progress, so the UI shows live movement without holding an edge function open.
+   */
+  const drainScoreQueue = useCallback(async (activationId: string) => {
+    const counts = async () => {
+      const { data } = await supabase
+        .from("intuizi_score_queue")
+        .select("status")
+        .eq("activation_id", activationId);
+      const rows = (data ?? []) as { status: string }[];
+      const total = rows.length;
+      const pending = rows.filter((r) => r.status === "pending" || r.status === "processing").length;
+      const failed = rows.filter((r) => r.status === "failed").length;
+      return { total, pending, failed };
+    };
+
+    let c = await counts();
+    if (c.total === 0) return;
+
+    setStage("score", {
+      state: "running",
+      summary: `scoring ${c.total - c.pending}/${c.total} identifiers in the background…`,
+    });
+    // Kick the worker; harmless if a scheduled tick already started it.
+    await supabase.functions
+      .invoke("intuizi-score-worker", { body: { source: "wizard" } })
+      .catch(() => undefined);
+
+    const deadline = Date.now() + SCORE_WAIT_MS;
+    while (c.pending > 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 4000));
+      c = await counts();
+      setStage("score", {
+        state: "running",
+        summary: `scoring ${c.total - c.pending}/${c.total} identifiers in the background…${
+          c.failed ? ` · ${c.failed} failed` : ""
+        }`,
+      });
+    }
+    if (c.pending > 0) {
+      setStage("score", {
+        state: "warn",
+        summary: `${c.total - c.pending}/${c.total} scored so far — the background worker is still running`,
+        notes: [
+          "Scoring continues on the server even after you leave this page. Re-run the wizard (or reopen it) to see the finished scores.",
+        ],
+      });
+    }
+  }, []);
+
   /** Steps 1-4 — run the semantic pipeline for the given files of the activation. */
   const runFiles = useCallback(async (files: ActivationFile[], resuming = false) => {
+
     if (!activation) return;
     setRunning(true);
     setResults({});
@@ -302,6 +363,7 @@ const PostIngestionWizard = () => {
     let rowsRead = 0;
     let scored = 0;
     let roster = 0;
+    let queued = 0;
 
     const estimates: ResumeEstimate[] = [];
     const deadlineInfos: DeadlineInfo[] = [];
@@ -350,6 +412,7 @@ const PostIngestionWizard = () => {
       const res = data as {
         rows_read?: number;
         identifiers_scored?: number;
+        identifiers_queued?: number;
         roster_identifiers?: number;
         time_budget_exhausted?: boolean;
         complete?: boolean;
@@ -381,6 +444,7 @@ const PostIngestionWizard = () => {
       }
       rowsRead += res.rows_read ?? 0;
       scored += res.identifiers_scored ?? 0;
+      queued += res.identifiers_queued ?? 0;
       roster += res.roster_identifiers ?? 0;
       if (res.errors?.length) ingestErrors.push(...res.errors);
 
@@ -473,7 +537,7 @@ const PostIngestionWizard = () => {
         total != null ? ` · row group ${cursor}/${total}` : "";
       perFile.push([
         fileName(f.object_key),
-        `${res.rows_read ?? 0} rows · ${res.identifiers_scored ?? 0} scored · ${res.roster_identifiers ?? 0} roster${progress} · ${complete ? "complete" : "partial"}`,
+        `${res.rows_read ?? 0} rows · ${res.identifiers_queued ?? 0} queued for scoring · ${res.roster_identifiers ?? 0} roster${progress} · ${complete ? "complete" : "partial"}`,
       ]);
     }
 
@@ -488,12 +552,18 @@ const PostIngestionWizard = () => {
 
     setStage("ingest", {
       state: ingestErrors.length || stillPartial.length ? (rowsRead ? "warn" : "error") : "ok",
-      summary: `${rowsRead} rows read · ${scored} profile(s) scored · ${roster} identifier(s) registered · ${
+      summary: `${rowsRead} rows read · ${queued} profile(s) queued for background scoring · ${roster} identifier(s) registered · ${
         stillPartial.length ? `${stillPartial.length} file(s) partial` : "all files complete"
       }`,
       outputs: perFile,
       notes: ingestErrors.length ? ingestErrors : undefined,
     });
+
+    // --- Background scoring -----------------------------------------------
+    // Ingest only enqueues scoring work now, so wait for `intuizi-score-worker`
+    // to drain this activation's queue before reading scores. The worker
+    // self-chains, so this is a read-only poll that never blocks the run budget.
+    await drainScoreQueue(activation.activation_id);
 
     // --- Stage: source + tags ---------------------------------------------
     setStage("source", { state: "running", summary: "resolving activation profile…" });
@@ -617,7 +687,7 @@ const PostIngestionWizard = () => {
     });
 
     setRunning(false);
-  }, [activation]);
+  }, [activation, drainScoreQueue]);
 
   const run = useCallback(
     () => runFiles(activation?.files ?? [], false),

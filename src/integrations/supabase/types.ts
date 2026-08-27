@@ -836,6 +836,66 @@ export type Database = {
         }
         Relationships: []
       }
+      intuizi_score_queue: {
+        Row: {
+          activation_id: string | null
+          attempts: number
+          confidence: number
+          created_at: string
+          finished_at: string | null
+          id: string
+          identifier: string
+          label: string | null
+          last_error: string | null
+          object_key: string
+          owner_id: string | null
+          report_type: string
+          signals: Json
+          started_at: string | null
+          status: string
+          tags: Json
+          updated_at: string
+        }
+        Insert: {
+          activation_id?: string | null
+          attempts?: number
+          confidence?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          identifier: string
+          label?: string | null
+          last_error?: string | null
+          object_key: string
+          owner_id?: string | null
+          report_type: string
+          signals?: Json
+          started_at?: string | null
+          status?: string
+          tags?: Json
+          updated_at?: string
+        }
+        Update: {
+          activation_id?: string | null
+          attempts?: number
+          confidence?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          identifier?: string
+          label?: string | null
+          last_error?: string | null
+          object_key?: string
+          owner_id?: string | null
+          report_type?: string
+          signals?: Json
+          started_at?: string | null
+          status?: string
+          tags?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       job_worker_state: {
         Row: {
           created_at: string
@@ -1768,6 +1828,34 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "analysis_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_intuizi_score_jobs: {
+        Args: { p_limit?: number }
+        Returns: {
+          activation_id: string | null
+          attempts: number
+          confidence: number
+          created_at: string
+          finished_at: string | null
+          id: string
+          identifier: string
+          label: string | null
+          last_error: string | null
+          object_key: string
+          owner_id: string | null
+          report_type: string
+          signals: Json
+          started_at: string | null
+          status: string
+          tags: Json
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "intuizi_score_queue"
           isOneToOne: false
           isSetofReturn: true
         }

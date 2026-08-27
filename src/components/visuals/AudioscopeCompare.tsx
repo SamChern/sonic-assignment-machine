@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Gauge, Image as ImageIcon, Info, Pause, Play, Waves } from "lucide-react";
+import { Accessibility, Gauge, Image as ImageIcon, Info, Pause, Play, Waves } from "lucide-react";
 import {
   AUDIOSCOPE_CATEGORIES,
   CATEGORY_LABELS,
@@ -47,6 +47,7 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
   const [speed, setSpeed] = useState(0.25);
   // Reduced-motion users get the still frame by default; they can opt back into motion.
   const [isStatic, setIsStatic] = useState(prefersReducedMotion);
+  const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const rafRef = useRef<number | null>(null);
   const visibleRef = useRef(true);
@@ -76,6 +77,14 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       })).sort((a, b) => b.delta - a.delta),
     [deltas],
   );
+
+  useEffect(() => {
+    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!mq) return;
+    const onChange = () => setReducedMotion(mq.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -293,6 +302,20 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       </div>
 
       <div className="p-4">
+        {reducedMotion ? (
+          <div
+            role="status"
+            className="mb-3 flex items-start gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-xs text-muted-foreground"
+          >
+            <Accessibility className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+            <p>
+              <span className="font-semibold text-foreground">Reduced motion is on.</span> Because
+              your system requests <em>prefers-reduced-motion</em>, this comparison starts as a
+              static frame at t = {STATIC_FRAME_T.toFixed(2)}s. Press <strong>Play</strong> to
+              animate it — the divergence band and Δ values are identical either way.
+            </p>
+          </div>
+        ) : null}
         <canvas
           ref={canvasRef}
           role="img"

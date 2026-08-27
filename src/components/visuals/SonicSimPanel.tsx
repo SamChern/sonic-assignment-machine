@@ -21,6 +21,7 @@ import {
   Radar,
   Network,
   Image as ImageIcon,
+  Accessibility,
 } from "lucide-react";
 import Audioscope, { type AudioscopeMode } from "./Audioscope";
 import {
@@ -80,6 +81,7 @@ export const SonicSimPanel = ({
   const [speed, setSpeed] = useState(0.25);
   // Reduced-motion users get the still frame by default; they can opt back into motion.
   const [isStatic, setIsStatic] = useState(prefersReducedMotion);
+  const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const [replayKey, setReplayKey] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
@@ -118,6 +120,14 @@ export const SonicSimPanel = ({
     onSubjectChange?.(subject ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subject?.id]);
+
+  useEffect(() => {
+    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!mq) return;
+    const onChange = () => setReducedMotion(mq.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
 
   useEffect(() => {
     const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -286,6 +296,22 @@ export const SonicSimPanel = ({
             : "Synthesized from fingerprint"}
         </Badge>
       </div>
+
+      {reducedMotion ? (
+        <div
+          role="status"
+          className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-xs text-muted-foreground"
+        >
+          <Accessibility className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+          <p>
+            <span className="font-semibold text-foreground">Reduced motion is on.</span> Your system
+            setting (<em>prefers-reduced-motion</em>) asks apps to avoid animation, so the audioscope
+            opens in <strong>Static</strong> — one still frame at t = {STATIC_FRAME_T.toFixed(2)}s
+            instead of a moving trace. Press <strong>Play</strong> or turn off{" "}
+            <strong>Static</strong> to animate it anyway; nothing is hidden either way.
+          </p>
+        </div>
+      ) : null}
 
       <div ref={wrapRef} className="bg-background/40 px-4 pb-4">
         <Audioscope

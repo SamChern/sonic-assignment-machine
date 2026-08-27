@@ -1261,6 +1261,8 @@ Deno.serve(async (req) => {
     }
     (summary as Json).roster_only = rosterOnly;
 
+    summary.rate_metrics = rateMetrics.snapshot();
+    console.log(JSON.stringify({ evt: "ingest_run_summary", ...summary }));
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),
       last_run_summary: summary,
@@ -1268,6 +1270,7 @@ Deno.serve(async (req) => {
     }).eq("id", "singleton");
 
     return json(summary);
+
 
   } catch (e) {
     const msg = errMsg(e);

@@ -325,21 +325,45 @@ export const SonicSimPanel = ({
         </Badge>
       </div>
 
+      {/* Announces mode changes to screen readers without moving focus. */}
+      <p aria-live="polite" className="sr-only">
+        {isStatic
+          ? `Audioscope is static — one frame at ${STATIC_FRAME_T.toFixed(2)} seconds.`
+          : playing
+          ? `Audioscope is animating at ${speed}x speed.`
+          : "Audioscope is paused."}
+      </p>
+
       {reducedMotion ? (
         <div
-          role="status"
+          id="audioscope-motion-notice"
+          role="note"
+          aria-labelledby="audioscope-motion-notice-title"
           className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-xs text-muted-foreground"
         >
           <Accessibility className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-          <p>
-            <span className="font-semibold text-foreground">Reduced motion is on.</span> Your system
-            setting (<em>prefers-reduced-motion</em>) asks apps to avoid animation, so the audioscope
-            opens in <strong>Static</strong> — one still frame at t = {STATIC_FRAME_T.toFixed(2)}s
-            instead of a moving trace. Press <strong>Play</strong> or turn off{" "}
-            <strong>Static</strong> to animate it anyway; nothing is hidden either way.
-          </p>
+          <div>
+            <p>
+              <span id="audioscope-motion-notice-title" className="font-semibold text-foreground">
+                Reduced motion is on.
+              </span>{" "}
+              Your system setting (<em>prefers-reduced-motion</em>) asks apps to avoid animation, so
+              the audioscope opens in <strong>Static</strong> — one still frame at t ={" "}
+              {STATIC_FRAME_T.toFixed(2)}s instead of a moving trace. Press <strong>Play</strong> or
+              turn off <strong>Static</strong> to animate it anyway; nothing is hidden either way.
+            </p>
+            <Button
+              size="sm"
+              variant="link"
+              className="h-auto p-0 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              onClick={() => staticBtnRef.current?.focus()}
+            >
+              Go to the Static toggle
+            </Button>
+          </div>
         </div>
       ) : null}
+
 
       <div ref={wrapRef} className="bg-background/40 px-4 pb-4">
         <Audioscope

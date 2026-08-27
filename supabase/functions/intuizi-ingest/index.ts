@@ -28,6 +28,7 @@ import {
 } from "../_shared/normalization.ts";
 import {
   activationIdFromKey,
+  fetchObjectChunk,
   fetchObjectRows,
   identifierOf,
   ingestPrefixes,

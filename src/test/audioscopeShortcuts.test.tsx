@@ -179,14 +179,11 @@ describe("Audioscope keyboard shortcuts", () => {
       "#audioscope-compare-static-toggle",
     ) as HTMLButtonElement;
 
-    const compareLegend = within(compare.closest("[data-audioscope-panel], div") as HTMLElement);
-    void compareLegend;
-
-    // Focus a control inside the compare pane, then press M.
-    const compareReplayOrLegend = compare.parentElement?.querySelector(
+    // Focus a non-anchor control inside the compare pane, then press M.
+    const compareChip = compare.parentElement?.querySelector(
       "button:not(#audioscope-compare-static-toggle)",
-    ) as HTMLButtonElement;
-    (compareReplayOrLegend ?? compare).focus();
+    ) as HTMLButtonElement | null;
+    (compareChip ?? compare).focus();
 
     await user.keyboard("m");
     expect(document.activeElement).toBe(compare);

@@ -72,6 +72,9 @@ export const useAudioscopeShortcuts = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e.target)) return;
       if (!ownsKeystroke(containerRef.current)) return;
+      // Only the owning pane handles the key — stop sibling panes from acting
+      // on the same keystroke after focus has moved.
+      e.stopImmediatePropagation();
       switch (e.key.toLowerCase()) {
         case "s":
           e.preventDefault();

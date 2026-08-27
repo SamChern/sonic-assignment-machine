@@ -245,6 +245,98 @@ describe("Audioscope keyboard shortcuts", () => {
     expect(screen.getAllByText(/jump to motion controls/i).length).toBeGreaterThan(0);
   });
 
+
+  it("announces the new state in the live region when S and K are pressed", async () => {
+    const user = userEvent.setup();
+    render(
+      <div data-testid="scope">
+        <SonicSimPanel subjects={subjects} />
+      </div>,
+    );
+    const toggle = staticBtn() as HTMLButtonElement;
+    const status = document.querySelector("#audioscope-status") as HTMLElement;
+    expect(status).toHaveAttribute("aria-live", "polite");
+
+    toggle.focus();
+    await user.keyboard("s");
+    expect(status.textContent).toMatch(/static — one frame at 1\.25 seconds/i);
+
+    await user.keyboard("k");
+    expect(status.textContent).toMatch(/animating at 0\.25x speed/i);
+
+    await user.keyboard("k");
+    expect(status.textContent).toMatch(/paused/i);
+  });
+
+  it("announces the compare pane state independently", async () => {
+    const user = userEvent.setup();
+    render(
+      <div data-testid="scope">
+        <SonicSimPanel subjects={subjects} />
+        <AudioscopeCompare entities={compareEntities} similarity={72} />
+      </div>,
+    );
+    const compare = document.querySelector(
+      "#audioscope-compare-static-toggle",
+    ) as HTMLButtonElement;
+    const compareStatus = document.querySelector("#audioscope-compare-status") as HTMLElement;
+    const singleStatus = document.querySelector("#audioscope-status") as HTMLElement;
+
+    compare.focus();
+    await user.keyboard("s");
+    expect(compareStatus.textContent).toMatch(/Comparison is static/i);
+    expect(singleStatus.textContent).not.toMatch(/static/i);
+  });
+
+  it("toggles Static and playback with S and K inside the compare pane", async () => {
+    const user = userEvent.setup();
+    render(
+      <div data-testid="scope">
+        <AudioscopeCompare entities={compareEntities} similarity={72} />
+      </div>,
+    );
+    const compare = document.querySelector(
+      "#audioscope-compare-static-toggle",
+    ) as HTMLButtonElement;
+    compare.focus();
+
+    await user.keyboard("s");
+    expect(compare).toHaveAttribute("aria-pressed", "true");
+
+    await user.keyboard("k");
+    expect(compare).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /^pause\b/i })).toBeInTheDocument();
+  });
+
+  it("does not toggle or announce when S and K are typed into form fields", async () => {
+    const user = userEvent.setup();
+    render(
+      <div data-testid="scope">
+        <input aria-label="note" />
+        <textarea aria-label="memo" />
+        <SonicSimPanel subjects={subjects} />
+      </div>,
+    );
+    const toggle = staticBtn() as HTMLButtonElement;
+    const status = document.querySelector("#audioscope-status") as HTMLElement;
+    const before = status.textContent;
+
+    const input = screen.getByLabelText("note");
+    await user.click(input);
+    await user.keyboard("sk");
+    expect(input).toHaveValue("sk");
+    expect(document.activeElement).toBe(input);
+
+    const memo = screen.getByLabelText("memo");
+    await user.click(memo);
+    await user.keyboard("ks");
+    expect(memo).toHaveValue("ks");
+    expect(document.activeElement).toBe(memo);
+
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(status.textContent).toBe(before);
+  });
+
   it("documents the shortcuts on screen for both panels", () => {
     render(
       <div data-testid="scope">

@@ -28,7 +28,7 @@ Added in three places, same component:
 - **Enterprise workspace** — new tab in `/workspace`.
 - **Admin dashboard** — new tab, with the ability to pick any user/identifier cohort.
 
-Inside the tab: a picker for *what* to visualize (aggregate sonic fingerprint, or one individual semantic analysis), the visualization-mode toggle, transport controls (play/pause, replay, mic toggle when available), and a full-screen/present mode for demoing.
+Inside the tab: a picker for *what* to visualize (aggregate sonic fingerprint, or one individual semantic analysis), the visualization-mode toggle, transport controls (play/pause, replay), and a full-screen/present mode for demoing.
 
 ### 3. Compare mode
 In the admin and enterprise compare views, next to the spider chart:

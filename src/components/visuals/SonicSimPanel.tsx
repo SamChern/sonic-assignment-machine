@@ -89,6 +89,8 @@ export const SonicSimPanel = ({
   const [liveEl, setLiveEl] = useState<HTMLMediaElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const staticBtnRef = useRef<HTMLButtonElement | null>(null);
+
 
   useEffect(() => {
     if (!subjects.some((s) => s.id === subjectId)) setSubjectId(subjects[0]?.id ?? "");

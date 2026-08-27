@@ -217,28 +217,36 @@ Deno.serve(async (req) => {
       .from("intuizi_score_queue")
       .select("id", { count: "exact", head: true })
       .in("status", ["pending", "processing"]);
+    const { count: deadLetter } = await admin
+      .from("intuizi_score_queue")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "dead_letter");
 
     const remaining = pending ?? 0;
     const willChain = remaining > 0 && !paused;
     if (willChain) {
       // Self-chaining: fire and forget, so this response returns immediately.
-      admin.functions.invoke("intuizi-score-worker", { body: { source: "chain" } })
-        .catch((e: unknown) => console.warn("chain failed", errMsg(e)));
+      admin.functions.invoke("intuizi-score-worker", {
+        body: { source: "chain", trace_id: runTraceId },
+      }).catch((e: unknown) => console.warn("chain failed", errMsg(e)));
     }
 
     const body = {
       success: true,
+      trace_id: runTraceId,
       scored,
       unchanged,
       failed,
       paused,
       pending: remaining,
+      dead_letter: deadLetter ?? 0,
       chained: willChain,
       elapsed_ms: Date.now() - startedAt,
       ...metrics.snapshot(),
     };
     console.log(JSON.stringify({ evt: "intuizi_score_worker_run", ...body }));
     return json(body);
+
   } catch (e) {
     console.error("intuizi-score-worker failed", e);
     return json({ success: false, error: errMsg(e) }, 500);

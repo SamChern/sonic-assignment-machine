@@ -418,6 +418,26 @@ const PostIngestionWizard = () => {
           Run semantic processing
         </Button>
 
+        {!running && !!Object.keys(results).length && (
+          partialFiles.length ? (
+            <>
+              <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+                Partial · {partialFiles.length} file{partialFiles.length === 1 ? "" : "s"} left
+              </Badge>
+              <Button onClick={resume} disabled={inferenceBlocked} variant="secondary">
+                <Play className="mr-1 h-4 w-4" />
+                Resume ingestion
+              </Button>
+            </>
+          ) : (
+            <Badge variant="outline" className="border-emerald-500/50 text-emerald-600 dark:text-emerald-400">
+              Complete
+            </Badge>
+          )
+        )}
+
+
+
         {!!Object.keys(results).length && !running && (
           <Button variant="ghost" size="sm" onClick={() => setResults({})}>
             <RefreshCw className="mr-1 h-4 w-4" />

@@ -732,6 +732,10 @@ Deno.serve(async (req) => {
     paused: false,
     pause_reason: null as string | null,
     time_budget_exhausted: false,
+    /** False when any file still has untransformed row groups or identifiers. */
+    complete: true,
+    /** Per-file resume state, so the caller can show partial/complete status. */
+    files: [] as Record<string, unknown>[],
     errors: [] as string[],
     // Rate-limit telemetry for this run, filled in before responding.
     rate_metrics: null as Record<string, unknown> | null,

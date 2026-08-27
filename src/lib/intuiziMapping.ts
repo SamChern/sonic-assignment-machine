@@ -99,11 +99,15 @@ export const FIELD_SPECS: Record<
   ctv: [
     { field: "contentgenre", aliases: ["contentgenre", "content_genre", "genre"], role: "tag", note: "→ ctv.genre.*" },
     { field: "contenttype", aliases: ["contenttype", "content_type"], role: "tag", note: "→ ctv.type.*" },
-    { field: "channelname", aliases: ["channelname", "channel_name", "network"], role: "tag", note: "→ ctv.channel.*" },
-    { field: "iab_cats", aliases: ["iab_cats", "iab_categories", "iabcats"], role: "tag", note: "multi-value, max 8 → iab.*" },
+    { field: "channelname", aliases: ["channelname", "channel_name", "network", "domain", "site"], role: "tag", note: "web `domain` maps here → ctv.channel.*" },
+    { field: "iab_cats", aliases: ["iab_cats", "iab_categories", "iabcats", "iab_codes", "iabcodes"], role: "tag", note: "multi-value, max 8 → iab.*" },
+    { field: "page", aliases: ["page", "path", "url"], role: "tag", note: "path tokens, max 2 → web.topic.*" },
+    { field: "ref", aliases: ["ref", "referrer", "referer"], role: "tag", note: "host only → web.referrer.*" },
+    { field: "signals", aliases: ["signals", "signal_count", "impressions"], role: "confidence", note: "0.5 + log10(1+n)/4, capped at 1" },
     { field: "device_id", aliases: ["ctv_taxonomy", "device_id", "deviceid"], role: "metadata" },
     { field: "useragent", aliases: ["useragent", "user_agent"], role: "metadata" },
   ],
+
   apps: [
     { field: "CategoryName", aliases: ["CategoryName", "category_name", "category"], role: "tag", note: "→ app.category.*" },
     { field: "TaxonomyName", aliases: ["TaxonomyName", "taxonomy_name", "taxonomy"], role: "tag", note: "→ app.taxonomy.*" },

@@ -126,3 +126,22 @@ Deno.test("transient classifier covers throttling and gateway faults", () => {
   assert(isTransientParquetError(new Error("fetch failed")));
   assertEquals(isTransientParquetError(new Error("corrupt footer magic")), false);
 });
+
+Deno.test("retries stop when the run budget cannot absorb the backoff", async () => {
+  let attempts = 0;
+  const past = Date.now() + 10; // effectively no budget left
+  await assertRejects(
+    () =>
+      retryRowGroups(
+        () => {
+          attempts++;
+          return Promise.reject(new Error("connection reset by peer"));
+        },
+        { attempts: 5, baseDelayMs: 500, deadlineAt: past, sleep: () => Promise.resolve() },
+      ),
+    Error,
+    "connection reset",
+  );
+  // Only the first attempt runs: the backoff would outlive the run budget.
+  assertEquals(attempts, 1);
+});

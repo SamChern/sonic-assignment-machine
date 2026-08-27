@@ -1,5 +1,5 @@
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { PlayCircle, Upload, GitCompare, Shield, Building2 } from "lucide-react";
+import { PlayCircle, Upload, GitCompare, Shield, Building2, User, LogIn } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
 import { cn } from "@/lib/utils";
@@ -48,13 +48,27 @@ const ITEMS: NavItem[] = [
     icon: Shield,
     isActive: (p) => p.startsWith("/admin"),
   },
+  {
+    key: "account",
+    label: "Account",
+    to: "/auth",
+    icon: User,
+    isActive: (p) => p === "/auth",
+  },
+  {
+    key: "signin",
+    label: "Sign in",
+    to: "/auth",
+    icon: LogIn,
+    isActive: (p) => p === "/auth",
+  },
 ];
 
 /** Sticky mobile-only quick navigation. Hidden from sm breakpoint upwards. */
 export function MobileBottomNav() {
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { orgs } = useOrganization();
   const hasOrg = orgs.length > 0;
   const tab = searchParams.get("tab");
@@ -62,10 +76,14 @@ export function MobileBottomNav() {
   if (pathname === "/auth") return null;
 
   const items = ITEMS.filter((item) => {
+    // Signed out: always offer a way into sign-in / admin / enterprise login.
+    if (item.key === "signin") return !user;
+    if (item.key === "account") return !!user;
     if (item.key === "admin") return isAdmin;
-    if (item.key === "enterprise") return hasOrg;
+    if (item.key === "enterprise") return !!user && hasOrg;
     return true;
   });
+
 
   return (
     <nav

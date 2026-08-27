@@ -27,8 +27,10 @@ import Audioscope, { type AudioscopeMode } from "./Audioscope";
 import {
   PANE_ANCHOR_ATTR,
   SHORTCUT_HINT,
+  focusMotionControls,
   useAudioscopeShortcuts,
 } from "@/lib/audioscope/shortcuts";
+
 import {
   AUDIOSCOPE_CATEGORIES,
   CATEGORY_LABELS,

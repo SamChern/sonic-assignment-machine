@@ -72,8 +72,18 @@ const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3] as const;
 
 const MOTION_PREF_KEY = "sonicsim.audioscope.motion";
 
+/**
+ * Transport chips: ~20% smaller than the default `sm` button and tinted to sit
+ * back into the panel surface instead of reading as solid buttons.
+ */
+const TRANSPORT_CLS =
+  "h-7 gap-1 rounded-md border border-border/40 bg-background/30 px-2 text-[11px] font-normal text-muted-foreground backdrop-blur-sm hover:bg-background/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+const TRANSPORT_CLS_ACTIVE =
+  "h-7 gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-[11px] font-normal text-foreground backdrop-blur-sm hover:bg-primary/25 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+
 /** Deterministic time offset (seconds) the Static view freezes on. */
 const STATIC_FRAME_T = 1.25;
+
 
 export const SonicSimPanel = ({
   subjects,

@@ -122,7 +122,7 @@ describe("E2E: semantic processing with Lovable AI routing", () => {
 
     // Guard reports the intentional routing, not a warning about missing GPU.
     await waitFor(() =>
-      expect(screen.getByText(/scoring on Lovable AI/i)).toBeInTheDocument(),
+      expect(screen.getAllByText(/scoring on Lovable AI/i).length).toBeGreaterThan(0),
     );
     expect(screen.getByText(/runs on Lovable AI \(intentional\)/i)).toBeInTheDocument();
     expect(screen.queryByText(/no GPU detected/i)).not.toBeInTheDocument();
@@ -142,7 +142,7 @@ describe("E2E: semantic processing with Lovable AI routing", () => {
       expect(invoked.some((c) => c.name === "inference-config-validate")).toBe(true),
     );
 
-    await user.click(screen.getByRole("button", { name: /scan|discover/i }));
+    await user.click(screen.getByRole("button", { name: /find activations/i }));
     await waitFor(() => expect(runButton()).toBeEnabled());
 
     await user.click(runButton());
@@ -157,7 +157,9 @@ describe("E2E: semantic processing with Lovable AI routing", () => {
     probe = { reachable: false, reachableDetail: "Probe failed", servedModels: [], gpu: null };
     render(<PostIngestionWizard />);
 
-    await waitFor(() => expect(screen.getByText(/scoring on Lovable AI/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByText(/scoring on Lovable AI/i).length).toBeGreaterThan(0),
+    );
     expect(screen.queryByText(/Semantic processing blocked/i)).not.toBeInTheDocument();
     expect(buildVerdict(parseInferenceConfig(env), probe).blocked).toBe(false);
   });

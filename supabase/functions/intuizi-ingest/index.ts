@@ -1089,7 +1089,8 @@ Deno.serve(async (req) => {
               }],
               user_id: ownerId,
               save_results: true,
-            });
+            }, fileRow.report_type ?? "unknown");
+
             const sourceOut = ana.sources[0];
 
 

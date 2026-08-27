@@ -271,8 +271,29 @@ Deno.serve(async (req) => {
         .update({ last_synced_at: new Date().toISOString() })
         .eq("id", grant.id);
 
+      const failedRows = prepared.length - inserted;
+      await finishRun({
+        status: failures.length ? "partial" : "done",
+        dataset_id: datasetId,
+        profiles_found: sources.length,
+        rows_synced: inserted,
+        rows_scored: scoredRows.length,
+        rows_failed: failedRows,
+        coverage_pct: prepared.length
+          ? Number(((scoredRows.length / prepared.length) * 100).toFixed(2))
+          : 0,
+        error: failures.length ? failures.join(" | ").slice(0, 1000) : null,
+        details: {
+          requested_activations: requested,
+          actor_role: caller.role,
+          dataset_name: datasetName,
+          failures,
+        },
+      });
+
       results.push({
         activation_id: activationId,
+        run_id: runId,
         dataset_id: datasetId,
         rows_synced: inserted,
         scored: scoredRows.length,

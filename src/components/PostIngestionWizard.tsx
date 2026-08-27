@@ -90,6 +90,9 @@ interface StageResult {
   notes?: string[];
 }
 
+const PHASE_HISTORY_KEY = "sonicsim.ingest.phaseCpuHistory.v1";
+const PHASE_HISTORY_MAX = 12;
+
 const STAGES = [
   ["discover", "Discover delivery"],
   ["ingest", "Ingest + normalize"],
@@ -97,6 +100,7 @@ const STAGES = [
   ["score", "Semantic scoring"],
   ["link", "Audience linkage"],
 ] as const;
+
 
 type StageKey = typeof STAGES[number][0];
 

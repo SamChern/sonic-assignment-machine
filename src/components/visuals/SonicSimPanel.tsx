@@ -9,7 +9,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Activity, Maximize2, Minimize2, Pause, Play, RotateCcw, Radar, Network } from "lucide-react";
+import {
+  Activity,
+  Gauge,
+  Info,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+  RotateCcw,
+  Radar,
+  Network,
+} from "lucide-react";
 import Audioscope, { type AudioscopeMode } from "./Audioscope";
 import {
   AUDIOSCOPE_CATEGORIES,
@@ -31,6 +42,8 @@ export interface SonicSimSubject {
 
 interface SonicSimPanelProps {
   subjects: SonicSimSubject[];
+  /** Fires whenever the visualized subject changes (used to pulse the network graph). */
+  onSubjectChange?: (subject: SonicSimSubject | null) => void;
   title?: string;
   description?: string;
   defaultMode?: AudioscopeMode;
@@ -43,8 +56,11 @@ const MODES: { key: AudioscopeMode; label: string; icon: typeof Activity }[] = [
   { key: "nodes", label: "Node pulse", icon: Network },
 ];
 
+const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3] as const;
+
 export const SonicSimPanel = ({
   subjects,
+  onSubjectChange,
   title = "See my SonicSIM",
   description = "Play your sonic fingerprint, or any single semantic analysis, as a live audioscope.",
   defaultMode = "radial",
@@ -53,6 +69,8 @@ export const SonicSimPanel = ({
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id ?? "");
   const [mode, setMode] = useState<AudioscopeMode>(defaultMode);
   const [playing, setPlaying] = useState(true);
+  const [speed, setSpeed] = useState(1);
+  const [showLegend, setShowLegend] = useState(false);
   const [replayKey, setReplayKey] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const [liveEl, setLiveEl] = useState<HTMLMediaElement | null>(null);
@@ -73,6 +91,11 @@ export const SonicSimPanel = ({
     setLiveEl(null);
     audioRef.current?.pause();
   }, [subjectId]);
+
+  useEffect(() => {
+    onSubjectChange?.(subject ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject?.id]);
 
   useEffect(() => {
     const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -141,6 +164,34 @@ export const SonicSimPanel = ({
             <RotateCcw className="h-3.5 w-3.5" />
             Replay
           </Button>
+          <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
+            <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+            <label className="sr-only" htmlFor="audioscope-speed">
+              Animation speed
+            </label>
+            <select
+              id="audioscope-speed"
+              value={String(speed)}
+              onChange={(e) => setSpeed(Number(e.target.value))}
+              className="bg-transparent text-xs text-foreground outline-none"
+            >
+              {SPEEDS.map((v) => (
+                <option key={v} value={v}>
+                  {v}x
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            size="sm"
+            variant={showLegend ? "default" : "outline"}
+            className="gap-1.5"
+            onClick={() => setShowLegend((v) => !v)}
+            aria-expanded={showLegend}
+          >
+            <Info className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">How to read this</span>
+          </Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={toggleFullscreen}>
             {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             <span className="hidden sm:inline">{fullscreen ? "Exit" : "Present"}</span>
@@ -194,6 +245,7 @@ export const SonicSimPanel = ({
           features={subject.features ?? null}
           mode={mode}
           playing={playing}
+          speed={speed}
           mediaEl={liveEl}
           height={fullscreen ? Math.max(420, Math.round(window.innerHeight * 0.7)) : height}
           caption={subject.sublabel ?? subject.label}
@@ -211,6 +263,40 @@ export const SonicSimPanel = ({
             </span>
           ))}
         </div>
+
+        {showLegend ? (
+          <div className="mt-3 grid gap-3 rounded-xl border border-border/60 bg-background/60 p-4 text-xs leading-relaxed text-muted-foreground sm:grid-cols-3">
+            <div>
+              <p className="mb-1 font-semibold text-foreground">Where the signal comes from</p>
+              <p>
+                A <strong>sonic fingerprint</strong> is the average of every analysis on the
+                six-category semantic layer; a <strong>single semantic analysis</strong> is one
+                source&apos;s scores. Either set of six numbers (0-100) drives the animation.
+              </p>
+            </div>
+            <div>
+              <p className="mb-1 font-semibold text-foreground">Harmonic bands</p>
+              <p>
+                Each category becomes one harmonic partial: Emotional is the lowest band and
+                Artistic the highest, in the legend order above. A category&apos;s score sets that
+                partial&apos;s <em>amplitude</em> (how tall its wave and spectrum bar are) and its
+                share of the identity ring. Higher overall energy and tempo hints widen and quicken
+                the trace, so a bright, communication-heavy source visibly buzzes faster than a
+                calm, contextual one.
+              </p>
+            </div>
+            <div>
+              <p className="mb-1 font-semibold text-foreground">Ontology node highlights</p>
+              <p>
+                In <strong>Node pulse</strong> mode, each dot is one ontology category node, colored
+                with the same token as the chips above and sized by its score; it pulses in time with
+                its own band, so dominant categories flare hardest. Selecting an analysis here also
+                pulses that source&apos;s nodes in the Network tab. In compare mode, the red band
+                between two traces is the divergence the similarity score measures.
+              </p>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {subject.audioUrl ? (

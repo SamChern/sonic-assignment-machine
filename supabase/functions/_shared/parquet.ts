@@ -486,7 +486,8 @@ export async function readParquetChunk(
     return bail("pre_open", {
       startRowGroup,
       nextRowGroup: startRowGroup,
-      rowGroupsTotal: null,
+      rowGroupsTotal: 0,
+
       rowsOffset: 0,
       nextRowsOffset: 0,
       exhausted: false,

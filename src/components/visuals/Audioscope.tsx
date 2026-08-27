@@ -19,6 +19,11 @@ interface AudioscopeProps {
   playing?: boolean;
   /** Animation rate multiplier (1 = realtime). */
   speed?: number;
+  /**
+   * When set, the scope renders one deterministic frame at this time offset and
+   * never animates ("Static" view). Overrides `playing`.
+   */
+  staticFrame?: number | null;
   /** When provided (and playable), the scope is driven by real audio. */
   mediaEl?: HTMLMediaElement | null;
   height?: number;

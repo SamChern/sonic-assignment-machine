@@ -1534,7 +1534,16 @@ Deno.serve(async (req) => {
 
   } catch (e) {
     const msg = errMsg(e);
+    summary.elapsed_ms = Date.now() - runStart;
+    summary.time_remaining_ms = timeLeftMs();
+    summary.budget_history = [...history, {
+      at: new Date().toISOString(),
+      budget_ms: budgetMs,
+      elapsed_ms: summary.elapsed_ms,
+      timed_out: true,
+    }].slice(-10);
     summary.rate_metrics = rateMetrics.snapshot();
+
     console.error(JSON.stringify({ evt: "ingest_run_failed", error: msg, ...summary }));
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),

@@ -225,12 +225,63 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/** One decode slice's wall-clock cost, for 504 post-mortems. */
+export interface DecodeSliceTiming {
+  rowStart: number;
+  rowEnd: number;
+  ms: number;
+  timedOut?: boolean;
+}
+
+/** Duration breakdown of a single chunk read. */
+export interface ParquetTimings {
+  /** Signed-URL HEAD / buffer setup. */
+  openMs: number;
+  /** Range probe for very large objects (0 when skipped). */
+  rangeProbeMs: number;
+  /** Footer / metadata decode. */
+  metadataMs: number;
+  /** Total page-decode time across all slices. */
+  decodeMs: number;
+  /** Post-decode scalar flattening + validation. */
+  normalizeMs: number;
+  totalMs: number;
+  /** Per-slice breakdown when an oversized row group was split. */
+  slices: DecodeSliceTiming[];
+  /** Ms left in the caller's budget when the read returned. */
+  timeLeftMs: number | null;
+  /** Which step ran out of budget, when one did. */
+  abortedAt?: "pre_open" | "metadata" | "pre_decode" | "decode";
+}
+
 export interface ParquetChunk {
   rows: Record<string, unknown>[];
   checkpoint: ParquetCheckpoint;
   /** True when the read stopped early to stay inside the caller's run budget. */
   deadlineExceeded?: boolean;
+  /** Step-by-step durations for this read. */
+  timings?: ParquetTimings;
 }
+
+/**
+ * Split a row range into decode slices no larger than `maxRows`.
+ * Used when a row group is too big to decode in one read inside the run budget:
+ * each slice gets its own timeout so a giant group makes measurable progress
+ * instead of stalling until the gateway's 150s idle limit fires.
+ */
+export function planDecodeSlices(
+  rowStart: number,
+  rowEnd: number,
+  maxRows: number,
+): { rowStart: number; rowEnd: number }[] {
+  const size = Math.max(1, Math.floor(maxRows));
+  const out: { rowStart: number; rowEnd: number }[] = [];
+  for (let s = rowStart; s < rowEnd; s += size) {
+    out.push({ rowStart: s, rowEnd: Math.min(s + size, rowEnd) });
+  }
+  return out;
+}
+
 
 /**
  * Pure row-group read planner. Given the per-row-group row counts, a resume

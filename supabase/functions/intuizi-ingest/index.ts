@@ -67,6 +67,56 @@ const MAX_ROWS_PER_FILE = 5000;
 // The edge gateway kills a request after 150s of idle time. Stop taking new work
 // well before that and return a partial summary; remaining work resumes next run.
 const RUN_BUDGET_MS = 105_000;
+/** Floor/ceiling for the auto-tuned wall-clock budget. */
+const MIN_RUN_BUDGET_MS = 45_000;
+const MAX_RUN_BUDGET_MS = 105_000;
+
+/** One historical run, kept in intuizi_ingest_state.last_run_summary. */
+export interface BudgetHistoryEntry {
+  at: string;
+  budget_ms: number;
+  elapsed_ms: number;
+  timed_out: boolean;
+}
+
+/**
+ * Choose this run's wall-clock budget from recent history.
+ *
+ * A run that burned its whole budget and still had to checkpoint means the last
+ * read overran — shrink the budget so the next resume leaves more headroom
+ * before the gateway's 150s idle limit. Runs that finished comfortably inside
+ * the budget grow it back toward the ceiling.
+ */
+export function tuneRunBudget(
+  history: BudgetHistoryEntry[],
+  fallback = MAX_RUN_BUDGET_MS,
+): { budgetMs: number; reason: string } {
+  const recent = history.slice(-5);
+  if (!recent.length) return { budgetMs: fallback, reason: "no history" };
+
+  const last = recent[recent.length - 1];
+  const overruns = recent.filter((r) => r.timed_out).length;
+  const clamp = (n: number) =>
+    Math.max(MIN_RUN_BUDGET_MS, Math.min(MAX_RUN_BUDGET_MS, Math.round(n / 1000) * 1000));
+
+  if (last.timed_out) {
+    const shrink = 1 - Math.min(0.4, 0.15 * overruns);
+    return {
+      budgetMs: clamp((last.budget_ms || fallback) * shrink),
+      reason: `last run exhausted its budget (${overruns} of ${recent.length} recent runs)`,
+    };
+  }
+
+  const worst = Math.max(...recent.map((r) => r.elapsed_ms || 0));
+  if (worst > 0 && worst < (last.budget_ms || fallback) * 0.6) {
+    return {
+      budgetMs: clamp(Math.max(last.budget_ms || fallback, worst * 1.8)),
+      reason: `recent runs finished in ${Math.round(worst / 1000)}s — growing budget`,
+    };
+  }
+  return { budgetMs: clamp(last.budget_ms || fallback), reason: "holding steady" };
+}
+
 // Expected rows per user/device in an Intuizi activation delivery. Used only by
 // the pre-ingest parquet validation log to flag deliveries whose shape drifted.
 const EXPECTED_ROWS_PER_USER = Number(

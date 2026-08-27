@@ -298,7 +298,20 @@ const PostIngestionWizard = () => {
       // Estimate how much of the file the NEXT run finishes under the server's
       // 105s budget, from this run's throughput (groups per elapsed ms).
       const budgetMs = res.run_budget_ms ?? 105_000;
+      lastBudgetMs.current = budgetMs;
       const elapsed = res.elapsed_ms ?? wallMs;
+      deadlineInfos.push({
+        key: f.object_key,
+        budgetMs,
+        defaultBudgetMs: res.default_run_budget_ms ?? null,
+        budgetReason: res.budget_reason ?? null,
+        elapsedMs: elapsed,
+        timeRemainingMs: res.time_remaining_ms ?? null,
+        deadlineExceeded: Boolean(res.deadline_exceeded || res.time_budget_exhausted),
+        deadlineStep: res.deadline_step ?? null,
+        phaseMs: res.phase_ms ?? null,
+      });
+
       const total = fileState?.row_groups_total ?? null;
       const cursor = fileState?.row_group_cursor ?? 0;
       const groupsThisRun = Math.max(0, cursor - (resumeCursors.current[f.object_key] ?? 0));

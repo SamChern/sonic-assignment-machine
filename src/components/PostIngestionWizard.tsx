@@ -148,7 +148,7 @@ const PostIngestionWizard = () => {
   /** Row-group cursor at the start of the previous run, for throughput math. */
   const resumeCursors = useRef<Record<string, number>>({});
   /** Last budget the server reported, used for the countdown before it replies. */
-  const lastBudgetMs = useRef(105_000);
+  const lastBudgetMs = useRef(70_000);
 
   useEffect(() => {
     if (!liveRun) return;
@@ -296,8 +296,8 @@ const PostIngestionWizard = () => {
       if (!complete) stillPartial.push(f);
 
       // Estimate how much of the file the NEXT run finishes under the server's
-      // 105s budget, from this run's throughput (groups per elapsed ms).
-      const budgetMs = res.run_budget_ms ?? 105_000;
+      // tuned run budget, from this run's throughput (groups per elapsed ms).
+      const budgetMs = res.run_budget_ms ?? 70_000;
       lastBudgetMs.current = budgetMs;
       const elapsed = res.elapsed_ms ?? wallMs;
       deadlineInfos.push({
@@ -645,7 +645,7 @@ const PostIngestionWizard = () => {
 
           <div className="w-full rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
             <p className="mb-2 font-medium text-amber-600 dark:text-amber-400">
-              Resume forecast — each run stops at the 105s budget
+              Resume forecast — each run stops at its tuned CPU-safe budget
             </p>
             <ul className="space-y-1">
               {resumeEstimates.map((e) => (

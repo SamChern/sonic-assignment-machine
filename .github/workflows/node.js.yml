@@ -66,6 +66,26 @@ jobs:
       - name: Run tests
         run: npm run test --if-present
 
+  # Edge-function unit tests (Deno). Covers the Parquet checkpoint/resume math:
+  # a run that hits the 105s time budget must resume at the next row group
+  # without re-transforming already-scored rows, and transient read failures
+  # must retry only the failed row groups.
+  edge-functions:
+    name: edge function tests (Deno)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Test Supabase edge functions
+        run: deno test --allow-net --allow-env --no-check supabase/functions/
+
+
+
   # Mobile layout visual regression: boots the built app and asserts no
   # clipped badges, overflowing tabs, or misaligned/overlapped sticky nav
   # across phone/tablet/desktop viewports. Runs on every PR.

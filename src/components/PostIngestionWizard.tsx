@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,17 @@ interface Activation {
   done_files: number;
 }
 
+/** Per-file resume forecast shown while an ingestion is partial. */
+interface ResumeEstimate {
+  key: string;
+  cursor: number;
+  total: number | null;
+  groupsRemaining: number | null;
+  groupsNextRun: number | null;
+  etaMs: number | null;
+  runsRemaining: number | null;
+}
+
 type StageState = "idle" | "running" | "ok" | "warn" | "error";
 
 interface StageResult {
@@ -80,6 +91,15 @@ const bytes = (n: number) =>
 
 const fileName = (key: string) => key.split("/").pop() ?? key;
 
+/** Compact ms -> "45s" / "3m 20s" for resume time estimates. */
+const fmtDuration = (ms: number) => {
+  const s = Math.max(1, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem ? `${m}m ${rem}s` : `${m}m`;
+};
+
 const StageIcon = ({ state }: { state: StageState }) => {
   if (state === "running") return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
   if (state === "ok") return <CheckCircle2 className="h-4 w-4 text-primary" />;
@@ -97,6 +117,10 @@ const PostIngestionWizard = () => {
   const [running, setRunning] = useState(false);
   /** Files that still have untransformed row groups — the Resume target. */
   const [partialFiles, setPartialFiles] = useState<ActivationFile[]>([]);
+  /** Row-group progress + time estimates for the next resume run. */
+  const [resumeEstimates, setResumeEstimates] = useState<ResumeEstimate[]>([]);
+  /** Row-group cursor at the start of the previous run, for throughput math. */
+  const resumeCursors = useRef<Record<string, number>>({});
   const {
     readiness,
     loading: inferenceLoading,
@@ -176,10 +200,14 @@ const PostIngestionWizard = () => {
     let scored = 0;
     let roster = 0;
 
+    const estimates: ResumeEstimate[] = [];
+
     for (const f of dataFiles) {
+      const t0 = Date.now();
       const { data, error } = await supabase.functions.invoke("intuizi-ingest", {
         body: { object_key: f.object_key, report_type: f.report_type ?? undefined },
       });
+      const wallMs = Date.now() - t0;
       if (error) {
         ingestErrors.push(`${fileName(f.object_key)}: ${error.message}`);
         perFile.push([fileName(f.object_key), "failed · resumable"]);
@@ -192,6 +220,8 @@ const PostIngestionWizard = () => {
         roster_identifiers?: number;
         time_budget_exhausted?: boolean;
         complete?: boolean;
+        run_budget_ms?: number;
+        elapsed_ms?: number;
         files?: {
           object_key?: string;
           complete?: boolean;
@@ -208,15 +238,46 @@ const PostIngestionWizard = () => {
       const fileState = res.files?.find((x) => x.object_key === f.object_key);
       const complete = fileState?.complete ?? (res.complete !== false);
       if (!complete) stillPartial.push(f);
+
+      // Estimate how much of the file the NEXT run finishes under the server's
+      // 105s budget, from this run's throughput (groups per elapsed ms).
+      const budgetMs = res.run_budget_ms ?? 105_000;
+      const elapsed = res.elapsed_ms ?? wallMs;
+      const total = fileState?.row_groups_total ?? null;
+      const cursor = fileState?.row_group_cursor ?? 0;
+      const groupsThisRun = Math.max(0, cursor - (resumeCursors.current[f.object_key] ?? 0));
+      const groupsRemaining = total != null ? Math.max(0, total - cursor) : null;
+      const msPerGroup = groupsThisRun > 0 ? elapsed / groupsThisRun : null;
+      const groupsNextRun =
+        msPerGroup && groupsRemaining != null
+          ? Math.max(1, Math.min(groupsRemaining, Math.floor(budgetMs / msPerGroup)))
+          : null;
+      const etaMs =
+        msPerGroup && groupsRemaining != null ? Math.round(groupsRemaining * msPerGroup) : null;
+      resumeCursors.current[f.object_key] = cursor;
+
+      if (!complete) {
+        estimates.push({
+          key: f.object_key,
+          cursor,
+          total,
+          groupsRemaining,
+          groupsNextRun,
+          etaMs,
+          runsRemaining:
+            groupsNextRun && groupsRemaining != null
+              ? Math.ceil(groupsRemaining / groupsNextRun)
+              : null,
+        });
+      }
+
       if (res.time_budget_exhausted) {
         ingestErrors.push(
-          `${fileName(f.object_key)}: stopped at the run time budget — press Resume to continue from row group ${fileState?.row_group_cursor ?? 0}.`,
+          `${fileName(f.object_key)}: stopped at the ${Math.round(budgetMs / 1000)}s run budget — press Resume to continue from row group ${cursor}.`,
         );
       }
       const progress =
-        fileState?.row_groups_total != null
-          ? ` · row group ${fileState.row_group_cursor ?? 0}/${fileState.row_groups_total}`
-          : "";
+        total != null ? ` · row group ${cursor}/${total}` : "";
       perFile.push([
         fileName(f.object_key),
         `${res.rows_read ?? 0} rows · ${res.identifiers_scored ?? 0} scored · ${res.roster_identifiers ?? 0} roster${progress} · ${complete ? "complete" : "partial"}`,
@@ -224,6 +285,7 @@ const PostIngestionWizard = () => {
     }
 
     setPartialFiles(stillPartial);
+    setResumeEstimates(estimates);
 
     setStage("ingest", {
       state: ingestErrors.length || stillPartial.length ? (rowsRead ? "warn" : "error") : "ok",
@@ -435,6 +497,39 @@ const PostIngestionWizard = () => {
             </Badge>
           )
         )}
+
+        {!running && !!resumeEstimates.length && (
+          <div className="w-full rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+            <p className="mb-2 font-medium text-amber-600 dark:text-amber-400">
+              Resume forecast — each run stops at the 105s budget
+            </p>
+            <ul className="space-y-1">
+              {resumeEstimates.map((e) => (
+                <li key={e.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+                  <span className="font-mono text-foreground/90">{fileName(e.key)}</span>
+                  <span>
+                    row group {e.cursor}
+                    {e.total != null ? `/${e.total}` : ""}
+                    {e.groupsRemaining != null ? ` · ${e.groupsRemaining} left` : ""}
+                  </span>
+                  {e.groupsNextRun != null && (
+                    <Badge variant="outline" className="text-[10px]">
+                      ~{e.groupsNextRun} row group{e.groupsNextRun === 1 ? "" : "s"} next run
+                    </Badge>
+                  )}
+                  {e.etaMs != null && (
+                    <Badge variant="outline" className="text-[10px]">
+                      ~{fmtDuration(e.etaMs)} of processing left
+                      {e.runsRemaining != null ? ` · ~${e.runsRemaining} run${e.runsRemaining === 1 ? "" : "s"}` : ""}
+                    </Badge>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+
 
 
 

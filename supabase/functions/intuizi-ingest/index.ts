@@ -731,6 +731,10 @@ Deno.serve(async (req) => {
     paused: false,
     pause_reason: null as string | null,
     time_budget_exhausted: false,
+    /** Server-side run budget (ms) the wizard uses to estimate remaining time. */
+    run_budget_ms: RUN_BUDGET_MS,
+    /** Wall-clock duration of this run (ms). */
+    elapsed_ms: 0,
     /** False when any file still has untransformed row groups or identifiers. */
     complete: true,
     /** Per-file resume state, so the caller can show partial/complete status. */
@@ -1349,6 +1353,7 @@ Deno.serve(async (req) => {
     if (summary.time_budget_exhausted || summary.files_failed || breakerTripped) {
       summary.complete = false;
     }
+    summary.elapsed_ms = Date.now() - runStart;
     summary.rate_metrics = rateMetrics.snapshot();
     console.log(JSON.stringify({ evt: "ingest_run_summary", ...summary }));
     await admin.from("intuizi_ingest_state").update({

@@ -215,6 +215,145 @@ export interface ParquetChunk {
 }
 
 /**
+ * Pure row-group read planner. Given the per-row-group row counts, a resume
+ * cursor and a row budget, decide which absolute row range to read and what
+ * checkpoint to persist. Kept side-effect free so resume behaviour is testable
+ * without a real Parquet object.
+ */
+export function planRowGroupRead(
+  groupRows: number[],
+  startRowGroup: number,
+  maxRows: number,
+): { rowStart: number; rowEnd: number; checkpoint: ParquetCheckpoint } {
+  const numRows = groupRows.reduce((a, b) => a + b, 0);
+  const from = Math.max(0, Math.min(startRowGroup, groupRows.length));
+  const rowsOffset = groupRows.slice(0, from).reduce((a, b) => a + b, 0);
+
+  if (from >= groupRows.length || rowsOffset >= numRows) {
+    return {
+      rowStart: rowsOffset,
+      rowEnd: rowsOffset,
+      checkpoint: {
+        startRowGroup: from,
+        nextRowGroup: groupRows.length,
+        rowGroupsTotal: groupRows.length,
+        rowsOffset,
+        nextRowsOffset: numRows,
+        exhausted: true,
+      },
+    };
+  }
+
+  // Consume whole row groups until the row budget is met (at least one group).
+  let nextRowGroup = from;
+  let take = 0;
+  while (
+    nextRowGroup < groupRows.length &&
+    (take === 0 || take + groupRows[nextRowGroup] <= maxRows)
+  ) {
+    take += groupRows[nextRowGroup];
+    nextRowGroup++;
+  }
+
+  // Reads are row-group aligned: `maxRows` is a soft budget, so a group is never
+  // half-read (which would silently skip rows when the cursor advances).
+  const rowEnd = Math.min(rowsOffset + take, numRows);
+
+  return {
+    rowStart: rowsOffset,
+    rowEnd,
+    checkpoint: {
+      startRowGroup: from,
+      nextRowGroup,
+      rowGroupsTotal: groupRows.length,
+      rowsOffset,
+      nextRowsOffset: rowEnd,
+      exhausted: nextRowGroup >= groupRows.length || rowEnd >= numRows,
+    },
+  };
+}
+
+/**
+ * Transient = worth retrying the same row groups (network blip, throttling,
+ * gateway error, truncated range response). Anything else (bad codec, corrupt
+ * footer, schema error) is permanent and must fail fast.
+ */
+export function isTransientParquetError(e: unknown): boolean {
+  const msg = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
+  const status = Number(
+    (e as { status?: number; statusCode?: number } | null)?.status ??
+      (e as { statusCode?: number } | null)?.statusCode ??
+      NaN,
+  );
+  if (status === 408 || status === 429 || (status >= 500 && status <= 599)) return true;
+  return [
+    "timeout",
+    "timed out",
+    "econnreset",
+    "connection reset",
+    "connection closed",
+    "socket hang up",
+    "network",
+    "fetch failed",
+    "temporarily",
+    "throttl",
+    "slow down",
+    "slowdown",
+    "rate limit",
+    "503",
+    "502",
+    "500",
+    "unexpected end",
+    "incomplete",
+  ].some((needle) => msg.includes(needle));
+}
+
+/**
+ * Retry a single row-group range read on transient errors with exponential
+ * backoff. Only the failed range is retried — the file's checkpoint is never
+ * rewound, so already-transformed row groups are not re-processed.
+ */
+export async function retryRowGroups<T>(
+  read: (attempt: number) => Promise<T>,
+  opts: {
+    attempts?: number;
+    baseDelayMs?: number;
+    label?: string;
+    isTransient?: (e: unknown) => boolean;
+    sleep?: (ms: number) => Promise<void>;
+  } = {},
+): Promise<T> {
+  const attempts = opts.attempts ?? 3;
+  const base = opts.baseDelayMs ?? 400;
+  const transient = opts.isTransient ?? isTransientParquetError;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await read(attempt);
+    } catch (e) {
+      lastErr = e;
+      if (attempt >= attempts || !transient(e)) throw e;
+      const delay = base * 2 ** (attempt - 1);
+      console.log(JSON.stringify({
+        evt: "parquet_row_group_retry",
+        label: opts.label ?? null,
+        attempt,
+        attempts,
+        delay_ms: delay,
+        error: e instanceof Error ? e.message : String(e),
+      }));
+      await sleep(delay);
+    }
+  }
+  throw lastErr;
+}
+
+
+
+
+/**
  * Read a bounded chunk of rows from a Parquet object, starting at a row-group
  * checkpoint. Reads are aligned to row-group boundaries so the returned
  * checkpoint can be persisted and a later run resumes exactly where this one
@@ -265,40 +404,27 @@ export async function readParquetChunk(
     );
   }
 
-  const from = Math.max(0, Math.min(startRowGroup, groupRows.length));
-  const rowsOffset = groupRows.slice(0, from).reduce((a, b) => a + b, 0);
+  const plan = planRowGroupRead(groupRows, startRowGroup, maxRows);
 
-  if (from >= groupRows.length || rowsOffset >= numRows) {
-    return {
-      rows: [],
-      checkpoint: {
-        startRowGroup: from,
-        nextRowGroup: groupRows.length,
-        rowGroupsTotal: groupRows.length,
-        rowsOffset,
-        nextRowsOffset: numRows,
-        exhausted: true,
-      },
-    };
+  if (plan.checkpoint.exhausted && plan.rowEnd <= plan.rowStart) {
+    return { rows: [], checkpoint: plan.checkpoint };
   }
 
-  // Consume whole row groups until the row budget is met (at least one group).
-  let nextRowGroup = from;
-  let take = 0;
-  while (nextRowGroup < groupRows.length && (take === 0 || take + groupRows[nextRowGroup] <= maxRows)) {
-    take += groupRows[nextRowGroup];
-    nextRowGroup++;
-  }
-
-  const rowEnd = Math.min(rowsOffset + Math.min(take, maxRows), numRows);
-
-  const raw = await parquetReadObjects({
-    file,
-    metadata,
-    compressors,
-    rowStart: rowsOffset,
-    rowEnd,
-  });
+  // Transient S3/network faults are retried for THIS row-group range only, so a
+  // blip never forces the whole file to be re-transformed from group 0.
+  const raw = await retryRowGroups(
+    () =>
+      parquetReadObjects({
+        file,
+        metadata,
+        compressors,
+        rowStart: plan.rowStart,
+        rowEnd: plan.rowEnd,
+      }),
+    {
+      label: `row groups ${plan.checkpoint.startRowGroup}..${plan.checkpoint.nextRowGroup - 1}`,
+    },
+  );
 
   const rows = (raw as Record<string, unknown>[]).map((row) => {
     const out: Record<string, unknown> = {};
@@ -314,17 +440,7 @@ export async function readParquetChunk(
     expectedRowsPerUser,
   );
 
-  return {
-    rows,
-    checkpoint: {
-      startRowGroup: from,
-      nextRowGroup,
-      rowGroupsTotal: groupRows.length,
-      rowsOffset,
-      nextRowsOffset: rowEnd,
-      exhausted: nextRowGroup >= groupRows.length || rowEnd >= numRows,
-    },
-  };
+  return { rows, checkpoint: plan.checkpoint };
 }
 
 /**

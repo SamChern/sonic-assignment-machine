@@ -17,6 +17,8 @@ interface AudioscopeProps {
   features?: AudioscopeFeatureHints | null;
   mode?: AudioscopeMode;
   playing?: boolean;
+  /** Animation rate multiplier (1 = realtime). */
+  speed?: number;
   /** When provided (and playable), the scope is driven by real audio. */
   mediaEl?: HTMLMediaElement | null;
   height?: number;
@@ -37,6 +39,7 @@ export const Audioscope = ({
   features = null,
   mode = "scope",
   playing = true,
+  speed = 1,
   mediaEl = null,
   height = 320,
   className,
@@ -328,16 +331,23 @@ export const Audioscope = ({
       };
     }
 
-    startRef.current = performance.now() - elapsedRef.current * 1000;
+    const rate = Math.max(0.1, Math.min(4, Number(speed) || 1));
+    startRef.current = performance.now();
     let last = 0;
+    let prev = performance.now();
     const minDelta = isMobile ? 1000 / 30 : 0;
 
     const loop = (now: number) => {
       rafRef.current = requestAnimationFrame(loop);
-      if (!visibleRef.current) return;
+      if (!visibleRef.current) {
+        prev = now;
+        return;
+      }
       if (now - last < minDelta) return;
       last = now;
-      elapsedRef.current = (now - startRef.current) / 1000;
+      // Scaled accumulation keeps the clock continuous across speed changes.
+      elapsedRef.current += ((now - prev) / 1000) * rate;
+      prev = now;
       frame(elapsedRef.current);
     };
     rafRef.current = requestAnimationFrame(loop);
@@ -348,7 +358,7 @@ export const Audioscope = ({
       window.removeEventListener("resize", resize);
       io.disconnect();
     };
-  }, [mode, playing, reduced, isMobile, height, caption, scores]);
+  }, [mode, playing, speed, reduced, isMobile, height, caption, scores]);
 
   return (
     <canvas

@@ -110,10 +110,12 @@ Deno.serve(async (req) => {
         : {
             id: "chat_model",
             label: "Selected scoring model",
-            state: EC2_REQUIRED ? "fail" : "warn",
-            detail:
-              "EC2_INFERENCE_MODEL is not set — semantic scoring runs on the Lovable AI Gateway, not on your EC2 GPU",
+            state: EC2_REQUIRED ? "fail" : "ok",
+            detail: EC2_REQUIRED
+              ? "EC2_INFERENCE_REQUIRED=true but EC2_INFERENCE_MODEL is not set"
+              : "By design: semantic scoring runs on the Lovable AI Gateway (no local scoring model configured)",
           },
+
     );
     checks.push(
       EC2_EMBED_MODEL

@@ -67,8 +67,11 @@ const InferenceConfigGuard = ({ readiness, loading, error, onRecheck, hideWhenOk
         {blocked
           ? "Semantic analysis blocked — EC2 GPU inference misconfigured"
           : readiness.verdict === "warn"
-            ? "EC2 GPU inference is not fully in the path"
-            : "EC2 GPU inference verified"}
+            ? "Semantic analysis available — some inference is not on EC2"
+            : readiness.selected_chat_model
+              ? "EC2 GPU inference verified"
+              : "Inference routing verified"}
+
         <Badge variant="outline" className="gap-1 text-[10px]">
           <Cpu className="h-3 w-3" />
           {readiness.chat_provider === "ec2"

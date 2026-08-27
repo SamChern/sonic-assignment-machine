@@ -894,14 +894,35 @@ Deno.serve(async (req) => {
 
       try {
         const url = await signReadUrl(cand.key);
-        const rawRows = (await fetchObjectRows(
+        // Resume from the last transformed row group instead of re-reading rows
+        // that were already normalized in an earlier (possibly timed-out) run.
+        const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
+        const chunk = await fetchObjectChunk(
           url,
           cand.key,
           MAX_ROWS_PER_FILE,
           EXPECTED_ROWS_PER_USER,
-        )).slice(0, MAX_ROWS_PER_FILE);
+          resumeGroup,
+        );
+        const checkpoint = chunk.checkpoint;
+        const rawRows = chunk.rows.slice(0, MAX_ROWS_PER_FILE);
 
         summary.rows_read += rawRows.length;
+
+        if (checkpoint && !rawRows.length && checkpoint.exhausted) {
+          // Every row group has already been transformed — close the file out.
+          await admin.from("intuizi_ingest_files").update({
+            status: "done",
+            row_group_cursor: checkpoint.nextRowGroup,
+            row_groups_total: checkpoint.rowGroupsTotal,
+            rows_offset: checkpoint.nextRowsOffset,
+            finished_at: new Date().toISOString(),
+            error_message: null,
+          }).eq("id", fileRow.id);
+          summary.files_processed++;
+          continue;
+        }
+
 
         // ---- Roll rows up per identifier ---------------------------------
         const perIdentifier = new Map<string, {

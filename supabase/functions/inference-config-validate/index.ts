@@ -198,18 +198,23 @@ Deno.serve(async (req) => {
               : false;
         gpuDetail = gpu
           ? "Health endpoint reports GPU/CUDA acceleration"
-          : "Health endpoint reports no GPU/CUDA device (CPU-only instance)";
+          : EC2_CHAT_MODEL
+            ? "Health endpoint reports no GPU/CUDA device (CPU-only instance)"
+            : "No GPU needed: no local scoring model is configured";
       } else {
-        gpuDetail = "Health endpoint did not report accelerator info";
+        gpuDetail = EC2_CHAT_MODEL
+          ? "Health endpoint did not report accelerator info"
+          : "No GPU needed: no local scoring model is configured";
       }
 
       checks.push({
         id: "gpu",
         label: "GPU acceleration",
-        state: gpu === true ? "ok" : EC2_CHAT_MODEL ? "fail" : "warn",
+        state: gpu === true ? "ok" : EC2_CHAT_MODEL ? "fail" : "ok",
         detail: gpuDetail,
       });
     }
+
 
     // 4. Fallback availability.
     checks.push(

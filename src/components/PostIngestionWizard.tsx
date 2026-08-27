@@ -289,7 +289,8 @@ const PostIngestionWizard = () => {
       const total = rows.length;
       const pending = rows.filter((r) => r.status === "pending" || r.status === "processing").length;
       const failed = rows.filter((r) => r.status === "failed").length;
-      return { total, pending, failed };
+      const dead = rows.filter((r) => r.status === "dead_letter").length;
+      return { total, pending, failed, dead };
     };
 
     let c = await counts();
@@ -312,7 +313,7 @@ const PostIngestionWizard = () => {
         state: "running",
         summary: `scoring ${c.total - c.pending}/${c.total} identifiers in the background…${
           c.failed ? ` · ${c.failed} failed` : ""
-        }`,
+        }${c.dead ? ` · ${c.dead} dead-lettered` : ""}`,
       });
     }
     if (c.pending > 0) {

@@ -261,8 +261,11 @@ Deno.serve(async (req) => {
         verdict === "blocked"
           ? "Semantic analysis is blocked: EC2 GPU inference is not correctly configured for the selected model and no fallback is available."
           : verdict === "warn"
-            ? "Semantic analysis can run, but not entirely on your EC2 GPU inference server."
-            : "EC2 GPU inference is correctly configured for the selected model.",
+            ? "Semantic analysis can run. Some inference does not run on EC2."
+            : EC2_CHAT_MODEL
+              ? "EC2 GPU inference is correctly configured for the selected model."
+              : "Inference routing is as configured: scoring on Lovable AI, embeddings/DSP on EC2.",
+
     });
   } catch (e) {
     console.error("inference-config-validate failed:", (e as Error).message);

@@ -16,9 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   CircleDashed,
   Loader2,
   Play,
@@ -26,6 +28,7 @@ import {
   Search,
   Wand2,
 } from "lucide-react";
+
 
 /* ------------------------------------------------------------------ types */
 

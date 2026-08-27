@@ -1,0 +1,247 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Pause, Play, Waves } from "lucide-react";
+import {
+  AUDIOSCOPE_CATEGORIES,
+  CATEGORY_LABELS,
+  createSyntheticSignal,
+  type CategoryScores,
+} from "@/lib/audioscope";
+
+export interface AudioscopeCompareEntity {
+  id: string;
+  label: string;
+  color: string;
+  scores: CategoryScores;
+}
+
+interface AudioscopeCompareProps {
+  entities: AudioscopeCompareEntity[];
+  /** 0-100 similarity, used for the phase-lock readout. */
+  similarity?: number | null;
+  height?: number;
+}
+
+function readVar(name: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v ? `hsl(${v})` : fallback;
+}
+
+/**
+ * Dual scope: two (or more) fingerprints drawn as overlaid waveforms, with the
+ * per-category delta filled as a difference band. Visual divergence tracks the
+ * similarity score, so the number has a visual explanation.
+ */
+export const AudioscopeCompare = ({ entities, similarity, height = 240 }: AudioscopeCompareProps) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [playing, setPlaying] = useState(true);
+  const rafRef = useRef<number | null>(null);
+  const visibleRef = useRef(true);
+
+  const reduced = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+  const isMobile = useMemo(() => typeof window !== "undefined" && window.innerWidth < 640, []);
+
+  const pair = entities.slice(0, 2);
+  const deltas = useMemo(() => {
+    if (pair.length < 2) return [];
+    return AUDIOSCOPE_CATEGORIES.map((c) =>
+      Math.abs((Number(pair[0].scores[c]) || 0) - (Number(pair[1].scores[c]) || 0)),
+    );
+  }, [pair]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || entities.length === 0) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const points = isMobile ? 300 : 640;
+    const signals = entities.slice(0, 4).map((e) => ({
+      entity: e,
+      signal: createSyntheticSignal({ scores: e.scores, seed: e.id }),
+      buf: new Float32Array(points),
+    }));
+
+    const colors = {
+      bg: readVar("--background", "#06121a"),
+      grid: readVar("--border", "#1f2937"),
+      muted: readVar("--muted-foreground", "#94a3b8"),
+      destructive: readVar("--destructive", "#ef4444"),
+    };
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor((canvas.clientWidth || 600) * dpr);
+      canvas.height = Math.floor((canvas.clientHeight || height) * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    const io = new IntersectionObserver(
+      (e) => {
+        visibleRef.current = e[0]?.isIntersecting ?? true;
+      },
+      { threshold: 0.05 },
+    );
+    io.observe(canvas);
+
+    const frame = (t: number) => {
+      const w = canvas.clientWidth || 600;
+      const h = canvas.clientHeight || height;
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, colors.bg);
+      grad.addColorStop(1, colors.grid);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.globalAlpha = 0.15;
+      ctx.strokeStyle = colors.grid;
+      ctx.beginPath();
+      ctx.moveTo(0, h / 2);
+      ctx.lineTo(w, h / 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      signals.forEach((s) => s.signal.waveform(s.buf, t));
+
+      // Difference band between the first two traces.
+      if (signals.length >= 2) {
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = colors.destructive;
+        ctx.beginPath();
+        for (let i = 0; i < points; i++) {
+          const x = (i / (points - 1)) * w;
+          ctx.lineTo(x, h / 2 + signals[0].buf[i] * (h * 0.36));
+        }
+        for (let i = points - 1; i >= 0; i--) {
+          const x = (i / (points - 1)) * w;
+          ctx.lineTo(x, h / 2 + signals[1].buf[i] * (h * 0.36));
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      signals.forEach((s) => {
+        const trace = (alpha: number, width: number) => {
+          ctx.globalAlpha = alpha;
+          ctx.lineWidth = width;
+          ctx.strokeStyle = s.entity.color;
+          ctx.beginPath();
+          for (let i = 0; i < points; i++) {
+            const x = (i / (points - 1)) * w;
+            const y = h / 2 + s.buf[i] * (h * 0.36);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        };
+        trace(0.16, 7);
+        trace(0.9, 1.8);
+      });
+    };
+
+    if (reduced || !playing) {
+      frame(0);
+      return () => {
+        window.removeEventListener("resize", resize);
+        io.disconnect();
+        signals.forEach((s) => s.signal.dispose());
+      };
+    }
+
+    const start = performance.now();
+    let last = 0;
+    const minDelta = isMobile ? 1000 / 30 : 0;
+    const loop = (now: number) => {
+      rafRef.current = requestAnimationFrame(loop);
+      if (!visibleRef.current) return;
+      if (now - last < minDelta) return;
+      last = now;
+      frame((now - start) / 1000);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("resize", resize);
+      io.disconnect();
+      signals.forEach((s) => s.signal.dispose());
+    };
+  }, [entities, playing, reduced, isMobile, height]);
+
+  if (entities.length === 0) return null;
+
+  const sim = typeof similarity === "number" ? Math.round(similarity) : null;
+  const lock = sim == null ? null : sim >= 80 ? "In phase" : sim >= 55 ? "Partial lock" : "Out of phase";
+
+  return (
+    <Card className="overflow-hidden border-border/60 bg-card/70 backdrop-blur-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 p-4">
+        <div className="min-w-0">
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Waves className="h-4 w-4 text-primary" />
+            Dual audioscope
+          </h4>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Overlaid waveforms per fingerprint — the red band is the divergence the similarity score measures.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {lock ? (
+            <span className="rounded-md border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+              {lock} · {sim}% similar
+            </span>
+          ) : null}
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setPlaying((p) => !p)}>
+            {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            {playing ? "Pause" : "Play"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="p-4">
+        <canvas
+          ref={canvasRef}
+          role="img"
+          aria-label="Overlaid audioscope comparison of selected fingerprints"
+          className="w-full rounded-xl border border-border/60"
+          style={{ height }}
+        />
+
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+          {entities.slice(0, 4).map((e) => (
+            <span key={e.id} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: e.color }} />
+              {e.label}
+            </span>
+          ))}
+        </div>
+
+        {deltas.length > 0 ? (
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {AUDIOSCOPE_CATEGORIES.map((c, i) => (
+              <div key={c} className="rounded-lg border border-border/50 bg-background/50 p-2">
+                <p className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {CATEGORY_LABELS[c]}
+                </p>
+                <p className="text-sm font-semibold text-foreground">Δ {Math.round(deltas[i])}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </Card>
+  );
+};
+
+export default AudioscopeCompare;

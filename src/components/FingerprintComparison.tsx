@@ -10,6 +10,8 @@ import {
   calculateSimilarity as sharedSimilarity,
   type FingerprintMode,
 } from "@/lib/fingerprintMath";
+import AudioscopeCompare from "@/components/visuals/AudioscopeCompare";
+import { fingerprintToScores } from "@/lib/audioscope";
 
 interface UserFingerprint {
   user_id: string;
@@ -386,7 +388,9 @@ export const FingerprintComparison = ({ fingerprints, mode = "all" }: Fingerprin
 
       {/* Comparison View */}
       {selectedIds.length >= 2 ? (
+        <>
         <div className="grid lg:grid-cols-2 gap-6">
+
           {/* Overlay Radar Chart */}
           <Card className="p-6 bg-card/80">
             <h4 className="font-semibold text-foreground mb-4">Overlaid Fingerprints</h4>
@@ -504,7 +508,20 @@ export const FingerprintComparison = ({ fingerprints, mode = "all" }: Fingerprin
             </div>
           </Card>
         </div>
+
+        {/* Audioscope: complements the spider chart with animated divergence */}
+        <AudioscopeCompare
+          entities={selectedFingerprints.map((fp, index) => ({
+            id: fp.user_id,
+            label: fp.username || "User",
+            color: userColors[index % userColors.length],
+            scores: fingerprintToScores(fp as any, mode),
+          }))}
+          similarity={avgSimilarity * 100}
+        />
+        </>
       ) : selectedIds.length === 1 ? (
+
         <Card className="p-8 text-center bg-card/80">
           <GitCompare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <p className="text-lg text-muted-foreground">

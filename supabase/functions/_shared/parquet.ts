@@ -212,6 +212,8 @@ export interface ParquetCheckpoint {
 export interface ParquetChunk {
   rows: Record<string, unknown>[];
   checkpoint: ParquetCheckpoint;
+  /** True when the read stopped early to stay inside the caller's run budget. */
+  deadlineExceeded?: boolean;
 }
 
 /**

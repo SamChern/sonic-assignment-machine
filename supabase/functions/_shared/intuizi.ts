@@ -126,6 +126,39 @@ function multi(v: string): string[] {
   return v.split(/[|,;]/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
 }
 
+/** Stop-words that carry no topical meaning in a URL path. */
+const PATH_STOP = new Set([
+  "www", "index", "html", "htm", "php", "amp", "en", "en-us", "us", "news",
+  "article", "articles", "story", "stories", "page", "pages", "p", "id",
+]);
+
+/**
+ * Web-report `page` paths are the closest analogue to content topics
+ * (`/lists/dolly-partons-most-...` → `lists`, `dolly-partons-most`). Keeps at
+ * most two meaningful segments so a single URL cannot flood the taxonomy.
+ */
+export function pathTopics(page: string): string[] {
+  if (!page) return [];
+  const path = page.replace(/^https?:\/\/[^/]+/i, "").split(/[?#]/)[0];
+  const out: string[] = [];
+  for (const raw of path.split("/")) {
+    const seg = raw.trim().toLowerCase();
+    if (!seg || seg.length < 3 || /^\d+$/.test(seg) || PATH_STOP.has(seg)) continue;
+    const trimmed = seg.replace(/\.(html?|php|aspx)$/, "").split("-").slice(0, 4).join("-");
+    if (trimmed.length >= 3 && !out.includes(trimmed)) out.push(trimmed);
+    if (out.length === 2) break;
+  }
+  return out;
+}
+
+/** Host portion of a referrer URL, without `www.`. */
+export function hostOf(ref: string): string {
+  if (!ref) return "";
+  const m = ref.match(/^(?:https?:\/\/)?([^/?#\s]+)/i);
+  return m ? m[1].replace(/^www\./i, "").toLowerCase() : "";
+}
+
+
 function daypart(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
@@ -183,14 +216,43 @@ export function normalizeRow(
     if (type) tags.push({ code: `ctv.type.${slug(type)}`, label: `CTV content type: ${type}`, parent_code: "ctv.type" });
     if (channel) tags.push({ code: `ctv.channel.${slug(channel)}`, label: `CTV channel: ${channel}`, parent_code: "ctv.channel" });
     for (const c of iab) tags.push({ code: `iab.${slug(c)}`, label: `IAB category ${c}`, parent_code: "iab" });
-    Object.assign(signals, { contentgenre: genre, contenttype: type, channelname: channel, iab_cats: iab });
+
+    // Web-report extras: page path tokens are the closest thing to content
+    // topics, and the referrer host adds discovery context.
+    const page = pick(row, "page", "path", "url");
+    const topics = pathTopics(page);
+    for (const t of topics) {
+      tags.push({ code: `web.topic.${slug(t)}`, label: `Web topic: ${t}`, parent_code: "web.topic" });
+    }
+    const refHost = hostOf(pick(row, "ref", "referrer", "referer"));
+    if (refHost) {
+      tags.push({ code: `web.referrer.${slug(refHost)}`, label: `Referrer: ${refHost}`, parent_code: "web.referrer" });
+    }
+
+    // `signals` is visit intensity — weight confidence the same way apps do.
+    const sigCount = Number(pick(row, "signals", "signal_count", "impressions"));
+    if (Number.isFinite(sigCount) && sigCount > 0) {
+      confidence = Math.min(1, 0.5 + Math.log10(1 + sigCount) / 4);
+    }
+
+    Object.assign(signals, {
+      contentgenre: genre,
+      contenttype: type,
+      channelname: channel,
+      iab_cats: iab,
+      web_topics: topics,
+      referrer_host: refHost || null,
+      signals: Number.isFinite(sigCount) ? sigCount : null,
+    });
 
     // metadata only
     signals.meta = {
       device_id: pick(row, "ctv_taxonomy", "device_id", "deviceid"),
       useragent: pick(row, "useragent", "user_agent"),
+      page,
     };
-    label = [channel, genre, type].filter(Boolean).join(" · ") || "CTV impression";
+    label = [channel, genre, type, topics[0]].filter(Boolean).join(" · ") || "CTV impression";
+
   } else if (reportType === "apps") {
     const category = pick(row, "CategoryName", "category_name", "category");
     const taxonomy = pick(row, "TaxonomyName", "taxonomy_name", "taxonomy");

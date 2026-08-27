@@ -240,17 +240,130 @@ async function ingestAudioObject(admin: any, args: {
     }
   }
 
-  const { data: ana, error: anaErr } = await admin.functions.invoke("analyze-audio", {
-    body: {
-      sources: [{ name, type: "file", audio_source_id: audioSourceId }],
-      user_id: ownerId,
-      save_results: true,
-    },
+  await invokeAnalyzeAudio(admin, {
+    sources: [{ name, type: "file", audio_source_id: audioSourceId }],
+    user_id: ownerId,
+    save_results: true,
   });
-  if (anaErr) throw anaErr;
-  if (!ana?.sources?.[0]) throw new Error("analyze-audio returned no source");
+
 
   return audioSourceId;
+}
+
+/**
+ * Rate-limit telemetry for one invocation. Emitted as a single structured JSON
+ * log line per file and per run so an activation failure can be diagnosed
+ * without replaying the ingest.
+ */
+const rateMetrics = {
+  attempts: 0,
+  retries: 0,
+  terminal: 0,
+  rateLimited: 0,
+  byReport: {} as Record<string, number>,
+  retryAfterMs: [] as number[],
+  reset() {
+    this.attempts = 0;
+    this.retries = 0;
+    this.terminal = 0;
+    this.rateLimited = 0;
+    this.byReport = {};
+    this.retryAfterMs = [];
+  },
+  /** Percentile summary of the observed `retryAfterMs` hints. */
+  retryAfterSummary() {
+    const v = [...this.retryAfterMs].sort((a, b) => a - b);
+    if (!v.length) return null;
+    const at = (p: number) => v[Math.min(v.length - 1, Math.floor(p * v.length))];
+    return {
+      n: v.length,
+      min: v[0],
+      p50: at(0.5),
+      p95: at(0.95),
+      max: v[v.length - 1],
+      mean: Math.round(v.reduce((a, b) => a + b, 0) / v.length),
+    };
+  },
+  snapshot() {
+    return {
+      analyze_attempts: this.attempts,
+      analyze_retries: this.retries,
+      rate_limited_calls: this.rateLimited,
+      terminal_errors: this.terminal,
+      rate_limits_by_report_type: this.byReport,
+      retry_after_ms: this.retryAfterSummary(),
+    };
+  },
+};
+
+/**
+ * Invoke `analyze-audio` with bounded backoff. The AI gateway rate-limits the
+ * whole workspace (`429` / `RateLimitError` with `retryAfterMs`), which used to
+ * land rows in `failed_rows` even though the taxonomy mapped fine. Retryable:
+ * 429 + 5xx. Terminal: 400/401/402/403 — re-sending returns the same error.
+ */
+// deno-lint-ignore no-explicit-any
+async function invokeAnalyzeAudio(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  body: Json,
+  reportType = "unknown",
+  // deno-lint-ignore no-explicit-any
+): Promise<any> {
+  const MAX_ATTEMPTS = 4;
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    rateMetrics.attempts++;
+    const { data, error } = await admin.functions.invoke("analyze-audio", { body });
+    if (!error) {
+      if (!data?.sources?.[0]) throw new Error("analyze-audio returned no source");
+      return data;
+    }
+    lastErr = error;
+    const msg = String(error?.message ?? error);
+    const status = Number((error as { status?: number })?.status ?? 0);
+    const terminal = [400, 401, 402, 403].includes(status) ||
+      /InsufficientCredits|PaymentRequired|Forbidden|Unauthorized/i.test(msg);
+    const isRateLimit = !terminal && (status === 429 || /RateLimit|rate limit/i.test(msg));
+    const retryable = !terminal &&
+      (isRateLimit || status >= 500 || /timeout|503|502/i.test(msg));
+    if (isRateLimit) {
+      rateMetrics.rateLimited++;
+      rateMetrics.byReport[reportType] = (rateMetrics.byReport[reportType] ?? 0) + 1;
+    }
+    if (terminal) rateMetrics.terminal++;
+    const hinted = Number(msg.match(/"retryAfterMs"\s*:\s*(\d+)/)?.[1] ?? 0);
+    if (hinted > 0) rateMetrics.retryAfterMs.push(hinted);
+    if (!retryable || attempt === MAX_ATTEMPTS) {
+      console.log(JSON.stringify({
+        evt: "analyze_audio_giving_up",
+        report_type: reportType,
+        attempt,
+        status,
+        terminal,
+        rate_limited: isRateLimit,
+        retry_after_ms: hinted || null,
+        message: msg.slice(0, 300),
+      }));
+      break;
+    }
+    const backoff = Math.max(hinted, 400 * 2 ** (attempt - 1));
+    const jitter = Math.floor(Math.random() * 250);
+    rateMetrics.retries++;
+    console.log(JSON.stringify({
+      evt: "analyze_audio_retry",
+      report_type: reportType,
+      attempt,
+      max_attempts: MAX_ATTEMPTS,
+      status,
+      rate_limited: isRateLimit,
+      retry_after_ms: hinted || null,
+      wait_ms: backoff + jitter,
+      message: msg.slice(0, 200),
+    }));
+    await new Promise((r) => setTimeout(r, backoff + jitter));
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 
@@ -599,6 +712,7 @@ Deno.serve(async (req) => {
   if (leaseErr) return json({ error: `lease error: ${leaseErr.message}` }, 500);
   if (!acquired) return json({ skipped: "another run holds the lease" });
 
+  rateMetrics.reset();
   const summary = {
     files_processed: 0,
     files_failed: 0,
@@ -612,8 +726,11 @@ Deno.serve(async (req) => {
     paused: false,
     pause_reason: null as string | null,
     errors: [] as string[],
+    // Rate-limit telemetry for this run, filled in before responding.
+    rate_metrics: null as Record<string, unknown> | null,
   };
   let breakerTripped = false;
+
 
   // audio_sources.user_id is required — attribute generated rows to an admin.
   let ownerId = actorId;
@@ -967,21 +1084,19 @@ Deno.serve(async (req) => {
             }
 
             // 4. Score through the same ontology path as music sources
-            const { data: ana, error: anaErr } = await admin.functions.invoke("analyze-audio", {
-              body: {
-                sources: [{
-                  name: label,
-                  type: "file",
-                  audio_source_id: audioSourceId,
-                  taxonomy_context: taxonomyContext,
-                }],
-                user_id: ownerId,
-                save_results: true,
-              },
-            });
-            if (anaErr) throw anaErr;
-            const sourceOut = ana?.sources?.[0];
-            if (!sourceOut) throw new Error("analyze-audio returned no source");
+            const ana = await invokeAnalyzeAudio(admin, {
+              sources: [{
+                name: label,
+                type: "file",
+                audio_source_id: audioSourceId,
+                taxonomy_context: taxonomyContext,
+              }],
+              user_id: ownerId,
+              save_results: true,
+            }, fileRow.report_type ?? "unknown");
+
+            const sourceOut = ana.sources[0];
+
 
             const scoreMap = {} as Record<Category, number>;
             for (const c of sourceOut.categories ?? []) {
@@ -1091,7 +1206,26 @@ Deno.serve(async (req) => {
           error_message: failedInFile ? summary.errors.slice(-3).join("\n").slice(0, 2000) : null,
         }).eq("id", fileRow.id);
 
+        // Structured per-file coverage + rate-limit metrics.
+        console.log(JSON.stringify({
+          evt: "ingest_file_coverage",
+          object_key: cand.key,
+          report_type: fileRow.report_type ?? "unknown",
+          activation_id: cand.key.toLowerCase().match(/activation[_-]?id(\d+)/)?.[1] ?? null,
+          status: breakerTripped ? "paused" : (remaining > 0 ? "partial" : "done"),
+          rows: rawRows.length,
+          identifiers: perIdentifier.size,
+          enriched: scoredInFile,
+          failed: failedInFile,
+          identifier_only: Math.max(0, remaining),
+          coverage_pct: perIdentifier.size
+            ? Math.round((scoredInFile / perIdentifier.size) * 100)
+            : null,
+          ...rateMetrics.snapshot(),
+        }));
+
         summary.files_processed++;
+
       } catch (e) {
         const st = statusOf(e);
         const msg = errMsg(e);
@@ -1127,6 +1261,8 @@ Deno.serve(async (req) => {
     }
     (summary as Json).roster_only = rosterOnly;
 
+    summary.rate_metrics = rateMetrics.snapshot();
+    console.log(JSON.stringify({ evt: "ingest_run_summary", ...summary }));
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),
       last_run_summary: summary,
@@ -1135,15 +1271,18 @@ Deno.serve(async (req) => {
 
     return json(summary);
 
+
   } catch (e) {
     const msg = errMsg(e);
-    console.error("intuizi-ingest failed:", msg);
+    summary.rate_metrics = rateMetrics.snapshot();
+    console.error(JSON.stringify({ evt: "ingest_run_failed", error: msg, ...summary }));
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),
       last_run_summary: summary,
       last_error: msg.slice(0, 1000),
     }).eq("id", "singleton");
     return json({ ...summary, error: msg }, 500);
+
   } finally {
     // Always release the lease so a stuck run cannot block the schedule.
     try {

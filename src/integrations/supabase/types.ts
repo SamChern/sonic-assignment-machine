@@ -988,6 +988,53 @@ export type Database = {
           },
         ]
       }
+      org_intuizi_activations: {
+        Row: {
+          activation_id: string
+          created_at: string
+          granted_by: string | null
+          id: string
+          is_active: boolean
+          label: string | null
+          last_synced_at: string | null
+          notes: string | null
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          activation_id: string
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          last_synced_at?: string | null
+          notes?: string | null
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          activation_id?: string
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          last_synced_at?: string | null
+          notes?: string | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_intuizi_activations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_tracking_settings: {
         Row: {
           created_at: string

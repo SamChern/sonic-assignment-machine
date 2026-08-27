@@ -54,6 +54,34 @@ const slug = (v: string) =>
 const multi = (v: string) =>
   !v ? [] : v.split(/[|,;]/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
 
+const PATH_STOP = new Set([
+  "www", "index", "html", "htm", "php", "amp", "en", "en-us", "us", "news",
+  "article", "articles", "story", "stories", "page", "pages", "p", "id",
+]);
+
+/** Path tokens from a web-report `page` value — max two meaningful segments. */
+export const pathTopics = (page: string): string[] => {
+  if (!page) return [];
+  const path = page.replace(/^https?:\/\/[^/]+/i, "").split(/[?#]/)[0];
+  const out: string[] = [];
+  for (const raw of path.split("/")) {
+    const seg = raw.trim().toLowerCase();
+    if (!seg || seg.length < 3 || /^\d+$/.test(seg) || PATH_STOP.has(seg)) continue;
+    const trimmed = seg.replace(/\.(html?|php|aspx)$/, "").split("-").slice(0, 4).join("-");
+    if (trimmed.length >= 3 && !out.includes(trimmed)) out.push(trimmed);
+    if (out.length === 2) break;
+  }
+  return out;
+};
+
+/** Host portion of a referrer URL, without `www.`. */
+export const hostOf = (ref: string): string => {
+  if (!ref) return "";
+  const m = ref.match(/^(?:https?:\/\/)?([^/?#\s]+)/i);
+  return m ? m[1].replace(/^www\./i, "").toLowerCase() : "";
+};
+
+
 const daypart = (iso: string) => {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
@@ -99,11 +127,15 @@ export const FIELD_SPECS: Record<
   ctv: [
     { field: "contentgenre", aliases: ["contentgenre", "content_genre", "genre"], role: "tag", note: "→ ctv.genre.*" },
     { field: "contenttype", aliases: ["contenttype", "content_type"], role: "tag", note: "→ ctv.type.*" },
-    { field: "channelname", aliases: ["channelname", "channel_name", "network"], role: "tag", note: "→ ctv.channel.*" },
-    { field: "iab_cats", aliases: ["iab_cats", "iab_categories", "iabcats"], role: "tag", note: "multi-value, max 8 → iab.*" },
+    { field: "channelname", aliases: ["channelname", "channel_name", "network", "domain", "site"], role: "tag", note: "web `domain` maps here → ctv.channel.*" },
+    { field: "iab_cats", aliases: ["iab_cats", "iab_categories", "iabcats", "iab_codes", "iabcodes"], role: "tag", note: "multi-value, max 8 → iab.*" },
+    { field: "page", aliases: ["page", "path", "url"], role: "tag", note: "path tokens, max 2 → web.topic.*" },
+    { field: "ref", aliases: ["ref", "referrer", "referer"], role: "tag", note: "host only → web.referrer.*" },
+    { field: "signals", aliases: ["signals", "signal_count", "impressions"], role: "confidence", note: "0.5 + log10(1+n)/4, capped at 1" },
     { field: "device_id", aliases: ["ctv_taxonomy", "device_id", "deviceid"], role: "metadata" },
     { field: "useragent", aliases: ["useragent", "user_agent"], role: "metadata" },
   ],
+
   apps: [
     { field: "CategoryName", aliases: ["CategoryName", "category_name", "category"], role: "tag", note: "→ app.category.*" },
     { field: "TaxonomyName", aliases: ["TaxonomyName", "taxonomy_name", "taxonomy"], role: "tag", note: "→ app.taxonomy.*" },
@@ -175,6 +207,19 @@ export function inspectRow(
           for (const c of cats)
             fieldTags.push({ code: `iab.${slug(c)}`, label: `IAB category ${c}`, parent_code: "iab" });
         }
+        if (s.field === "page") {
+          const topics = pathTopics(hit.value);
+          value = topics.length ? topics : hit.value;
+          for (const t of topics)
+            fieldTags.push({ code: `web.topic.${slug(t)}`, label: `Web topic: ${t}`, parent_code: "web.topic" });
+        }
+        if (s.field === "ref") {
+          const host = hostOf(hit.value);
+          value = host || hit.value;
+          if (host)
+            fieldTags.push({ code: `web.referrer.${slug(host)}`, label: `Referrer: ${host}`, parent_code: "web.referrer" });
+        }
+
       } else if (reportType === "apps") {
         if (s.field === "CategoryName")
           fieldTags.push({ code: `app.category.${slug(hit.value)}`, label: `App category: ${hit.value}`, parent_code: "app.category" });
@@ -220,8 +265,15 @@ export function inspectRow(
           confidence = d <= 25 ? 0.9 : d <= 100 ? 0.7 : d <= 250 ? 0.5 : 0.35;
           confidenceReason = `distance=${d}m → ${confidence}`;
         }
+      } else if (reportType === "ctv") {
+        const n = Number(hit.value);
+        if (Number.isFinite(n) && n > 0) {
+          confidence = Math.min(1, 0.5 + Math.log10(1 + n) / 4);
+          confidenceReason = `signals=${n} → 0.5 + log10(1+${n})/4`;
+        }
       }
     }
+
 
     fields.push({
       field: s.field,

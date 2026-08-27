@@ -129,6 +129,46 @@ const StageIcon = ({ state }: { state: StageState }) => {
   return <CircleDashed className="h-4 w-4 text-muted-foreground" />;
 };
 
+
+/** Shrink factors used when a run is killed for exceeding compute limits. */
+const RESOURCE_RETRY_SHRINK = [0.5, 0.25];
+
+/** True when an invoke failure is the worker compute kill (546 / CPU or memory). */
+const isResourceLimit = (message: string, detail: string) => {
+  const t = `${message} ${detail}`.toUpperCase();
+  return t.includes("WORKER_RESOURCE_LIMIT") || t.includes("546") ||
+    t.includes("CPU TIME") || t.includes("COMPUTE RESOURCES") || t.includes("MEMORY LIMIT");
+};
+
+/**
+ * Invoke the ingest function for one file, retrying ONLY the unfinished chunk
+ * with a smaller workload when the worker is killed for compute limits.
+ * Each retry resumes from the persisted row-group cursor, so no work repeats.
+ */
+async function invokeIngestWithRetry(
+  body: Record<string, unknown>,
+  onRetry?: (attempt: number, shrink: number, detail: string) => void,
+) {
+  let lastError: { message: string; detail: string } | null = null;
+  for (let attempt = 0; attempt <= RESOURCE_RETRY_SHRINK.length; attempt++) {
+    const shrink = attempt === 0 ? undefined : RESOURCE_RETRY_SHRINK[attempt - 1];
+    const { data, error } = await supabase.functions.invoke("intuizi-ingest", {
+      body: shrink ? { ...body, shrink, after_resource_limit: true } : body,
+    });
+    if (!error) return { data, error: null, retries: attempt, shrink };
+    let detail = "";
+    try {
+      const ctx = (error as { context?: { text?: () => Promise<string> } }).context;
+      if (ctx?.text) detail = await ctx.text();
+    } catch { /* body already consumed */ }
+    lastError = { message: error.message, detail };
+    const next = RESOURCE_RETRY_SHRINK[attempt];
+    if (!isResourceLimit(error.message, detail) || next === undefined) break;
+    onRetry?.(attempt + 1, next, detail);
+  }
+  return { data: null, error: lastError, retries: RESOURCE_RETRY_SHRINK.length, shrink: undefined };
+}
+
 /* ------------------------------------------------------------- component */
 
 const PostIngestionWizard = () => {
@@ -241,11 +281,23 @@ const PostIngestionWizard = () => {
     for (const f of dataFiles) {
       const t0 = Date.now();
       setLiveRun({ key: f.object_key, startedAt: t0, budgetMs: lastBudgetMs.current });
-      const { data, error } = await supabase.functions.invoke("intuizi-ingest", {
-        body: { object_key: f.object_key, report_type: f.report_type ?? undefined },
-      });
+      const { data, error, retries, shrink } = await invokeIngestWithRetry(
+        { object_key: f.object_key, report_type: f.report_type ?? undefined },
+        (attempt, nextShrink) => {
+          ingestErrors.push(
+            `${fileName(f.object_key)}: hit the worker compute limit — retry ${attempt} re-runs the same chunk at ${Math.round(nextShrink * 100)}% workload.`,
+          );
+          setLiveRun({ key: f.object_key, startedAt: Date.now(), budgetMs: lastBudgetMs.current });
+        },
+      );
       setLiveRun(null);
       const wallMs = Date.now() - t0;
+      if (retries > 0 && !error) {
+        perFile.push([
+          fileName(f.object_key),
+          `recovered after ${retries} compute-limit retr${retries === 1 ? "y" : "ies"} at ${Math.round((shrink ?? 1) * 100)}% workload`,
+        ]);
+      }
       if (error) {
         ingestErrors.push(`${fileName(f.object_key)}: ${error.message}`);
         perFile.push([fileName(f.object_key), "failed · resumable"]);
@@ -258,7 +310,9 @@ const PostIngestionWizard = () => {
           elapsedMs: wallMs,
           timeRemainingMs: 0,
           deadlineExceeded: true,
-          deadlineStep: "gateway timeout / invoke error",
+          deadlineStep: isResourceLimit(error.message, error.detail)
+            ? "worker compute limit (CPU/memory) — reduced-workload retries also failed"
+            : "gateway timeout / invoke error",
           phaseMs: null,
         });
         continue;
@@ -277,6 +331,10 @@ const PostIngestionWizard = () => {
         deadline_exceeded?: boolean;
         deadline_step?: string | null;
         phase_ms?: Record<string, number>;
+        phase_usage?: Record<string, { ms?: number; heap_delta_mb?: number; peak_heap_mb?: number }>;
+        mem_peak_mb?: number | null;
+        memory_pressure?: boolean;
+        work_caps?: { rows?: number; identifiers?: number; shrink?: number; reason?: string };
         files?: {
           object_key?: string;
           complete?: boolean;
@@ -286,6 +344,11 @@ const PostIngestionWizard = () => {
         errors?: string[];
       };
 
+      if (res.memory_pressure) {
+        ingestErrors.push(
+          `${fileName(f.object_key)}: checkpointed early under memory pressure (peak heap ${res.mem_peak_mb ?? "?"} MB) — the next run uses ${res.work_caps?.rows ?? "fewer"} rows per file.`,
+        );
+      }
       rowsRead += res.rows_read ?? 0;
       scored += res.identifiers_scored ?? 0;
       roster += res.roster_identifiers ?? 0;

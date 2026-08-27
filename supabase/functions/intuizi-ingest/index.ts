@@ -75,13 +75,172 @@ const MIN_RUN_BUDGET_MS = 35_000;
 const MAX_RUN_BUDGET_MS = 70_000;
 
 
+/** Heap ceiling (MB) that counts as compute pressure and ends the run early. */
+const MEM_SOFT_LIMIT_MB = Number(Deno.env.get("INTUIZI_MEM_SOFT_LIMIT_MB") ?? "220");
+/** Absolute floors so a shrinking cap still makes forward progress. */
+const MIN_ROWS_PER_FILE = 250;
+const MIN_IDENTIFIERS_PER_RUN = 4;
+
 /** One historical run, kept in intuizi_ingest_state.last_run_summary. */
 export interface BudgetHistoryEntry {
   at: string;
   budget_ms: number;
   elapsed_ms: number;
   timed_out: boolean;
+  /** Set when the caller reported a WORKER_RESOURCE_LIMIT kill for the last run. */
+  resource_kill?: boolean;
+  /** Peak heap seen during the run (MB), when the runtime exposes it. */
+  mem_peak_mb?: number;
+  /** Row cap this run actually used, so the tuner can keep shrinking. */
+  rows_cap?: number;
 }
+
+/** Per-invocation work caps, tuned down when compute pressure is detected. */
+export interface WorkCaps {
+  rows: number;
+  identifiers: number;
+  files: number;
+  reason: string;
+  shrink: number;
+}
+
+/**
+ * Choose row / identifier / file caps for this invocation.
+ *
+ * A WORKER_RESOURCE_LIMIT kill leaves no summary behind, so the caller reports
+ * it on the retry (`after_resource_limit`, optionally with an explicit
+ * `shrink`). Recorded kills and budget overruns in recent history also pull the
+ * caps down; clean runs let them drift back to the defaults.
+ */
+export function planWorkCaps(
+  history: BudgetHistoryEntry[],
+  opts: {
+    shrink?: number;
+    afterResourceLimit?: boolean;
+    maxRows?: number;
+    maxIdentifiers?: number;
+    memPeakMb?: number | null;
+  } = {},
+): WorkCaps {
+  const recent = history.slice(-3);
+  const kills = recent.filter((r) => r.resource_kill).length +
+    (opts.afterResourceLimit ? 1 : 0);
+  const overruns = recent.filter((r) => r.timed_out).length;
+  const memPressure = recent.some((r) => (r.mem_peak_mb ?? 0) >= MEM_SOFT_LIMIT_MB) ||
+    (opts.memPeakMb ?? 0) >= MEM_SOFT_LIMIT_MB;
+
+  let shrink = 1;
+  const why: string[] = [];
+  if (kills) {
+    shrink *= Math.max(0.2, 0.5 ** kills);
+    why.push(`${kills} recent compute kill${kills === 1 ? "" : "s"}`);
+  }
+  if (overruns) {
+    shrink *= Math.max(0.5, 1 - 0.2 * overruns);
+    why.push(`${overruns} recent budget overrun${overruns === 1 ? "" : "s"}`);
+  }
+  if (memPressure) {
+    shrink *= 0.6;
+    why.push(`heap peaked at or above ${MEM_SOFT_LIMIT_MB} MB`);
+  }
+  if (opts.shrink && opts.shrink > 0 && opts.shrink < 1) {
+    shrink *= opts.shrink;
+    why.push(`caller requested ${Math.round(opts.shrink * 100)}% workload`);
+  }
+  shrink = Math.max(0.1, Math.min(1, shrink));
+
+  let rows = Math.max(MIN_ROWS_PER_FILE, Math.round((MAX_ROWS_PER_FILE * shrink) / 50) * 50);
+  let identifiers = Math.max(MIN_IDENTIFIERS_PER_RUN, Math.round(MAX_IDENTIFIERS_PER_RUN * shrink));
+  if (opts.maxRows && opts.maxRows > 0) rows = Math.min(rows, Math.max(MIN_ROWS_PER_FILE, opts.maxRows));
+  if (opts.maxIdentifiers && opts.maxIdentifiers > 0) {
+    identifiers = Math.min(identifiers, Math.max(1, opts.maxIdentifiers));
+  }
+
+  return {
+    rows,
+    identifiers,
+    files: MAX_FILES_PER_RUN,
+    shrink: Number(shrink.toFixed(2)),
+    reason: why.length ? why.join("; ") : "defaults — no compute pressure detected",
+  };
+}
+
+/** Heap/RSS snapshot in MB, or null when the runtime hides memory usage. */
+export function memSnapshot(): { heap_mb: number; rss_mb: number; external_mb: number } | null {
+  try {
+    const m = Deno.memoryUsage();
+    const mb = (n: number) => Number((n / 1048576).toFixed(1));
+    return { heap_mb: mb(m.heapUsed), rss_mb: mb(m.rss), external_mb: mb(m.external) };
+  } catch {
+    return null;
+  }
+}
+
+export type PhaseName = "discover" | "sign" | "read" | "normalize" | "score" | "persist";
+
+/**
+ * Records wall/CPU-ish duration plus heap growth for each pipeline phase, so a
+ * compute kill can be attributed to the exact step (and row group) that caused it.
+ */
+export function createPhaseMeter() {
+  const phases: Record<string, {
+    ms: number;
+    calls: number;
+    heap_delta_mb: number;
+    heap_after_mb: number | null;
+    peak_heap_mb: number;
+  }> = {};
+  let peakHeap = 0;
+  let peakRss = 0;
+
+  return {
+    /** Call at the START of a phase; returns a closer that records the phase. */
+    begin(phase: PhaseName) {
+      const before = memSnapshot();
+      const t0 = Date.now();
+      return (extra?: Record<string, unknown>) => {
+        const after = memSnapshot();
+        const ms = Date.now() - t0;
+        const slot = phases[phase] ??= {
+          ms: 0, calls: 0, heap_delta_mb: 0, heap_after_mb: null, peak_heap_mb: 0,
+        };
+        slot.ms += ms;
+        slot.calls++;
+        if (before && after) {
+          slot.heap_delta_mb = Number((slot.heap_delta_mb + (after.heap_mb - before.heap_mb)).toFixed(1));
+          slot.heap_after_mb = after.heap_mb;
+          slot.peak_heap_mb = Math.max(slot.peak_heap_mb, after.heap_mb);
+          peakHeap = Math.max(peakHeap, after.heap_mb, before.heap_mb);
+          peakRss = Math.max(peakRss, after.rss_mb, before.rss_mb);
+        }
+        console.log(JSON.stringify({
+          evt: "ingest_phase_usage",
+          phase,
+          ms,
+          heap_before_mb: before?.heap_mb ?? null,
+          heap_after_mb: after?.heap_mb ?? null,
+          heap_delta_mb: before && after ? Number((after.heap_mb - before.heap_mb).toFixed(1)) : null,
+          rss_mb: after?.rss_mb ?? null,
+          external_mb: after?.external_mb ?? null,
+          ...(extra ?? {}),
+        }));
+        return ms;
+      };
+    },
+    /** True once the heap crosses the soft limit — the run should checkpoint. */
+    underPressure() {
+      const now = memSnapshot();
+      if (!now) return false;
+      peakHeap = Math.max(peakHeap, now.heap_mb);
+      peakRss = Math.max(peakRss, now.rss_mb);
+      return now.heap_mb >= MEM_SOFT_LIMIT_MB;
+    },
+    peakHeapMb: () => (peakHeap > 0 ? peakHeap : null),
+    peakRssMb: () => (peakRss > 0 ? peakRss : null),
+    snapshot: () => JSON.parse(JSON.stringify(phases)) as typeof phases,
+  };
+}
+
 
 /**
  * Choose this run's wall-clock budget from recent history.
@@ -783,13 +942,28 @@ Deno.serve(async (req) => {
   /** Hard wall for any single object read, so no read outlives the run budget. */
   const readDeadlineAt = runStart + budgetMs;
   const timeLeftMs = () => Math.max(0, readDeadlineAt - Date.now());
+
+  // ---- Dynamic work caps --------------------------------------------------
+  // A WORKER_RESOURCE_LIMIT kill never gets to write a summary, so the caller
+  // reports it on the retry and we re-run the same checkpoint with less work.
+  const meter = createPhaseMeter();
+  const caps = planWorkCaps(history, {
+    shrink: Number(body.shrink ?? 0) || undefined,
+    afterResourceLimit: Boolean(body.after_resource_limit),
+    maxRows: Number(body.max_rows ?? 0) || undefined,
+    maxIdentifiers: Number(body.max_identifiers ?? 0) || undefined,
+    memPeakMb: Number(prevSummary.mem_peak_mb ?? 0) || null,
+  });
   console.log(JSON.stringify({
     evt: "ingest_budget_tuned",
     budget_ms: budgetMs,
     default_budget_ms: RUN_BUDGET_MS,
     reason: tuned.reason,
     history_len: history.length,
+    caps,
+    mem: memSnapshot(),
   }));
+
   const summary = {
     files_processed: 0,
     files_failed: 0,
@@ -819,8 +993,18 @@ Deno.serve(async (req) => {
     elapsed_ms: 0,
     /** Per-step duration breakdown (ms). */
     phase_ms: { discover: 0, sign: 0, read: 0, normalize: 0, score: 0, persist: 0 },
+    /** Per-step CPU-time proxy + heap growth, to attribute a compute kill. */
+    phase_usage: {} as Record<string, unknown>,
+    /** Caps this run used, and why they were reduced. */
+    work_caps: caps as unknown as Record<string, unknown>,
+    /** Peak heap / RSS (MB) observed during the run. */
+    mem_peak_mb: null as number | null,
+    mem_peak_rss_mb: null as number | null,
+    /** True when the run checkpointed early because the heap hit the soft limit. */
+    memory_pressure: false,
     /** Rolling history the budget tuner reads on the next run. */
     budget_history: [] as BudgetHistoryEntry[],
+
     /** False when any file still has untransformed row groups or identifiers. */
     complete: true,
     /** Per-file resume state, so the caller can show partial/complete status. */
@@ -924,11 +1108,17 @@ Deno.serve(async (req) => {
       return json({ ...summary, idle: true });
     }
 
-    const identifierBudget = probeOnly ? 1 : MAX_IDENTIFIERS_PER_RUN;
+    const identifierBudget = probeOnly ? 1 : caps.identifiers;
 
     for (const rawCand of candidates) {
       if (breakerTripped) break;
       if (outOfTime()) { summary.time_budget_exhausted = true; break; }
+      if (meter.underPressure()) {
+        summary.memory_pressure = true;
+        summary.time_budget_exhausted = true;
+        summary.complete = false;
+        break;
+      }
 
       const { data: fileRow, error: fileErr } = await admin
         .from("intuizi_ingest_files")
@@ -997,17 +1187,19 @@ Deno.serve(async (req) => {
         // Resume from the last transformed row group instead of re-reading rows
         // that were already normalized in an earlier (possibly timed-out) run.
         const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
+        const endRead = meter.begin("read");
         const readStart = Date.now();
         const chunk = await fetchObjectChunk(
           url,
           cand.key,
-          MAX_ROWS_PER_FILE,
+          caps.rows,
           EXPECTED_ROWS_PER_USER,
           resumeGroup,
           readDeadlineAt,
         );
         const readMs = Date.now() - readStart;
         summary.phase_ms.read += readMs;
+        endRead({ object_key: cand.key, resume_at_group: resumeGroup, rows: chunk.rows.length, row_cap: caps.rows });
         const checkpoint = chunk.checkpoint;
         const readTimings = (chunk.timings ?? null) as Record<string, unknown> | null;
         console.log(JSON.stringify({
@@ -1050,7 +1242,8 @@ Deno.serve(async (req) => {
           break;
         }
 
-        const rawRows = chunk.rows.slice(0, MAX_ROWS_PER_FILE);
+        const rawRows = chunk.rows.slice(0, caps.rows);
+        const endNormalize = meter.begin("normalize");
         const normalizeStart = Date.now();
 
         summary.rows_read += rawRows.length;
@@ -1195,6 +1388,8 @@ Deno.serve(async (req) => {
         let failedInFile = 0;
         const normalizeMs = Date.now() - normalizeStart;
         summary.phase_ms.normalize += normalizeMs;
+        endNormalize({ object_key: cand.key, rows: rawRows.length, identifiers: perIdentifier.size });
+        const endScore = meter.begin("score");
         const scoreStart = Date.now();
 
 
@@ -1204,6 +1399,13 @@ Deno.serve(async (req) => {
         for (const [identifier, entry] of perIdentifier) {
           if (summary.identifiers_scored >= identifierBudget) break;
           if (outOfTime()) { summary.time_budget_exhausted = true; break; }
+          if (meter.underPressure()) {
+            // Heap is close to the worker ceiling: checkpoint now instead of
+            // being killed with WORKER_RESOURCE_LIMIT mid-profile.
+            summary.memory_pressure = true;
+            summary.time_budget_exhausted = true;
+            break;
+          }
 
           const { data: existing } = await admin
             .from("intuizi_identifiers")
@@ -1401,12 +1603,20 @@ Deno.serve(async (req) => {
 
         const scoreMs = Date.now() - scoreStart;
         summary.phase_ms.score += scoreMs;
+        endScore({
+          object_key: cand.key,
+          scored: scoredInFile,
+          failed: failedInFile,
+          identifier_cap: identifierBudget,
+          row_group_cursor: checkpoint?.startRowGroup ?? null,
+        });
         const remaining = perIdentifier.size - scoredInFile - failedInFile;
         // A Parquet file is only "done" once its last row group is transformed.
         const chunkComplete = !checkpoint || checkpoint.exhausted;
         const fileStatus = breakerTripped
           ? "paused"
           : (remaining > 0 || !chunkComplete ? "partial" : "done");
+        const endPersist = meter.begin("persist");
         const persistStart = Date.now();
         await admin.from("intuizi_ingest_files").update({
 
@@ -1429,6 +1639,7 @@ Deno.serve(async (req) => {
         }).eq("id", fileRow.id);
 
         summary.phase_ms.persist += Date.now() - persistStart;
+        endPersist({ object_key: cand.key });
 
         // Structured per-file coverage + timing + rate-limit metrics.
         console.log(JSON.stringify({
@@ -1518,11 +1729,17 @@ Deno.serve(async (req) => {
     }
     summary.elapsed_ms = Date.now() - runStart;
     summary.time_remaining_ms = timeLeftMs();
+    summary.phase_usage = meter.snapshot();
+    summary.mem_peak_mb = meter.peakHeapMb();
+    summary.mem_peak_rss_mb = meter.peakRssMb();
     summary.budget_history = [...history, {
       at: new Date().toISOString(),
       budget_ms: budgetMs,
       elapsed_ms: summary.elapsed_ms,
       timed_out: summary.time_budget_exhausted || summary.deadline_exceeded,
+      resource_kill: Boolean(body.after_resource_limit) || summary.memory_pressure,
+      mem_peak_mb: summary.mem_peak_mb ?? undefined,
+      rows_cap: caps.rows,
     }].slice(-10);
     summary.rate_metrics = rateMetrics.snapshot();
     console.log(JSON.stringify({ evt: "ingest_run_summary", ...summary }));
@@ -1540,11 +1757,17 @@ Deno.serve(async (req) => {
     const msg = errMsg(e);
     summary.elapsed_ms = Date.now() - runStart;
     summary.time_remaining_ms = timeLeftMs();
+    summary.phase_usage = meter.snapshot();
+    summary.mem_peak_mb = meter.peakHeapMb();
+    summary.mem_peak_rss_mb = meter.peakRssMb();
     summary.budget_history = [...history, {
       at: new Date().toISOString(),
       budget_ms: budgetMs,
       elapsed_ms: summary.elapsed_ms,
       timed_out: true,
+      resource_kill: Boolean(body.after_resource_limit) || summary.memory_pressure,
+      mem_peak_mb: summary.mem_peak_mb ?? undefined,
+      rows_cap: caps.rows,
     }].slice(-10);
     summary.rate_metrics = rateMetrics.snapshot();
 

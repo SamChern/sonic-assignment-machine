@@ -5,7 +5,7 @@
 // precise geo/device values are carried as metadata and never used as features.
 
 import type { OntologyTag } from "./ontology.ts";
-import { readParquetChunk, type ParquetCheckpoint } from "./parquet.ts";
+import { readParquetChunk, type ParquetCheckpoint, type ParquetTimings } from "./parquet.ts";
 export type { ParquetCheckpoint };
 
 

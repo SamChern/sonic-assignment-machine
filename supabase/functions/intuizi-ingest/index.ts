@@ -996,21 +996,18 @@ Deno.serve(async (req) => {
             }
 
             // 4. Score through the same ontology path as music sources
-            const { data: ana, error: anaErr } = await admin.functions.invoke("analyze-audio", {
-              body: {
-                sources: [{
-                  name: label,
-                  type: "file",
-                  audio_source_id: audioSourceId,
-                  taxonomy_context: taxonomyContext,
-                }],
-                user_id: ownerId,
-                save_results: true,
-              },
+            const ana = await invokeAnalyzeAudio(admin, {
+              sources: [{
+                name: label,
+                type: "file",
+                audio_source_id: audioSourceId,
+                taxonomy_context: taxonomyContext,
+              }],
+              user_id: ownerId,
+              save_results: true,
             });
-            if (anaErr) throw anaErr;
-            const sourceOut = ana?.sources?.[0];
-            if (!sourceOut) throw new Error("analyze-audio returned no source");
+            const sourceOut = ana.sources[0];
+
 
             const scoreMap = {} as Record<Category, number>;
             for (const c of sourceOut.categories ?? []) {

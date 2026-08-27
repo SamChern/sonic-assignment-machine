@@ -37,9 +37,9 @@ const MOTION_PREF_KEY = "sonicsim.audioscope.compare.motion";
 
 /** Transport chips — smaller and blended into the panel surface. */
 const TRANSPORT_CLS =
-  "h-7 gap-1 rounded-md border border-border/40 bg-background/30 px-2 text-[11px] font-normal text-muted-foreground backdrop-blur-sm hover:bg-background/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  "h-7 gap-1 rounded-md border border-border/60 bg-background/60 px-2 text-[11px] font-normal text-foreground/80 shadow-sm backdrop-blur-sm supports-[backdrop-filter]:bg-background/45 hover:bg-background/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const TRANSPORT_CLS_ACTIVE =
-  "h-7 gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-[11px] font-normal text-foreground backdrop-blur-sm hover:bg-primary/25 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  "h-7 gap-1 rounded-md border border-primary/60 bg-primary/20 px-2 text-[11px] font-medium text-foreground shadow-sm backdrop-blur-sm hover:bg-primary/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 /** Deterministic time offset (seconds) the Static view freezes on. */
 const STATIC_FRAME_T = 1.25;
@@ -270,7 +270,11 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
   const lock = sim == null ? null : sim >= 80 ? "In phase" : sim >= 55 ? "Partial lock" : "Out of phase";
 
   return (
-    <Card ref={rootRef} className="overflow-hidden border-border/60 bg-card/70 backdrop-blur-sm">
+    <Card
+      ref={rootRef}
+      data-audioscope-panel="compare"
+      className="overflow-hidden border-border/60 bg-card/70 backdrop-blur-sm"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 p-4">
         <div className="min-w-0">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">

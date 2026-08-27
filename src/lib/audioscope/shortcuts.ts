@@ -16,6 +16,9 @@ import { useEffect, type RefObject } from "react";
 /** Marker attribute placed on each pane's focus anchor (its Static button). */
 export const PANE_ANCHOR_ATTR = "data-audioscope-pane";
 
+/** Marker attribute placed on each panel's root element. */
+export const PANE_ROOT_ATTR = "data-audioscope-panel";
+
 const isTypingTarget = (el: EventTarget | null): boolean => {
   const node = el as HTMLElement | null;
   if (!node || typeof node.closest !== "function") return false;
@@ -50,7 +53,14 @@ export const focusMotionControls = (container?: HTMLElement | null): boolean => 
   const panes = paneAnchors();
   if (panes.length === 0) return false;
   const active = document.activeElement as HTMLElement | null;
-  const inPane = panes.find((el) => el === active || el.contains(active));
+  // The pane the user is in: either the anchor itself, or any anchor whose
+  // panel root contains the focused element (e.g. the Pause chip next to it).
+  const inPane =
+    panes.find((el) => el === active || el.contains(active)) ??
+    panes.find((el) => {
+      const root = el.closest(`[${PANE_ROOT_ATTR}]`);
+      return Boolean(root && active && root.contains(active));
+    });
   const scoped = container ? panes.find((el) => container.contains(el)) : undefined;
   const target = inPane ?? scoped ?? panes[0];
   target?.focus();

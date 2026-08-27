@@ -993,8 +993,18 @@ Deno.serve(async (req) => {
     elapsed_ms: 0,
     /** Per-step duration breakdown (ms). */
     phase_ms: { discover: 0, sign: 0, read: 0, normalize: 0, score: 0, persist: 0 },
+    /** Per-step CPU-time proxy + heap growth, to attribute a compute kill. */
+    phase_usage: {} as Record<string, unknown>,
+    /** Caps this run used, and why they were reduced. */
+    work_caps: caps as unknown as Record<string, unknown>,
+    /** Peak heap / RSS (MB) observed during the run. */
+    mem_peak_mb: null as number | null,
+    mem_peak_rss_mb: null as number | null,
+    /** True when the run checkpointed early because the heap hit the soft limit. */
+    memory_pressure: false,
     /** Rolling history the budget tuner reads on the next run. */
     budget_history: [] as BudgetHistoryEntry[],
+
     /** False when any file still has untransformed row groups or identifiers. */
     complete: true,
     /** Per-file resume state, so the caller can show partial/complete status. */

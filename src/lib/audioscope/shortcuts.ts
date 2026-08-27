@@ -90,10 +90,19 @@ export const useAudioscopeShortcuts = ({
     if (!enabled || typeof window === "undefined") return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e.target)) return;
+      // M works from anywhere on the page, even when focus is outside a pane:
+      // it takes the user straight to the motion controls.
+      if (e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        focusMotionControls(containerRef.current);
+        return;
+      }
       if (!ownsKeystroke(containerRef.current)) return;
       // Only the owning pane handles the key — stop sibling panes from acting
       // on the same keystroke after focus has moved.
       e.stopImmediatePropagation();
+
       switch (e.key.toLowerCase()) {
         case "s":
           e.preventDefault();

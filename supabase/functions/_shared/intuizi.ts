@@ -176,13 +176,15 @@ export function normalizeRow(
   if (reportType === "ctv") {
     const genre = pick(row, "contentgenre", "content_genre", "genre");
     const type = pick(row, "contenttype", "content_type");
-    const channel = pick(row, "channelname", "channel_name", "network");
-    const iab = multi(pick(row, "iab_cats", "iab_categories", "iabcats"));
+    // `domain` is the web-report analogue of a CTV channel.
+    const channel = pick(row, "channelname", "channel_name", "network", "domain", "site");
+    const iab = multi(pick(row, "iab_cats", "iab_categories", "iabcats", "iab_codes", "iabcodes"));
     if (genre) tags.push({ code: `ctv.genre.${slug(genre)}`, label: `CTV genre: ${genre}`, parent_code: "ctv.genre" });
     if (type) tags.push({ code: `ctv.type.${slug(type)}`, label: `CTV content type: ${type}`, parent_code: "ctv.type" });
     if (channel) tags.push({ code: `ctv.channel.${slug(channel)}`, label: `CTV channel: ${channel}`, parent_code: "ctv.channel" });
     for (const c of iab) tags.push({ code: `iab.${slug(c)}`, label: `IAB category ${c}`, parent_code: "iab" });
     Object.assign(signals, { contentgenre: genre, contenttype: type, channelname: channel, iab_cats: iab });
+
     // metadata only
     signals.meta = {
       device_id: pick(row, "ctv_taxonomy", "device_id", "deviceid"),

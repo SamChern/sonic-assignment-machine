@@ -97,6 +97,10 @@ const PostIngestionWizard = () => {
   const [running, setRunning] = useState(false);
   /** Files that still have untransformed row groups — the Resume target. */
   const [partialFiles, setPartialFiles] = useState<ActivationFile[]>([]);
+  /** Row-group progress + time estimates for the next resume run. */
+  const [resumeEstimates, setResumeEstimates] = useState<ResumeEstimate[]>([]);
+  /** Row-group cursor at the start of the previous run, for throughput math. */
+  const resumeCursors = useRef<Record<string, number>>({});
   const {
     readiness,
     loading: inferenceLoading,

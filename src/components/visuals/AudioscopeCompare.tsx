@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Gauge, Image as ImageIcon, Info, Pause, Play, Waves } from "lucide-react";
+import { Accessibility, Gauge, Image as ImageIcon, Info, Pause, Play, Waves } from "lucide-react";
 import {
   AUDIOSCOPE_CATEGORIES,
   CATEGORY_LABELS,
   createSyntheticSignal,
   type CategoryScores,
+  initialStatic,
+  prefersReducedMotion,
+  writeMotionPref,
 } from "@/lib/audioscope";
 
 export interface AudioscopeCompareEntity {
@@ -23,9 +26,10 @@ interface AudioscopeCompareProps {
   height?: number;
 }
 
-const prefersReducedMotion = () =>
-  typeof window !== "undefined" &&
-  Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+const MOTION_PREF_KEY = "sonicsim.audioscope.compare.motion";
+
+/** Deterministic time offset (seconds) the Static view freezes on. */
+const STATIC_FRAME_T = 1.25;
 
 function readVar(name: string, fallback: string): string {
   if (typeof window === "undefined") return fallback;
@@ -40,10 +44,11 @@ function readVar(name: string, fallback: string): string {
  */
 export const AudioscopeCompare = ({ entities, similarity, height = 240 }: AudioscopeCompareProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [playing, setPlaying] = useState(() => !prefersReducedMotion());
+  const [playing, setPlaying] = useState(() => !initialStatic(MOTION_PREF_KEY));
   const [speed, setSpeed] = useState(0.25);
   // Reduced-motion users get the still frame by default; they can opt back into motion.
-  const [isStatic, setIsStatic] = useState(prefersReducedMotion);
+  const [isStatic, setIsStatic] = useState(() => initialStatic(MOTION_PREF_KEY));
+  const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const rafRef = useRef<number | null>(null);
   const visibleRef = useRef(true);
@@ -63,6 +68,28 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       Math.abs((Number(pair[0].scores[c]) || 0) - (Number(pair[1].scores[c]) || 0)),
     );
   }, [pair]);
+
+  const staticDeltas = useMemo(
+    () =>
+      AUDIOSCOPE_CATEGORIES.map((c, i) => ({
+        category: c,
+        band: i + 1,
+        delta: Math.round(deltas[i] ?? 0),
+      })).sort((a, b) => b.delta - a.delta),
+    [deltas],
+  );
+
+  useEffect(() => {
+    writeMotionPref(MOTION_PREF_KEY, isStatic ? "static" : "motion");
+  }, [isStatic]);
+
+  useEffect(() => {
+    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!mq) return;
+    const onChange = () => setReducedMotion(mq.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -159,7 +186,7 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
     };
 
     if (isStatic || reduced || !playing) {
-      frame(isStatic ? 1.25 : 0);
+      frame(isStatic ? STATIC_FRAME_T : 0);
       return () => {
         window.removeEventListener("resize", resize);
         io.disconnect();
@@ -194,6 +221,24 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
     };
   }, [entities, playing, speed, isStatic, reduced, isMobile, height]);
 
+  const animating = playing && !isStatic;
+
+  // Same semantics as the SonicSIM panel: Play always leaves Static, and
+  // entering Static always halts motion.
+  const togglePlay = () => {
+    const next = !animating;
+    setPlaying(next);
+    if (next) setIsStatic(false);
+  };
+
+  const toggleStatic = () => {
+    setIsStatic((prev) => {
+      const next = !prev;
+      if (next) setPlaying(false);
+      return next;
+    });
+  };
+
   if (entities.length === 0) return null;
 
   const sim = typeof similarity === "number" ? Math.round(similarity) : null;
@@ -217,30 +262,15 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
               {lock} · {sim}% similar
             </span>
           ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5"
-            onClick={() => {
-              setPlaying((p) => {
-                if (!p) setIsStatic(false);
-                return !p;
-              });
-            }}
-          >
-            {playing && !isStatic ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-            {playing && !isStatic ? "Pause" : "Play"}
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={togglePlay}>
+            {animating ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            {animating ? "Pause" : "Play"}
           </Button>
           <Button
             size="sm"
             variant={isStatic ? "default" : "outline"}
             className="gap-1.5"
-            onClick={() =>
-              setIsStatic((prev) => {
-                if (!prev) setPlaying(false);
-                return !prev;
-              })
-            }
+            onClick={toggleStatic}
             aria-pressed={isStatic}
             title="Freeze the dual audioscope on a single still frame"
           >
@@ -280,6 +310,20 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       </div>
 
       <div className="p-4">
+        {reducedMotion ? (
+          <div
+            role="status"
+            className="mb-3 flex items-start gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-xs text-muted-foreground"
+          >
+            <Accessibility className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+            <p>
+              <span className="font-semibold text-foreground">Reduced motion is on.</span> Because
+              your system requests <em>prefers-reduced-motion</em>, this comparison starts as a
+              static frame at t = {STATIC_FRAME_T.toFixed(2)}s. Press <strong>Play</strong> to
+              animate it — the divergence band and Δ values are identical either way.
+            </p>
+          </div>
+        ) : null}
         <canvas
           ref={canvasRef}
           role="img"
@@ -307,6 +351,33 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
                 subject scores high on the semantic layer.
               </p>
             </div>
+            {isStatic ? (
+              <div className="sm:col-span-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
+                <p className="mb-1 font-semibold text-foreground">
+                  Static mode — frozen at t = {STATIC_FRAME_T.toFixed(2)}s
+                </p>
+                <p className="mb-2">
+                  Both traces and the divergence band are sampled at that one timestamp, so the gap
+                  you see is a fixed, comparable snapshot. Per-category Δ at this frame, largest
+                  first — the top rows are the ontology nodes lit hardest in the frozen frame:
+                </p>
+                <ul className="grid gap-1 sm:grid-cols-2">
+                  {staticDeltas.map((d) => (
+                    <li key={d.category} className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: `hsl(var(--category-${d.category}))` }}
+                      />
+                      <span className="text-foreground">
+                        Band {d.band} · {CATEGORY_LABELS[d.category] ?? d.category}
+                      </span>
+                      <span>Δ {d.delta}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div>
               <p className="mb-1 font-semibold text-foreground">Divergence &amp; nodes</p>
               <p>

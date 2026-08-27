@@ -3,6 +3,7 @@ import { AUDIOSCOPE_CATEGORIES, emptyScores, type CategoryScores } from "./types
 export * from "./types";
 export { createSyntheticSignal } from "./synthetic";
 export { createLiveAudioSignal } from "./liveAudio";
+export * from "./preference";
 
 /** Map a `user_fingerprints` row (…_avg / …_avg_recent) into category scores. */
 export function fingerprintToScores(

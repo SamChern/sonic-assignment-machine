@@ -1045,8 +1045,10 @@ Deno.serve(async (req) => {
         }
 
         const rawRows = chunk.rows.slice(0, MAX_ROWS_PER_FILE);
+        const normalizeStart = Date.now();
 
         summary.rows_read += rawRows.length;
+
 
         if (checkpoint && !rawRows.length && checkpoint.exhausted) {
           // Every row group has already been transformed — close the file out.

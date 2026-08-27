@@ -907,10 +907,10 @@ Deno.serve(async (req) => {
         }
       }
     }
-
-
+    summary.phase_ms.discover = Date.now() - discoverStart;
 
     if (!candidates.length) {
+
       // Idle path stops here — it does not kick more work.
       await admin.from("intuizi_ingest_state").update({
         last_run_at: new Date().toISOString(),

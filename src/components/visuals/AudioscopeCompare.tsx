@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pause, Play, Waves } from "lucide-react";
+import { Gauge, Info, Pause, Play, Waves } from "lucide-react";
 import {
   AUDIOSCOPE_CATEGORIES,
   CATEGORY_LABELS,
@@ -37,6 +37,8 @@ function readVar(name: string, fallback: string): string {
 export const AudioscopeCompare = ({ entities, similarity, height = 240 }: AudioscopeCompareProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [playing, setPlaying] = useState(true);
+  const [speed, setSpeed] = useState(1);
+  const [showLegend, setShowLegend] = useState(false);
   const rafRef = useRef<number | null>(null);
   const visibleRef = useRef(true);
 
@@ -159,15 +161,22 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       };
     }
 
-    const start = performance.now();
+    const rate = Math.max(0.1, Math.min(4, Number(speed) || 1));
+    let elapsed = 0;
+    let prev = performance.now();
     let last = 0;
     const minDelta = isMobile ? 1000 / 30 : 0;
     const loop = (now: number) => {
       rafRef.current = requestAnimationFrame(loop);
-      if (!visibleRef.current) return;
+      if (!visibleRef.current) {
+        prev = now;
+        return;
+      }
       if (now - last < minDelta) return;
       last = now;
-      frame((now - start) / 1000);
+      elapsed += ((now - prev) / 1000) * rate;
+      prev = now;
+      frame(elapsed);
     };
     rafRef.current = requestAnimationFrame(loop);
 
@@ -177,7 +186,7 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       io.disconnect();
       signals.forEach((s) => s.signal.dispose());
     };
-  }, [entities, playing, reduced, isMobile, height]);
+  }, [entities, playing, speed, reduced, isMobile, height]);
 
   if (entities.length === 0) return null;
 
@@ -206,6 +215,34 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
             {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             {playing ? "Pause" : "Play"}
           </Button>
+          <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
+            <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+            <label className="sr-only" htmlFor="audioscope-compare-speed">
+              Comparison animation speed
+            </label>
+            <select
+              id="audioscope-compare-speed"
+              value={String(speed)}
+              onChange={(e) => setSpeed(Number(e.target.value))}
+              className="bg-transparent text-xs text-foreground outline-none"
+            >
+              {[0.25, 0.5, 1, 1.5, 2, 3].map((v) => (
+                <option key={v} value={v}>
+                  {v}x
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            size="sm"
+            variant={showLegend ? "default" : "outline"}
+            className="gap-1.5"
+            onClick={() => setShowLegend((v) => !v)}
+            aria-expanded={showLegend}
+          >
+            <Info className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">How to read this</span>
+          </Button>
         </div>
       </div>
 
@@ -226,6 +263,27 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
             </span>
           ))}
         </div>
+
+        {showLegend ? (
+          <div className="mt-4 grid gap-3 rounded-xl border border-border/60 bg-background/60 p-4 text-xs leading-relaxed text-muted-foreground sm:grid-cols-2">
+            <div>
+              <p className="mb-1 font-semibold text-foreground">Harmonic bands</p>
+              <p>
+                Each fingerprint&apos;s six category scores become six harmonic partials — Emotional
+                lowest through Artistic highest. Score sets amplitude, so a trace bulges where that
+                subject scores high on the semantic layer.
+              </p>
+            </div>
+            <div>
+              <p className="mb-1 font-semibold text-foreground">Divergence &amp; nodes</p>
+              <p>
+                The red fill is the instantaneous gap between the two traces: wide band = low
+                similarity. Per-category Δ tiles below name which ontology nodes drive that gap, and
+                those same nodes pulse in Node pulse mode and in the network graph.
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         {deltas.length > 0 ? (
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">

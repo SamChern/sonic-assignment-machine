@@ -62,6 +62,8 @@ const Index = () => {
     status: 'idle' | 'checking-cache' | 'analyzing' | 'complete';
   } | null>(null);
   const [results, setResults] = useState<{ sources: any[]; images: any[] } | null>(null);
+  /** Source name currently playing in "See my SonicSIM" — pulses its ontology nodes. */
+  const [sonicSimSubject, setSonicSimSubject] = useState<string | null>(null);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
@@ -845,7 +847,11 @@ const Index = () => {
                 </div>
               }
             >
-              <NetworkVisualization sources={filteredSources} sourceImages={filteredImages} />
+              <NetworkVisualization
+                sources={filteredSources}
+                sourceImages={filteredImages}
+                highlightSourceName={sonicSimSubject}
+              />
             </Suspense>
           </TabsContent>
 
@@ -991,6 +997,9 @@ const Index = () => {
           {/* Tab 4: See my SonicSIM — animated audioscope */}
           <TabsContent value="sonicsim" className="space-y-6">
             <SonicSimPanel
+              onSubjectChange={(s) =>
+                setSonicSimSubject(s && !s.id.startsWith("fingerprint-") ? s.label : null)
+              }
               subjects={[
                 ...(myFingerprint
                   ? [

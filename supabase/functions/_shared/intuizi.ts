@@ -388,12 +388,29 @@ export function ingestPrefixes(): { prefix: string; report_type: ReportType | nu
 
 /** Filename tokens that identify a report type in activation exports. */
 const TYPE_TOKENS: { type: ReportType; tokens: string[] }[] = [
-  { type: "ctv", tokens: ["ctv", "connectedtv", "connected-tv", "streaming", "soundtracksignals"] },
+  // Web reports carry IAB codes + domains — the same content-affinity shape the
+  // ctv mapping already handles, so they resolve to `ctv`.
+  {
+    type: "ctv",
+    tokens: [
+      "ctv", "connectedtv", "connected-tv", "streaming", "soundtracksignals",
+      "web", "webreport", "iab", "domains",
+    ],
+  },
   { type: "apps", tokens: ["apps", "app", "appaffinity", "mobileapp", "appusage"] },
   { type: "visitation", tokens: ["visitation", "visits", "visit", "footfall", "poi"] },
-  { type: "demographics", tokens: ["demographics", "demographic", "demos", "audienceprofile"] },
+  {
+    // Marketing-audience deliveries are identifier rosters; they fall through to
+    // the roster path when no taxonomy columns are present.
+    type: "demographics",
+    tokens: [
+      "demographics", "demographic", "demos", "audienceprofile",
+      "audience", "marketingaudience", "maids", "hems", "uniquedevices",
+    ],
+  },
   { type: "origin", tokens: ["origin", "origins", "homeorigin", "geoorigin", "travel"] },
 ];
+
 
 /**
  * Resolve the report type for an object key.

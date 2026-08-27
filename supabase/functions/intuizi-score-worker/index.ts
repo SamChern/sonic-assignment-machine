@@ -64,6 +64,57 @@ Deno.serve(async (req) => {
       throw e;
     }
 
+    const reqBody = await req.json().catch(() => ({})) as {
+      source?: string;
+      trace_id?: string;
+      action?: string;
+      object_key?: string;
+      activation_id?: string;
+      include_dead_letter?: boolean;
+    };
+    /** One id for this invocation; inherited from the caller when chaining. */
+    const runTraceId = reqBody.trace_id ?? newTraceId("run");
+
+    // Operator action: put failed / dead-lettered identifiers back in the queue.
+    // Scoring is idempotent per identifier, so already-completed work is skipped
+    // instead of redone (a covered tag set short-circuits as `unchanged`).
+    if (reqBody.action === "requeue_failed") {
+      const { data: rq, error: rqErr } = await admin.rpc(
+        "requeue_intuizi_score_failures",
+        {
+          p_object_key: reqBody.object_key ?? null,
+          p_activation_id: reqBody.activation_id ?? null,
+          p_include_dead_letter: reqBody.include_dead_letter ?? true,
+          p_extra_attempts: 3,
+        },
+      );
+      if (rqErr) return json({ success: false, error: rqErr.message }, 500);
+      const row = (Array.isArray(rq) ? rq[0] : rq) as
+        | { requeued?: number; remaining_dead_letter?: number }
+        | null;
+      const requeued = row?.requeued ?? 0;
+      if (requeued > 0) {
+        admin.functions.invoke("intuizi-score-worker", {
+          body: { source: "requeue", trace_id: runTraceId },
+        }).catch((e: unknown) => console.warn("kick failed", errMsg(e)));
+      }
+      console.log(JSON.stringify({
+        evt: "intuizi_score_requeue",
+        trace_id: runTraceId,
+        activation_id: reqBody.activation_id ?? null,
+        object_key: reqBody.object_key ?? null,
+        requeued,
+      }));
+      return json({
+        success: true,
+        action: "requeue_failed",
+        trace_id: runTraceId,
+        requeued,
+        remaining_dead_letter: row?.remaining_dead_letter ?? 0,
+      });
+    }
+
+
     // Never fan out beyond one worker: a paused/parked ingest state means the AI
     // gateway is out of credits or rate limiting, so scoring must wait too.
     const { data: state } = await admin

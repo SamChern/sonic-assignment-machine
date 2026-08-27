@@ -51,6 +51,8 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const rafRef = useRef<number | null>(null);
+  const staticBtnRef = useRef<HTMLButtonElement | null>(null);
+
   const visibleRef = useRef(true);
 
   const reduced = useMemo(
@@ -256,27 +258,43 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
             Overlaid waveforms per fingerprint — the red band is the divergence the similarity score measures.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div role="group" aria-label="Comparison playback controls" className="flex items-center gap-2">
           {lock ? (
             <span className="rounded-md border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground">
               {lock} · {sim}% similar
             </span>
           ) : null}
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={togglePlay}>
-            {animating ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-            {animating ? "Pause" : "Play"}
-          </Button>
           <Button
             size="sm"
+            variant="outline"
+            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={togglePlay}
+          >
+            {animating ? <Pause className="h-3.5 w-3.5" aria-hidden /> : <Play className="h-3.5 w-3.5" aria-hidden />}
+            {animating ? "Pause" : "Play"}
+            <span className="sr-only">
+              {animating ? " — pause the animated comparison" : " — animate the comparison"}
+            </span>
+          </Button>
+          <Button
+            ref={staticBtnRef}
+            id="audioscope-compare-static-toggle"
+            size="sm"
             variant={isStatic ? "default" : "outline"}
-            className="gap-1.5"
+            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={toggleStatic}
             aria-pressed={isStatic}
-            title="Freeze the dual audioscope on a single still frame"
+            aria-describedby={reducedMotion ? "audioscope-compare-motion-notice" : undefined}
           >
-            <ImageIcon className="h-3.5 w-3.5" />
+            <ImageIcon className="h-3.5 w-3.5" aria-hidden />
             Static
+            <span className="sr-only">
+              {isStatic
+                ? ` — on. Showing one still frame at ${STATIC_FRAME_T.toFixed(2)} seconds. Activate to resume motion.`
+                : " — off. Activate to freeze the comparison on a single still frame."}
+            </span>
           </Button>
+
           <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
             <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
             <label className="sr-only" htmlFor="audioscope-compare-speed">
@@ -310,20 +328,43 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       </div>
 
       <div className="p-4">
+        {/* Announces mode changes to screen readers without moving focus. */}
+        <p aria-live="polite" className="sr-only">
+          {isStatic
+            ? `Comparison is static — one frame at ${STATIC_FRAME_T.toFixed(2)} seconds.`
+            : playing
+            ? `Comparison is animating at ${speed}x speed.`
+            : "Comparison is paused."}
+        </p>
         {reducedMotion ? (
           <div
-            role="status"
+            id="audioscope-compare-motion-notice"
+            role="note"
+            aria-labelledby="audioscope-compare-motion-title"
             className="mb-3 flex items-start gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-xs text-muted-foreground"
           >
             <Accessibility className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-            <p>
-              <span className="font-semibold text-foreground">Reduced motion is on.</span> Because
-              your system requests <em>prefers-reduced-motion</em>, this comparison starts as a
-              static frame at t = {STATIC_FRAME_T.toFixed(2)}s. Press <strong>Play</strong> to
-              animate it — the divergence band and Δ values are identical either way.
-            </p>
+            <div>
+              <p>
+                <span id="audioscope-compare-motion-title" className="font-semibold text-foreground">
+                  Reduced motion is on.
+                </span>{" "}
+                Because your system requests <em>prefers-reduced-motion</em>, this comparison starts
+                as a static frame at t = {STATIC_FRAME_T.toFixed(2)}s. Press <strong>Play</strong> to
+                animate it — the divergence band and Δ values are identical either way.
+              </p>
+              <Button
+                size="sm"
+                variant="link"
+                className="h-auto p-0 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                onClick={() => staticBtnRef.current?.focus()}
+              >
+                Jump to motion controls
+              </Button>
+            </div>
           </div>
         ) : null}
+
         <canvas
           ref={canvasRef}
           role="img"

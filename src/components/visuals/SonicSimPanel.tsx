@@ -89,6 +89,8 @@ export const SonicSimPanel = ({
   const [liveEl, setLiveEl] = useState<HTMLMediaElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const staticBtnRef = useRef<HTMLButtonElement | null>(null);
+
 
   useEffect(() => {
     if (!subjects.some((s) => s.id === subjectId)) setSubjectId(subjects[0]?.id ?? "");
@@ -202,31 +204,51 @@ export const SonicSimPanel = ({
           </h3>
           <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{description}</p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={togglePlay}>
-            {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+        <div
+          role="group"
+          aria-label="Audioscope playback controls"
+          className="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={togglePlay}
+          >
+            {playing ? <Pause className="h-3.5 w-3.5" aria-hidden /> : <Play className="h-3.5 w-3.5" aria-hidden />}
             {playing ? "Pause" : "Play"}
+            <span className="sr-only">
+              {playing ? " — pause the animated audioscope" : " — animate the audioscope"}
+            </span>
           </Button>
           <Button
             size="sm"
             variant="outline"
-            className="gap-1.5"
+            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={() => setReplayKey((k) => k + 1)}
           >
-            <RotateCcw className="h-3.5 w-3.5" />
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden />
             Replay
           </Button>
           <Button
+            ref={staticBtnRef}
+            id="audioscope-static-toggle"
             size="sm"
             variant={isStatic ? "default" : "outline"}
-            className="gap-1.5"
+            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={toggleStatic}
             aria-pressed={isStatic}
-            title="Freeze the audioscope on a single still frame"
+            aria-describedby={reducedMotion ? "audioscope-motion-notice" : undefined}
           >
-            <ImageIcon className="h-3.5 w-3.5" />
+            <ImageIcon className="h-3.5 w-3.5" aria-hidden />
             Static
+            <span className="sr-only">
+              {isStatic
+                ? ` — on. Showing one still frame at ${STATIC_FRAME_T.toFixed(2)} seconds. Activate to resume motion.`
+                : " — off. Activate to freeze the audioscope on a single still frame."}
+            </span>
           </Button>
+
           <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
             <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
             <label className="sr-only" htmlFor="audioscope-speed">
@@ -303,21 +325,45 @@ export const SonicSimPanel = ({
         </Badge>
       </div>
 
+      {/* Announces mode changes to screen readers without moving focus. */}
+      <p aria-live="polite" className="sr-only">
+        {isStatic
+          ? `Audioscope is static — one frame at ${STATIC_FRAME_T.toFixed(2)} seconds.`
+          : playing
+          ? `Audioscope is animating at ${speed}x speed.`
+          : "Audioscope is paused."}
+      </p>
+
       {reducedMotion ? (
         <div
-          role="status"
+          id="audioscope-motion-notice"
+          role="note"
+          aria-labelledby="audioscope-motion-notice-title"
           className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-xs text-muted-foreground"
         >
           <Accessibility className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-          <p>
-            <span className="font-semibold text-foreground">Reduced motion is on.</span> Your system
-            setting (<em>prefers-reduced-motion</em>) asks apps to avoid animation, so the audioscope
-            opens in <strong>Static</strong> — one still frame at t = {STATIC_FRAME_T.toFixed(2)}s
-            instead of a moving trace. Press <strong>Play</strong> or turn off{" "}
-            <strong>Static</strong> to animate it anyway; nothing is hidden either way.
-          </p>
+          <div>
+            <p>
+              <span id="audioscope-motion-notice-title" className="font-semibold text-foreground">
+                Reduced motion is on.
+              </span>{" "}
+              Your system setting (<em>prefers-reduced-motion</em>) asks apps to avoid animation, so
+              the audioscope opens in <strong>Static</strong> — one still frame at t ={" "}
+              {STATIC_FRAME_T.toFixed(2)}s instead of a moving trace. Press <strong>Play</strong> or
+              turn off <strong>Static</strong> to animate it anyway; nothing is hidden either way.
+            </p>
+            <Button
+              size="sm"
+              variant="link"
+              className="h-auto p-0 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              onClick={() => staticBtnRef.current?.focus()}
+            >
+              Jump to motion controls
+            </Button>
+          </div>
         </div>
       ) : null}
+
 
       <div ref={wrapRef} className="bg-background/40 px-4 pb-4">
         <Audioscope

@@ -54,8 +54,8 @@ describe("Audioscope Static mode", () => {
     render(<SonicSimPanel subjects={subjects} />);
 
     expect(staticBtn()).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /^play$/i })).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(/reduced motion is on/i);
+    expect(screen.getByRole("button", { name: /^play\b/i })).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(/reduced motion is on/i);
     expect(screen.getByText(/Static frame/i)).toBeInTheDocument();
   });
 
@@ -64,17 +64,17 @@ describe("Audioscope Static mode", () => {
     render(<SonicSimPanel subjects={subjects} />);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole("button", { name: /^play$/i }));
+    await user.click(screen.getByRole("button", { name: /^play\b/i }));
 
     expect(staticBtn()).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: /^pause$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^pause\b/i })).toBeInTheDocument();
   });
 
   it("remembers the Play choice across page loads", async () => {
     setReducedMotion(true);
     const first = render(<SonicSimPanel subjects={subjects} />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /^play$/i }));
+    await user.click(screen.getByRole("button", { name: /^play\b/i }));
     first.unmount();
 
     render(<SonicSimPanel subjects={subjects} />);
@@ -98,7 +98,7 @@ describe("Audioscope Static mode", () => {
     render(<SonicSimPanel subjects={subjects} />);
 
     expect(staticBtn()).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: /^pause$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^pause\b/i })).toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });
@@ -114,8 +114,8 @@ describe("Dual audioscope Static parity", () => {
     render(<AudioscopeCompare entities={compareEntities} similarity={72} />);
 
     expect(staticBtn()).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /^play$/i })).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(/reduced motion is on/i);
+    expect(screen.getByRole("button", { name: /^play\b/i })).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(/reduced motion is on/i);
   });
 
   it("Play leaves Static and Static halts motion, persisting the choice", async () => {
@@ -123,13 +123,13 @@ describe("Dual audioscope Static parity", () => {
     const user = userEvent.setup();
     const first = render(<AudioscopeCompare entities={compareEntities} />);
 
-    await user.click(screen.getByRole("button", { name: /^play$/i }));
+    await user.click(screen.getByRole("button", { name: /^play\b/i }));
     expect(staticBtn()).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: /^pause$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^pause\b/i })).toBeInTheDocument();
 
     await user.click(staticBtn());
     expect(staticBtn()).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /^play$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^play\b/i })).toBeInTheDocument();
     first.unmount();
 
     render(<AudioscopeCompare entities={compareEntities} />);

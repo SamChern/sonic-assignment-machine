@@ -355,6 +355,8 @@ const PostIngestionWizard = () => {
 
     setPartialFiles(stillPartial);
     setResumeEstimates(estimates);
+    setDeadlines(deadlineInfos);
+
 
     setStage("ingest", {
       state: ingestErrors.length || stillPartial.length ? (rowsRead ? "warn" : "error") : "ok",

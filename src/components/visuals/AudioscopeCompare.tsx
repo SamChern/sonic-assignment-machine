@@ -37,7 +37,7 @@ function readVar(name: string, fallback: string): string {
 export const AudioscopeCompare = ({ entities, similarity, height = 240 }: AudioscopeCompareProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [playing, setPlaying] = useState(true);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState(0.25);
   const [isStatic, setIsStatic] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const rafRef = useRef<number | null>(null);

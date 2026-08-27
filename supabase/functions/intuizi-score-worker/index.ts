@@ -17,8 +17,14 @@ import {
   errMsg,
   scoreIdentifier,
   type ScoreTask,
-  statusOf,
 } from "../_shared/scoreIdentifier.ts";
+import {
+  backoffFor,
+  classifyFailure,
+  newTraceId,
+  stageOf,
+} from "../_shared/failure.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

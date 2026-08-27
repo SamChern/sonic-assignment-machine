@@ -26,6 +26,7 @@ import {
   applyNormalizationToAnalysis,
   loadNormalization,
 } from "../_shared/normalization.ts";
+import { scoreIdentifier } from "../_shared/scoreIdentifier.ts";
 import {
   activationIdFromKey,
   fetchObjectChunk,
@@ -287,6 +288,9 @@ const EXPECTED_ROWS_PER_USER = Number(
 );
 
 const LEASE_SECONDS = 600;
+
+/** Rows per enqueue upsert into `intuizi_score_queue`. */
+const QUEUE_CHUNK = 200;
 
 type Json = Record<string, unknown>;
 
@@ -968,6 +972,9 @@ Deno.serve(async (req) => {
     files_processed: 0,
     files_failed: 0,
     identifiers_scored: 0,
+    /** Identifiers handed to the background scoring worker this run. */
+    identifiers_queued: 0,
+
     roster_identifiers: 0,
     audio_files_scored: 0,
 
@@ -1157,6 +1164,13 @@ Deno.serve(async (req) => {
             error_message: null,
           }).eq("id", fileRow.id);
           summary.files_processed++;
+
+        // Nudge the background scorer so queued identifiers start immediately
+        // instead of waiting for the next scheduled worker tick.
+        if (summary.identifiers_queued > 0) {
+          admin.functions.invoke("intuizi-score-worker", { body: { source: "ingest" } })
+            .catch((e: unknown) => console.warn("score worker kick failed", errMsg(e)));
+        }
           summary.audio_files_scored++;
         } catch (e) {
           const msg = errMsg(e);
@@ -1399,182 +1413,58 @@ Deno.serve(async (req) => {
 
 
 
-        for (const [identifier, entry] of perIdentifier) {
-          if (summary.identifiers_scored >= identifierBudget) break;
-          if (outOfTime()) { summary.time_budget_exhausted = true; break; }
-          if (meter.underPressure()) {
-            // Heap is close to the worker ceiling: checkpoint now instead of
-            // being killed with WORKER_RESOURCE_LIMIT mid-profile.
-            summary.memory_pressure = true;
-            summary.time_budget_exhausted = true;
-            break;
+        // ---- Decoupled scoring -------------------------------------------
+        // Scoring (AI gateway + embeddings) used to run inline here, which made
+        // total run time proportional to the identifier count and reliably hit
+        // the wall-clock budget or a WORKER_RESOURCE_LIMIT kill before any
+        // analysis landed. The ingest run now only *enqueues* one task per
+        // identifier — a handful of cheap DB writes — and `intuizi-score-worker`
+        // drains the queue in small self-chaining batches. Pipeline throughput
+        // is therefore unbounded while each invocation stays well inside limits.
+        const queueRows = [...perIdentifier].map(([identifier, entry]) => ({
+          object_key: cand.key,
+          report_type: cand.report_type,
+          identifier,
+          activation_id: activationIdFromKey(cand.key),
+          owner_id: ownerId,
+          label: `Intuizi ${cand.report_type}: ${entry.labels[0] ?? identifier.slice(0, 12)}`,
+          tags: [...entry.tags.values()],
+          signals: entry.signals,
+          confidence: entry.confidence,
+        }));
+
+        for (let i = 0; i < queueRows.length; i += QUEUE_CHUNK) {
+          const chunk = queueRows.slice(i, i + QUEUE_CHUNK);
+          const { error: qErr } = await admin
+            .from("intuizi_score_queue")
+            .upsert(chunk, { onConflict: "object_key,identifier", ignoreDuplicates: true });
+          if (qErr) {
+            failedInFile += chunk.length;
+            summary.errors.push(`enqueue: ${qErr.message}`);
+          } else {
+            scoredInFile += chunk.length;
+            summary.identifiers_queued += chunk.length;
           }
+        }
 
-          const { data: existing } = await admin
-            .from("intuizi_identifiers")
-            .select("id,audio_source_id,tag_codes,observation_count")
-            .eq("primary_identifier", identifier)
-            .maybeSingle();
-
-          const tags = [...entry.tags.values()];
-          const tagCodes = tags.map((t) => t.code);
-
-          // Dedup: identical tag set already scored for this identifier.
-          const previousCodes: string[] = existing?.tag_codes ?? [];
-          const unchanged = previousCodes.length > 0 &&
-            tagCodes.every((c) => previousCodes.includes(c));
-          if (unchanged) {
-            unchangedInFile++;
-            continue;
-          }
-
-          const label = `Intuizi ${cand.report_type}: ${entry.labels[0] ?? identifier.slice(0, 12)}`;
-
+        // A probe run scores a single identifier synchronously so the operator
+        // gets an immediate credits / connectivity verdict before the queue runs.
+        if (probeOnly && queueRows.length) {
           try {
-            // 1. audio_sources row (reused across runs per identifier)
-            let audioSourceId: string | null = existing?.audio_source_id ?? null;
-            if (!audioSourceId) {
-              const { data: src, error: srcErr } = await admin
-                .from("audio_sources")
-                .insert({
-                  user_id: ownerId,
-                  source_type: "intuizi",
-                  name: label,
-                  ctv_metadata: {
-                    provider: "intuizi",
-                    report_type: cand.report_type,
-                    object_key: cand.key,
-                    identifier,
-                    signals: entry.signals,
-                  },
-                })
-                .select("id").single();
-              if (srcErr) throw srcErr;
-              audioSourceId = src.id;
-            }
-
-            // 2. Taxonomy tags
-            const nodeIds: string[] = [];
-            for (const t of tags) {
-              try { nodeIds.push(await resolveTag(admin, t)); } catch (e) {
-                if ([402, 403, 429].includes(statusOf(e) ?? 0)) throw e;
-                console.warn("tag resolve failed", t.code, e);
-              }
-            }
-            if (nodeIds.length) {
-              await admin.from("audio_source_tags").upsert(
-                nodeIds.map((nid) => ({
-                  audio_source_id: audioSourceId,
-                  node_id: nid,
-                  weight: entry.confidence,
-                })),
-                { onConflict: "audio_source_id,node_id" },
-              );
-            }
-
-            // 3. Calibration priors + kNN warm start
-            let taxonomyContext = await buildTaxonomyContext(admin, nodeIds);
-            const queryEmbedding = await embed(
-              `intuizi ${cand.report_type}; tags: ${tagCodes.join(",")}`,
-            );
-            if (queryEmbedding) {
-              const { data: neighbors } = await admin.rpc("match_audio_profiles", {
-                query_embedding: queryEmbedding,
-                match_count: 5,
-                exclude_id: audioSourceId,
-              });
-              if (neighbors?.length) {
-                // deno-lint-ignore no-explicit-any
-                const lines = neighbors.map((n: any) =>
-                  `  - ${n.name} (sim=${Number(n.similarity).toFixed(2)}): ` +
-                  `emo=${Math.round(n.emotional_score)} cog=${Math.round(n.cognitive_score)} ` +
-                  `soc=${Math.round(n.social_score)} com=${Math.round(n.communication_score)} ` +
-                  `ctx=${Math.round(n.contextual_score)} art=${Math.round(n.artistic_score)}`
-                ).join("\n");
-                taxonomyContext = `${taxonomyContext}\nnearest_neighbors:\n${lines}`;
-              }
-            }
-
-            // 4. Score through the same ontology path as music sources
-            const ana = await invokeAnalyzeAudio(admin, {
-              sources: [{
-                name: label,
-                type: "file",
-                audio_source_id: audioSourceId,
-                taxonomy_context: taxonomyContext,
-              }],
-              user_id: ownerId,
-              save_results: true,
-            }, fileRow.report_type ?? "unknown");
-
-            const sourceOut = ana.sources[0];
-
-
-            const scoreMap = {} as Record<Category, number>;
-            for (const c of sourceOut.categories ?? []) {
-              scoreMap[(c.name ?? "").toLowerCase() as Category] = Number(c.score) || 0;
-            }
-
-            // 4b. Speech-skew normalization: Intuizi CTV / audio-app feeds skew
-            // toward vocal + spoken-word signals, which inflates Communication.
-            // Rewrite the saved analysis with the corrected profile (raw scores
-            // retained for audit) before learning from it.
-            const normCfg = await loadNormalization(admin, "intuizi");
-            const normScores = await applyNormalizationToAnalysis(
-              admin, audioSourceId!, scoreMap, normCfg,
-            );
-            for (const c of CATEGORIES) scoreMap[c] = normScores[c] ?? scoreMap[c];
-
-            // 5. Continuous learning: calibration + profile embedding
-            await updateCalibration(admin, nodeIds, scoreMap);
-            const profileEmbedding = await embed(
-              `intuizi ${cand.report_type}; tags: ${tagCodes.join(",")}; ` +
-              `scores: ${CATEGORIES.map((c) => `${c}=${scoreMap[c] ?? "?"}`).join(",")}`,
-            );
-            if (profileEmbedding) {
-              await admin.from("audio_sources")
-                .update({ profile_embedding: profileEmbedding })
-                .eq("id", audioSourceId);
-            }
-
-            // 6. Idempotent progress marking, in the same step as the work
-            const mergedCodes = Array.from(new Set([...previousCodes, ...tagCodes]));
-            await admin.from("intuizi_identifiers").upsert({
-              primary_identifier: identifier,
-              [SIGNAL_COLUMN[cand.report_type]]: {
-                rows: entry.signals,
-                confidence: entry.confidence,
-                scores: scoreMap,
-                object_key: cand.key,
-                scored_at: new Date().toISOString(),
-              },
-              tag_codes: mergedCodes,
-              audio_source_id: audioSourceId,
-              observation_count: (existing?.observation_count ?? 0) + entry.signals.length,
-              last_seen_at: new Date().toISOString(),
-            }, { onConflict: "primary_identifier" });
-
+            await scoreIdentifier(admin, queueRows[0] as never, rateMetrics as never);
             summary.identifiers_scored++;
-            scoredInFile++;
-
-            if (probeOnly) {
-              // Probe succeeded — clear the pause and stop this run.
-              await admin.from("intuizi_ingest_state").update({
-                paused: false,
-                pause_reason: null,
-                paused_at: null,
-                parked_until: null,
-                consecutive_rate_limits: 0,
-              }).eq("id", "singleton");
-              break;
-            }
+            await admin.from("intuizi_ingest_state").update({
+              paused: false,
+              pause_reason: null,
+              paused_at: null,
+              parked_until: null,
+              consecutive_rate_limits: 0,
+            }).eq("id", "singleton");
           } catch (e) {
             const st = statusOf(e);
             const msg = errMsg(e);
             failedInFile++;
-            summary.errors.push(`${identifier}: ${msg}`);
-
-            // ---- Circuit breaker: halt the whole job, not just this item --
+            summary.errors.push(`probe ${queueRows[0].identifier}: ${msg}`);
             if (st === 402 || st === 403) {
               breakerTripped = true;
               summary.paused = true;
@@ -1584,25 +1474,20 @@ Deno.serve(async (req) => {
                 pause_reason: msg.slice(0, 500),
                 paused_at: new Date().toISOString(),
               }).eq("id", "singleton");
-              break;
-            }
-            if (st === 429) {
+            } else if (st === 429) {
               const next = (state?.consecutive_rate_limits ?? 0) + 1;
+              await admin.from("intuizi_ingest_state").update({
+                consecutive_rate_limits: next,
+                last_error: msg.slice(0, 500),
+                ...(next >= 3
+                  ? { parked_until: new Date(Date.now() + 30 * 60 * 1000).toISOString() }
+                  : {}),
+              }).eq("id", "singleton");
               if (next >= 3) {
                 breakerTripped = true;
                 summary.paused = true;
                 summary.pause_reason = `rate limited ${next}x — parked until the next scheduled run`;
-                await admin.from("intuizi_ingest_state").update({
-                  consecutive_rate_limits: next,
-                  parked_until: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-                  last_error: msg.slice(0, 500),
-                }).eq("id", "singleton");
-                break;
               }
-              await admin.from("intuizi_ingest_state")
-                .update({ consecutive_rate_limits: next }).eq("id", "singleton");
-              // Bounded backoff before the next item.
-              await new Promise((r) => setTimeout(r, 2000 * next));
             }
           }
         }

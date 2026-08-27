@@ -130,4 +130,6 @@ export const useAudioscopeShortcuts = ({
 };
 
 /** Shared help text so both panels describe the same keys. */
-export const SHORTCUT_HINT = "Keys: S static · K play/pause · [ / ] switch panes";
+export const SHORTCUT_HINT =
+  "Keys: S static · K play/pause · M jump to motion controls · [ / ] switch panes";
+

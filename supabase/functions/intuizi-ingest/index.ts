@@ -1387,13 +1387,17 @@ Deno.serve(async (req) => {
           }
         }
 
+        const scoreMs = Date.now() - scoreStart;
+        summary.phase_ms.score += scoreMs;
         const remaining = perIdentifier.size - scoredInFile - failedInFile;
         // A Parquet file is only "done" once its last row group is transformed.
         const chunkComplete = !checkpoint || checkpoint.exhausted;
         const fileStatus = breakerTripped
           ? "paused"
           : (remaining > 0 || !chunkComplete ? "partial" : "done");
+        const persistStart = Date.now();
         await admin.from("intuizi_ingest_files").update({
+
           status: fileStatus,
           total_rows: rawRows.length,
           processed_rows: (fileRow.processed_rows ?? 0) + scoredInFile,

@@ -41,7 +41,7 @@ The network visualization gets an optional "animate" toggle so an individual ana
 
 ## Technical notes
 - No new backend, no new tables, no new dependencies — canvas 2D plus Web Audio, both already available.
-- `AudioContext` is created only on user gesture (browser autoplay policy); mic access stays opt-in and is never recorded or uploaded.
+- `AudioContext` is created only on user gesture (browser autoplay policy). No microphone access is used anywhere.
 - Cross-origin preview URLs are loaded with `crossOrigin="anonymous"`; if a provider blocks analysis, the component falls back to the synthesized scope automatically so the tab never renders empty.
 - Synthetic mode is deterministic per source id, so a given fingerprint always animates the same way — comparable across sessions and screenshots.
 - Mobile: reduced particle/line counts and capped frame rate below 640px, following the existing mobile-optimization pattern.

@@ -98,8 +98,8 @@ const Index = () => {
       const fadeEnd = 280;
       const progress = Math.min(1, Math.max(0, scrollY / fadeEnd));
       if (logoRef.current) {
-        logoRef.current.style.setProperty('--logo-opacity', String(1 - progress * 0.92));
-        logoRef.current.style.setProperty('--logo-overlay-opacity', String(progress * 0.92));
+        logoRef.current.style.setProperty('--logo-opacity', String(1 - progress));
+        logoRef.current.style.setProperty('--logo-overlay-opacity', String(progress));
         logoRef.current.style.setProperty('--logo-blur', `${progress * 3}px`);
         logoRef.current.style.setProperty('--logo-scale', String(1 - progress * 0.04));
       }

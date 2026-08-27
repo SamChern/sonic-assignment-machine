@@ -1,16 +1,16 @@
 # See my SonicSIM — Audioscope Visualizations
 
-Yes, this is implementable. The HTML you shared is a live-mic oscilloscope on a `<canvas>` using the Web Audio API. The same technique ports cleanly into the app, and it can be driven by three different signal sources depending on what the user is looking at.
+Yes, this is implementable. The HTML you shared is an oscilloscope on a `<canvas>` using the Web Audio API. The same technique ports cleanly into the app, and it can be driven by two signal sources depending on what the user is looking at.
 
 ## How it works here
 
-The oscilloscope needs a signal per animation frame. The app has three that are already in place:
+The oscilloscope needs a signal per animation frame. The app has two that are already in place:
 
 1. **Real audio** — uploaded files (`File` objects, already used by the audio player) and Spotify/Apple preview URLs stored on `audio_sources.preview_url` / `file_url`. These go through a real `AnalyserNode`, exactly like your snippet (time-domain waveform plus frequency spectrum).
-2. **Live mic** — same as your code, kept as an optional "listen" mode.
-3. **Synthesized scope** — for sources with no playable audio (CTV/Intuizi identifiers, saved analyses, aggregate fingerprints), the waveform is generated from stored data: the six category scores drive six harmonic bands, and where DSP features exist (`audio_sources.librosa_features` — tempo, spectral centroid, energy) they set pulse rate, brightness, and amplitude. This makes the animation a faithful visual of the semantic fingerprint rather than decoration.
+2. **Synthesized scope** — for sources with no playable audio (CTV/Intuizi identifiers, saved analyses, aggregate fingerprints), the waveform is generated from stored data: the six category scores drive six harmonic bands, and where DSP features exist (`audio_sources.librosa_features` — tempo, spectral centroid, energy) they set pulse rate, brightness, and amplitude. This makes the animation a faithful visual of the semantic fingerprint rather than decoration.
 
-All three feed one shared renderer, so visuals look identical regardless of source.
+Both feed one shared renderer, so visuals look identical regardless of source.
+
 
 ## What gets built
 

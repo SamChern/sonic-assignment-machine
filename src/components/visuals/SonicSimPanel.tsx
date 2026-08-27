@@ -25,6 +25,11 @@ import {
 } from "lucide-react";
 import Audioscope, { type AudioscopeMode } from "./Audioscope";
 import {
+  PANE_ANCHOR_ATTR,
+  SHORTCUT_HINT,
+  useAudioscopeShortcuts,
+} from "@/lib/audioscope/shortcuts";
+import {
   AUDIOSCOPE_CATEGORIES,
   CATEGORY_LABELS,
   categoryToken,
@@ -340,6 +345,13 @@ export const SonicSimPanel = ({
             : "Synthesized from fingerprint"}
         </Badge>
       </div>
+
+      <p
+        id="audioscope-shortcut-hint"
+        className="px-4 pb-2 text-[11px] text-muted-foreground"
+      >
+        {SHORTCUT_HINT}
+      </p>
 
       {/* Announces mode changes to screen readers without moving focus. */}
       <p aria-live="polite" className="sr-only">

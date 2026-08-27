@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  PANE_ANCHOR_ATTR,
+  SHORTCUT_HINT,
+  useAudioscopeShortcuts,
+} from "@/lib/audioscope/shortcuts";
 import { Accessibility, Gauge, Image as ImageIcon, Info, Pause, Play, Waves } from "lucide-react";
 import {
   AUDIOSCOPE_CATEGORIES,
@@ -52,6 +57,7 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
   const [showLegend, setShowLegend] = useState(false);
   const rafRef = useRef<number | null>(null);
   const staticBtnRef = useRef<HTMLButtonElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   const visibleRef = useRef(true);
 
@@ -241,13 +247,21 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
     });
   };
 
+  // S = Static, K = Play/Pause, [ / ] = move between audioscope panes.
+  useAudioscopeShortcuts({
+    containerRef: rootRef,
+    onToggleStatic: toggleStatic,
+    onTogglePlay: togglePlay,
+    enabled: entities.length > 0,
+  });
+
   if (entities.length === 0) return null;
 
   const sim = typeof similarity === "number" ? Math.round(similarity) : null;
   const lock = sim == null ? null : sim >= 80 ? "In phase" : sim >= 55 ? "Partial lock" : "Out of phase";
 
   return (
-    <Card className="overflow-hidden border-border/60 bg-card/70 backdrop-blur-sm">
+    <Card ref={rootRef} className="overflow-hidden border-border/60 bg-card/70 backdrop-blur-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 p-4">
         <div className="min-w-0">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -279,12 +293,17 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
           <Button
             ref={staticBtnRef}
             id="audioscope-compare-static-toggle"
+            {...{ [PANE_ANCHOR_ATTR]: "compare" }}
             size="sm"
             variant={isStatic ? "default" : "outline"}
             className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={toggleStatic}
             aria-pressed={isStatic}
-            aria-describedby={reducedMotion ? "audioscope-compare-motion-notice" : undefined}
+            aria-describedby={
+              reducedMotion
+                ? "audioscope-compare-motion-notice audioscope-compare-shortcut-hint"
+                : "audioscope-compare-shortcut-hint"
+            }
           >
             <ImageIcon className="h-3.5 w-3.5" aria-hidden />
             Static
@@ -328,6 +347,13 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       </div>
 
       <div className="p-4">
+        <p
+          id="audioscope-compare-shortcut-hint"
+          className="mb-2 text-[11px] text-muted-foreground"
+        >
+          {SHORTCUT_HINT}
+        </p>
+
         {/* Announces mode changes to screen readers without moving focus. */}
         <p aria-live="polite" className="sr-only">
           {isStatic

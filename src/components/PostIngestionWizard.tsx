@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import InferenceConfigGuard from "@/components/InferenceConfigGuard";
+import PhaseCpuChart, { type PhaseRun } from "@/components/PhaseCpuChart";
 import { useInferenceReadiness } from "@/hooks/useInferenceReadiness";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+
 import {
   Select,
   SelectContent,

@@ -16,8 +16,25 @@ import {
 import { compressors } from "https://esm.sh/hyparquet-compressors@1.1.1";
 
 
-/** Anything larger than this is refused rather than buffered. */
-const MAX_OBJECT_BYTES = 512 * 1024 * 1024;
+/**
+ * Objects larger than this are only readable when the host honours HTTP Range
+ * requests (S3 does). Range reads mean we transfer the footer plus the first
+ * row group(s) only, so a multi-GB delivery still ingests a bounded sample.
+ */
+const RANGE_REQUIRED_BYTES = 512 * 1024 * 1024;
+
+/** Probe whether the URL serves partial content, so huge objects stay bounded. */
+async function supportsRangeRequests(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, { headers: { Range: "bytes=0-0" } });
+    // Consume the body so the connection is released.
+    await res.arrayBuffer().catch(() => undefined);
+    return res.status === 206;
+  } catch {
+    return false;
+  }
+}
+
 
 function scalar(v: unknown): unknown {
   if (v === null || v === undefined) return v;
@@ -189,12 +206,21 @@ export async function readParquetRows(
   const file = await asyncBufferFromUrl({ url });
   const byteLength = typeof file.byteLength === "number" ? file.byteLength : null;
 
-  if (byteLength !== null && byteLength > MAX_OBJECT_BYTES) {
-    throw new Error(
-      `parquet object is ${(byteLength / 1e6).toFixed(0)} MB — over the ` +
-        `${MAX_OBJECT_BYTES / 1e6} MB ingest limit; ask Intuizi to partition the delivery`,
+  if (byteLength !== null && byteLength > RANGE_REQUIRED_BYTES) {
+    const ranged = await supportsRangeRequests(url);
+    if (!ranged) {
+      throw new Error(
+        `parquet object is ${(byteLength / 1e6).toFixed(0)} MB and the storage host ` +
+          `does not honour Range requests, so it cannot be read in bounded chunks; ` +
+          `ask Intuizi to partition the delivery`,
+      );
+    }
+    console.log(
+      `parquet object is ${(byteLength / 1e6).toFixed(0)} MB — reading a bounded ` +
+        `sample of up to ${maxRows} rows via Range requests`,
     );
   }
+
 
   // Footer first: gives the column list and row count without decoding pages,
   // so an empty or mis-shaped delivery fails with a readable message.

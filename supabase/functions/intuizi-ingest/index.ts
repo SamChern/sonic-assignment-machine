@@ -1006,6 +1006,7 @@ Deno.serve(async (req) => {
 
         for (const [identifier, entry] of perIdentifier) {
           if (summary.identifiers_scored >= identifierBudget) break;
+          if (outOfTime()) { summary.time_budget_exhausted = true; break; }
 
           const { data: existing } = await admin
             .from("intuizi_identifiers")

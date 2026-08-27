@@ -442,26 +442,66 @@ export async function readParquetChunk(
 ): Promise<ParquetChunk> {
   /** Minimum time a row-group read is given; below this we checkpoint instead. */
   const MIN_READ_MS = 25_000;
+  /** Below this we split the range into smaller decode slices instead. */
+  const SPLIT_BELOW_MS = 60_000;
+  /** Rows per slice when a range is split. */
+  const SLICE_ROWS = 1_000;
+  const t0 = Date.now();
   const timeLeft = () => (deadlineAt == null ? Infinity : deadlineAt - Date.now());
+  const finite = (n: number) => (Number.isFinite(n) ? n : null);
+
+  const timings: ParquetTimings = {
+    openMs: 0,
+    rangeProbeMs: 0,
+    metadataMs: 0,
+    decodeMs: 0,
+    normalizeMs: 0,
+    totalMs: 0,
+    slices: [],
+    timeLeftMs: null,
+  };
+  const finish = <T extends ParquetChunk>(chunk: T): T => {
+    timings.totalMs = Date.now() - t0;
+    timings.timeLeftMs = finite(timeLeft());
+    chunk.timings = timings;
+    console.log(JSON.stringify({
+      evt: "parquet_read_timings",
+      resume_at_group: startRowGroup,
+      rows: chunk.rows.length,
+      deadline_exceeded: Boolean(chunk.deadlineExceeded),
+      ...timings,
+    }));
+    return chunk;
+  };
+
+  const bail = (
+    abortedAt: NonNullable<ParquetTimings["abortedAt"]>,
+    checkpoint: ParquetCheckpoint,
+  ): ParquetChunk => {
+    timings.abortedAt = abortedAt;
+    return finish({ rows: [], checkpoint, deadlineExceeded: true });
+  };
+
   if (timeLeft() <= MIN_READ_MS) {
-    return {
-      rows: [],
-      checkpoint: {
-        startRowGroup,
-        nextRowGroup: startRowGroup,
-        rowGroupsTotal: null,
-        rowsOffset: 0,
-        nextRowsOffset: 0,
-        exhausted: false,
-      },
-      deadlineExceeded: true,
-    };
+    return bail("pre_open", {
+      startRowGroup,
+      nextRowGroup: startRowGroup,
+      rowGroupsTotal: null,
+      rowsOffset: 0,
+      nextRowsOffset: 0,
+      exhausted: false,
+    });
   }
+
+  const openStart = Date.now();
   const file = await asyncBufferFromUrl({ url });
+  timings.openMs = Date.now() - openStart;
   const byteLength = typeof file.byteLength === "number" ? file.byteLength : null;
 
   if (byteLength !== null && byteLength > RANGE_REQUIRED_BYTES) {
+    const probeStart = Date.now();
     const ranged = await supportsRangeRequests(url);
+    timings.rangeProbeMs = Date.now() - probeStart;
     if (!ranged) {
       throw new Error(
         `parquet object is ${(byteLength / 1e6).toFixed(0)} MB and the storage host ` +
@@ -477,7 +517,25 @@ export async function readParquetChunk(
 
   // Footer first: gives the column list and row count without decoding pages,
   // so an empty or mis-shaped delivery fails with a readable message.
-  const metadata = await withTimeout(parquetMetadataAsync(file), timeLeft());
+  const metaStart = Date.now();
+  let metadata: Awaited<ReturnType<typeof parquetMetadataAsync>>;
+  try {
+    metadata = await withTimeout(parquetMetadataAsync(file), timeLeft());
+  } catch (e) {
+    timings.metadataMs = Date.now() - metaStart;
+    if (e instanceof ParquetReadTimeout) {
+      return bail("metadata", {
+        startRowGroup,
+        nextRowGroup: startRowGroup,
+        rowGroupsTotal: null,
+        rowsOffset: 0,
+        nextRowsOffset: 0,
+        exhausted: false,
+      });
+    }
+    throw e;
+  }
+  timings.metadataMs = Date.now() - metaStart;
   const columns = (metadata.schema ?? [])
     .filter((s: { num_children?: number; name: string }) => !s.num_children)
     .map((s: { name: string }) => s.name);
@@ -486,7 +544,8 @@ export async function readParquetChunk(
     .map((rg) => Number(rg.num_rows ?? 0));
   console.log(
     `parquet footer: rows=${numRows} row_groups=${groupRows.length} ` +
-      `resume_at_group=${startRowGroup} columns=[${columns.join(", ")}]`,
+      `resume_at_group=${startRowGroup} columns=[${columns.join(", ")}] ` +
+      `metadata_ms=${timings.metadataMs}`,
   );
 
   if (numRows === 0) {
@@ -497,68 +556,86 @@ export async function readParquetChunk(
   }
 
   const plan = planRowGroupRead(groupRows, startRowGroup, maxRows);
+  /** Cursor-preserving checkpoint used whenever the read cannot complete. */
+  const heldCheckpoint: ParquetCheckpoint = {
+    ...plan.checkpoint,
+    nextRowGroup: plan.checkpoint.startRowGroup,
+    nextRowsOffset: plan.checkpoint.rowsOffset,
+    exhausted: false,
+  };
 
   // Footer/metadata reads can be slow on multi-GB deliveries. If decoding pages
   // can no longer finish inside the run budget, stop here with the UNCHANGED
   // cursor so the next run re-reads exactly this range (no rows are skipped).
-  if (timeLeft() <= MIN_READ_MS) {
-    return {
-      rows: [],
-      checkpoint: {
-        ...plan.checkpoint,
-        nextRowGroup: plan.checkpoint.startRowGroup,
-        nextRowsOffset: plan.checkpoint.rowsOffset,
-        exhausted: false,
-      },
-      deadlineExceeded: true,
-    };
-  }
+  if (timeLeft() <= MIN_READ_MS) return bail("pre_decode", heldCheckpoint);
 
   if (plan.checkpoint.exhausted && plan.rowEnd <= plan.rowStart) {
-    return { rows: [], checkpoint: plan.checkpoint };
+    return finish({ rows: [], checkpoint: plan.checkpoint });
   }
 
-  // Transient S3/network faults are retried for THIS row-group range only, so a
-  // blip never forces the whole file to be re-transformed from group 0.
-  let raw: unknown;
-  try {
-    raw = await retryRowGroups(
-      () =>
-        // Hard cap on the decode itself: a stalled page read must not hold the
-        // function open until the gateway's 150s idle timeout fires.
-        withTimeout(
-          parquetReadObjects({
-            file,
-            metadata,
-            compressors,
-            rowStart: plan.rowStart,
-            rowEnd: plan.rowEnd,
-          }),
-          timeLeft(),
-        ),
-    {
-      label: `row groups ${plan.checkpoint.startRowGroup}..${plan.checkpoint.nextRowGroup - 1}`,
-      deadlineAt,
-    },
-    );
-  } catch (e) {
-    if (e instanceof ParquetReadTimeout) {
-      // Same contract as the pre-read bail-out: keep the cursor put and resume.
-      return {
-        rows: [],
-        checkpoint: {
-          ...plan.checkpoint,
-          nextRowGroup: plan.checkpoint.startRowGroup,
-          nextRowsOffset: plan.checkpoint.rowsOffset,
-          exhausted: false,
+  // Oversized row groups are decoded in smaller row slices when the remaining
+  // budget is tight, so each individual read stays well inside the gateway's
+  // idle limit and its cost shows up separately in the timing log.
+  const planned = plan.rowEnd - plan.rowStart;
+  const split = planned > SLICE_ROWS && timeLeft() < SPLIT_BELOW_MS;
+  const slices = split
+    ? planDecodeSlices(plan.rowStart, plan.rowEnd, SLICE_ROWS)
+    : [{ rowStart: plan.rowStart, rowEnd: plan.rowEnd }];
+  if (split) {
+    console.log(JSON.stringify({
+      evt: "parquet_split_decode",
+      row_groups: `${plan.checkpoint.startRowGroup}..${plan.checkpoint.nextRowGroup - 1}`,
+      planned_rows: planned,
+      slices: slices.length,
+      slice_rows: SLICE_ROWS,
+      time_left_ms: finite(timeLeft()),
+    }));
+  }
+
+  const raw: Record<string, unknown>[] = [];
+  for (const slice of slices) {
+    const sliceStart = Date.now();
+    try {
+      // Transient S3/network faults are retried for THIS slice only, so a blip
+      // never forces the whole file to be re-transformed from group 0.
+      const part = await retryRowGroups(
+        () =>
+          // Hard cap on the decode itself: a stalled page read must not hold the
+          // function open until the gateway's 150s idle timeout fires.
+          withTimeout(
+            parquetReadObjects({
+              file,
+              metadata,
+              compressors,
+              rowStart: slice.rowStart,
+              rowEnd: slice.rowEnd,
+            }),
+            timeLeft(),
+          ),
+        {
+          label: `rows ${slice.rowStart}..${slice.rowEnd}`,
+          deadlineAt,
         },
-        deadlineExceeded: true,
-      };
+      );
+      const ms = Date.now() - sliceStart;
+      timings.slices.push({ ...slice, ms });
+      timings.decodeMs += ms;
+      raw.push(...(part as Record<string, unknown>[]));
+    } catch (e) {
+      const ms = Date.now() - sliceStart;
+      timings.slices.push({ ...slice, ms, timedOut: e instanceof ParquetReadTimeout });
+      timings.decodeMs += ms;
+      if (e instanceof ParquetReadTimeout) {
+        // Row-group aligned contract: partial slices are discarded and the
+        // cursor stays put, so resume re-reads this range with no duplicates.
+        return bail("decode", heldCheckpoint);
+      }
+      throw e;
     }
-    throw e;
   }
 
-  const rows = (raw as Record<string, unknown>[]).map((row) => {
+  const normStart = Date.now();
+  const rows = raw.map((row) => {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(row)) out[k] = scalar(v);
     return out;
@@ -571,9 +648,11 @@ export async function readParquetChunk(
     byteLength,
     expectedRowsPerUser,
   );
+  timings.normalizeMs = Date.now() - normStart;
 
-  return { rows, checkpoint: plan.checkpoint };
+  return finish({ rows, checkpoint: plan.checkpoint });
 }
+
 
 /**
  * Read up to `maxRows` rows from a Parquet object as plain records.

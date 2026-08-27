@@ -968,7 +968,13 @@ Deno.serve(async (req) => {
     mem: memSnapshot(),
   }));
 
+  // One trace id per ingest run. It is written onto every queued scoring task
+  // and echoed by the worker, so a CPU spike in the logs maps to an identifier.
+  const runTraceId = newTraceId("ingest");
+  console.log(JSON.stringify({ evt: "ingest_run_started", trace_id: runTraceId, caps }));
+
   const summary = {
+    trace_id: runTraceId,
     files_processed: 0,
     files_failed: 0,
     identifiers_scored: 0,
@@ -1431,6 +1437,7 @@ Deno.serve(async (req) => {
           tags: [...entry.tags.values()],
           signals: entry.signals,
           confidence: entry.confidence,
+          trace_id: `${runTraceId}.${identifier.slice(0, 8)}`,
         }));
 
         for (let i = 0; i < queueRows.length; i += QUEUE_CHUNK) {
@@ -1451,7 +1458,7 @@ Deno.serve(async (req) => {
         // gets an immediate credits / connectivity verdict before the queue runs.
         if (probeOnly && queueRows.length) {
           try {
-            await scoreIdentifier(admin, queueRows[0] as never, rateMetrics as never);
+            await scoreIdentifier(admin, queueRows[0] as never, rateMetrics as never, { traceId: queueRows[0].trace_id } as never);
             summary.identifiers_scored++;
             await admin.from("intuizi_ingest_state").update({
               paused: false,

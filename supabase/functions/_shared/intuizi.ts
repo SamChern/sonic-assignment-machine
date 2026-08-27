@@ -82,6 +82,7 @@ export async function fetchObjectChunk(
   rows: Record<string, unknown>[];
   checkpoint: ParquetCheckpoint | null;
   deadlineExceeded?: boolean;
+  timings?: Record<string, unknown>;
 }> {
   const lower = objectKey.toLowerCase();
 
@@ -91,10 +92,12 @@ export async function fetchObjectChunk(
 
   // Plain object reads are aborted at the deadline so a stalled transfer can
   // never hold the function open past the gateway's 150s idle limit.
+  const fetchStart = Date.now();
   const signal = deadlineAt != null
     ? AbortSignal.timeout(Math.max(1_000, deadlineAt - Date.now()))
     : undefined;
   const res = await fetch(url, { signal });
+
   if (!res.ok) {
     throw new Error(`object fetch failed [${res.status}]: ${await res.text()}`);
   }

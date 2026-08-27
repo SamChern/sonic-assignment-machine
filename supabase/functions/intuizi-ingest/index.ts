@@ -28,7 +28,7 @@ import {
 } from "../_shared/normalization.ts";
 import {
   activationIdFromKey,
-  fetchObjectRows,
+  fetchObjectChunk,
   identifierOf,
   ingestPrefixes,
   isAudioKey,
@@ -731,6 +731,10 @@ Deno.serve(async (req) => {
     paused: false,
     pause_reason: null as string | null,
     time_budget_exhausted: false,
+    /** False when any file still has untransformed row groups or identifiers. */
+    complete: true,
+    /** Per-file resume state, so the caller can show partial/complete status. */
+    files: [] as Record<string, unknown>[],
     errors: [] as string[],
     // Rate-limit telemetry for this run, filled in before responding.
     rate_metrics: null as Record<string, unknown> | null,
@@ -845,7 +849,7 @@ Deno.serve(async (req) => {
           started_at: new Date().toISOString(),
           error_message: null,
         }, { onConflict: "object_key" })
-        .select("id,processed_rows").single();
+        .select("id,report_type,processed_rows,row_group_cursor,rows_offset,row_groups_total").single();
       if (fileErr) {
         summary.errors.push(`ledger ${rawCand.key}: ${fileErr.message}`);
         summary.files_failed++;
@@ -894,14 +898,43 @@ Deno.serve(async (req) => {
 
       try {
         const url = await signReadUrl(cand.key);
-        const rawRows = (await fetchObjectRows(
+        // Resume from the last transformed row group instead of re-reading rows
+        // that were already normalized in an earlier (possibly timed-out) run.
+        const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
+        const chunk = await fetchObjectChunk(
           url,
           cand.key,
           MAX_ROWS_PER_FILE,
           EXPECTED_ROWS_PER_USER,
-        )).slice(0, MAX_ROWS_PER_FILE);
+          resumeGroup,
+        );
+        const checkpoint = chunk.checkpoint;
+        const rawRows = chunk.rows.slice(0, MAX_ROWS_PER_FILE);
 
         summary.rows_read += rawRows.length;
+
+        if (checkpoint && !rawRows.length && checkpoint.exhausted) {
+          // Every row group has already been transformed — close the file out.
+          await admin.from("intuizi_ingest_files").update({
+            status: "done",
+            row_group_cursor: checkpoint.nextRowGroup,
+            row_groups_total: checkpoint.rowGroupsTotal,
+            rows_offset: checkpoint.nextRowsOffset,
+            finished_at: new Date().toISOString(),
+            error_message: null,
+          }).eq("id", fileRow.id);
+          summary.files_processed++;
+          summary.files.push({
+            object_key: cand.key,
+            status: "done",
+            complete: true,
+            rows: 0,
+            row_group_cursor: checkpoint.nextRowGroup,
+            row_groups_total: checkpoint.rowGroupsTotal,
+          });
+          continue;
+        }
+
 
         // ---- Roll rows up per identifier ---------------------------------
         const perIdentifier = new Map<string, {
@@ -979,17 +1012,30 @@ Deno.serve(async (req) => {
                 .upsert(chunk, { onConflict: "primary_identifier" });
               if (rosterErr) throw rosterErr;
             }
+            const rosterComplete = !checkpoint || checkpoint.exhausted;
             await admin.from("intuizi_ingest_files").update({
-              status: "done",
+              status: rosterComplete ? "done" : "partial",
               total_rows: rawRows.length,
-              processed_rows: rosterIds.length,
+              processed_rows: (fileRow.processed_rows ?? 0) + rosterIds.length,
               failed_rows: 0,
               cursor_offset: rosterIds.length,
-              finished_at: nowIso,
+              row_group_cursor: checkpoint?.nextRowGroup ?? 0,
+              row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+              rows_offset: checkpoint?.nextRowsOffset ?? 0,
+              finished_at: rosterComplete ? nowIso : null,
               error_message: null,
             }).eq("id", fileRow.id);
             summary.files_processed++;
             summary.roster_identifiers += rosterIds.length;
+            summary.files.push({
+              object_key: cand.key,
+              status: rosterComplete ? "done" : "partial",
+              complete: rosterComplete,
+              rows: rawRows.length,
+              row_group_cursor: checkpoint?.nextRowGroup ?? null,
+              row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+            });
+            if (!rosterComplete) summary.complete = false;
             continue;
           }
         }
@@ -1204,13 +1250,27 @@ Deno.serve(async (req) => {
         }
 
         const remaining = perIdentifier.size - scoredInFile - failedInFile;
+        // A Parquet file is only "done" once its last row group is transformed.
+        const chunkComplete = !checkpoint || checkpoint.exhausted;
+        const fileStatus = breakerTripped
+          ? "paused"
+          : (remaining > 0 || !chunkComplete ? "partial" : "done");
         await admin.from("intuizi_ingest_files").update({
-          status: breakerTripped ? "paused" : (remaining > 0 ? "partial" : "done"),
+          status: fileStatus,
           total_rows: rawRows.length,
           processed_rows: (fileRow.processed_rows ?? 0) + scoredInFile,
           failed_rows: failedInFile,
           cursor_offset: perIdentifier.size - remaining,
-          finished_at: remaining > 0 || breakerTripped ? null : new Date().toISOString(),
+          // Only advance the row-group checkpoint when this chunk's rows were
+          // fully drained, so nothing is skipped on resume.
+          row_group_cursor: checkpoint
+            ? (remaining > 0 || breakerTripped ? checkpoint.startRowGroup : checkpoint.nextRowGroup)
+            : 0,
+          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+          rows_offset: checkpoint
+            ? (remaining > 0 || breakerTripped ? checkpoint.rowsOffset : checkpoint.nextRowsOffset)
+            : 0,
+          finished_at: fileStatus === "done" ? new Date().toISOString() : null,
           error_message: failedInFile ? summary.errors.slice(-3).join("\n").slice(0, 2000) : null,
         }).eq("id", fileRow.id);
 
@@ -1220,17 +1280,34 @@ Deno.serve(async (req) => {
           object_key: cand.key,
           report_type: fileRow.report_type ?? "unknown",
           activation_id: cand.key.toLowerCase().match(/activation[_-]?id(\d+)/)?.[1] ?? null,
-          status: breakerTripped ? "paused" : (remaining > 0 ? "partial" : "done"),
+          status: fileStatus,
           rows: rawRows.length,
           identifiers: perIdentifier.size,
           enriched: scoredInFile,
           failed: failedInFile,
           identifier_only: Math.max(0, remaining),
+          row_group_cursor: checkpoint?.nextRowGroup ?? null,
+          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
           coverage_pct: perIdentifier.size
             ? Math.round((scoredInFile / perIdentifier.size) * 100)
             : null,
           ...rateMetrics.snapshot(),
         }));
+
+        summary.files.push({
+          object_key: cand.key,
+          status: fileStatus,
+          complete: fileStatus === "done",
+          rows: rawRows.length,
+          identifiers: perIdentifier.size,
+          enriched: scoredInFile,
+          failed: failedInFile,
+          row_group_cursor: checkpoint
+            ? (remaining > 0 || breakerTripped ? checkpoint.startRowGroup : checkpoint.nextRowGroup)
+            : null,
+          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+        });
+        if (fileStatus !== "done") summary.complete = false;
 
         summary.files_processed++;
 
@@ -1269,6 +1346,9 @@ Deno.serve(async (req) => {
     }
     (summary as Json).roster_only = rosterOnly;
 
+    if (summary.time_budget_exhausted || summary.files_failed || breakerTripped) {
+      summary.complete = false;
+    }
     summary.rate_metrics = rateMetrics.snapshot();
     console.log(JSON.stringify({ evt: "ingest_run_summary", ...summary }));
     await admin.from("intuizi_ingest_state").update({

@@ -193,16 +193,39 @@ export function validateParquetRows(
   return report;
 }
 
+/** Checkpoint describing how far through a Parquet object a read got. */
+export interface ParquetCheckpoint {
+  /** Row group the read started at (0-based). */
+  startRowGroup: number;
+  /** Row group the next read should start at. */
+  nextRowGroup: number;
+  /** Total row groups in the object. */
+  rowGroupsTotal: number;
+  /** Absolute row offset the read started at. */
+  rowsOffset: number;
+  /** Absolute row offset the next read should start at. */
+  nextRowsOffset: number;
+  /** True when every row group has been consumed. */
+  exhausted: boolean;
+}
+
+export interface ParquetChunk {
+  rows: Record<string, unknown>[];
+  checkpoint: ParquetCheckpoint;
+}
+
 /**
- * Read up to `maxRows` rows from a Parquet object as plain records.
- * Values are flattened to JSON-safe scalars so `normalizeRow` can treat the
- * rows exactly like CSV rows.
+ * Read a bounded chunk of rows from a Parquet object, starting at a row-group
+ * checkpoint. Reads are aligned to row-group boundaries so the returned
+ * checkpoint can be persisted and a later run resumes exactly where this one
+ * stopped, without re-transforming rows that were already processed.
  */
-export async function readParquetRows(
+export async function readParquetChunk(
   url: string,
   maxRows: number,
+  startRowGroup = 0,
   expectedRowsPerUser?: number,
-): Promise<Record<string, unknown>[]> {
+): Promise<ParquetChunk> {
   const file = await asyncBufferFromUrl({ url });
   const byteLength = typeof file.byteLength === "number" ? file.byteLength : null;
 
@@ -221,7 +244,6 @@ export async function readParquetRows(
     );
   }
 
-
   // Footer first: gives the column list and row count without decoding pages,
   // so an empty or mis-shaped delivery fails with a readable message.
   const metadata = await parquetMetadataAsync(file);
@@ -229,7 +251,12 @@ export async function readParquetRows(
     .filter((s: { num_children?: number; name: string }) => !s.num_children)
     .map((s: { name: string }) => s.name);
   const numRows = Number(metadata.num_rows ?? 0);
-  console.log(`parquet footer: rows=${numRows} columns=[${columns.join(", ")}]`);
+  const groupRows = ((metadata.row_groups ?? []) as { num_rows?: number | bigint }[])
+    .map((rg) => Number(rg.num_rows ?? 0));
+  console.log(
+    `parquet footer: rows=${numRows} row_groups=${groupRows.length} ` +
+      `resume_at_group=${startRowGroup} columns=[${columns.join(", ")}]`,
+  );
 
   if (numRows === 0) {
     validateParquetRows(metadata as unknown as Record<string, unknown>, [], byteLength);
@@ -238,12 +265,39 @@ export async function readParquetRows(
     );
   }
 
+  const from = Math.max(0, Math.min(startRowGroup, groupRows.length));
+  const rowsOffset = groupRows.slice(0, from).reduce((a, b) => a + b, 0);
+
+  if (from >= groupRows.length || rowsOffset >= numRows) {
+    return {
+      rows: [],
+      checkpoint: {
+        startRowGroup: from,
+        nextRowGroup: groupRows.length,
+        rowGroupsTotal: groupRows.length,
+        rowsOffset,
+        nextRowsOffset: numRows,
+        exhausted: true,
+      },
+    };
+  }
+
+  // Consume whole row groups until the row budget is met (at least one group).
+  let nextRowGroup = from;
+  let take = 0;
+  while (nextRowGroup < groupRows.length && (take === 0 || take + groupRows[nextRowGroup] <= maxRows)) {
+    take += groupRows[nextRowGroup];
+    nextRowGroup++;
+  }
+
+  const rowEnd = Math.min(rowsOffset + Math.min(take, maxRows), numRows);
+
   const raw = await parquetReadObjects({
     file,
     metadata,
     compressors,
-    rowStart: 0,
-    rowEnd: Math.min(maxRows, numRows),
+    rowStart: rowsOffset,
+    rowEnd,
   });
 
   const rows = (raw as Record<string, unknown>[]).map((row) => {
@@ -260,6 +314,30 @@ export async function readParquetRows(
     expectedRowsPerUser,
   );
 
+  return {
+    rows,
+    checkpoint: {
+      startRowGroup: from,
+      nextRowGroup,
+      rowGroupsTotal: groupRows.length,
+      rowsOffset,
+      nextRowsOffset: rowEnd,
+      exhausted: nextRowGroup >= groupRows.length || rowEnd >= numRows,
+    },
+  };
+}
+
+/**
+ * Read up to `maxRows` rows from a Parquet object as plain records.
+ * Values are flattened to JSON-safe scalars so `normalizeRow` can treat the
+ * rows exactly like CSV rows.
+ */
+export async function readParquetRows(
+  url: string,
+  maxRows: number,
+  expectedRowsPerUser?: number,
+): Promise<Record<string, unknown>[]> {
+  const { rows } = await readParquetChunk(url, maxRows, 0, expectedRowsPerUser);
   return rows;
 }
 

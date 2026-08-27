@@ -55,7 +55,7 @@ describe("Audioscope Static mode", () => {
 
     expect(staticBtn()).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /^play\b/i })).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(/reduced motion is on/i);
+    expect(screen.getByRole("note")).toHaveTextContent(/reduced motion is on/i);
     expect(screen.getByText(/Static frame/i)).toBeInTheDocument();
   });
 
@@ -115,7 +115,7 @@ describe("Dual audioscope Static parity", () => {
 
     expect(staticBtn()).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /^play\b/i })).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(/reduced motion is on/i);
+    expect(screen.getByRole("note")).toHaveTextContent(/reduced motion is on/i);
   });
 
   it("Play leaves Static and Static halts motion, persisting the choice", async () => {

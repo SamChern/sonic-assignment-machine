@@ -1001,17 +1001,30 @@ Deno.serve(async (req) => {
                 .upsert(chunk, { onConflict: "primary_identifier" });
               if (rosterErr) throw rosterErr;
             }
+            const rosterComplete = !checkpoint || checkpoint.exhausted;
             await admin.from("intuizi_ingest_files").update({
-              status: "done",
+              status: rosterComplete ? "done" : "partial",
               total_rows: rawRows.length,
-              processed_rows: rosterIds.length,
+              processed_rows: (fileRow.processed_rows ?? 0) + rosterIds.length,
               failed_rows: 0,
               cursor_offset: rosterIds.length,
-              finished_at: nowIso,
+              row_group_cursor: checkpoint?.nextRowGroup ?? 0,
+              row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+              rows_offset: checkpoint?.nextRowsOffset ?? 0,
+              finished_at: rosterComplete ? nowIso : null,
               error_message: null,
             }).eq("id", fileRow.id);
             summary.files_processed++;
             summary.roster_identifiers += rosterIds.length;
+            summary.files.push({
+              object_key: cand.key,
+              status: rosterComplete ? "done" : "partial",
+              complete: rosterComplete,
+              rows: rawRows.length,
+              row_group_cursor: checkpoint?.nextRowGroup ?? null,
+              row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+            });
+            if (!rosterComplete) summary.complete = false;
             continue;
           }
         }

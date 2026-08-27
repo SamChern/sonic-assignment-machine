@@ -7,6 +7,9 @@ import {
   CATEGORY_LABELS,
   createSyntheticSignal,
   type CategoryScores,
+  initialStatic,
+  prefersReducedMotion,
+  writeMotionPref,
 } from "@/lib/audioscope";
 
 export interface AudioscopeCompareEntity {
@@ -23,12 +26,10 @@ interface AudioscopeCompareProps {
   height?: number;
 }
 
+const MOTION_PREF_KEY = "sonicsim.audioscope.compare.motion";
+
 /** Deterministic time offset (seconds) the Static view freezes on. */
 const STATIC_FRAME_T = 1.25;
-
-const prefersReducedMotion = () =>
-  typeof window !== "undefined" &&
-  Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
 
 function readVar(name: string, fallback: string): string {
   if (typeof window === "undefined") return fallback;
@@ -43,10 +44,10 @@ function readVar(name: string, fallback: string): string {
  */
 export const AudioscopeCompare = ({ entities, similarity, height = 240 }: AudioscopeCompareProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [playing, setPlaying] = useState(() => !prefersReducedMotion());
+  const [playing, setPlaying] = useState(() => !initialStatic(MOTION_PREF_KEY));
   const [speed, setSpeed] = useState(0.25);
   // Reduced-motion users get the still frame by default; they can opt back into motion.
-  const [isStatic, setIsStatic] = useState(prefersReducedMotion);
+  const [isStatic, setIsStatic] = useState(() => initialStatic(MOTION_PREF_KEY));
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const rafRef = useRef<number | null>(null);
@@ -77,6 +78,10 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       })).sort((a, b) => b.delta - a.delta),
     [deltas],
   );
+
+  useEffect(() => {
+    writeMotionPref(MOTION_PREF_KEY, isStatic ? "static" : "motion");
+  }, [isStatic]);
 
   useEffect(() => {
     const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");

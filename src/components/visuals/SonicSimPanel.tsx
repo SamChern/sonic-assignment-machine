@@ -30,6 +30,9 @@ import {
   categoryToken,
   type AudioscopeFeatureHints,
   type CategoryScores,
+  initialStatic,
+  prefersReducedMotion,
+  writeMotionPref,
 } from "@/lib/audioscope";
 
 export interface SonicSimSubject {
@@ -58,11 +61,9 @@ const MODES: { key: AudioscopeMode; label: string; icon: typeof Activity }[] = [
   { key: "nodes", label: "Node pulse", icon: Network },
 ];
 
-const prefersReducedMotion = () =>
-  typeof window !== "undefined" &&
-  Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
-
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3] as const;
+
+const MOTION_PREF_KEY = "sonicsim.audioscope.motion";
 
 /** Deterministic time offset (seconds) the Static view freezes on. */
 const STATIC_FRAME_T = 1.25;
@@ -77,10 +78,10 @@ export const SonicSimPanel = ({
 }: SonicSimPanelProps) => {
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id ?? "");
   const [mode, setMode] = useState<AudioscopeMode>(defaultMode);
-  const [playing, setPlaying] = useState(() => !prefersReducedMotion());
+  const [playing, setPlaying] = useState(() => !initialStatic(MOTION_PREF_KEY));
   const [speed, setSpeed] = useState(0.25);
-  // Reduced-motion users get the still frame by default; they can opt back into motion.
-  const [isStatic, setIsStatic] = useState(prefersReducedMotion);
+  // Stored choice wins; otherwise reduced-motion users get the still frame by default.
+  const [isStatic, setIsStatic] = useState(() => initialStatic(MOTION_PREF_KEY));
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const [replayKey, setReplayKey] = useState(0);
@@ -134,6 +135,11 @@ export const SonicSimPanel = ({
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
+
+  // Persist the Static/Play choice so it stays consistent across page loads.
+  useEffect(() => {
+    writeMotionPref(MOTION_PREF_KEY, isStatic ? "static" : "motion");
+  }, [isStatic]);
 
   const toggleStatic = () => {
     setIsStatic((prev) => {

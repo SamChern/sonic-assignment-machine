@@ -190,3 +190,29 @@ export function buildVerdict(cfg: InferenceConfig, probe: ProbeResult): VerdictR
     summary,
   };
 }
+
+/** Truthy env spellings accepted for EC2_INFERENCE_REQUIRED. */
+const TRUTHY = new Set(["true", "1", "yes", "on"]);
+
+/**
+ * Parses raw env values into a config, tolerating malformed input: values are
+ * trimmed, trailing slashes dropped from the URL, quotes stripped, unparsable
+ * or negative dims collapse to 0, and any non-truthy "required" spelling
+ * (including junk like "maybe") is treated as NOT required — so a typo can
+ * never block semantic processing.
+ */
+export function parseInferenceConfig(
+  env: Record<string, string | undefined>,
+): InferenceConfig {
+  const str = (k: string) => (env[k] ?? "").trim().replace(/^["']|["']$/g, "").trim();
+  const dimsRaw = Number.parseInt(str("EC2_EMBEDDING_DIMS"), 10);
+  return {
+    ec2Url: str("EC2_INFERENCE_URL").replace(/\/+$/, ""),
+    ec2Key: str("EC2_INFERENCE_API_KEY") || str("AWS_API_KEY"),
+    chatModel: str("EC2_INFERENCE_MODEL"),
+    embedModel: str("EC2_EMBEDDING_MODEL"),
+    embedDims: Number.isFinite(dimsRaw) && dimsRaw > 0 ? dimsRaw : 0,
+    ec2Required: TRUTHY.has(str("EC2_INFERENCE_REQUIRED").toLowerCase()),
+    lovableApiKey: str("LOVABLE_API_KEY"),
+  };
+}

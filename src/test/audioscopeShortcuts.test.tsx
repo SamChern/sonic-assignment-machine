@@ -148,6 +148,106 @@ describe("Audioscope keyboard shortcuts", () => {
     expect(single).toHaveAttribute("aria-pressed", "false");
   });
 
+
+  it("jumps focus to motion controls with M from inside the single pane", async () => {
+    const user = userEvent.setup();
+    render(
+      <div data-testid="scope">
+        <SonicSimPanel subjects={subjects} />
+      </div>,
+    );
+    const toggle = document.querySelector("#audioscope-static-toggle") as HTMLButtonElement;
+    const legend = screen.getByRole("button", { name: /how to read this/i }) as HTMLButtonElement;
+
+    legend.focus();
+    expect(document.activeElement).toBe(legend);
+
+    await user.keyboard("m");
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  it("jumps focus to the motion controls of the pane the user is in (compare)", async () => {
+    const user = userEvent.setup();
+    render(
+      <div data-testid="scope">
+        <SonicSimPanel subjects={subjects} />
+        <AudioscopeCompare entities={compareEntities} similarity={72} />
+      </div>,
+    );
+    const single = document.querySelector("#audioscope-static-toggle") as HTMLButtonElement;
+    const compare = document.querySelector(
+      "#audioscope-compare-static-toggle",
+    ) as HTMLButtonElement;
+
+    const compareLegend = within(compare.closest("[data-audioscope-panel], div") as HTMLElement);
+    void compareLegend;
+
+    // Focus a control inside the compare pane, then press M.
+    const compareReplayOrLegend = compare.parentElement?.querySelector(
+      "button:not(#audioscope-compare-static-toggle)",
+    ) as HTMLButtonElement;
+    (compareReplayOrLegend ?? compare).focus();
+
+    await user.keyboard("m");
+    expect(document.activeElement).toBe(compare);
+    expect(document.activeElement).not.toBe(single);
+  });
+
+  it("falls back to the first pane when M is pressed outside every pane", async () => {
+    const user = userEvent.setup();
+    render(
+      <div data-testid="scope">
+        <button type="button">outside</button>
+        <SonicSimPanel subjects={subjects} />
+        <AudioscopeCompare entities={compareEntities} similarity={72} />
+      </div>,
+    );
+    const single = document.querySelector("#audioscope-static-toggle") as HTMLButtonElement;
+
+    (screen.getByRole("button", { name: "outside" }) as HTMLButtonElement).focus();
+    await user.keyboard("m");
+    expect(document.activeElement).toBe(single);
+  });
+
+  it("does not steal focus with M while typing in a form field", async () => {
+    const user = userEvent.setup();
+    render(
+      <div data-testid="scope">
+        <input aria-label="note" />
+        <textarea aria-label="memo" />
+        <SonicSimPanel subjects={subjects} />
+        <AudioscopeCompare entities={compareEntities} similarity={72} />
+      </div>,
+    );
+    const single = document.querySelector("#audioscope-static-toggle") as HTMLButtonElement;
+    const compare = document.querySelector(
+      "#audioscope-compare-static-toggle",
+    ) as HTMLButtonElement;
+
+    const input = screen.getByLabelText("note");
+    await user.click(input);
+    await user.keyboard("mm");
+    expect(input).toHaveValue("mm");
+    expect(document.activeElement).toBe(input);
+
+    const memo = screen.getByLabelText("memo");
+    await user.click(memo);
+    await user.keyboard("m");
+    expect(memo).toHaveValue("m");
+    expect(document.activeElement).toBe(memo);
+    expect(document.activeElement).not.toBe(single);
+    expect(document.activeElement).not.toBe(compare);
+  });
+
+  it("advertises M on the motion-controls link and shortcut hint", () => {
+    render(
+      <div data-testid="scope">
+        <SonicSimPanel subjects={subjects} />
+      </div>,
+    );
+    expect(screen.getAllByText(/jump to motion controls/i).length).toBeGreaterThan(0);
+  });
+
   it("documents the shortcuts on screen for both panels", () => {
     render(
       <div data-testid="scope">

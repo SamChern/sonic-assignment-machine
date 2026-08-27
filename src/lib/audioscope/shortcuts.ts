@@ -11,7 +11,7 @@
  * Typing in inputs, textareas, selects, or contenteditable regions is never
  * hijacked, and any modifier combination (Ctrl/Cmd/Alt) is left to the browser.
  */
-import { useEffect } from "react";
+import { useEffect, type RefObject } from "react";
 
 /** Marker attribute placed on each pane's focus anchor (its Static button). */
 export const PANE_ANCHOR_ATTR = "data-audioscope-pane";
@@ -36,13 +36,29 @@ const cycleFocus = (direction: 1 | -1) => {
 };
 
 export type AudioscopeShortcutHandlers = {
+  /** The panel root — shortcuts only fire while focus is inside it. */
+  containerRef: RefObject<HTMLElement>;
   onToggleStatic: () => void;
   onTogglePlay: () => void;
   /** Set false to detach (e.g. panel has nothing to visualize). */
   enabled?: boolean;
 };
 
+/**
+ * A panel owns the keystroke when focus sits inside it, or when nothing is
+ * focused at all and it is the only audioscope pane on the page.
+ */
+const ownsKeystroke = (container: HTMLElement | null): boolean => {
+  if (!container || typeof document === "undefined") return false;
+  const active = document.activeElement;
+  if (active && active !== document.body && container.contains(active)) return true;
+  if (active && active !== document.body) return false;
+  const panes = document.querySelectorAll(`[${PANE_ANCHOR_ATTR}]`);
+  return panes.length <= 1 && container.contains(panes[0] ?? container);
+};
+
 export const useAudioscopeShortcuts = ({
+  containerRef,
   onToggleStatic,
   onTogglePlay,
   enabled = true,
@@ -51,6 +67,7 @@ export const useAudioscopeShortcuts = ({
     if (!enabled || typeof window === "undefined") return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e.target)) return;
+      if (!ownsKeystroke(containerRef.current)) return;
       switch (e.key.toLowerCase()) {
         case "s":
           e.preventDefault();
@@ -74,7 +91,7 @@ export const useAudioscopeShortcuts = ({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [enabled, onToggleStatic, onTogglePlay]);
+  }, [enabled, containerRef, onToggleStatic, onTogglePlay]);
 };
 
 /** Shared help text so both panels describe the same keys. */

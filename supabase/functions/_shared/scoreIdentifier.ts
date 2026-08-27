@@ -25,6 +25,20 @@ import {
   applyNormalizationToAnalysis,
   loadNormalization,
 } from "./normalization.ts";
+import {
+  backoffFor,
+  classifyFailure,
+  type FailureVerdict,
+  httpStatusOf,
+  messageOf,
+  newTraceId,
+  stageOf,
+  tagStage,
+} from "./failure.ts";
+
+export { classifyFailure, newTraceId, stageOf };
+export type { FailureVerdict };
+
 
 type Json = Record<string, unknown>;
 

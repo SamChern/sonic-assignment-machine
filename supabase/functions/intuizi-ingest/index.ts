@@ -1513,8 +1513,16 @@ Deno.serve(async (req) => {
       summary.complete = false;
     }
     summary.elapsed_ms = Date.now() - runStart;
+    summary.time_remaining_ms = timeLeftMs();
+    summary.budget_history = [...history, {
+      at: new Date().toISOString(),
+      budget_ms: budgetMs,
+      elapsed_ms: summary.elapsed_ms,
+      timed_out: summary.time_budget_exhausted || summary.deadline_exceeded,
+    }].slice(-10);
     summary.rate_metrics = rateMetrics.snapshot();
     console.log(JSON.stringify({ evt: "ingest_run_summary", ...summary }));
+
     await admin.from("intuizi_ingest_state").update({
       last_run_at: new Date().toISOString(),
       last_run_summary: summary,

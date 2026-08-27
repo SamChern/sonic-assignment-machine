@@ -29,7 +29,6 @@ import {
 import {
   activationIdFromKey,
   fetchObjectChunk,
-  fetchObjectRows,
   identifierOf,
   ingestPrefixes,
   isAudioKey,

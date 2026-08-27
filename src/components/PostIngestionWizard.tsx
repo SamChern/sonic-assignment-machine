@@ -186,15 +186,21 @@ const PostIngestionWizard = () => {
         rows_read?: number;
         identifiers_scored?: number;
         roster_identifiers?: number;
+        time_budget_exhausted?: boolean;
         errors?: string[];
       };
       rowsRead += res.rows_read ?? 0;
       scored += res.identifiers_scored ?? 0;
       roster += res.roster_identifiers ?? 0;
       if (res.errors?.length) ingestErrors.push(...res.errors);
+      if (res.time_budget_exhausted) {
+        ingestErrors.push(
+          `${fileName(f.object_key)}: stopped at the run time budget — remaining rows resume on the next run.`,
+        );
+      }
       perFile.push([
         fileName(f.object_key),
-        `${res.rows_read ?? 0} rows · ${res.identifiers_scored ?? 0} scored · ${res.roster_identifiers ?? 0} roster`,
+        `${res.rows_read ?? 0} rows · ${res.identifiers_scored ?? 0} scored · ${res.roster_identifiers ?? 0} roster${res.time_budget_exhausted ? " · partial" : ""}`,
       ]);
     }
 

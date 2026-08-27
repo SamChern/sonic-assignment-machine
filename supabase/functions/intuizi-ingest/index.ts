@@ -64,6 +64,9 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const MAX_FILES_PER_RUN = 3;
 const MAX_IDENTIFIERS_PER_RUN = 40;
 const MAX_ROWS_PER_FILE = 5000;
+// The edge gateway kills a request after 150s of idle time. Stop taking new work
+// well before that and return a partial summary; remaining work resumes next run.
+const RUN_BUDGET_MS = 105_000;
 // Expected rows per user/device in an Intuizi activation delivery. Used only by
 // the pre-ingest parquet validation log to flag deliveries whose shape drifted.
 const EXPECTED_ROWS_PER_USER = Number(
@@ -713,6 +716,8 @@ Deno.serve(async (req) => {
   if (!acquired) return json({ skipped: "another run holds the lease" });
 
   rateMetrics.reset();
+  const runStart = Date.now();
+  const outOfTime = () => Date.now() - runStart > RUN_BUDGET_MS;
   const summary = {
     files_processed: 0,
     files_failed: 0,
@@ -725,6 +730,7 @@ Deno.serve(async (req) => {
     probe_only: probeOnly,
     paused: false,
     pause_reason: null as string | null,
+    time_budget_exhausted: false,
     errors: [] as string[],
     // Rate-limit telemetry for this run, filled in before responding.
     rate_metrics: null as Record<string, unknown> | null,
@@ -825,6 +831,7 @@ Deno.serve(async (req) => {
 
     for (const rawCand of candidates) {
       if (breakerTripped) break;
+      if (outOfTime()) { summary.time_budget_exhausted = true; break; }
 
       const { data: fileRow, error: fileErr } = await admin
         .from("intuizi_ingest_files")
@@ -1000,6 +1007,7 @@ Deno.serve(async (req) => {
 
         for (const [identifier, entry] of perIdentifier) {
           if (summary.identifiers_scored >= identifierBudget) break;
+          if (outOfTime()) { summary.time_budget_exhausted = true; break; }
 
           const { data: existing } = await admin
             .from("intuizi_identifiers")

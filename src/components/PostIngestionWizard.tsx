@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import InferenceConfigGuard from "@/components/InferenceConfigGuard";
 import PhaseCpuChart, { type PhaseRun } from "@/components/PhaseCpuChart";
+import ScoreQueueHealthPanel from "@/components/ScoreQueueHealthPanel";
 import { useInferenceReadiness } from "@/hooks/useInferenceReadiness";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -842,6 +843,11 @@ const PostIngestionWizard = () => {
         {!running && !!phaseRuns.length && (
           <div className="w-full space-y-1">
             <PhaseCpuChart runs={phaseRuns} />
+          </div>
+
+          <div className="mt-4">
+            {/* Dead-letter visibility + one-click recovery for the background scorer. */}
+            <ScoreQueueHealthPanel activationId={selected || undefined} />
             <div className="flex justify-end">
               <Button
                 variant="ghost"

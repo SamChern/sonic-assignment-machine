@@ -21,6 +21,7 @@ import { toast } from "@/hooks/use-toast";
 import InspectMappingPanel from "@/components/InspectMappingPanel";
 import PostIngestionWizard from "@/components/PostIngestionWizard";
 import ConfidenceBreakdownPanel from "@/components/ConfidenceBreakdownPanel";
+import ScoreQueueHealthPanel from "@/components/ScoreQueueHealthPanel";
 import SpeechNormalizationPanel from "@/components/SpeechNormalizationPanel";
 import CategoryFlipTrendWidget from "@/components/CategoryFlipTrendWidget";
 import PerfMetricsBadge from "@/components/PerfMetricsBadge";
@@ -975,6 +976,13 @@ const SemanticAnalysis = () => {
         <div className="mt-6" id="data-stream-wizard">
 
           <PostIngestionWizard />
+        </div>
+
+        <div className="mt-6">
+          <ScoreQueueHealthPanel
+            activationId={activationParam ?? undefined}
+            className="border-border/60 bg-card/70 backdrop-blur-sm"
+          />
         </div>
 
         <div className="mt-6">

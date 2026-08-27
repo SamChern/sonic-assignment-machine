@@ -27,8 +27,10 @@ import Audioscope, { type AudioscopeMode } from "./Audioscope";
 import {
   PANE_ANCHOR_ATTR,
   SHORTCUT_HINT,
+  focusMotionControls,
   useAudioscopeShortcuts,
 } from "@/lib/audioscope/shortcuts";
+
 import {
   AUDIOSCOPE_CATEGORIES,
   CATEGORY_LABELS,
@@ -70,8 +72,18 @@ const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3] as const;
 
 const MOTION_PREF_KEY = "sonicsim.audioscope.motion";
 
+/**
+ * Transport chips: ~20% smaller than the default `sm` button and tinted to sit
+ * back into the panel surface instead of reading as solid buttons.
+ */
+const TRANSPORT_CLS =
+  "h-7 gap-1 rounded-md border border-border/40 bg-background/30 px-2 text-[11px] font-normal text-muted-foreground backdrop-blur-sm hover:bg-background/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+const TRANSPORT_CLS_ACTIVE =
+  "h-7 gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-[11px] font-normal text-foreground backdrop-blur-sm hover:bg-primary/25 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+
 /** Deterministic time offset (seconds) the Static view freezes on. */
 const STATIC_FRAME_T = 1.25;
+
 
 export const SonicSimPanel = ({
   subjects,
@@ -223,55 +235,63 @@ export const SonicSimPanel = ({
         <div
           role="group"
           aria-label="Audioscope playback controls"
-          className="flex shrink-0 flex-wrap items-center gap-2"
+          className="flex shrink-0 flex-wrap items-center gap-1.5"
         >
           <Button
             size="sm"
-            variant="outline"
-            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            variant="ghost"
+            className={TRANSPORT_CLS}
             onClick={togglePlay}
+            aria-pressed={playing && !isStatic}
+            aria-keyshortcuts="K"
+            aria-describedby="audioscope-shortcut-hint audioscope-status"
           >
-            {playing ? <Pause className="h-3.5 w-3.5" aria-hidden /> : <Play className="h-3.5 w-3.5" aria-hidden />}
+            {playing ? <Pause className="h-3 w-3" aria-hidden /> : <Play className="h-3 w-3" aria-hidden />}
             {playing ? "Pause" : "Play"}
             <span className="sr-only">
-              {playing ? " — pause the animated audioscope" : " — animate the audioscope"}
+              {playing
+                ? ` — on. The audioscope is animating at ${speed}x speed. Activate to pause it. Shortcut: K.`
+                : " — off. Activate to animate the audioscope. Shortcut: K."}
             </span>
           </Button>
           <Button
             size="sm"
-            variant="outline"
-            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            variant="ghost"
+            className={TRANSPORT_CLS}
             onClick={() => setReplayKey((k) => k + 1)}
           >
-            <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+            <RotateCcw className="h-3 w-3" aria-hidden />
             Replay
+            <span className="sr-only"> — restart the audioscope from the beginning</span>
           </Button>
           <Button
             ref={staticBtnRef}
             id="audioscope-static-toggle"
             {...{ [PANE_ANCHOR_ATTR]: "sonicsim" }}
             size="sm"
-            variant={isStatic ? "default" : "outline"}
-            className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            variant="ghost"
+            className={isStatic ? TRANSPORT_CLS_ACTIVE : TRANSPORT_CLS}
             onClick={toggleStatic}
             aria-pressed={isStatic}
+            aria-keyshortcuts="S"
             aria-describedby={
               reducedMotion
-                ? "audioscope-motion-notice audioscope-shortcut-hint"
-                : "audioscope-shortcut-hint"
+                ? "audioscope-motion-notice audioscope-shortcut-hint audioscope-status"
+                : "audioscope-shortcut-hint audioscope-status"
             }
           >
-            <ImageIcon className="h-3.5 w-3.5" aria-hidden />
+            <ImageIcon className="h-3 w-3" aria-hidden />
             Static
             <span className="sr-only">
               {isStatic
-                ? ` — on. Showing one still frame at ${STATIC_FRAME_T.toFixed(2)} seconds. Activate to resume motion.`
-                : " — off. Activate to freeze the audioscope on a single still frame."}
+                ? ` — on. Showing one still frame at ${STATIC_FRAME_T.toFixed(2)} seconds. Activate to resume motion. Shortcut: S.`
+                : " — off. Activate to freeze the audioscope on a single still frame. Shortcut: S."}
             </span>
           </Button>
 
-          <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
-            <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+
+          <div className="flex h-7 items-center gap-1.5 rounded-md border border-border/40 bg-background/30 px-2 backdrop-blur-sm">
+            <Gauge className="h-3 w-3 text-muted-foreground/70" aria-hidden />
             <label className="sr-only" htmlFor="audioscope-speed">
               Animation speed
             </label>
@@ -280,7 +300,7 @@ export const SonicSimPanel = ({
               value={String(speed)}
               disabled={isStatic}
               onChange={(e) => setSpeed(Number(e.target.value))}
-              className="bg-transparent text-xs text-foreground outline-none disabled:opacity-50"
+              className="bg-transparent text-[11px] text-muted-foreground outline-none disabled:opacity-50"
             >
               {SPEEDS.map((v) => (
                 <option key={v} value={v}>
@@ -291,19 +311,24 @@ export const SonicSimPanel = ({
           </div>
           <Button
             size="sm"
-            variant={showLegend ? "default" : "outline"}
-            className="gap-1.5"
+            variant="ghost"
+            className={showLegend ? TRANSPORT_CLS_ACTIVE : TRANSPORT_CLS}
             onClick={() => setShowLegend((v) => !v)}
             aria-expanded={showLegend}
           >
-            <Info className="h-3.5 w-3.5" />
+            <Info className="h-3 w-3" aria-hidden />
             <span className="hidden sm:inline">How to read this</span>
           </Button>
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={toggleFullscreen}>
-            {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          <Button size="sm" variant="ghost" className={TRANSPORT_CLS} onClick={toggleFullscreen}>
+            {fullscreen ? (
+              <Minimize2 className="h-3 w-3" aria-hidden />
+            ) : (
+              <Maximize2 className="h-3 w-3" aria-hidden />
+            )}
             <span className="hidden sm:inline">{fullscreen ? "Exit" : "Present"}</span>
           </Button>
         </div>
+
       </div>
 
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
@@ -354,7 +379,7 @@ export const SonicSimPanel = ({
       </p>
 
       {/* Announces mode changes to screen readers without moving focus. */}
-      <p aria-live="polite" className="sr-only">
+      <p id="audioscope-status" aria-live="polite" className="sr-only">
         {isStatic
           ? `Audioscope is static — one frame at ${STATIC_FRAME_T.toFixed(2)} seconds.`
           : playing
@@ -384,10 +409,12 @@ export const SonicSimPanel = ({
               size="sm"
               variant="link"
               className="h-auto p-0 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onClick={() => staticBtnRef.current?.focus()}
+              aria-keyshortcuts="M"
+              onClick={() => focusMotionControls(rootRef.current)}
             >
-              Jump to motion controls
+              Jump to motion controls (M)
             </Button>
+
           </div>
         </div>
       ) : null}

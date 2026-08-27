@@ -23,20 +23,38 @@ const isTypingTarget = (el: EventTarget | null): boolean => {
   return Boolean(node.closest("input, textarea, select, [contenteditable='true']"));
 };
 
-const cycleFocus = (direction: 1 | -1) => {
-  if (typeof document === "undefined") return;
-  const panes = Array.from(
-    document.querySelectorAll<HTMLElement>(`[${PANE_ANCHOR_ATTR}]`),
-  ).filter(
+const paneAnchors = (): HTMLElement[] => {
+  if (typeof document === "undefined") return [];
+  return Array.from(document.querySelectorAll<HTMLElement>(`[${PANE_ANCHOR_ATTR}]`)).filter(
     (el) =>
       el === document.activeElement ||
       (!el.hasAttribute("hidden") && !el.closest("[hidden], [aria-hidden='true']")),
   );
+};
+
+const cycleFocus = (direction: 1 | -1) => {
+  const panes = paneAnchors();
   if (panes.length === 0) return;
   const active = document.activeElement as HTMLElement | null;
   const current = panes.findIndex((el) => el === active || el.contains(active));
   const next = panes[(((current === -1 ? 0 : current + direction) % panes.length) + panes.length) % panes.length];
   next?.focus();
+};
+
+/**
+ * Jump focus to the motion controls (the Static toggle) of the pane the user is
+ * in — or, when focus sits outside every pane, the first pane on the page.
+ * Exported so notices and links can reuse the exact same behaviour as `M`.
+ */
+export const focusMotionControls = (container?: HTMLElement | null): boolean => {
+  const panes = paneAnchors();
+  if (panes.length === 0) return false;
+  const active = document.activeElement as HTMLElement | null;
+  const inPane = panes.find((el) => el === active || el.contains(active));
+  const scoped = container ? panes.find((el) => container.contains(el)) : undefined;
+  const target = inPane ?? scoped ?? panes[0];
+  target?.focus();
+  return Boolean(target);
 };
 
 export type AudioscopeShortcutHandlers = {
@@ -47,6 +65,7 @@ export type AudioscopeShortcutHandlers = {
   /** Set false to detach (e.g. panel has nothing to visualize). */
   enabled?: boolean;
 };
+
 
 /**
  * A panel owns the keystroke when focus sits inside it, or when nothing is
@@ -71,10 +90,19 @@ export const useAudioscopeShortcuts = ({
     if (!enabled || typeof window === "undefined") return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e.target)) return;
+      // M works from anywhere on the page, even when focus is outside a pane:
+      // it takes the user straight to the motion controls.
+      if (e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        focusMotionControls(containerRef.current);
+        return;
+      }
       if (!ownsKeystroke(containerRef.current)) return;
       // Only the owning pane handles the key — stop sibling panes from acting
       // on the same keystroke after focus has moved.
       e.stopImmediatePropagation();
+
       switch (e.key.toLowerCase()) {
         case "s":
           e.preventDefault();
@@ -102,4 +130,6 @@ export const useAudioscopeShortcuts = ({
 };
 
 /** Shared help text so both panels describe the same keys. */
-export const SHORTCUT_HINT = "Keys: S static · K play/pause · [ / ] switch panes";
+export const SHORTCUT_HINT =
+  "Keys: S static · K play/pause · M jump to motion controls · [ / ] switch panes";
+

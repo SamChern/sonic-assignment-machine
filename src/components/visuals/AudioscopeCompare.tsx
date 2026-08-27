@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import {
   PANE_ANCHOR_ATTR,
   SHORTCUT_HINT,
+  focusMotionControls,
   useAudioscopeShortcuts,
+
 } from "@/lib/audioscope/shortcuts";
 import { Accessibility, Gauge, Image as ImageIcon, Info, Pause, Play, Waves } from "lucide-react";
 import {

@@ -45,6 +45,7 @@ export const Audioscope = ({
   mode = "scope",
   playing = true,
   speed = 1,
+  staticFrame = null,
   mediaEl = null,
   height = 320,
   className,
@@ -327,9 +328,9 @@ export const Audioscope = ({
       }
     };
 
-    // Reduced motion or paused: render one static frame and stop.
-    if (reduced || !playing) {
-      frame(elapsedRef.current);
+    // Static view, reduced motion, or paused: render one frame and stop.
+    if (staticFrame != null || reduced || !playing) {
+      frame(staticFrame ?? elapsedRef.current);
       return () => {
         window.removeEventListener("resize", resize);
         io.disconnect();
@@ -363,7 +364,7 @@ export const Audioscope = ({
       window.removeEventListener("resize", resize);
       io.disconnect();
     };
-  }, [mode, playing, speed, reduced, isMobile, height, caption, scores]);
+  }, [mode, playing, speed, staticFrame, reduced, isMobile, height, caption, scores]);
 
   return (
     <canvas

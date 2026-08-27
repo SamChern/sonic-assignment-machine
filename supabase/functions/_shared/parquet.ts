@@ -271,6 +271,84 @@ export function planRowGroupRead(
   };
 }
 
+/**
+ * Transient = worth retrying the same row groups (network blip, throttling,
+ * gateway error, truncated range response). Anything else (bad codec, corrupt
+ * footer, schema error) is permanent and must fail fast.
+ */
+export function isTransientParquetError(e: unknown): boolean {
+  const msg = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
+  const status = Number(
+    (e as { status?: number; statusCode?: number } | null)?.status ??
+      (e as { statusCode?: number } | null)?.statusCode ??
+      NaN,
+  );
+  if (status === 408 || status === 429 || (status >= 500 && status <= 599)) return true;
+  return [
+    "timeout",
+    "timed out",
+    "econnreset",
+    "connection reset",
+    "connection closed",
+    "socket hang up",
+    "network",
+    "fetch failed",
+    "temporarily",
+    "throttl",
+    "slow down",
+    "rate limit",
+    "503",
+    "502",
+    "500",
+    "unexpected end",
+    "incomplete",
+  ].some((needle) => msg.includes(needle));
+}
+
+/**
+ * Retry a single row-group range read on transient errors with exponential
+ * backoff. Only the failed range is retried — the file's checkpoint is never
+ * rewound, so already-transformed row groups are not re-processed.
+ */
+export async function retryRowGroups<T>(
+  read: (attempt: number) => Promise<T>,
+  opts: {
+    attempts?: number;
+    baseDelayMs?: number;
+    label?: string;
+    isTransient?: (e: unknown) => boolean;
+    sleep?: (ms: number) => Promise<void>;
+  } = {},
+): Promise<T> {
+  const attempts = opts.attempts ?? 3;
+  const base = opts.baseDelayMs ?? 400;
+  const transient = opts.isTransient ?? isTransientParquetError;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await read(attempt);
+    } catch (e) {
+      lastErr = e;
+      if (attempt >= attempts || !transient(e)) throw e;
+      const delay = base * 2 ** (attempt - 1);
+      console.log(JSON.stringify({
+        evt: "parquet_row_group_retry",
+        label: opts.label ?? null,
+        attempt,
+        attempts,
+        delay_ms: delay,
+        error: e instanceof Error ? e.message : String(e),
+      }));
+      await sleep(delay);
+    }
+  }
+  throw lastErr;
+}
+
+
+
 
 /**
  * Read a bounded chunk of rows from a Parquet object, starting at a row-group

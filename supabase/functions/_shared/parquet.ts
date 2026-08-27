@@ -16,8 +16,25 @@ import {
 import { compressors } from "https://esm.sh/hyparquet-compressors@1.1.1";
 
 
-/** Anything larger than this is refused rather than buffered. */
-const MAX_OBJECT_BYTES = 512 * 1024 * 1024;
+/**
+ * Objects larger than this are only readable when the host honours HTTP Range
+ * requests (S3 does). Range reads mean we transfer the footer plus the first
+ * row group(s) only, so a multi-GB delivery still ingests a bounded sample.
+ */
+const RANGE_REQUIRED_BYTES = 512 * 1024 * 1024;
+
+/** Probe whether the URL serves partial content, so huge objects stay bounded. */
+async function supportsRangeRequests(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, { headers: { Range: "bytes=0-0" } });
+    // Consume the body so the connection is released.
+    await res.arrayBuffer().catch(() => undefined);
+    return res.status === 206;
+  } catch {
+    return false;
+  }
+}
+
 
 function scalar(v: unknown): unknown {
   if (v === null || v === undefined) return v;

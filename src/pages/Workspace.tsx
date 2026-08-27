@@ -24,8 +24,10 @@ import PredictUsersPanel from "@/components/enterprise/PredictUsersPanel";
 import PredictOutcomesPanel from "@/components/enterprise/PredictOutcomesPanel";
 import PixelSetupPanel from "@/components/enterprise/PixelSetupPanel";
 import CategoryProfileEditor from "@/components/enterprise/CategoryProfileEditor";
+import WorkspaceSonicSim from "@/components/enterprise/WorkspaceSonicSim";
 import sonicSimLogo from "@/assets/SonicSIM_transp.png";
 import {
+  Activity,
   ArrowLeft,
   Building2,
   Compass,
@@ -42,6 +44,7 @@ import {
 
 const TABS = [
   { key: "analyses", label: "Analyses", icon: Sparkles },
+  { key: "sonicsim", label: "See my SonicSIM", icon: Activity },
   { key: "data", label: "My data", icon: Upload },
   { key: "discover", label: "Discovery", icon: Compass },
   { key: "categories", label: "Categories", icon: Sliders },
@@ -260,6 +263,13 @@ const Workspace = () => {
 
         <TabsContent value="analyses" className="mt-4">
           <WorkspaceAnalyses key={refreshKey} organizationId={active.organization_id} />
+        </TabsContent>
+        <TabsContent value="sonicsim" className="mt-4">
+          <WorkspaceSonicSim
+            key={refreshKey}
+            organizationId={active.organization_id}
+            orgName={active.name}
+          />
         </TabsContent>
         <TabsContent value="data" className="mt-4 space-y-4">
           <IntuiziSyncPanel

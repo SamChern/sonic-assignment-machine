@@ -37,6 +37,10 @@ import { useFingerprints } from "@/hooks/useFingerprints";
 import { cn } from "@/lib/utils";
 import { AudioJobsPanel } from "@/components/AudioJobsPanel";
 import { UploadProgressPanel } from "@/components/UploadProgressPanel";
+import SonicSimPanel from "@/components/visuals/SonicSimPanel";
+import { analysisToScores, fingerprintToScores } from "@/lib/audioscope";
+
+
 
 
 const Index = () => {
@@ -46,7 +50,7 @@ const Index = () => {
 
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
   
-  const { myFingerprint, allFingerprints } = useFingerprints();
+  const { myFingerprint, allFingerprints, myAnalyses } = useFingerprints();
   
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [spotifyTracks, setSpotifyTracks] = useState<any[]>([]);
@@ -603,7 +607,7 @@ const Index = () => {
       {/* Main Content with Tabs */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
-          <TabsList className="mb-6 sm:mb-8 grid h-auto min-h-12 w-full max-w-full grid-cols-2 items-stretch gap-1 sm:grid-cols-4">
+          <TabsList className="mb-6 sm:mb-8 grid h-auto min-h-12 w-full max-w-full grid-cols-2 items-stretch gap-1 sm:grid-cols-5">
             <TabsTrigger value="select" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3">
               <FileAudio className="h-4 w-4 shrink-0" />
               <span className="hidden truncate sm:inline">Select Sources</span>
@@ -616,6 +620,11 @@ const Index = () => {
             <TabsTrigger value="analysis" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!results}>
               <ListTree className="h-4 w-4 shrink-0" />
               <span className="truncate">Analysis</span>
+            </TabsTrigger>
+            <TabsTrigger value="sonicsim" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!user}>
+              <Activity className="h-4 w-4 shrink-0" />
+              <span className="hidden truncate sm:inline">See my SonicSIM</span>
+              <span className="truncate sm:hidden">SonicSIM</span>
             </TabsTrigger>
             <TabsTrigger value="discover" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!user}>
               <UsersIcon className="h-4 w-4 shrink-0" />
@@ -979,7 +988,31 @@ const Index = () => {
             })()}
           </TabsContent>
 
-          {/* Tab 4: Discover — Taste Neighbors */}
+          {/* Tab 4: See my SonicSIM — animated audioscope */}
+          <TabsContent value="sonicsim" className="space-y-6">
+            <SonicSimPanel
+              subjects={[
+                ...(myFingerprint
+                  ? [
+                      {
+                        id: `fingerprint-${myFingerprint.user_id}`,
+                        label: "My sonic fingerprint (aggregate)",
+                        sublabel: `Aggregate · ${myFingerprint.total_sources_analyzed} sources`,
+                        scores: fingerprintToScores(myFingerprint as any),
+                      },
+                    ]
+                  : []),
+                ...(myAnalyses || []).slice(0, 25).map((a) => ({
+                  id: a.id,
+                  label: a.source_name,
+                  sublabel: `Analysis · ${a.source_name}`,
+                  scores: analysisToScores(a as any),
+                })),
+              ]}
+            />
+          </TabsContent>
+
+          {/* Tab 5: Discover — Taste Neighbors */}
           <TabsContent value="discover" className="space-y-6">
             {user && (
               <TasteNeighbors

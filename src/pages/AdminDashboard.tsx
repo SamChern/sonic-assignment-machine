@@ -56,6 +56,8 @@ import { AnalysisResults } from "@/components/AnalysisResults";
 import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";
 import { FingerprintComparison } from "@/components/FingerprintComparison";
 import { useFingerprints } from "@/hooks/useFingerprints";
+import SonicSimPanel from "@/components/visuals/SonicSimPanel";
+import { fingerprintToScores } from "@/lib/audioscope";
 import { useEC2Api } from "@/hooks/useEC2Api";
 import { calculateSimilarity, type FingerprintMode } from "@/lib/fingerprintMath";
 import { SignalCohortPanel } from "@/components/SignalCohortPanel";
@@ -872,6 +874,10 @@ const AdminDashboard = () => {
               <GitCompare className="h-3.5 w-3.5 shrink-0" />
               Compare
             </TabsTrigger>
+            <TabsTrigger value="sonicsim" className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
+              <Activity className="h-3.5 w-3.5 shrink-0" />
+              See my SonicSIM
+            </TabsTrigger>
             <TabsTrigger value="analysis" disabled={!analysisResults} className="min-w-0 justify-start gap-1 whitespace-normal px-2 text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs">
               <Network className="h-3.5 w-3.5 shrink-0" />
               Analysis
@@ -1248,6 +1254,19 @@ const AdminDashboard = () => {
               </div>
             </div>
             <FingerprintComparison fingerprints={scopedFingerprints} mode={compareMode} />
+          </TabsContent>
+
+          <TabsContent value="sonicsim" className="space-y-6">
+            <SonicSimPanel
+              title={entityMode === "signal" ? "See this cohort's SonicSIM" : "See my SonicSIM"}
+              description="Animated audioscope of any fingerprint in the current scope — switch subjects to compare identity rings and node pulses."
+              subjects={scopedFingerprints.map((fp: any) => ({
+                id: fp.user_id,
+                label: fp.username || "User",
+                sublabel: `${fp.total_sources_analyzed ?? 0} sources analyzed`,
+                scores: fingerprintToScores(fp, compareMode === "recent" ? "recent" : "all"),
+              }))}
+            />
           </TabsContent>
 
           <TabsContent value="analysis" className="space-y-6">

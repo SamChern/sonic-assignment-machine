@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ZoomIn, ZoomOut, RotateCcw, Maximize, Tag, EyeOff } from "lucide-react";
+import { Activity, Check, ZoomIn, ZoomOut, RotateCcw, Maximize, Tag, EyeOff } from "lucide-react";
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,6 +81,8 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
     sourcePairs: [],
   });
   const [showDetails, setShowDetails] = useState(false);
+  /** Audioscope-style pulse on the graph nodes (purely visual, CSS driven). */
+  const [animateNodes, setAnimateNodes] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(1);
   const [showLabels, setShowLabels] = useState(false);
 
@@ -802,7 +804,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
           )}
           <svg
             ref={svgRef}
-            className="w-full h-full relative z-10"
+            className={`w-full h-full relative z-10${animateNodes ? " audioscope-pulse" : ""}`}
             style={{ background: "transparent" }}
           />
 
@@ -857,6 +859,16 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
               title={showLabels ? "Hide labels" : "Show labels"}
             >
               {showLabels ? <Tag className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant={animateNodes ? "default" : "ghost"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setAnimateNodes((v) => !v)}
+              title={animateNodes ? "Stop node pulse" : "Animate nodes"}
+              aria-pressed={animateNodes}
+            >
+              <Activity className="h-4 w-4" />
             </Button>
           </div>
           

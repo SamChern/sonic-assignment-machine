@@ -88,8 +88,14 @@ export function createRateMetrics() {
 export type RateMetrics = ReturnType<typeof createRateMetrics>;
 
 /**
- * Invoke `analyze-audio` with bounded backoff.
- * Retryable: 429 + 5xx. Terminal: 400/401/402/403.
+ * Invoke `analyze-audio` with classified, adaptive retries.
+ *
+ * - resource / timeout failures re-run with a SMALLER payload (the taxonomy
+ *   context is the only part that scales), because the same payload would be
+ *   killed the same way again;
+ * - rate limits back off using the gateway's own hint;
+ * - schema / credits / policy / auth failures fail fast with a clear reason
+ *   instead of consuming the attempt budget.
  */
 // deno-lint-ignore no-explicit-any
 export async function invokeAnalyzeAudio(
@@ -98,50 +104,76 @@ export async function invokeAnalyzeAudio(
   body: Json,
   reportType = "unknown",
   metrics: RateMetrics = createRateMetrics(),
+  opts: { traceId?: string; stepScale?: number } = {},
   // deno-lint-ignore no-explicit-any
 ): Promise<any> {
   const MAX_ATTEMPTS = 4;
+  /** Context budget shrinks on every resource failure (never below 25%). */
+  let scale = Math.min(Math.max(opts.stepScale ?? 1, 0.25), 1);
   let lastErr: unknown = null;
+
+  const shrinkBody = (b: Json): Json => {
+    if (scale >= 1) return b;
+    const sources = (b.sources as Array<Record<string, unknown>> | undefined) ?? [];
+    return {
+      ...b,
+      sources: sources.map((s) => {
+        const ctx = typeof s.taxonomy_context === "string" ? s.taxonomy_context : "";
+        const keep = Math.max(400, Math.floor(ctx.length * scale));
+        return ctx.length > keep ? { ...s, taxonomy_context: ctx.slice(0, keep) } : s;
+      }),
+    };
+  };
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     metrics.attempts++;
-    const { data, error } = await admin.functions.invoke("analyze-audio", { body });
+    const { data, error } = await admin.functions.invoke("analyze-audio", {
+      body: shrinkBody(body),
+    });
     if (!error) {
       if (!data?.sources?.[0]) throw new Error("analyze-audio returned no source");
       return data;
     }
     lastErr = error;
-    const msg = String(error?.message ?? error);
-    const status = Number((error as { status?: number })?.status ?? 0);
-    const terminal = [400, 401, 402, 403].includes(status) ||
-      /InsufficientCredits|PaymentRequired|Forbidden|Unauthorized/i.test(msg);
-    const isRateLimit = !terminal && (status === 429 || /RateLimit|rate limit/i.test(msg));
-    const retryable = !terminal &&
-      (isRateLimit || status >= 500 || /timeout|503|502/i.test(msg));
-    if (isRateLimit) {
+    const verdict = classifyFailure(error);
+    if (verdict.kind === "rate_limit") {
       metrics.rateLimited++;
       metrics.byReport[reportType] = (metrics.byReport[reportType] ?? 0) + 1;
+      metrics.retryAfterMs.push(verdict.backoffMs);
     }
-    if (terminal) metrics.terminal++;
-    const hinted = Number(msg.match(/"retryAfterMs"\s*:\s*(\d+)/)?.[1] ?? 0);
-    if (hinted > 0) metrics.retryAfterMs.push(hinted);
-    if (!retryable || attempt === MAX_ATTEMPTS) {
+    if (!verdict.retryable) metrics.terminal++;
+
+    if (!verdict.retryable || attempt === MAX_ATTEMPTS) {
       console.log(JSON.stringify({
         evt: "analyze_audio_giving_up",
+        trace_id: opts.traceId ?? null,
         report_type: reportType,
         attempt,
-        status,
-        terminal,
-        rate_limited: isRateLimit,
-        message: msg.slice(0, 300),
+        status: verdict.status ?? null,
+        failure_kind: verdict.kind,
+        step_scale: scale,
+        reason: verdict.reason.slice(0, 300),
       }));
       break;
     }
-    const backoff = Math.max(hinted, 400 * 2 ** (attempt - 1));
+
+    if (verdict.shrink) scale = Math.max(0.25, scale * 0.5);
     metrics.retries++;
-    await new Promise((r) => setTimeout(r, backoff + Math.floor(Math.random() * 250)));
+    const wait = backoffFor(verdict, attempt);
+    console.log(JSON.stringify({
+      evt: "analyze_audio_retry",
+      trace_id: opts.traceId ?? null,
+      report_type: reportType,
+      attempt,
+      failure_kind: verdict.kind,
+      backoff_ms: wait,
+      next_step_scale: scale,
+    }));
+    await new Promise((r) => setTimeout(r, wait));
   }
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
+
 
 /** One queued scoring task (shape of `public.intuizi_score_queue`). */
 export interface ScoreTask {

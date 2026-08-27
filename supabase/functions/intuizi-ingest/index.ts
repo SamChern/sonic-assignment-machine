@@ -64,6 +64,9 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const MAX_FILES_PER_RUN = 3;
 const MAX_IDENTIFIERS_PER_RUN = 40;
 const MAX_ROWS_PER_FILE = 5000;
+// The edge gateway kills a request after 150s of idle time. Stop taking new work
+// well before that and return a partial summary; remaining work resumes next run.
+const RUN_BUDGET_MS = 105_000;
 // Expected rows per user/device in an Intuizi activation delivery. Used only by
 // the pre-ingest parquet validation log to flag deliveries whose shape drifted.
 const EXPECTED_ROWS_PER_USER = Number(

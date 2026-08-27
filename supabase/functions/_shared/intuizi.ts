@@ -126,6 +126,39 @@ function multi(v: string): string[] {
   return v.split(/[|,;]/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
 }
 
+/** Stop-words that carry no topical meaning in a URL path. */
+const PATH_STOP = new Set([
+  "www", "index", "html", "htm", "php", "amp", "en", "en-us", "us", "news",
+  "article", "articles", "story", "stories", "page", "pages", "p", "id",
+]);
+
+/**
+ * Web-report `page` paths are the closest analogue to content topics
+ * (`/lists/dolly-partons-most-...` → `lists`, `dolly-partons-most`). Keeps at
+ * most two meaningful segments so a single URL cannot flood the taxonomy.
+ */
+export function pathTopics(page: string): string[] {
+  if (!page) return [];
+  const path = page.replace(/^https?:\/\/[^/]+/i, "").split(/[?#]/)[0];
+  const out: string[] = [];
+  for (const raw of path.split("/")) {
+    const seg = raw.trim().toLowerCase();
+    if (!seg || seg.length < 3 || /^\d+$/.test(seg) || PATH_STOP.has(seg)) continue;
+    const trimmed = seg.replace(/\.(html?|php|aspx)$/, "").split("-").slice(0, 4).join("-");
+    if (trimmed.length >= 3 && !out.includes(trimmed)) out.push(trimmed);
+    if (out.length === 2) break;
+  }
+  return out;
+}
+
+/** Host portion of a referrer URL, without `www.`. */
+export function hostOf(ref: string): string {
+  if (!ref) return "";
+  const m = ref.match(/^(?:https?:\/\/)?([^/?#\s]+)/i);
+  return m ? m[1].replace(/^www\./i, "").toLowerCase() : "";
+}
+
+
 function daypart(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";

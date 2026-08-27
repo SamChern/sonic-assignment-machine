@@ -688,6 +688,9 @@ export type Database = {
           partition_date: string | null
           processed_rows: number
           report_type: string
+          row_group_cursor: number
+          row_groups_total: number | null
+          rows_offset: number
           size_bytes: number | null
           started_at: string | null
           status: string
@@ -707,6 +710,9 @@ export type Database = {
           partition_date?: string | null
           processed_rows?: number
           report_type: string
+          row_group_cursor?: number
+          row_groups_total?: number | null
+          rows_offset?: number
           size_bytes?: number | null
           started_at?: string | null
           status?: string
@@ -726,6 +732,9 @@ export type Database = {
           partition_date?: string | null
           processed_rows?: number
           report_type?: string
+          row_group_cursor?: number
+          row_groups_total?: number | null
+          rows_offset?: number
           size_bytes?: number | null
           started_at?: string | null
           status?: string

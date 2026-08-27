@@ -8,15 +8,17 @@
 // values are ever returned — only whether they are present.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { buildVerdict, type ProbeResult } from "../_shared/inferenceVerdict.ts";
+import {
+  buildVerdict,
+  parseInferenceConfig,
+  type ProbeResult,
+} from "../_shared/inferenceVerdict.ts";
 
-const EC2_URL = (Deno.env.get("EC2_INFERENCE_URL") ?? "").replace(/\/+$/, "");
-const EC2_KEY = Deno.env.get("EC2_INFERENCE_API_KEY") ?? Deno.env.get("AWS_API_KEY") ?? "";
-const EC2_CHAT_MODEL = Deno.env.get("EC2_INFERENCE_MODEL") ?? "";
-const EC2_EMBED_MODEL = Deno.env.get("EC2_EMBEDDING_MODEL") ?? "";
-const EC2_EMBED_DIMS = Number(Deno.env.get("EC2_EMBEDDING_DIMS") ?? "0") || 0;
-const EC2_REQUIRED = (Deno.env.get("EC2_INFERENCE_REQUIRED") ?? "").toLowerCase() === "true";
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
+const CFG = parseInferenceConfig(Deno.env.toObject());
+const EC2_URL = CFG.ec2Url;
+const EC2_KEY = CFG.ec2Key;
+const EC2_EMBED_MODEL = CFG.embedModel;
+
 
 const PROBE_TIMEOUT_MS = 8_000;
 
@@ -103,18 +105,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    const result = buildVerdict(
-      {
-        ec2Url: EC2_URL,
-        ec2Key: EC2_KEY,
-        chatModel: EC2_CHAT_MODEL,
-        embedModel: EC2_EMBED_MODEL,
-        embedDims: EC2_EMBED_DIMS,
-        ec2Required: EC2_REQUIRED,
-        lovableApiKey: LOVABLE_API_KEY,
-      },
-      probeResult,
-    );
+    const result = buildVerdict(CFG, probeResult);
+
 
     // Structured metrics: one JSON line per validation so verdicts and the
     // chosen scoring route can be counted over time from edge function logs.

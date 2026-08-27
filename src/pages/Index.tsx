@@ -7,17 +7,13 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Save, Shield, Activity, ChevronDown, ChevronUp, Users as UsersIcon, Building2, Upload as UploadIcon, Compass, Target, LineChart, Sliders } from "lucide-react";
+import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Save, Shield, Activity, ChevronDown, ChevronUp, Users as UsersIcon, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
 import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
-import fingerprintBg from "@/assets/fingerprint-bg.webp";
-const WorkspaceAnalyses = lazy(() => import("@/components/enterprise/WorkspaceAnalyses"));
-const WorkspaceUpload = lazy(() => import("@/components/enterprise/WorkspaceUpload"));
-const DatasetDiscovery = lazy(() => import("@/components/enterprise/DatasetDiscovery"));
 
 const NetworkVisualization = lazy(() =>
   import("@/components/NetworkVisualization").then((m) => ({ default: m.NetworkVisualization }))
@@ -45,7 +41,7 @@ import { analysisToScores, fingerprintToScores } from "@/lib/audioscope";
 
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
-  const { orgs: enterpriseOrgs, active: activeOrg, canWrite: orgCanWrite } = useOrganization();
+  const { orgs: enterpriseOrgs } = useOrganization();
   const hasEnterprise = enterpriseOrgs.length > 0;
 
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
@@ -98,8 +94,8 @@ const Index = () => {
       const fadeEnd = 280;
       const progress = Math.min(1, Math.max(0, scrollY / fadeEnd));
       if (logoRef.current) {
-        logoRef.current.style.setProperty('--logo-opacity', String(1 - progress * 0.92));
-        logoRef.current.style.setProperty('--logo-overlay-opacity', String(progress * 0.92));
+        logoRef.current.style.setProperty('--logo-opacity', String(1 - progress));
+        logoRef.current.style.setProperty('--logo-overlay-opacity', String(progress));
         logoRef.current.style.setProperty('--logo-blur', `${progress * 3}px`);
         logoRef.current.style.setProperty('--logo-scale', String(1 - progress * 0.04));
       }
@@ -414,7 +410,7 @@ const Index = () => {
         <div className="absolute inset-0 bg-gradient-to-b from-background/95 to-background" />
         
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 pt-16 sm:pt-24 pb-8 sm:pb-12">
-          <div className="text-center" ref={logoRef}>
+          <div className="sticky top-14 z-10 text-center sm:top-16" ref={logoRef}>
             <div className="relative inline-block">
               <img
                 src={sonicSimLogo}
@@ -473,137 +469,34 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Enterprise Workspace Section */}
-      <section aria-labelledby="enterprise-heading" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-6 pt-8 sm:scroll-mt-28 sm:px-6 sm:pb-8 sm:pt-12">
-        <div className="relative min-h-0 overflow-visible rounded-2xl border border-primary/30 bg-primary/5 p-4 pb-5 sm:min-h-[28rem] sm:p-8 sm:pb-10">
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-          {/* Subtle cluster/network texture merged into the frame (static, not animated) */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 opacity-[0.14] mix-blend-screen"
-            style={{
-              backgroundImage: `url(${fingerprintBg})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              maskImage:
-                "radial-gradient(120% 90% at 80% 10%, hsl(0 0% 0% / 0.9), transparent 70%)",
-              WebkitMaskImage:
-                "radial-gradient(120% 90% at 80% 10%, hsl(0 0% 0% / 0.9), transparent 70%)",
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
-          </div>
-
-          <div className="relative min-w-0 overflow-visible">
-          <Badge className="mb-3 inline-flex bg-primary text-primary-foreground sm:absolute sm:right-0 sm:top-0 sm:mb-0">
-            Enterprise
-          </Badge>
-          <h2 id="enterprise-heading" className="text-xl sm:text-2xl font-semibold text-foreground sm:pr-28">
-            {hasEnterprise && activeOrg ? `${activeOrg.name} enterprise workspace` : "SonicSIM Enterprise workspace"}
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm sm:text-base text-muted-foreground">
-            {hasEnterprise
-              ? "Everything below is scoped to your organization's permissions — recent analyses, your own data, and dataset discovery."
-              : "Licensed teams get a private dashboard scoped to their own data — recent analyses, their own data uploads, dataset discovery, and predictive modelling on the six-category semantic layer."}
-          </p>
-
-          {hasEnterprise && activeOrg ? (
-            <Tabs defaultValue="analyses" className="mt-5 w-full min-w-0 overflow-visible">
-              <TabsList className="grid h-auto min-h-12 w-full max-w-full grid-cols-2 items-stretch gap-1 rounded-lg p-1 sm:grid-cols-3">
-                <TabsTrigger value="analyses" className="h-auto min-h-10 min-w-0 px-2 py-2.5 sm:px-3">
-                  <Sparkles className="mr-1 h-4 w-4 shrink-0" />
-                  <span className="whitespace-normal leading-tight sm:truncate">Recent analyses</span>
-                </TabsTrigger>
-                <TabsTrigger value="data" className="h-auto min-h-10 min-w-0 px-2 py-2.5 sm:px-3">
-                  <UploadIcon className="mr-1 h-4 w-4 shrink-0" />
-                  <span className="whitespace-normal leading-tight sm:truncate">Upload my data</span>
-                </TabsTrigger>
-                <TabsTrigger value="discover" className="h-auto min-h-10 min-w-0 px-2 py-2.5 sm:px-3">
-                  <Compass className="mr-1 h-4 w-4 shrink-0" />
-                  <span className="whitespace-normal leading-tight sm:truncate">Dataset discovery</span>
-                </TabsTrigger>
-              </TabsList>
-
-              <Suspense fallback={<div className="mt-4 min-h-36 animate-pulse rounded-xl bg-muted/40" />}>
-                <TabsContent value="analyses" className="mt-4 min-h-40 overflow-visible pb-2 scroll-mt-24 sm:min-h-48 sm:pb-3 sm:scroll-mt-28">
-                  <WorkspaceAnalyses organizationId={activeOrg.organization_id} />
-                </TabsContent>
-                <TabsContent value="data" className="mt-4 min-h-40 overflow-visible pb-2 scroll-mt-24 sm:min-h-48 sm:pb-3 sm:scroll-mt-28">
-                  <WorkspaceUpload organizationId={activeOrg.organization_id} canWrite={orgCanWrite} />
-                </TabsContent>
-                <TabsContent value="discover" className="mt-4 min-h-28 overflow-visible pb-3 scroll-mt-24 sm:min-h-48 sm:pb-4 sm:scroll-mt-28">
-                  <DatasetDiscovery organizationId={activeOrg.organization_id} />
-                </TabsContent>
-              </Suspense>
-            </Tabs>
-          ) : (
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                { icon: Sparkles, title: "Recent analyses", body: "Every SonicSIM analysis your organization has run, permission-scoped." },
-                { icon: UploadIcon, title: "Upload my own data", body: "Batch CSV to the published schema, or connect GCP/BigQuery, AWS S3 or Snowflake." },
-                { icon: Compass, title: "Dataset discovery", body: "Same discovery experience as the home page, but across datasets instead of taste neighbors." },
-                { icon: Target, title: "Predict users & outcomes", body: "Normalize the six categories, find like-minded users, and model KPI outcomes from pixel data." },
-              ].map((item) => (
-                <div key={item.title} className="rounded-xl border border-border/60 bg-background/50 p-4">
-                  <item.icon className="h-5 w-5 text-primary" aria-hidden="true" />
-                  <h3 className="mt-2 text-sm font-semibold text-foreground">{item.title}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">{item.body}</p>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="mt-4 flex flex-wrap items-center gap-3 min-w-0 sm:mt-5">
-            <Button asChild size="lg" className="min-h-12 w-full sm:w-auto">
-              <Link to="/workspace">
-                <Building2 className="mr-2 h-5 w-5 shrink-0" />
-                <span className="truncate">{hasEnterprise ? "Open enterprise workspace" : "Enterprise sign in"}</span>
-              </Link>
-            </Button>
-            {hasEnterprise && (
-              <>
-                <Button asChild variant="outline" className="min-h-12 w-full sm:w-auto">
-                  <Link to="/workspace?tab=categories">
-                    <Sliders className="mr-2 h-4 w-4 shrink-0" />
-                    <span className="truncate">Adjust 6 categories</span>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="min-h-12 w-full sm:w-auto">
-                  <Link to="/workspace?tab=users">
-                    <Target className="mr-2 h-4 w-4 shrink-0" />
-                    <span className="truncate">Predict SonicSIM-Users</span>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="min-h-12 w-full sm:w-auto">
-                  <Link to="/workspace?tab=outcomes">
-                    <LineChart className="mr-2 h-4 w-4 shrink-0" />
-                    <span className="truncate">Predict SonicSIM-Outcomes</span>
-                  </Link>
-                </Button>
-                <a
-                  href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More"
-                  className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  Learn More
-                </a>
-              </>
-            )}
-            {!hasEnterprise && (
-              <a
-                href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More"
-                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Learn More
-              </a>
-            )}
-          </div>
-          <p className="mt-3 flex items-start gap-1 text-xs text-muted-foreground">
-            <LineChart className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>KPI modelling: traffic, CPC, CTR, page views, VCR, time on site</span>
-          </p>
-
-          </div>
-        </div>
+      {/* SCOPE audioscope band — the only visual between the hero and the tabs */}
+      <section aria-labelledby="scope-heading" className="mx-auto max-w-7xl px-4 pb-2 pt-4 sm:px-6 sm:pb-4 sm:pt-6">
+        <h2 id="scope-heading" className="sr-only">
+          SonicSIM SCOPE audioscope
+        </h2>
+        <SonicSimPanel
+          title="SCOPE"
+          description="A live audioscope of the six-category semantic layer."
+          defaultMode="scope"
+          height={200}
+          subjects={[
+            {
+              id: "home-scope",
+              label: "SonicSIM SCOPE",
+              sublabel: "Six-category semantic waveform",
+              scores: {
+                emotional: 72,
+                cognitive: 58,
+                social: 46,
+                communication: 64,
+                contextual: 55,
+                artistic: 68,
+              },
+            },
+          ]}
+        />
       </section>
+
 
 
       {/* Main Content with Tabs */}

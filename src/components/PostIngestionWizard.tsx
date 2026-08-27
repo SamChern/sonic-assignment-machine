@@ -16,9 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   CircleDashed,
   Loader2,
   Play,
@@ -26,6 +28,7 @@ import {
   Search,
   Wand2,
 } from "lucide-react";
+
 
 /* ------------------------------------------------------------------ types */
 
@@ -186,6 +189,9 @@ const PostIngestionWizard = () => {
   const [selected, setSelected] = useState<string>("");
   const [discovering, setDiscovering] = useState(false);
   const [running, setRunning] = useState(false);
+  /** Stages the user chose to expand — collapsed by default (progress bar only). */
+  const [expandedStages, setExpandedStages] = useState<StageKey[]>([]);
+
   /** Files that still have untransformed row groups — the Resume target. */
   const [partialFiles, setPartialFiles] = useState<ActivationFile[]>([]);
   /** Row-group progress + time estimates for the next resume run. */
@@ -918,10 +924,12 @@ const PostIngestionWizard = () => {
         />
       </div>
 
-      <ol className="mt-5 space-y-3">
+      <ol className="mt-5 space-y-2">
         {STAGES.map(([key, label], i) => {
           const res = results[key];
           const state = res?.state ?? "idle";
+          const hasDetails = !!res?.outputs?.length || !!res?.notes?.length;
+          const open = expandedStages.includes(key);
           const tone =
             state === "ok"
               ? "border-primary/40 bg-primary/5"
@@ -930,19 +938,50 @@ const PostIngestionWizard = () => {
                 : state === "error"
                   ? "border-destructive/40 bg-destructive/5"
                   : "border-border bg-muted/20";
+          const pct = state === "ok" ? 100 : state === "running" ? 60 : state === "idle" ? 0 : 100;
+          const barTone =
+            state === "error"
+              ? "[&>div]:bg-destructive"
+              : state === "warn"
+                ? "[&>div]:bg-amber-500"
+                : "";
           return (
-            <li key={key} className={`rounded-lg border p-3 ${tone}`}>
-              <div className="flex items-center gap-2">
+            <li key={key} className={`rounded-lg border px-3 py-2 ${tone}`}>
+              <button
+                type="button"
+                onClick={() =>
+                  hasDetails &&
+                  setExpandedStages((prev) =>
+                    prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+                  )}
+                aria-expanded={open}
+                disabled={!hasDetails}
+                className="flex w-full items-center gap-2 text-left disabled:cursor-default"
+              >
                 <StageIcon state={state} />
-                <span className="text-sm font-medium">
-                  {i + 1}. {label}
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline gap-2">
+                    <span className="truncate text-xs font-medium">
+                      {i + 1}. {label}
+                    </span>
+                    <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
+                      {res?.summary ?? "not started"}
+                    </span>
+                  </span>
+                  <Progress
+                    value={pct}
+                    className={`mt-1.5 h-1 ${barTone} ${state === "running" ? "animate-pulse" : ""}`}
+                  />
                 </span>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {res?.summary ?? "not started"}
-                </span>
-              </div>
+                {hasDetails && (
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
 
-              {!!res?.outputs?.length && (
+              {open && !!res?.outputs?.length && (
                 <div className="mt-2 grid gap-1 sm:grid-cols-2">
                   {res.outputs.map(([k, v]) => (
                     <div
@@ -958,7 +997,7 @@ const PostIngestionWizard = () => {
                 </div>
               )}
 
-              {!!res?.notes?.length && (
+              {open && !!res?.notes?.length && (
                 <ul className="mt-2 space-y-1">
                   {res.notes.map((n) => (
                     <li key={n} className="text-[11px] text-muted-foreground break-all">
@@ -971,6 +1010,7 @@ const PostIngestionWizard = () => {
           );
         })}
       </ol>
+
     </Card>
   );
 };

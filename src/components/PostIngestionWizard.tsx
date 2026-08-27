@@ -356,6 +356,12 @@ const PostIngestionWizard = () => {
     setRunning(false);
   }, [activation]);
 
+  const run = useCallback(
+    () => runFiles(activation?.files ?? [], false),
+    [activation, runFiles],
+  );
+  const resume = useCallback(() => runFiles(partialFiles, true), [partialFiles, runFiles]);
+
   return (
     <Card className="p-5">
       <div className="flex flex-wrap items-center gap-2">

@@ -250,7 +250,11 @@ export const SonicSimPanel = ({
             className="gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={toggleStatic}
             aria-pressed={isStatic}
-            aria-describedby="audioscope-shortcut-hint"
+            aria-describedby={
+              reducedMotion
+                ? "audioscope-motion-notice audioscope-shortcut-hint"
+                : "audioscope-shortcut-hint"
+            }
           >
             <ImageIcon className="h-3.5 w-3.5" aria-hidden />
             Static

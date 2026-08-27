@@ -844,11 +844,6 @@ const PostIngestionWizard = () => {
         {!running && !!phaseRuns.length && (
           <div className="w-full space-y-1">
             <PhaseCpuChart runs={phaseRuns} />
-          </div>
-
-          <div className="mt-4">
-            {/* Dead-letter visibility + one-click recovery for the background scorer. */}
-            <ScoreQueueHealthPanel activationId={selected || undefined} />
             <div className="flex justify-end">
               <Button
                 variant="ghost"
@@ -861,6 +856,12 @@ const PostIngestionWizard = () => {
             </div>
           </div>
         )}
+
+        {/* Dead-letter visibility + one-click recovery for the background scorer. */}
+        <div className="mt-4 w-full">
+          <ScoreQueueHealthPanel activationId={selected || undefined} />
+        </div>
+
 
 
 

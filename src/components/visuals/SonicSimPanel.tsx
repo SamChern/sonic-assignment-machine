@@ -358,7 +358,7 @@ export const SonicSimPanel = ({
               className="h-auto p-0 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => staticBtnRef.current?.focus()}
             >
-              Go to the Static toggle
+              Jump to motion controls
             </Button>
           </div>
         </div>

@@ -209,6 +209,22 @@ export interface ParquetCheckpoint {
   exhausted: boolean;
 }
 
+/** Thrown when a row-group decode exceeds the caller's remaining run budget. */
+export class ParquetReadTimeout extends Error {
+  constructor(ms: number) {
+    super(`parquet row-group read exceeded the ${Math.round(ms / 1000)}s run budget`);
+    this.name = "ParquetReadTimeout";
+  }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  if (!Number.isFinite(ms)) return p;
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new ParquetReadTimeout(ms)), Math.max(1_000, ms));
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
 export interface ParquetChunk {
   rows: Record<string, unknown>[];
   checkpoint: ParquetCheckpoint;
@@ -453,20 +469,43 @@ export async function readParquetChunk(
 
   // Transient S3/network faults are retried for THIS row-group range only, so a
   // blip never forces the whole file to be re-transformed from group 0.
-  const raw = await retryRowGroups(
-    () =>
-      parquetReadObjects({
-        file,
-        metadata,
-        compressors,
-        rowStart: plan.rowStart,
-        rowEnd: plan.rowEnd,
-      }),
+  let raw: unknown;
+  try {
+    raw = await retryRowGroups(
+      () =>
+        // Hard cap on the decode itself: a stalled page read must not hold the
+        // function open until the gateway's 150s idle timeout fires.
+        withTimeout(
+          parquetReadObjects({
+            file,
+            metadata,
+            compressors,
+            rowStart: plan.rowStart,
+            rowEnd: plan.rowEnd,
+          }),
+          timeLeft(),
+        ),
     {
       label: `row groups ${plan.checkpoint.startRowGroup}..${plan.checkpoint.nextRowGroup - 1}`,
       deadlineAt,
     },
-  );
+    );
+  } catch (e) {
+    if (e instanceof ParquetReadTimeout) {
+      // Same contract as the pre-read bail-out: keep the cursor put and resume.
+      return {
+        rows: [],
+        checkpoint: {
+          ...plan.checkpoint,
+          nextRowGroup: plan.checkpoint.startRowGroup,
+          nextRowsOffset: plan.checkpoint.rowsOffset,
+          exhausted: false,
+        },
+        deadlineExceeded: true,
+      };
+    }
+    throw e;
+  }
 
   const rows = (raw as Record<string, unknown>[]).map((row) => {
     const out: Record<string, unknown> = {};

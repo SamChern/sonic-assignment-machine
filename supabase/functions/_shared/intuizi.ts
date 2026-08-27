@@ -63,21 +63,25 @@ export function parseCsv(text: string): Record<string, string>[] {
 }
 
 /**
- * Fetch an object and decode it to raw rows.
+ * Fetch an object and decode a bounded chunk of rows.
  * Handles .csv, .csv.gz, .json(l) and .parquet (snappy/gzip/zstd/brotli).
+ *
+ * For Parquet, reads resume at `startRowGroup` and return a checkpoint so the
+ * caller can persist progress and continue from the next unread row group.
+ * Non-Parquet formats are read whole and report an exhausted checkpoint.
  */
-export async function fetchObjectRows(
+export async function fetchObjectChunk(
   url: string,
   objectKey: string,
   maxRows = 5000,
   expectedRowsPerUser?: number,
-): Promise<Record<string, unknown>[]> {
+  startRowGroup = 0,
+): Promise<{ rows: Record<string, unknown>[]; checkpoint: ParquetCheckpoint | null }> {
   const lower = objectKey.toLowerCase();
 
   if (lower.endsWith(".parquet") || lower.endsWith(".pq")) {
-    return await readParquetRows(url, maxRows, expectedRowsPerUser);
+    return await readParquetChunk(url, maxRows, startRowGroup, expectedRowsPerUser);
   }
-
 
   const res = await fetch(url);
   if (!res.ok) {
@@ -93,14 +97,27 @@ export async function fetchObjectRows(
     text = await res.text();
   }
 
+  let rows: Record<string, unknown>[];
   if (lower.includes(".jsonl") || lower.includes(".ndjson")) {
-    return text.split(/\r?\n/).filter((l) => l.trim()).map((l) => JSON.parse(l));
-  }
-  if (lower.replace(/\.gz$/, "").endsWith(".json")) {
+    rows = text.split(/\r?\n/).filter((l) => l.trim()).map((l) => JSON.parse(l));
+  } else if (lower.replace(/\.gz$/, "").endsWith(".json")) {
     const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed : (parsed.rows ?? []);
+    rows = Array.isArray(parsed) ? parsed : (parsed.rows ?? []);
+  } else {
+    rows = parseCsv(text);
   }
-  return parseCsv(text);
+  return { rows, checkpoint: null };
+}
+
+/** Backwards-compatible whole-object read (no checkpointing). */
+export async function fetchObjectRows(
+  url: string,
+  objectKey: string,
+  maxRows = 5000,
+  expectedRowsPerUser?: number,
+): Promise<Record<string, unknown>[]> {
+  const { rows } = await fetchObjectChunk(url, objectKey, maxRows, expectedRowsPerUser, 0);
+  return rows;
 }
 
 

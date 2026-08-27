@@ -1225,13 +1225,27 @@ Deno.serve(async (req) => {
         }
 
         const remaining = perIdentifier.size - scoredInFile - failedInFile;
+        // A Parquet file is only "done" once its last row group is transformed.
+        const chunkComplete = !checkpoint || checkpoint.exhausted;
+        const fileStatus = breakerTripped
+          ? "paused"
+          : (remaining > 0 || !chunkComplete ? "partial" : "done");
         await admin.from("intuizi_ingest_files").update({
-          status: breakerTripped ? "paused" : (remaining > 0 ? "partial" : "done"),
+          status: fileStatus,
           total_rows: rawRows.length,
           processed_rows: (fileRow.processed_rows ?? 0) + scoredInFile,
           failed_rows: failedInFile,
           cursor_offset: perIdentifier.size - remaining,
-          finished_at: remaining > 0 || breakerTripped ? null : new Date().toISOString(),
+          // Only advance the row-group checkpoint when this chunk's rows were
+          // fully drained, so nothing is skipped on resume.
+          row_group_cursor: checkpoint
+            ? (remaining > 0 || breakerTripped ? checkpoint.startRowGroup : checkpoint.nextRowGroup)
+            : 0,
+          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+          rows_offset: checkpoint
+            ? (remaining > 0 || breakerTripped ? checkpoint.rowsOffset : checkpoint.nextRowsOffset)
+            : 0,
+          finished_at: fileStatus === "done" ? new Date().toISOString() : null,
           error_message: failedInFile ? summary.errors.slice(-3).join("\n").slice(0, 2000) : null,
         }).eq("id", fileRow.id);
 

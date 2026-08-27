@@ -331,6 +331,10 @@ const PostIngestionWizard = () => {
         deadline_exceeded?: boolean;
         deadline_step?: string | null;
         phase_ms?: Record<string, number>;
+        phase_usage?: Record<string, { ms?: number; heap_delta_mb?: number; peak_heap_mb?: number }>;
+        mem_peak_mb?: number | null;
+        memory_pressure?: boolean;
+        work_caps?: { rows?: number; identifiers?: number; shrink?: number; reason?: string };
         files?: {
           object_key?: string;
           complete?: boolean;
@@ -340,6 +344,11 @@ const PostIngestionWizard = () => {
         errors?: string[];
       };
 
+      if (res.memory_pressure) {
+        ingestErrors.push(
+          `${fileName(f.object_key)}: checkpointed early under memory pressure (peak heap ${res.mem_peak_mb ?? "?"} MB) — the next run uses ${res.work_caps?.rows ?? "fewer"} rows per file.`,
+        );
+      }
       rowsRead += res.rows_read ?? 0;
       scored += res.identifiers_scored ?? 0;
       roster += res.roster_identifiers ?? 0;

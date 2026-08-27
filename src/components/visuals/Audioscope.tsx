@@ -19,6 +19,11 @@ interface AudioscopeProps {
   playing?: boolean;
   /** Animation rate multiplier (1 = realtime). */
   speed?: number;
+  /**
+   * When set, the scope renders one deterministic frame at this time offset and
+   * never animates ("Static" view). Overrides `playing`.
+   */
+  staticFrame?: number | null;
   /** When provided (and playable), the scope is driven by real audio. */
   mediaEl?: HTMLMediaElement | null;
   height?: number;
@@ -40,6 +45,7 @@ export const Audioscope = ({
   mode = "scope",
   playing = true,
   speed = 1,
+  staticFrame = null,
   mediaEl = null,
   height = 320,
   className,
@@ -322,9 +328,9 @@ export const Audioscope = ({
       }
     };
 
-    // Reduced motion or paused: render one static frame and stop.
-    if (reduced || !playing) {
-      frame(elapsedRef.current);
+    // Static view, reduced motion, or paused: render one frame and stop.
+    if (staticFrame != null || reduced || !playing) {
+      frame(staticFrame ?? elapsedRef.current);
       return () => {
         window.removeEventListener("resize", resize);
         io.disconnect();
@@ -358,7 +364,7 @@ export const Audioscope = ({
       window.removeEventListener("resize", resize);
       io.disconnect();
     };
-  }, [mode, playing, speed, reduced, isMobile, height, caption, scores]);
+  }, [mode, playing, speed, staticFrame, reduced, isMobile, height, caption, scores]);
 
   return (
     <canvas

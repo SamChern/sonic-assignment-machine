@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Gauge, Info, Pause, Play, Waves } from "lucide-react";
+import { Gauge, Image as ImageIcon, Info, Pause, Play, Waves } from "lucide-react";
 import {
   AUDIOSCOPE_CATEGORIES,
   CATEGORY_LABELS,
@@ -37,7 +37,8 @@ function readVar(name: string, fallback: string): string {
 export const AudioscopeCompare = ({ entities, similarity, height = 240 }: AudioscopeCompareProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [playing, setPlaying] = useState(true);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState(0.25);
+  const [isStatic, setIsStatic] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const rafRef = useRef<number | null>(null);
   const visibleRef = useRef(true);
@@ -152,8 +153,8 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       });
     };
 
-    if (reduced || !playing) {
-      frame(0);
+    if (isStatic || reduced || !playing) {
+      frame(isStatic ? 1.25 : 0);
       return () => {
         window.removeEventListener("resize", resize);
         io.disconnect();
@@ -186,7 +187,7 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       io.disconnect();
       signals.forEach((s) => s.signal.dispose());
     };
-  }, [entities, playing, speed, reduced, isMobile, height]);
+  }, [entities, playing, speed, isStatic, reduced, isMobile, height]);
 
   if (entities.length === 0) return null;
 
@@ -211,9 +212,35 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
               {lock} · {sim}% similar
             </span>
           ) : null}
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setPlaying((p) => !p)}>
-            {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-            {playing ? "Pause" : "Play"}
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => {
+              setPlaying((p) => {
+                if (!p) setIsStatic(false);
+                return !p;
+              });
+            }}
+          >
+            {playing && !isStatic ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            {playing && !isStatic ? "Pause" : "Play"}
+          </Button>
+          <Button
+            size="sm"
+            variant={isStatic ? "default" : "outline"}
+            className="gap-1.5"
+            onClick={() =>
+              setIsStatic((prev) => {
+                if (!prev) setPlaying(false);
+                return !prev;
+              })
+            }
+            aria-pressed={isStatic}
+            title="Freeze the dual audioscope on a single still frame"
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+            Static
           </Button>
           <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
             <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
@@ -223,8 +250,9 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
             <select
               id="audioscope-compare-speed"
               value={String(speed)}
+              disabled={isStatic}
               onChange={(e) => setSpeed(Number(e.target.value))}
-              className="bg-transparent text-xs text-foreground outline-none"
+              className="bg-transparent text-xs text-foreground outline-none disabled:opacity-50"
             >
               {[0.25, 0.5, 1, 1.5, 2, 3].map((v) => (
                 <option key={v} value={v}>

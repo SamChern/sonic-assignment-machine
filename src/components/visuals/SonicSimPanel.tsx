@@ -20,6 +20,7 @@ import {
   RotateCcw,
   Radar,
   Network,
+  Image as ImageIcon,
 } from "lucide-react";
 import Audioscope, { type AudioscopeMode } from "./Audioscope";
 import {
@@ -69,7 +70,8 @@ export const SonicSimPanel = ({
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id ?? "");
   const [mode, setMode] = useState<AudioscopeMode>(defaultMode);
   const [playing, setPlaying] = useState(true);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState(0.25);
+  const [isStatic, setIsStatic] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [replayKey, setReplayKey] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
@@ -103,8 +105,22 @@ export const SonicSimPanel = ({
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
+  const toggleStatic = () => {
+    setIsStatic((prev) => {
+      const next = !prev;
+      if (next) {
+        // Freezing the view also stops any real-audio routing.
+        setPlaying(false);
+        audioRef.current?.pause();
+        setLiveEl(null);
+      }
+      return next;
+    });
+  };
+
   const togglePlay = async () => {
     const next = !playing;
+    if (next) setIsStatic(false);
     setPlaying(next);
     const el = audioRef.current;
     if (!el || !subject?.audioUrl) return;
@@ -164,6 +180,17 @@ export const SonicSimPanel = ({
             <RotateCcw className="h-3.5 w-3.5" />
             Replay
           </Button>
+          <Button
+            size="sm"
+            variant={isStatic ? "default" : "outline"}
+            className="gap-1.5"
+            onClick={toggleStatic}
+            aria-pressed={isStatic}
+            title="Freeze the audioscope on a single still frame"
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+            Static
+          </Button>
           <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1">
             <Gauge className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
             <label className="sr-only" htmlFor="audioscope-speed">
@@ -172,8 +199,9 @@ export const SonicSimPanel = ({
             <select
               id="audioscope-speed"
               value={String(speed)}
+              disabled={isStatic}
               onChange={(e) => setSpeed(Number(e.target.value))}
-              className="bg-transparent text-xs text-foreground outline-none"
+              className="bg-transparent text-xs text-foreground outline-none disabled:opacity-50"
             >
               {SPEEDS.map((v) => (
                 <option key={v} value={v}>
@@ -229,7 +257,9 @@ export const SonicSimPanel = ({
         </div>
 
         <Badge variant="secondary" className="w-fit text-[11px]">
-          {subject.audioUrl
+          {isStatic
+            ? "Static frame"
+            : subject.audioUrl
             ? liveEl
               ? "Real audio signal"
               : "Press play for real audio"
@@ -244,8 +274,9 @@ export const SonicSimPanel = ({
           seed={subject.id}
           features={subject.features ?? null}
           mode={mode}
-          playing={playing}
+          playing={playing && !isStatic}
           speed={speed}
+          staticFrame={isStatic ? 1.25 : null}
           mediaEl={liveEl}
           height={fullscreen ? Math.max(420, Math.round(window.innerHeight * 0.7)) : height}
           caption={subject.sublabel ?? subject.label}

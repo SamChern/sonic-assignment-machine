@@ -64,12 +64,18 @@ interface SimilarityMetrics {
 interface NetworkVisualizationProps {
   sources: SourceAnalysis[];
   sourceImages?: Array<{ name: string; imageUrl: string }>;
+  /** Source name whose ontology nodes should pulse/highlight (driven by "See my SonicSIM"). */
+  highlightSourceName?: string | null;
 }
 
 // Store nodes reference for fit-to-view calculation
 let networkNodesRef: { x?: number; y?: number; score: number }[] = [];
 
-export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisualizationProps) => {
+export const NetworkVisualization = ({
+  sources,
+  sourceImages = [],
+  highlightSourceName = null,
+}: NetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
@@ -510,15 +516,27 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
       .join("circle")
       .attr("r", (d) => 10 + (d.score / 100) * 25) // Score drives node size
       .attr("fill", (d) => d.color)
+      .attr("class", (d) =>
+        highlightSourceName && d.sourceName === highlightSourceName ? "as-node-highlight" : null,
+      )
       .attr("opacity", (d) => {
-        if (selectedCategories.size === 0) return 0.8;
+        const highlighted = highlightSourceName && d.sourceName === highlightSourceName;
+        if (highlightSourceName && !highlighted) return 0.18;
+        if (selectedCategories.size === 0) return highlighted ? 1 : 0.8;
         return selectedCategories.has(d.category) ? 0.95 : 0.2;
       })
       .attr("stroke", (d) => {
+        if (highlightSourceName && d.sourceName === highlightSourceName) return "#fff";
         if (selectedCategories.size === 0) return "none";
         return selectedCategories.has(d.category) ? "#fff" : "none";
       })
-      .attr("stroke-width", (d) => selectedCategories.has(d.category) ? 2 : 0)
+      .attr("stroke-width", (d) =>
+        highlightSourceName && d.sourceName === highlightSourceName
+          ? 2.5
+          : selectedCategories.has(d.category)
+            ? 2
+            : 0,
+      )
       .style("cursor", "pointer")
       .on("mouseenter", (event, d) => {
         // Don't show hover tooltip if a node is pinned
@@ -741,7 +759,7 @@ export const NetworkVisualization = ({ sources, sourceImages = [] }: NetworkVisu
     return () => {
       simulation?.stop();
     };
-  }, [sources, selectedCategories, pinnedNode, showLabels]);
+  }, [sources, selectedCategories, pinnedNode, showLabels, highlightSourceName]);
 
   return (
     <Card className="relative overflow-hidden bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">

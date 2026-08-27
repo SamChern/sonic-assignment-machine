@@ -406,3 +406,17 @@ All colors MUST be HSL.
 @media (prefers-reduced-motion: reduce) {
   .audioscope-pulse circle { animation: none; }
 }
+
+/* Nodes of the analysis currently playing in "See my SonicSIM". */
+@keyframes audioscope-node-highlight {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 2px hsl(var(--primary) / 0.5)); }
+  50% { transform: scale(1.22); filter: drop-shadow(0 0 12px hsl(var(--primary) / 0.9)); }
+}
+circle.as-node-highlight {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: audioscope-node-highlight 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  circle.as-node-highlight { animation: none; }
+}

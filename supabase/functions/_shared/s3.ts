@@ -186,7 +186,42 @@ const gatewayDriver: S3Driver = {
       etag: res.headers.get("ETag")?.replace(/"/g, "") ?? null,
     };
   },
+
+  // Object bytes cannot be PUT through the gateway proxy, so a short-lived
+  // signed write URL is requested and the body uploaded straight to S3.
+  async putObject(objectKey, body, opts) {
+    const res = await fetch(
+      `${GATEWAY_BASE}/api/v1/sign_storage_url?provider=${CONNECTOR}&mode=write`,
+      {
+        method: "POST",
+        headers: { ...gatewayHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ object_path: objectKey }),
+      },
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      throw Object.assign(new Error(`S3 write sign failed [${res.status}]: ${text}`), {
+        status: res.status,
+      });
+    }
+    const { url } = await res.json();
+    if (!url) throw new Error("S3 write sign returned no url");
+
+    const headers: Record<string, string> = {
+      "Content-Type": opts?.contentType ?? "application/octet-stream",
+    };
+    if (opts?.contentEncoding) headers["Content-Encoding"] = opts.contentEncoding;
+
+    const put = await fetch(url as string, { method: "PUT", headers, body });
+    if (!put.ok) {
+      const text = await put.text();
+      throw Object.assign(new Error(`S3 put failed [${put.status}]: ${text}`), {
+        status: put.status,
+      });
+    }
+  },
 };
+
 
 // ---------------------------------------------------------------------------
 // Backend 2: direct AWS S3 with an IAM user access key (SigV4)

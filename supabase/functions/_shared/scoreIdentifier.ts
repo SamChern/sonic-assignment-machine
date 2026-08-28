@@ -324,9 +324,13 @@ async function runScore(
   // 2. Taxonomy tags
   enter("tags");
   const nodeIds: string[] = [];
+  let suppressedTags = 0;
   for (const t of tags) {
     try {
-      nodeIds.push(await resolveTag(admin, t));
+      // resolveTag returns null for suppressed sensitive classes — skip them.
+      const nid = await resolveTag(admin, t);
+      if (nid) nodeIds.push(nid);
+      else suppressedTags++;
     } catch (e) {
       const verdict = classifyFailure(e);
       // Credits / policy / rate limits must stop the task; a single unresolved

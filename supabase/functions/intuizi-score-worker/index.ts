@@ -33,10 +33,13 @@ const corsHeaders = {
 
 /** Wall-clock ceiling per invocation; well under the 150s gateway idle limit. */
 const RUN_BUDGET_MS = 60_000;
-/** Tasks claimed per batch. Small batches keep peak memory flat. */
-const BATCH = 3;
+/** Tasks claimed per batch; matches the max in-flight scoring concurrency. */
+const BATCH = 4;
+/** Max identifiers scored concurrently. Dropped to 1 under rate-limit pressure. */
+const MAX_CONCURRENCY = 4;
 /** Stop claiming when a single task took longer than this share of the budget. */
 const SAFETY_MS = 12_000;
+
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -133,135 +136,157 @@ Deno.serve(async (req) => {
     let unchanged = 0;
     let failed = 0;
     let paused = false;
+    /** Adaptive: starts wide, collapses to 1 as soon as the gateway pushes back. */
+    let concurrency = MAX_CONCURRENCY;
+    let rateLimits = state?.consecutive_rate_limits ?? 0;
+
+    type QueuedTask = ScoreTask & {
+      id: string;
+      attempts: number;
+      max_attempts: number;
+      trace_id: string | null;
+      step_scale: number | null;
+    };
+
+    /** Scores one identifier and persists its terminal queue state. */
+    const runTask = async (task: QueuedTask) => {
+      const t0 = Date.now();
+      const traceId = task.trace_id ?? `${runTraceId}.${task.id.slice(0, 8)}`;
+      const stepScale = Number(task.step_scale ?? 1) || 1;
+      let lastStage = "lookup";
+      let outcome = "ok";
+      let failureKind: string | null = null;
+      try {
+        const out = await scoreIdentifier(admin, task, metrics, {
+          traceId,
+          stepScale,
+          onStage: (s) => {
+            lastStage = s;
+          },
+        });
+        if (out.status === "scored") scored++;
+        else unchanged++;
+        await admin.from("intuizi_score_queue").update({
+          status: out.status === "scored" ? "done" : "skipped",
+          finished_at: new Date().toISOString(),
+          last_error: null,
+          failure_kind: null,
+          last_stage: out.stage,
+          trace_id: traceId,
+        }).eq("id", task.id);
+      } catch (e) {
+        failed++;
+        const verdict = classifyFailure(e);
+        const msg = verdict.reason;
+        failureKind = verdict.kind;
+        lastStage = stageOf(e) ?? lastStage;
+        outcome = "failed";
+        const attemptsUsed = task.attempts ?? 1;
+        const maxAttempts = task.max_attempts ?? 5;
+        // Dead-letter (never retried, never silently dropped) when the error is
+        // permanent, or when the attempt budget is spent. Everything else is
+        // rescheduled with a classified backoff and a smaller workload.
+        const dead = !verdict.retryable || attemptsUsed >= maxAttempts;
+        const nextScale = verdict.shrink
+          ? Math.max(0.25, stepScale * 0.5)
+          : stepScale;
+        await admin.from("intuizi_score_queue").update({
+          status: dead ? "dead_letter" : "pending",
+          last_error: msg.slice(0, 1000),
+          failure_kind: verdict.kind,
+          last_stage: lastStage,
+          trace_id: traceId,
+          step_scale: nextScale,
+          next_attempt_at: new Date(
+            Date.now() + backoffFor(verdict, attemptsUsed),
+          ).toISOString(),
+          dead_lettered_at: dead ? new Date().toISOString() : null,
+          finished_at: dead ? new Date().toISOString() : null,
+        }).eq("id", task.id);
+
+        if (dead) {
+          console.error(JSON.stringify({
+            evt: "intuizi_score_dead_letter",
+            trace_id: traceId,
+            identifier: task.identifier,
+            object_key: task.object_key,
+            stage: lastStage,
+            failure_kind: verdict.kind,
+            attempts: attemptsUsed,
+            reason: msg.slice(0, 400),
+          }));
+        }
+
+        // Credit / policy / sustained rate-limit failures pause the pipeline
+        // instead of burning every remaining queue item on the same error.
+        if (verdict.kind === "credits" || verdict.kind === "policy") {
+          paused = true;
+          await admin.from("intuizi_ingest_state").update({
+            paused: true,
+            pause_reason: msg.slice(0, 500),
+            paused_at: new Date().toISOString(),
+          }).eq("id", "singleton");
+        } else if (verdict.kind === "rate_limit") {
+          // Back off hard: serialize the remaining work for this invocation.
+          concurrency = 1;
+          rateLimits += 1;
+          const next = rateLimits;
+          await admin.from("intuizi_ingest_state").update({
+            consecutive_rate_limits: next,
+            last_error: msg.slice(0, 500),
+            ...(next >= 3
+              ? { parked_until: new Date(Date.now() + 30 * 60 * 1000).toISOString() }
+              : {}),
+          }).eq("id", "singleton");
+          if (next >= 3) paused = true;
+          else await new Promise((r) => setTimeout(r, 2000 * next));
+        }
+      }
+      console.log(JSON.stringify({
+        evt: "intuizi_score_task",
+        trace_id: traceId,
+        queue_id: task.id,
+        identifier: task.identifier,
+        object_key: task.object_key,
+        report_type: task.report_type,
+        activation_id: (task as { activation_id?: string }).activation_id ?? null,
+        attempt: task.attempts ?? 1,
+        step_scale: stepScale,
+        stage: lastStage,
+        outcome,
+        failure_kind: failureKind,
+        duration_ms: Date.now() - t0,
+        time_remaining_ms: timeLeft(),
+      }));
+    };
 
     while (timeLeft() > SAFETY_MS && !paused) {
       const { data: claimed, error: claimErr } = await admin.rpc(
         "claim_intuizi_score_jobs",
-        { p_limit: BATCH },
+        { p_limit: Math.max(1, Math.min(BATCH, concurrency)) },
       );
       if (claimErr) return json({ success: false, error: claimErr.message }, 500);
-      const tasks = (claimed ?? []) as Array<
-        ScoreTask & {
-          id: string;
-          attempts: number;
-          max_attempts: number;
-          trace_id: string | null;
-          step_scale: number | null;
-        }
-      >;
+      const tasks = (claimed ?? []) as QueuedTask[];
       if (!tasks.length) break;
 
-      // Strictly sequential: one AI gateway request in flight at a time.
-      for (const task of tasks) {
-        const t0 = Date.now();
-        const traceId = task.trace_id ?? `${runTraceId}.${task.id.slice(0, 8)}`;
-        const stepScale = Number(task.step_scale ?? 1) || 1;
-        let lastStage = "lookup";
-        let outcome = "ok";
-        let failureKind: string | null = null;
-        try {
-          const out = await scoreIdentifier(admin, task, metrics, {
-            traceId,
-            stepScale,
-            onStage: (s) => {
-              lastStage = s;
-            },
-          });
-          if (out.status === "scored") scored++;
-          else unchanged++;
-          await admin.from("intuizi_score_queue").update({
-            status: out.status === "scored" ? "done" : "skipped",
-            finished_at: new Date().toISOString(),
-            last_error: null,
-            failure_kind: null,
-            last_stage: out.stage,
-            trace_id: traceId,
-          }).eq("id", task.id);
-        } catch (e) {
-          failed++;
-          const verdict = classifyFailure(e);
-          const msg = verdict.reason;
-          failureKind = verdict.kind;
-          lastStage = stageOf(e) ?? lastStage;
-          outcome = "failed";
-          const attemptsUsed = task.attempts ?? 1;
-          const maxAttempts = task.max_attempts ?? 5;
-          // Dead-letter (never retried, never silently dropped) when the error is
-          // permanent, or when the attempt budget is spent. Everything else is
-          // rescheduled with a classified backoff and a smaller workload.
-          const dead = !verdict.retryable || attemptsUsed >= maxAttempts;
-          const nextScale = verdict.shrink
-            ? Math.max(0.25, stepScale * 0.5)
-            : stepScale;
-          await admin.from("intuizi_score_queue").update({
-            status: dead ? "dead_letter" : "pending",
-            last_error: msg.slice(0, 1000),
-            failure_kind: verdict.kind,
-            last_stage: lastStage,
-            trace_id: traceId,
-            step_scale: nextScale,
-            next_attempt_at: new Date(
-              Date.now() + backoffFor(verdict, attemptsUsed),
-            ).toISOString(),
-            dead_lettered_at: dead ? new Date().toISOString() : null,
-            finished_at: dead ? new Date().toISOString() : null,
-          }).eq("id", task.id);
-
-          if (dead) {
-            console.error(JSON.stringify({
-              evt: "intuizi_score_dead_letter",
-              trace_id: traceId,
-              identifier: task.identifier,
-              object_key: task.object_key,
-              stage: lastStage,
-              failure_kind: verdict.kind,
-              attempts: attemptsUsed,
-              reason: msg.slice(0, 400),
-            }));
+      // Bounded parallelism: `concurrency` identifiers in flight at once. Each
+      // task is independent (own row, own idempotency check), so a slow AI
+      // gateway round-trip no longer blocks the whole batch.
+      let cursor = 0;
+      const lanes = Array.from(
+        { length: Math.max(1, Math.min(concurrency, tasks.length)) },
+        async () => {
+          while (cursor < tasks.length && !paused && timeLeft() > SAFETY_MS) {
+            const task = tasks[cursor++];
+            if (!task) break;
+            await runTask(task);
           }
-
-          // Credit / policy / sustained rate-limit failures pause the pipeline
-          // instead of burning every remaining queue item on the same error.
-          if (verdict.kind === "credits" || verdict.kind === "policy") {
-            paused = true;
-            await admin.from("intuizi_ingest_state").update({
-              paused: true,
-              pause_reason: msg.slice(0, 500),
-              paused_at: new Date().toISOString(),
-            }).eq("id", "singleton");
-          } else if (verdict.kind === "rate_limit") {
-            const next = (state?.consecutive_rate_limits ?? 0) + 1;
-            await admin.from("intuizi_ingest_state").update({
-              consecutive_rate_limits: next,
-              last_error: msg.slice(0, 500),
-              ...(next >= 3
-                ? { parked_until: new Date(Date.now() + 30 * 60 * 1000).toISOString() }
-                : {}),
-            }).eq("id", "singleton");
-            if (next >= 3) paused = true;
-            else await new Promise((r) => setTimeout(r, 2000 * next));
-          }
-        }
-        console.log(JSON.stringify({
-          evt: "intuizi_score_task",
-          trace_id: traceId,
-          queue_id: task.id,
-          identifier: task.identifier,
-          object_key: task.object_key,
-          report_type: task.report_type,
-          activation_id: (task as { activation_id?: string }).activation_id ?? null,
-          attempt: task.attempts ?? 1,
-          step_scale: stepScale,
-          stage: lastStage,
-          outcome,
-          failure_kind: failureKind,
-          duration_ms: Date.now() - t0,
-          time_remaining_ms: timeLeft(),
-        }));
-        if (timeLeft() <= SAFETY_MS || paused) break;
-      }
-
+        },
+      );
+      await Promise.all(lanes);
     }
+
+
 
     // How much work is left, and should another invocation pick it up?
     const { count: pending } = await admin

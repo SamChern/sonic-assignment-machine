@@ -1702,6 +1702,7 @@ export type Database = {
           communication_desc: string | null
           communication_score: number
           confidence: number
+          context_neighbors: Json | null
           contextual_desc: string | null
           contextual_score: number
           created_at: string
@@ -1726,6 +1727,7 @@ export type Database = {
           communication_desc?: string | null
           communication_score: number
           confidence?: number
+          context_neighbors?: Json | null
           contextual_desc?: string | null
           contextual_score: number
           created_at?: string
@@ -1750,6 +1752,7 @@ export type Database = {
           communication_desc?: string | null
           communication_score?: number
           confidence?: number
+          context_neighbors?: Json | null
           contextual_desc?: string | null
           contextual_score?: number
           created_at?: string

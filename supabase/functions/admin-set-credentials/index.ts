@@ -46,6 +46,7 @@ const ALLOWED_FIELDS: Record<string, string[]> = {
     "PANDORA_USER_PASSWORD",
   ],
   librosa_rest: ["LIBROSA_REST_URL", "LIBROSA_REST_TOKEN"],
+  semantic_svc: ["SEMANTIC_SVC_URL", "SEMANTIC_SVC_TOKEN"],
   spotify_audio_features: [],
   mcp_generic: MCP_FIELDS,
   mcp_notion: MCP_FIELDS,

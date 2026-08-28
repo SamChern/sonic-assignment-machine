@@ -509,9 +509,20 @@ OTHER RULES:
   Treat those priors as a Bayesian anchor — your scores should stay within
   ~1 std of the prior unless the acoustics clearly contradict it. This keeps
   scores comparable across the catalog.
+- When "exemplarN(similarity=... emotional=... tags=[...])" entries appear, they
+  are retrieved few-shot examples: real already-scored sources with their cosine
+  similarity to this subject. Weight each exemplar by its similarity — a 0.9
+  neighbour is strong evidence, a 0.4 neighbour is weak. Interpolate between the
+  exemplars rather than copying any single one, and deviate when the acoustic
+  line or tags clearly differ.
+- When a "subject=tags_only" line appears there is NO audio for this subject.
+  Score entirely from the tag weights and exemplars: heavier tag weights
+  dominate the profile, spoken-word/talk tags raise Communication and lower
+  Artistic, and stay closer to the exemplar range since acoustics are unknown.
 - If a source has neither an "acoustic:" nor a "taxonomy:" line, score it from
   its name and genre knowledge alone and stay closer to moderate values; the
   system records lower confidence for those.`;
+
 
 
 

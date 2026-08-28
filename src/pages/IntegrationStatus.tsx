@@ -752,7 +752,9 @@ const IntegrationStatus = () => {
 
         <div className="mt-6 space-y-4">
           <IngestByKeyPanel />
+          <AudioSetCrosswalkPanel />
           <EnrichmentReadinessPanel />
+
           <IngestDebugPanel />
         </div>
 

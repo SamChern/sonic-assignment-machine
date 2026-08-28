@@ -1182,8 +1182,6 @@ Deno.serve(async (req) => {
       return json({ ...summary, idle: true });
     }
 
-    const identifierBudget = probeOnly ? 1 : caps.identifiers;
-
     for (const rawCand of candidates) {
       if (breakerTripped) break;
       if (outOfTime()) { summary.time_budget_exhausted = true; break; }
@@ -1194,6 +1192,8 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // `discovered` is the pre-dispatch state: the row exists (so the ETag and
+      // resume cursor are durable) but no worker owns it yet.
       const { data: fileRow, error: fileErr } = await admin
         .from("intuizi_ingest_files")
         .upsert({
@@ -1202,11 +1202,13 @@ Deno.serve(async (req) => {
           etag: rawCand.etag,
           size_bytes: rawCand.size || null,
           partition_date: partitionDateFromKey(rawCand.key),
-          status: "processing",
+          status: "discovered",
           started_at: new Date().toISOString(),
           error_message: null,
         }, { onConflict: "object_key" })
-        .select("id,report_type,processed_rows,row_group_cursor,rows_offset,row_groups_total").single();
+        .select(
+          "id,report_type,processed_rows,row_group_cursor,rows_offset,row_groups_total,dispatch_attempts",
+        ).single();
       if (fileErr) {
         summary.errors.push(`ledger ${rawCand.key}: ${fileErr.message}`);
         summary.files_failed++;

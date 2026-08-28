@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,22 +10,56 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { toast } from "@/hooks/use-toast";
 import { KPI_OPTIONS } from "@/lib/enterpriseSchema";
-import { AlertTriangle, LineChart, Loader2, Play } from "lucide-react";
+import { AlertTriangle, HelpCircle, LineChart, Loader2, Play, TrendingUp } from "lucide-react";
+
+const CATEGORIES = [
+  "emotional",
+  "cognitive",
+  "social",
+  "communication",
+  "contextual",
+  "artistic",
+] as const;
+
+type CategoryName = (typeof CATEGORIES)[number];
 
 interface Driver {
   category: string;
   coefficient: number;
   per_10_points: number;
+  per_10_ci: [number, number];
+  ci_low: number;
+  ci_high: number;
+  /** True when the bootstrap interval crosses zero: not yet distinguishable. */
+  inconclusive: boolean;
+}
+
+interface LiftPrior {
+  category: string;
+  lift: number;
+  ci_low: number;
+  ci_high: number;
+  exposed_n: number;
+  holdout_n: number;
+  cohort_slug: string;
 }
 
 interface OutcomeResult {
   kpi: string;
   kpi_source: string;
   matched_rows: number;
+  min_rows: number;
+  engine: string;
+  bootstrap_iters: number;
+  intercept: number;
   r2: number;
   mean_actual: number;
+  mean_scores: Record<string, number>;
+  conclusive_count: number;
+  lift_priors: LiftPrior[];
   drivers: Driver[];
   top_predicted: { record_id: string; label: string; predicted: number; actual: number | null }[];
 }
@@ -50,11 +84,18 @@ const PredictOutcomesPanel = ({
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<OutcomeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gate, setGate] = useState<{ matched_rows: number; min_rows: number } | null>(null);
+  /** Counterfactual deltas, in points, per category. */
+  const [deltas, setDeltas] = useState<Record<CategoryName, number>>(
+    Object.fromEntries(CATEGORIES.map((c) => [c, 0])) as Record<CategoryName, number>,
+  );
 
   const run = useCallback(async () => {
     setRunning(true);
     setError(null);
     setResult(null);
+    setGate(null);
+    setDeltas(Object.fromEntries(CATEGORIES.map((c) => [c, 0])) as Record<CategoryName, number>);
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("predict-outcomes", {
         body: {
@@ -64,8 +105,13 @@ const PredictOutcomesPanel = ({
           dataset_id: datasetId === "all" ? null : datasetId,
         },
       });
-      if (fnErr) throw new Error(fnErr.message);
-      if (!data?.success) throw new Error(data?.error ?? "Model could not be fitted");
+      if (fnErr && !data) throw new Error(fnErr.message);
+      if (!data?.success) {
+        if (data?.gated) {
+          setGate({ matched_rows: Number(data.matched_rows ?? 0), min_rows: Number(data.min_rows ?? 0) });
+        }
+        throw new Error(data?.error ?? fnErr?.message ?? "Model could not be fitted");
+      }
       setResult(data as OutcomeResult);
       toast({
         title: "Outcome model fitted",
@@ -77,6 +123,35 @@ const PredictOutcomesPanel = ({
       setRunning(false);
     }
   }, [organizationId, kpi, kpiSource, datasetId]);
+
+  /** Predicted KPI at the counterfactual point, plus the supported interval. */
+  const counterfactual = useMemo(() => {
+    if (!result) {
+      return { predicted: 0, delta: 0, ciLow: 0, ciHigh: 0, conclusive: false };
+    }
+    const base = result.intercept +
+      result.drivers.reduce(
+        (s, d) => s + d.coefficient * ((result.mean_scores[d.category] ?? 0) / 100),
+        0,
+      );
+    let delta = 0;
+    let ciLow = 0;
+    let ciHigh = 0;
+    let conclusive = false;
+    for (const d of result.drivers) {
+      const pts = deltas[d.category as CategoryName] ?? 0;
+      if (!pts) continue;
+      delta += d.coefficient * (pts / 100);
+      if (!d.inconclusive) {
+        conclusive = true;
+        const a = d.ci_low * (pts / 100);
+        const b = d.ci_high * (pts / 100);
+        ciLow += Math.min(a, b);
+        ciHigh += Math.max(a, b);
+      }
+    }
+    return { predicted: base + delta, delta, ciLow: delta + ciLow - delta, ciHigh, conclusive };
+  }, [result, deltas]);
 
   return (
     <div className="space-y-4">
@@ -136,6 +211,13 @@ const PredictOutcomesPanel = ({
           Run prediction
         </Button>
 
+        {gate && (
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Needs at least {gate.min_rows} scored rows with a {kpi} value attached — you have{" "}
+            {gate.matched_rows}. Category-level claims stay hidden until then rather than guessing.
+          </p>
+        )}
+
         {error && (
           <p className="mt-3 flex items-start gap-1 text-[11px] text-destructive">
             <AlertTriangle className="mt-[2px] h-3 w-3 shrink-0" />
@@ -155,33 +237,138 @@ const PredictOutcomesPanel = ({
               <Badge variant="outline" className="text-[11px]">
                 avg {result.mean_actual.toFixed(3)}
               </Badge>
+              <Badge variant="outline" className="text-[11px]">
+                {result.conclusive_count} of 6 axes distinguishable
+              </Badge>
             </div>
             <div className="mt-3 space-y-2">
               {result.drivers.map((d) => {
-                const max = Math.max(...result.drivers.map((x) => Math.abs(x.coefficient))) || 1;
-                const pct = (Math.abs(d.coefficient) / max) * 100;
+                const conclusive = result.drivers.filter((x) => !x.inconclusive);
+                const max = Math.max(...conclusive.map((x) => Math.abs(x.coefficient)), 1e-9);
+                const pct = Math.min(100, (Math.abs(d.coefficient) / max) * 100);
                 return (
-                  <div key={d.category} className="flex items-center gap-2">
+                  <div
+                    key={d.category}
+                    className={`flex flex-wrap items-center gap-2 ${
+                      d.inconclusive ? "opacity-50" : ""
+                    }`}
+                  >
                     <span className="w-28 text-xs capitalize">{d.category}</span>
-                    <div className="h-2 flex-1 overflow-hidden rounded bg-muted">
+                    <div className="h-2 min-w-[100px] flex-1 overflow-hidden rounded bg-muted">
                       <div
-                        className={`h-full ${d.coefficient >= 0 ? "bg-primary" : "bg-destructive"}`}
-                        style={{ width: `${pct}%` }}
+                        className={`h-full ${
+                          d.inconclusive
+                            ? "bg-muted-foreground/40"
+                            : d.coefficient >= 0
+                              ? "bg-primary"
+                              : "bg-destructive"
+                        }`}
+                        style={{ width: `${d.inconclusive ? 12 : pct}%` }}
                       />
                     </div>
-                    <span className="w-28 text-right text-[11px] text-muted-foreground">
-                      {d.per_10_points >= 0 ? "+" : ""}
-                      {d.per_10_points.toFixed(4)} / +10 pts
-                    </span>
+                    {d.inconclusive ? (
+                      <span className="flex w-52 items-center justify-end gap-1 text-right text-[11px] text-muted-foreground">
+                        <HelpCircle className="h-3 w-3" />
+                        not yet distinguishable · needs more data
+                      </span>
+                    ) : (
+                      <span className="w-52 text-right text-[11px] text-muted-foreground">
+                        {d.per_10_points >= 0 ? "+" : ""}
+                        {d.per_10_points.toFixed(4)} / +10 pts
+                        <span className="ml-1 opacity-70">
+                          [{d.per_10_ci[0].toFixed(4)}, {d.per_10_ci[1].toFixed(4)}]
+                        </span>
+                      </span>
+                    )}
                   </div>
                 );
               })}
             </div>
             <p className="mt-3 text-[11px] text-muted-foreground">
-              Fit below roughly 20% means the semantic profile alone does not explain this KPI yet —
-              add more rows with observed values, or capture live events with the tracking tag.
+              Effects are ridge-regularized with {result.bootstrap_iters} bootstrap resamples on the{" "}
+              {result.engine === "remote" ? "analysis worker" : "in-cloud fallback"}. Greyed rows are
+              not yet distinguishable from zero — treat them as unknown, not as neutral.
             </p>
           </Card>
+
+          <Card className="p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold">Counterfactual planning</h3>
+              <Badge variant="outline" className="text-[11px]">
+                predicted {counterfactual.predicted.toFixed(4)}
+              </Badge>
+              <Badge
+                variant={counterfactual.conclusive ? "default" : "outline"}
+                className="text-[11px]"
+              >
+                {counterfactual.delta >= 0 ? "+" : ""}
+                {counterfactual.delta.toFixed(4)} vs. today
+              </Badge>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Move an axis and see the predicted change in {result.kpi}, with the interval the data
+              actually supports. Intervals from inconclusive axes are excluded from the total.
+            </p>
+            <div className="mt-3 space-y-3">
+              {result.drivers.map((d) => (
+                <div key={`cf-${d.category}`} className="flex flex-wrap items-center gap-2">
+                  <span className="w-28 text-xs capitalize">{d.category}</span>
+                  <Slider
+                    value={[deltas[d.category as CategoryName] ?? 0]}
+                    min={-20}
+                    max={20}
+                    step={1}
+                    aria-label={`${d.category} delta`}
+                    onValueChange={([v]) =>
+                      setDeltas((p) => ({ ...p, [d.category as CategoryName]: v }))
+                    }
+                    className="min-w-[140px] flex-1"
+                  />
+                  <span className="w-28 text-right text-[11px] text-muted-foreground">
+                    {(deltas[d.category as CategoryName] ?? 0) >= 0 ? "+" : ""}
+                    {deltas[d.category as CategoryName] ?? 0} pts
+                    {d.inconclusive && " · unknown"}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Interval: {counterfactual.conclusive
+                ? `${counterfactual.ciLow.toFixed(4)} to ${counterfactual.ciHigh.toFixed(4)}`
+                : "no distinguishable axis moved — no interval to report"}
+            </p>
+          </Card>
+
+          {result.lift_priors.length > 0 && (
+            <Card className="p-4">
+              <h3 className="text-sm font-semibold">Measured activation lift</h3>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Exposed vs. withheld holdout from live tag events — this is lift, not correlation,
+                and it feeds back into your calibration.
+              </p>
+              <div className="mt-3 space-y-1">
+                {result.lift_priors.map((p) => (
+                  <div
+                    key={`${p.cohort_slug}-${p.category}`}
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/10 p-2 text-xs"
+                  >
+                    <span className="w-28 capitalize">{p.category}</span>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      {p.cohort_slug}
+                    </span>
+                    <span className={p.lift >= 0 ? "text-primary" : "text-destructive"}>
+                      {p.lift >= 0 ? "+" : ""}
+                      {p.lift.toFixed(4)}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {p.exposed_n} exposed / {p.holdout_n} holdout
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           <Card className="p-4">
             <h3 className="text-sm font-semibold">Predicted top performers</h3>

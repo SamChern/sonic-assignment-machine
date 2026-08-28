@@ -620,3 +620,13 @@ export function headObject(objectKey: string): Promise<S3ObjectHead> {
   return memo(headCache, `${d.name}|${objectKey}`, HEAD_TTL_MS, () => d.headObject(objectKey));
 }
 
+/** Write object bytes (outbound activation files). Never memoized. */
+export function putObject(
+  objectKey: string,
+  body: Uint8Array,
+  opts?: PutObjectOptions,
+): Promise<void> {
+  return driver().putObject(objectKey, body, opts);
+}
+
+

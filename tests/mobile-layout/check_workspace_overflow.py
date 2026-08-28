@@ -21,8 +21,22 @@ BASE = os.environ.get("SONICSIM_BASE_URL", "http://localhost:8080")
 SCREENSHOTS = Path(__file__).parent / "screenshots" / "workspace"
 SCREENSHOTS.mkdir(parents=True, exist_ok=True)
 
-TABS = ["analyses", "data", "discover", "categories", "users", "outcomes", "tags"]
+# Step 12 regrouped the workspace nav into four groups, each with its own
+# sub-tab row. Expected trigger count per deep link = 4 group triggers + the
+# sub-tabs of the group that owns the linked tab.
+GROUP_SIZES = {
+    "data": 2,
+    "discover": 2,
+    "analyses": 3,
+    "sonicsim": 3,
+    "categories": 3,
+    "users": 2,
+    "outcomes": 2,
+    "tags": 1,
+}
+TABS = list(GROUP_SIZES)
 VIEWPORTS = [("mobile", 390, 844), ("tablet", 820, 1100), ("desktop", 1440, 1000)]
+
 
 PROBE = """
 () => {

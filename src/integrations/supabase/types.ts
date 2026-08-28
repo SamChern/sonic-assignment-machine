@@ -2206,6 +2206,7 @@ export type Database = {
         Returns: boolean
       }
       is_org_owner: { Args: { _org: string }; Returns: boolean }
+      log_intuizi_custody_scan: { Args: never; Returns: Json }
       match_audio_profiles: {
         Args: {
           exclude_id?: string

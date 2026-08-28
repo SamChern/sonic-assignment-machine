@@ -68,6 +68,12 @@ Deno.serve(async (req) => {
       throw e;
     }
 
+    // Control Room knob (60s cached), falls back to the shipped default.
+    const batchSize = Math.round(
+      await controlNumber(admin, "ingest.score_batch_size", BATCH_DEFAULT, { min: 1, max: 64 }),
+    );
+
+
     const reqBody = await req.json().catch(() => ({})) as {
       source?: string;
       trace_id?: string;

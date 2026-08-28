@@ -207,28 +207,36 @@ function directConfig() {
   };
 }
 
+// SigV4 primitives. Exported because `sqs.ts` signs against the `sqs` service
+// with exactly the same algorithm — one implementation, two AWS services.
 const enc = new TextEncoder();
 
-async function sha256Hex(data: string | Uint8Array): Promise<string> {
+export async function sha256Hex(data: string | Uint8Array): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", typeof data === "string" ? enc.encode(data) : data);
   return hex(new Uint8Array(buf));
 }
 
-function hex(bytes: Uint8Array): string {
+export function hex(bytes: Uint8Array): string {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function hmac(key: Uint8Array, data: string): Promise<Uint8Array> {
+export async function hmac(key: Uint8Array, data: string): Promise<Uint8Array> {
   const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, [
     "sign",
   ]);
   return new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(data)));
 }
 
-async function signingKey(secret: string, date: string, region: string): Promise<Uint8Array> {
+/** Derive the SigV4 signing key for a given AWS service (defaults to s3). */
+export async function signingKey(
+  secret: string,
+  date: string,
+  region: string,
+  service = "s3",
+): Promise<Uint8Array> {
   let k = await hmac(enc.encode(`AWS4${secret}`), date);
   k = await hmac(k, region);
-  k = await hmac(k, "s3");
+  k = await hmac(k, service);
   return await hmac(k, "aws4_request");
 }
 
@@ -240,7 +248,7 @@ function encodeKeyPath(key: string): string {
     .join("/");
 }
 
-function amzDates() {
+export function amzDates() {
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
   return { amzDate, dateStamp: amzDate.slice(0, 8) };

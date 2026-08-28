@@ -382,6 +382,39 @@ export type Database = {
           },
         ]
       }
+      embedding_bridges: {
+        Row: {
+          created_at: string
+          eval_agreement: number | null
+          from_dim: number
+          id: string
+          is_active: boolean
+          name: string
+          to_dim: number
+          weights_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          eval_agreement?: number | null
+          from_dim: number
+          id?: string
+          is_active?: boolean
+          name: string
+          to_dim: number
+          weights_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          eval_agreement?: number | null
+          from_dim?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          to_dim?: number
+          weights_url?: string | null
+        }
+        Relationships: []
+      }
       embedding_cache: {
         Row: {
           created_at: string
@@ -679,14 +712,18 @@ export type Database = {
           created_at: string
           cursor_offset: number
           discovered_at: string
+          dispatch_attempts: number
+          enqueued_at: string | null
           error_message: string | null
           etag: string | null
           failed_rows: number
           finished_at: string | null
+          heartbeat_at: string | null
           id: string
           object_key: string
           partition_date: string | null
           processed_rows: number
+          queue_message_id: string | null
           report_type: string
           row_group_cursor: number
           row_groups_total: number | null
@@ -695,20 +732,26 @@ export type Database = {
           started_at: string | null
           status: string
           total_rows: number
+          trace_id: string | null
           updated_at: string
+          worker_id: string | null
         }
         Insert: {
           created_at?: string
           cursor_offset?: number
           discovered_at?: string
+          dispatch_attempts?: number
+          enqueued_at?: string | null
           error_message?: string | null
           etag?: string | null
           failed_rows?: number
           finished_at?: string | null
+          heartbeat_at?: string | null
           id?: string
           object_key: string
           partition_date?: string | null
           processed_rows?: number
+          queue_message_id?: string | null
           report_type: string
           row_group_cursor?: number
           row_groups_total?: number | null
@@ -717,20 +760,26 @@ export type Database = {
           started_at?: string | null
           status?: string
           total_rows?: number
+          trace_id?: string | null
           updated_at?: string
+          worker_id?: string | null
         }
         Update: {
           created_at?: string
           cursor_offset?: number
           discovered_at?: string
+          dispatch_attempts?: number
+          enqueued_at?: string | null
           error_message?: string | null
           etag?: string | null
           failed_rows?: number
           finished_at?: string | null
+          heartbeat_at?: string | null
           id?: string
           object_key?: string
           partition_date?: string | null
           processed_rows?: number
+          queue_message_id?: string | null
           report_type?: string
           row_group_cursor?: number
           row_groups_total?: number | null
@@ -739,7 +788,9 @@ export type Database = {
           started_at?: string | null
           status?: string
           total_rows?: number
+          trace_id?: string | null
           updated_at?: string
+          worker_id?: string | null
         }
         Relationships: []
       }
@@ -1530,6 +1581,74 @@ export type Database = {
         }
         Relationships: []
       }
+      sonic_cohort_members: {
+        Row: {
+          added_at: string
+          cohort_id: string
+          similarity: number | null
+          subject_key: string
+        }
+        Insert: {
+          added_at?: string
+          cohort_id: string
+          similarity?: number | null
+          subject_key: string
+        }
+        Update: {
+          added_at?: string
+          cohort_id?: string
+          similarity?: number | null
+          subject_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sonic_cohort_members_cohort_id_fkey"
+            columns: ["cohort_id"]
+            isOneToOne: false
+            referencedRelation: "sonic_cohorts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sonic_cohorts: {
+        Row: {
+          centroid: string | null
+          created_at: string
+          description: string | null
+          export_eligible: boolean | null
+          id: string
+          member_count: number
+          name: string
+          narrative: string | null
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          centroid?: string | null
+          created_at?: string
+          description?: string | null
+          export_eligible?: boolean | null
+          id?: string
+          member_count?: number
+          name: string
+          narrative?: string | null
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          centroid?: string | null
+          created_at?: string
+          description?: string | null
+          export_eligible?: boolean | null
+          id?: string
+          member_count?: number
+          name?: string
+          narrative?: string | null
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       source_analyses: {
         Row: {
           artistic_desc: string | null
@@ -1685,9 +1804,12 @@ export type Database = {
       }
       taxonomy_nodes: {
         Row: {
+          audio_embedding: string | null
           code: string
           created_at: string
+          crosswalk: Json
           embedding: string | null
+          grounding_count: number
           id: string
           label: string
           parent_code: string | null
@@ -1695,9 +1817,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          audio_embedding?: string | null
           code: string
           created_at?: string
+          crosswalk?: Json
           embedding?: string | null
+          grounding_count?: number
           id?: string
           label: string
           parent_code?: string | null
@@ -1705,9 +1830,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          audio_embedding?: string | null
           code?: string
           created_at?: string
+          crosswalk?: Json
           embedding?: string | null
+          grounding_count?: number
           id?: string
           label?: string
           parent_code?: string | null

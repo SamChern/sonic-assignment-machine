@@ -1,44 +1,37 @@
-// Intuizi S3 ingest worker.
+// Intuizi ingest CONTROL PLANE (Step 2.5).
 //
-// Bounded, single-flight, idempotent batch job:
-//  1. Read the paused/parked state — exit while paused (one probe row allowed
-//     after a credit/policy pause, to detect out-of-band recovery).
+// This function used to decode Parquet and score identifiers inside the edge
+// runtime. Both are unbounded CPU work against a bounded worker, which is why
+// large deliveries reliably died with WORKER_RESOURCE_LIMIT (546) or
+// IDLE_TIMEOUT (504) no matter how small the caps got.
+//
+// It is now a control plane and does only bounded metadata work:
+//  1. Read the paused/parked state — exit while paused (one probe dispatch
+//     allowed after a credit/policy pause, to detect out-of-band recovery).
 //  2. Acquire the DB lease — a second concurrent run exits instead of racing.
 //  3. List a bounded number of unprocessed objects under each report prefix.
-//  4. Normalize rows, roll them up per identifier, resolve taxonomy tags,
-//     score through analyze-audio, update calibration priors + embeddings.
-//  5. Mark files/identifiers done in the same step that processes them.
+//  4. Write/advance the ledger row and DISPATCH one SQS message per file.
+//  5. Return. The DuckDB worker on EC2 (deploy/ingest-worker) decodes the file,
+//     normalizes rows and reports back through `ingest-worker-callback`, which
+//     enqueues scoring tasks exactly as before.
+//
+// Ledger status machine:
+//   discovered -> enqueued -> processing -> done | partial | failed
+//   ('partial' is re-dispatched from its saved row-group/row cursor.)
+//
+// Audio objects still run inline: that path is one Librosa HTTP call, not a
+// decode loop, so it was never the source of the compute kills.
 //
 // Callable by an admin JWT (manual run from Intuizi Console) or a
 // service-role bearer token (the scheduled pg_cron trigger).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  buildTaxonomyContext,
-  CATEGORIES,
-  type Category,
-  embed,
-  type OntologyTag,
-  resolveTag,
-  updateCalibration,
-} from "../_shared/ontology.ts";
-import {
-  applyNormalizationToAnalysis,
-  loadNormalization,
-} from "../_shared/normalization.ts";
-import { scoreIdentifier } from "../_shared/scoreIdentifier.ts";
 import { newTraceId } from "../_shared/failure.ts";
 
 import {
   activationIdFromKey,
-  fetchObjectChunk,
-  identifierOf,
   ingestPrefixes,
   isAudioKey,
-  isRosterRow,
-  isSummaryRow,
-  normalizeRow,
-  normalizeSummaryRows,
   partitionDateFromKey,
   REPORT_TYPES,
   type ReportType,
@@ -50,7 +43,12 @@ import {
   getUpstreamCreds,
 } from "../_shared/librosa.ts";
 
-
+import {
+  queueAttributes,
+  sendIngestMessage,
+  sqsConfigured,
+  sqsInfo,
+} from "../_shared/sqs.ts";
 
 import { headObject, listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
@@ -64,25 +62,27 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 // ---- Work bounds (every run ends, even with work remaining) ----------------
-// The worker is killed with WORKER_RESOURCE_LIMIT when it burns too much CPU in
-// one invocation. Parquet page decoding + scoring are both CPU-bound, so a run
-// takes ONE file and a small identifier slice, then checkpoints and resumes.
-const MAX_FILES_PER_RUN = 1;
-const MAX_IDENTIFIERS_PER_RUN = 20;
-const MAX_ROWS_PER_FILE = 2500;
-// The edge gateway kills a request after 150s of idle time, and CPU quota bites
-// sooner than that. Stop taking new work early and return a partial summary.
-const RUN_BUDGET_MS = 70_000;
+// Dispatch is metadata-only: a List, a ledger upsert and one SQS SendMessage per
+// file. That is milliseconds of CPU, so a run can safely hand off many files
+// where the old decode-in-edge design could barely finish one.
+const MAX_FILES_PER_RUN = Number(Deno.env.get("INTUIZI_MAX_FILES_PER_RUN") ?? "25");
+/** Cap the worker's per-message slice so one file still checkpoints & resumes. */
+const MAX_ROWS_PER_MESSAGE = Number(Deno.env.get("INTUIZI_MAX_ROWS_PER_MESSAGE") ?? "250000");
+/** How long a claimed file may go without a heartbeat before it is re-dispatched. */
+const STALE_CLAIM_MS = Number(Deno.env.get("INTUIZI_STALE_CLAIM_MS") ?? String(15 * 60 * 1000));
+// The edge gateway kills a request after 150s of idle time. Dispatch is fast, so
+// a short budget is plenty and keeps the run comfortably inside every limit.
+const RUN_BUDGET_MS = 30_000;
 /** Floor/ceiling for the auto-tuned wall-clock budget. */
-const MIN_RUN_BUDGET_MS = 35_000;
-const MAX_RUN_BUDGET_MS = 70_000;
+const MIN_RUN_BUDGET_MS = 15_000;
+const MAX_RUN_BUDGET_MS = 45_000;
 
 
 /** Heap ceiling (MB) that counts as compute pressure and ends the run early. */
 const MEM_SOFT_LIMIT_MB = Number(Deno.env.get("INTUIZI_MEM_SOFT_LIMIT_MB") ?? "220");
 /** Absolute floors so a shrinking cap still makes forward progress. */
-const MIN_ROWS_PER_FILE = 250;
-const MIN_IDENTIFIERS_PER_RUN = 4;
+const MIN_ROWS_PER_MESSAGE = 25_000;
+const MIN_FILES_PER_RUN = 1;
 
 /** One historical run, kept in intuizi_ingest_state.last_run_summary. */
 export interface BudgetHistoryEntry {
@@ -94,34 +94,37 @@ export interface BudgetHistoryEntry {
   resource_kill?: boolean;
   /** Peak heap seen during the run (MB), when the runtime exposes it. */
   mem_peak_mb?: number;
-  /** Row cap this run actually used, so the tuner can keep shrinking. */
+  /** Row-slice cap this run actually dispatched, so the tuner can keep shrinking. */
   rows_cap?: number;
 }
 
-/** Per-invocation work caps, tuned down when compute pressure is detected. */
+/**
+ * Per-invocation dispatch caps.
+ *
+ * Since Step 2.5 these bound *dispatch*, not decoding:
+ *  - `rows`  — the row slice one SQS message asks the EC2 worker to process
+ *              before it checkpoints and re-queues the remainder;
+ *  - `files` — how many files this run hands off.
+ *
+ * The edge side no longer decodes anything, so a 546 here is close to
+ * impossible — but the tuner is kept because the DuckDB worker reports its own
+ * pressure back through the callback, and shrinking the slice is exactly the
+ * right response to a worker that is running out of memory on wide row groups.
+ */
 export interface WorkCaps {
   rows: number;
-  identifiers: number;
   files: number;
   reason: string;
   shrink: number;
 }
 
-/**
- * Choose row / identifier / file caps for this invocation.
- *
- * A WORKER_RESOURCE_LIMIT kill leaves no summary behind, so the caller reports
- * it on the retry (`after_resource_limit`, optionally with an explicit
- * `shrink`). Recorded kills and budget overruns in recent history also pull the
- * caps down; clean runs let them drift back to the defaults.
- */
 export function planWorkCaps(
   history: BudgetHistoryEntry[],
   opts: {
     shrink?: number;
     afterResourceLimit?: boolean;
     maxRows?: number;
-    maxIdentifiers?: number;
+    maxFiles?: number;
     memPeakMb?: number | null;
   } = {},
 ): WorkCaps {
@@ -152,17 +155,19 @@ export function planWorkCaps(
   }
   shrink = Math.max(0.1, Math.min(1, shrink));
 
-  let rows = Math.max(MIN_ROWS_PER_FILE, Math.round((MAX_ROWS_PER_FILE * shrink) / 50) * 50);
-  let identifiers = Math.max(MIN_IDENTIFIERS_PER_RUN, Math.round(MAX_IDENTIFIERS_PER_RUN * shrink));
-  if (opts.maxRows && opts.maxRows > 0) rows = Math.min(rows, Math.max(MIN_ROWS_PER_FILE, opts.maxRows));
-  if (opts.maxIdentifiers && opts.maxIdentifiers > 0) {
-    identifiers = Math.min(identifiers, Math.max(1, opts.maxIdentifiers));
+  let rows = Math.max(
+    MIN_ROWS_PER_MESSAGE,
+    Math.round((MAX_ROWS_PER_MESSAGE * shrink) / 1000) * 1000,
+  );
+  let files = Math.max(MIN_FILES_PER_RUN, Math.round(MAX_FILES_PER_RUN * shrink));
+  if (opts.maxRows && opts.maxRows > 0) {
+    rows = Math.min(rows, Math.max(MIN_ROWS_PER_MESSAGE, opts.maxRows));
   }
+  if (opts.maxFiles && opts.maxFiles > 0) files = Math.min(files, Math.max(1, opts.maxFiles));
 
   return {
     rows,
-    identifiers,
-    files: MAX_FILES_PER_RUN,
+    files,
     shrink: Number(shrink.toFixed(2)),
     reason: why.length ? why.join("; ") : "defaults — no compute pressure detected",
   };
@@ -179,7 +184,10 @@ export function memSnapshot(): { heap_mb: number; rss_mb: number; external_mb: n
   }
 }
 
-export type PhaseName = "discover" | "sign" | "read" | "normalize" | "score" | "persist";
+// Since Step 2.5 the control plane only discovers, dispatches and persists —
+// `read`/`normalize`/`score` now happen on the EC2 worker and are reported back
+// through `ingest-worker-callback`.
+export type PhaseName = "discover" | "dispatch" | "persist" | "audio";
 
 /**
  * Records wall/CPU-ish duration plus heap growth for each pipeline phase, so a
@@ -283,16 +291,7 @@ export function tuneRunBudget(
   return { budgetMs: clamp(last.budget_ms || fallback), reason: "holding steady" };
 }
 
-// Expected rows per user/device in an Intuizi activation delivery. Used only by
-// the pre-ingest parquet validation log to flag deliveries whose shape drifted.
-const EXPECTED_ROWS_PER_USER = Number(
-  Deno.env.get("INTUIZI_EXPECTED_ROWS_PER_USER") ?? "100",
-);
-
 const LEASE_SECONDS = 600;
-
-/** Rows per enqueue upsert into `intuizi_score_queue`. */
-const QUEUE_CHUNK = 200;
 
 type Json = Record<string, unknown>;
 

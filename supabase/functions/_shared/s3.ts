@@ -432,7 +432,23 @@ const directDriver: S3Driver = {
       etag: res.headers.get("ETag")?.replace(/"/g, "") ?? null,
     };
   },
+
+  async putObject(objectKey, body, opts) {
+    const extra: Record<string, string> = {
+      "content-type": opts?.contentType ?? "application/octet-stream",
+    };
+    if (opts?.contentEncoding) extra["content-encoding"] = opts.contentEncoding;
+    const res = await signedFetch("PUT", `/${encodeKeyPath(objectKey)}`, {}, body, extra);
+    if (!res.ok) {
+      const text = await res.text();
+      throw Object.assign(new Error(`S3 put failed [${res.status}]: ${text}`), {
+        status: res.status,
+      });
+    }
+    await res.arrayBuffer();
+  },
 };
+
 
 // ---------------------------------------------------------------------------
 // Backend 3: enterprise ingestion path (PLACEHOLDER)

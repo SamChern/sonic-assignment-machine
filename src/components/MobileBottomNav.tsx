@@ -99,19 +99,29 @@ export function MobileBottomNav() {
               <Link
                 to={item.to}
                 aria-current={active ? "page" : undefined}
+                data-active={active ? "true" : undefined}
                 className={cn(
-                  "flex min-h-14 flex-col items-center justify-center gap-1 px-2 py-2 text-[11px] font-medium transition-colors",
+                  "relative flex min-h-14 flex-col items-center justify-center gap-1 px-2 py-2 text-[11px] font-medium transition-colors",
                   active
-                    ? "text-primary"
+                    ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
+                {/* Active indicator: top rail so the current section is obvious. */}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "pointer-events-none absolute inset-x-2 top-0 h-0.5 rounded-full transition-opacity",
+                    active ? "bg-primary opacity-100" : "opacity-0",
+                  )}
+                />
                 <Icon className="h-5 w-5" aria-hidden="true" />
-                <span>{item.label}</span>
+                <span className={cn(active && "font-semibold")}>{item.label}</span>
               </Link>
             </li>
           );
         })}
+
       </ul>
     </nav>
   );

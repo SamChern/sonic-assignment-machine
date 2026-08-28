@@ -8,6 +8,7 @@ import {
   loadNormalization,
 } from "../_shared/normalization.ts";
 import { embed as ontologyEmbed } from "../_shared/ontology.ts";
+import { isSensitiveTag } from "../_shared/sensitiveTaxonomy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -204,7 +205,10 @@ Deno.serve(async (req) => {
       // 3. Resolve tags
       const nodeIds: string[] = [];
       for (const t of row.tags ?? []) {
-        try { nodeIds.push(await resolveTag(supabase, t)); } catch (e) { console.warn("tag fail", t, e); }
+        try {
+          const nid = await resolveTag(supabase, t);
+          if (nid) nodeIds.push(nid);
+        } catch (e) { console.warn("tag fail", t, e); }
       }
       if (nodeIds.length) {
         await supabase.from("audio_source_tags").upsert(

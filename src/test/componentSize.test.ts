@@ -58,7 +58,7 @@ describe("component size ceiling", () => {
   it("keeps every component at or under 500 lines, legacy files shrinking only", () => {
     const violations: string[] = [];
     for (const file of files) {
-      const lines = readFileSync(file, "utf8").split("\n").length;
+      const lines = readFileSync(file, "utf8").replace(/\n$/, "").split("\n").length;
       const budget = LEGACY[file] ?? LIMIT;
       if (lines > budget) {
         violations.push(

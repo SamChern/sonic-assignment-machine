@@ -114,11 +114,24 @@ const AdPlatformPixels = ({
       const id = values.google_tag_id.trim();
       out.push({
         title: "Google tag (base) — every page",
-        note: "Step 2 equivalent: install once site-wide, or add as the native Google Tag in GTM on All Pages.",
-        code: `<script async src="https://www.googletagmanager.com/gtag/js?id=${id}"></script>
-<script>
+        note:
+          "Step 2 equivalent: install once site-wide, or add as the native Google Tag in GTM on All Pages. Ships Consent Mode v2 denied-by-default signals — call gtag('consent','update',…) from your CMP once the visitor chooses.",
+        code: `<script>
+  // Google Consent Mode v2 — denied by default until your CMP updates it.
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
+  gtag('consent', 'default', {
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+    analytics_storage: 'denied',
+    wait_for_update: 500
+  });
+  gtag('set', 'url_passthrough', true);
+  gtag('set', 'ads_data_redaction', true);
+</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=${id}"></script>
+<script>
   gtag('js', new Date());
   gtag('config', '${id}');
 </script>`,

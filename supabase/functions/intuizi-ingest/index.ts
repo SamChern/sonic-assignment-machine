@@ -1,44 +1,37 @@
-// Intuizi S3 ingest worker.
+// Intuizi ingest CONTROL PLANE (Step 2.5).
 //
-// Bounded, single-flight, idempotent batch job:
-//  1. Read the paused/parked state — exit while paused (one probe row allowed
-//     after a credit/policy pause, to detect out-of-band recovery).
+// This function used to decode Parquet and score identifiers inside the edge
+// runtime. Both are unbounded CPU work against a bounded worker, which is why
+// large deliveries reliably died with WORKER_RESOURCE_LIMIT (546) or
+// IDLE_TIMEOUT (504) no matter how small the caps got.
+//
+// It is now a control plane and does only bounded metadata work:
+//  1. Read the paused/parked state — exit while paused (one probe dispatch
+//     allowed after a credit/policy pause, to detect out-of-band recovery).
 //  2. Acquire the DB lease — a second concurrent run exits instead of racing.
 //  3. List a bounded number of unprocessed objects under each report prefix.
-//  4. Normalize rows, roll them up per identifier, resolve taxonomy tags,
-//     score through analyze-audio, update calibration priors + embeddings.
-//  5. Mark files/identifiers done in the same step that processes them.
+//  4. Write/advance the ledger row and DISPATCH one SQS message per file.
+//  5. Return. The DuckDB worker on EC2 (deploy/ingest-worker) decodes the file,
+//     normalizes rows and reports back through `ingest-worker-callback`, which
+//     enqueues scoring tasks exactly as before.
+//
+// Ledger status machine:
+//   discovered -> enqueued -> processing -> done | partial | failed
+//   ('partial' is re-dispatched from its saved row-group/row cursor.)
+//
+// Audio objects still run inline: that path is one Librosa HTTP call, not a
+// decode loop, so it was never the source of the compute kills.
 //
 // Callable by an admin JWT (manual run from Intuizi Console) or a
 // service-role bearer token (the scheduled pg_cron trigger).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  buildTaxonomyContext,
-  CATEGORIES,
-  type Category,
-  embed,
-  type OntologyTag,
-  resolveTag,
-  updateCalibration,
-} from "../_shared/ontology.ts";
-import {
-  applyNormalizationToAnalysis,
-  loadNormalization,
-} from "../_shared/normalization.ts";
-import { scoreIdentifier } from "../_shared/scoreIdentifier.ts";
 import { newTraceId } from "../_shared/failure.ts";
 
 import {
   activationIdFromKey,
-  fetchObjectChunk,
-  identifierOf,
   ingestPrefixes,
   isAudioKey,
-  isRosterRow,
-  isSummaryRow,
-  normalizeRow,
-  normalizeSummaryRows,
   partitionDateFromKey,
   REPORT_TYPES,
   type ReportType,
@@ -50,7 +43,12 @@ import {
   getUpstreamCreds,
 } from "../_shared/librosa.ts";
 
-
+import {
+  queueAttributes,
+  sendIngestMessage,
+  sqsConfigured,
+  sqsInfo,
+} from "../_shared/sqs.ts";
 
 import { headObject, listObjects, s3BackendInfo, s3Configured, signReadUrl } from "../_shared/s3.ts";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
@@ -64,25 +62,27 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 // ---- Work bounds (every run ends, even with work remaining) ----------------
-// The worker is killed with WORKER_RESOURCE_LIMIT when it burns too much CPU in
-// one invocation. Parquet page decoding + scoring are both CPU-bound, so a run
-// takes ONE file and a small identifier slice, then checkpoints and resumes.
-const MAX_FILES_PER_RUN = 1;
-const MAX_IDENTIFIERS_PER_RUN = 20;
-const MAX_ROWS_PER_FILE = 2500;
-// The edge gateway kills a request after 150s of idle time, and CPU quota bites
-// sooner than that. Stop taking new work early and return a partial summary.
-const RUN_BUDGET_MS = 70_000;
+// Dispatch is metadata-only: a List, a ledger upsert and one SQS SendMessage per
+// file. That is milliseconds of CPU, so a run can safely hand off many files
+// where the old decode-in-edge design could barely finish one.
+const MAX_FILES_PER_RUN = Number(Deno.env.get("INTUIZI_MAX_FILES_PER_RUN") ?? "25");
+/** Cap the worker's per-message slice so one file still checkpoints & resumes. */
+const MAX_ROWS_PER_MESSAGE = Number(Deno.env.get("INTUIZI_MAX_ROWS_PER_MESSAGE") ?? "250000");
+/** How long a claimed file may go without a heartbeat before it is re-dispatched. */
+const STALE_CLAIM_MS = Number(Deno.env.get("INTUIZI_STALE_CLAIM_MS") ?? String(15 * 60 * 1000));
+// The edge gateway kills a request after 150s of idle time. Dispatch is fast, so
+// a short budget is plenty and keeps the run comfortably inside every limit.
+const RUN_BUDGET_MS = 30_000;
 /** Floor/ceiling for the auto-tuned wall-clock budget. */
-const MIN_RUN_BUDGET_MS = 35_000;
-const MAX_RUN_BUDGET_MS = 70_000;
+const MIN_RUN_BUDGET_MS = 15_000;
+const MAX_RUN_BUDGET_MS = 45_000;
 
 
 /** Heap ceiling (MB) that counts as compute pressure and ends the run early. */
 const MEM_SOFT_LIMIT_MB = Number(Deno.env.get("INTUIZI_MEM_SOFT_LIMIT_MB") ?? "220");
 /** Absolute floors so a shrinking cap still makes forward progress. */
-const MIN_ROWS_PER_FILE = 250;
-const MIN_IDENTIFIERS_PER_RUN = 4;
+const MIN_ROWS_PER_MESSAGE = 25_000;
+const MIN_FILES_PER_RUN = 1;
 
 /** One historical run, kept in intuizi_ingest_state.last_run_summary. */
 export interface BudgetHistoryEntry {
@@ -94,34 +94,37 @@ export interface BudgetHistoryEntry {
   resource_kill?: boolean;
   /** Peak heap seen during the run (MB), when the runtime exposes it. */
   mem_peak_mb?: number;
-  /** Row cap this run actually used, so the tuner can keep shrinking. */
+  /** Row-slice cap this run actually dispatched, so the tuner can keep shrinking. */
   rows_cap?: number;
 }
 
-/** Per-invocation work caps, tuned down when compute pressure is detected. */
+/**
+ * Per-invocation dispatch caps.
+ *
+ * Since Step 2.5 these bound *dispatch*, not decoding:
+ *  - `rows`  — the row slice one SQS message asks the EC2 worker to process
+ *              before it checkpoints and re-queues the remainder;
+ *  - `files` — how many files this run hands off.
+ *
+ * The edge side no longer decodes anything, so a 546 here is close to
+ * impossible — but the tuner is kept because the DuckDB worker reports its own
+ * pressure back through the callback, and shrinking the slice is exactly the
+ * right response to a worker that is running out of memory on wide row groups.
+ */
 export interface WorkCaps {
   rows: number;
-  identifiers: number;
   files: number;
   reason: string;
   shrink: number;
 }
 
-/**
- * Choose row / identifier / file caps for this invocation.
- *
- * A WORKER_RESOURCE_LIMIT kill leaves no summary behind, so the caller reports
- * it on the retry (`after_resource_limit`, optionally with an explicit
- * `shrink`). Recorded kills and budget overruns in recent history also pull the
- * caps down; clean runs let them drift back to the defaults.
- */
 export function planWorkCaps(
   history: BudgetHistoryEntry[],
   opts: {
     shrink?: number;
     afterResourceLimit?: boolean;
     maxRows?: number;
-    maxIdentifiers?: number;
+    maxFiles?: number;
     memPeakMb?: number | null;
   } = {},
 ): WorkCaps {
@@ -152,17 +155,19 @@ export function planWorkCaps(
   }
   shrink = Math.max(0.1, Math.min(1, shrink));
 
-  let rows = Math.max(MIN_ROWS_PER_FILE, Math.round((MAX_ROWS_PER_FILE * shrink) / 50) * 50);
-  let identifiers = Math.max(MIN_IDENTIFIERS_PER_RUN, Math.round(MAX_IDENTIFIERS_PER_RUN * shrink));
-  if (opts.maxRows && opts.maxRows > 0) rows = Math.min(rows, Math.max(MIN_ROWS_PER_FILE, opts.maxRows));
-  if (opts.maxIdentifiers && opts.maxIdentifiers > 0) {
-    identifiers = Math.min(identifiers, Math.max(1, opts.maxIdentifiers));
+  let rows = Math.max(
+    MIN_ROWS_PER_MESSAGE,
+    Math.round((MAX_ROWS_PER_MESSAGE * shrink) / 1000) * 1000,
+  );
+  let files = Math.max(MIN_FILES_PER_RUN, Math.round(MAX_FILES_PER_RUN * shrink));
+  if (opts.maxRows && opts.maxRows > 0) {
+    rows = Math.min(rows, Math.max(MIN_ROWS_PER_MESSAGE, opts.maxRows));
   }
+  if (opts.maxFiles && opts.maxFiles > 0) files = Math.min(files, Math.max(1, opts.maxFiles));
 
   return {
     rows,
-    identifiers,
-    files: MAX_FILES_PER_RUN,
+    files,
     shrink: Number(shrink.toFixed(2)),
     reason: why.length ? why.join("; ") : "defaults — no compute pressure detected",
   };
@@ -179,7 +184,10 @@ export function memSnapshot(): { heap_mb: number; rss_mb: number; external_mb: n
   }
 }
 
-export type PhaseName = "discover" | "sign" | "read" | "normalize" | "score" | "persist";
+// Since Step 2.5 the control plane only discovers, dispatches and persists —
+// `read`/`normalize`/`score` now happen on the EC2 worker and are reported back
+// through `ingest-worker-callback`.
+export type PhaseName = "discover" | "dispatch" | "persist" | "audio";
 
 /**
  * Records wall/CPU-ish duration plus heap growth for each pipeline phase, so a
@@ -283,16 +291,7 @@ export function tuneRunBudget(
   return { budgetMs: clamp(last.budget_ms || fallback), reason: "holding steady" };
 }
 
-// Expected rows per user/device in an Intuizi activation delivery. Used only by
-// the pre-ingest parquet validation log to flag deliveries whose shape drifted.
-const EXPECTED_ROWS_PER_USER = Number(
-  Deno.env.get("INTUIZI_EXPECTED_ROWS_PER_USER") ?? "100",
-);
-
 const LEASE_SECONDS = 600;
-
-/** Rows per enqueue upsert into `intuizi_score_queue`. */
-const QUEUE_CHUNK = 200;
 
 type Json = Record<string, unknown>;
 
@@ -609,7 +608,52 @@ Deno.serve(async (req) => {
 
   // ---- Owner controls -----------------------------------------------------
   if (action === "status") {
-    return json({ state, s3_configured: s3Configured(), s3: s3BackendInfo() });
+    return json({
+      state,
+      s3_configured: s3Configured(),
+      s3: s3BackendInfo(),
+      // Control-plane mode: dispatch only works once the queue is configured.
+      dispatch: sqsInfo(),
+    });
+  }
+
+  // ---- Control-plane queue health -----------------------------------------
+  // Depth of the file queue plus the ledger's view of in-flight work, so the
+  // admin can tell "nothing dispatched" apart from "worker is not draining".
+  if (action === "queue_status") {
+    const [{ data: pending }, { data: inflight }, { data: stalled }] = await Promise.all([
+      admin.from("intuizi_ingest_files")
+        .select("object_key,report_type,enqueued_at,dispatch_attempts")
+        .in("status", ["discovered", "partial"]).order("discovered_at").limit(50),
+      admin.from("intuizi_ingest_files")
+        .select("object_key,report_type,status,enqueued_at,heartbeat_at,worker_id,processed_rows,total_rows")
+        .in("status", ["enqueued", "processing"]).order("enqueued_at").limit(50),
+      admin.from("intuizi_ingest_files")
+        .select("object_key,status,heartbeat_at,worker_id")
+        .in("status", ["enqueued", "processing"])
+        .lt("heartbeat_at", new Date(Date.now() - STALE_CLAIM_MS).toISOString())
+        .limit(50),
+    ]);
+
+    let queue: Awaited<ReturnType<typeof queueAttributes>> | null = null;
+    let queueError: string | null = null;
+    if (sqsConfigured()) {
+      try {
+        queue = await queueAttributes();
+      } catch (e) {
+        queueError = errMsg(e).slice(0, 400);
+      }
+    }
+
+    return json({
+      dispatch: sqsInfo(),
+      queue,
+      queue_error: queueError,
+      awaiting_dispatch: pending ?? [],
+      in_flight: inflight ?? [],
+      stalled: stalled ?? [],
+      stale_claim_ms: STALE_CLAIM_MS,
+    });
   }
 
   // ---- Access probe --------------------------------------------------------
@@ -957,7 +1001,7 @@ Deno.serve(async (req) => {
     shrink: Number(body.shrink ?? 0) || undefined,
     afterResourceLimit: Boolean(body.after_resource_limit),
     maxRows: Number(body.max_rows ?? 0) || undefined,
-    maxIdentifiers: Number(body.max_identifiers ?? 0) || undefined,
+    maxFiles: Number(body.max_files ?? 0) || undefined,
     memPeakMb: Number(prevSummary.mem_peak_mb ?? 0) || null,
   });
   console.log(JSON.stringify({
@@ -977,17 +1021,15 @@ Deno.serve(async (req) => {
 
   const summary = {
     trace_id: runTraceId,
+    /** Control-plane mode marker, so the UI can label the run correctly. */
+    mode: "dispatch" as const,
+    /** Report files handed to the EC2 worker this run. */
+    files_dispatched: 0,
+    /** Audio objects analysed inline (that path never left the edge). */
     files_processed: 0,
     files_failed: 0,
-    identifiers_scored: 0,
-    /** Identifiers handed to the background scoring worker this run. */
-    identifiers_queued: 0,
-
-    roster_identifiers: 0,
     audio_files_scored: 0,
 
-
-    rows_read: 0,
     probe_only: probeOnly,
     paused: false,
     pause_reason: null as string | null,
@@ -1000,14 +1042,10 @@ Deno.serve(async (req) => {
     budget_reason: tuned.reason,
     /** Ms left in the budget when the run returned. */
     time_remaining_ms: budgetMs,
-    /** True when a single Parquet read had to abort at the deadline. */
-    deadline_exceeded: false,
-    /** Which step ran out of budget, when one did. */
-    deadline_step: null as string | null,
     /** Wall-clock duration of this run (ms). */
     elapsed_ms: 0,
     /** Per-step duration breakdown (ms). */
-    phase_ms: { discover: 0, sign: 0, read: 0, normalize: 0, score: 0, persist: 0 },
+    phase_ms: { discover: 0, dispatch: 0, persist: 0, audio: 0 },
     /** Per-step CPU-time proxy + heap growth, to attribute a compute kill. */
     phase_usage: {} as Record<string, unknown>,
     /** Caps this run used, and why they were reduced. */
@@ -1072,7 +1110,7 @@ Deno.serve(async (req) => {
       }
     } else {
       for (const { prefix, report_type } of ingestPrefixes()) {
-        if (candidates.length >= MAX_FILES_PER_RUN) break;
+        if (candidates.length >= caps.files) break;
         let objects: Awaited<ReturnType<typeof listObjects>> = [];
         try {
           objects = await listObjects(prefix, 100);
@@ -1088,14 +1126,29 @@ Deno.serve(async (req) => {
 
         const { data: seen } = await admin
           .from("intuizi_ingest_files")
-          .select("object_key,status")
+          .select("object_key,status,etag,heartbeat_at")
           .in("object_key", dataObjects.map((o) => o.key));
-        const done = new Set(
-          (seen ?? []).filter((s) => s.status === "done").map((s) => s.object_key),
+
+        // Skip finished files, and files a worker is actively holding. A claim
+        // whose heartbeat went quiet is NOT skipped — it gets re-dispatched,
+        // which is safe because the worker resumes from the saved cursor and
+        // the score queue upsert is idempotent per (object_key, identifier).
+        const staleBefore = Date.now() - STALE_CLAIM_MS;
+        const skip = new Set(
+          (seen ?? []).filter((s) => {
+            if (s.status === "done") return true;
+            if (s.status !== "enqueued" && s.status !== "processing") return false;
+            const beat = s.heartbeat_at ? new Date(s.heartbeat_at).getTime() : 0;
+            return beat >= staleBefore;
+          }).map((s) => s.object_key),
         );
+        const etags = new Map((seen ?? []).map((s) => [s.object_key, s.etag]));
 
         for (const o of dataObjects) {
-          if (done.has(o.key) || claimed.has(o.key)) continue;
+          if (skip.has(o.key) || claimed.has(o.key)) continue;
+          // A re-upload under the same key changes the ETag: treat it as new work.
+          const knownEtag = etags.get(o.key);
+          if (knownEtag && o.etag && knownEtag === o.etag && skip.has(o.key)) continue;
           // Audio files are ingested as real audio, not as report rows.
           const rt: ReportType | "audio" | null = isAudioKey(o.key)
             ? "audio"
@@ -1106,7 +1159,7 @@ Deno.serve(async (req) => {
           }
           claimed.add(o.key);
           candidates.push({ key: o.key, report_type: rt, size: o.size, etag: o.etag });
-          if (candidates.length >= MAX_FILES_PER_RUN) break;
+          if (candidates.length >= caps.files) break;
         }
       }
     }
@@ -1123,8 +1176,6 @@ Deno.serve(async (req) => {
       return json({ ...summary, idle: true });
     }
 
-    const identifierBudget = probeOnly ? 1 : caps.identifiers;
-
     for (const rawCand of candidates) {
       if (breakerTripped) break;
       if (outOfTime()) { summary.time_budget_exhausted = true; break; }
@@ -1135,6 +1186,8 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // `discovered` is the pre-dispatch state: the row exists (so the ETag and
+      // resume cursor are durable) but no worker owns it yet.
       const { data: fileRow, error: fileErr } = await admin
         .from("intuizi_ingest_files")
         .upsert({
@@ -1143,11 +1196,13 @@ Deno.serve(async (req) => {
           etag: rawCand.etag,
           size_bytes: rawCand.size || null,
           partition_date: partitionDateFromKey(rawCand.key),
-          status: "processing",
+          status: "discovered",
           started_at: new Date().toISOString(),
           error_message: null,
         }, { onConflict: "object_key" })
-        .select("id,report_type,processed_rows,row_group_cursor,rows_offset,row_groups_total").single();
+        .select(
+          "id,report_type,processed_rows,row_group_cursor,rows_offset,row_groups_total,dispatch_attempts",
+        ).single();
       if (fileErr) {
         summary.errors.push(`ledger ${rawCand.key}: ${fileErr.message}`);
         summary.files_failed++;
@@ -1172,14 +1227,11 @@ Deno.serve(async (req) => {
             error_message: null,
           }).eq("id", fileRow.id);
           summary.files_processed++;
-
-        // Nudge the background scorer so queued identifiers start immediately
-        // instead of waiting for the next scheduled worker tick.
-        if (summary.identifiers_queued > 0) {
+          summary.audio_files_scored++;
+          // Nudge the background scorer so the audio identifier starts now
+          // instead of waiting for the next scheduled worker tick.
           admin.functions.invoke("intuizi-score-worker", { body: { source: "ingest" } })
             .catch((e: unknown) => console.warn("score worker kick failed", errMsg(e)));
-        }
-          summary.audio_files_scored++;
         } catch (e) {
           const msg = errMsg(e);
           await admin.from("intuizi_ingest_files").update({
@@ -1200,408 +1252,118 @@ Deno.serve(async (req) => {
         etag: string | null;
       };
 
-
+      // ---- Report file: DISPATCH ONLY ------------------------------------
+      // No decoding here. One SQS message tells the EC2 DuckDB worker which
+      // object to read and where to resume, and the worker reports rows back
+      // through `ingest-worker-callback`, which enqueues the scoring tasks.
       try {
-        const signStart = Date.now();
-        const url = await signReadUrl(cand.key);
-        const signMs = Date.now() - signStart;
-        summary.phase_ms.sign += signMs;
-        // Resume from the last transformed row group instead of re-reading rows
-        // that were already normalized in an earlier (possibly timed-out) run.
-        const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
-        const resumeRowsOffset = Number(fileRow.rows_offset ?? 0) || 0;
-        const endRead = meter.begin("read");
-        const readStart = Date.now();
-        const chunk = await fetchObjectChunk(
-          url,
-          cand.key,
-          caps.rows,
-          EXPECTED_ROWS_PER_USER,
-          resumeGroup,
-          readDeadlineAt,
-          resumeRowsOffset,
-        );
-        const readMs = Date.now() - readStart;
-        summary.phase_ms.read += readMs;
-        endRead({ object_key: cand.key, resume_at_group: resumeGroup, rows: chunk.rows.length, row_cap: caps.rows });
-        const checkpoint = chunk.checkpoint;
-        const readTimings = (chunk.timings ?? null) as Record<string, unknown> | null;
-        console.log(JSON.stringify({
-          evt: "ingest_file_read_timings",
-          object_key: cand.key,
-          resume_at_group: resumeGroup,
-          sign_ms: signMs,
-          read_ms: readMs,
-          rows: chunk.rows.length,
-          deadline_exceeded: Boolean(chunk.deadlineExceeded),
-          time_remaining_ms: timeLeftMs(),
-          ...(readTimings ?? {}),
-        }));
-
-        // The reader stopped early to stay inside the run budget: persist the
-        // unchanged cursor as `partial` and let the wizard's Resume continue.
-        if (chunk.deadlineExceeded) {
-          summary.time_budget_exhausted = true;
-          summary.deadline_exceeded = true;
-          summary.deadline_step = String(readTimings?.abortedAt ?? "decode");
-          summary.complete = false;
-          await admin.from("intuizi_ingest_files").update({
-            status: "partial",
-            row_group_cursor: checkpoint?.startRowGroup ?? resumeGroup,
-            row_groups_total: checkpoint?.rowGroupsTotal ?? fileRow.row_groups_total ?? null,
-            error_message: null,
-          }).eq("id", fileRow.id);
-          summary.files.push({
-            object_key: cand.key,
-            status: "partial",
-            complete: false,
-            rows: 0,
-            row_group_cursor: checkpoint?.startRowGroup ?? resumeGroup,
-            row_groups_total: checkpoint?.rowGroupsTotal ?? null,
-            deadline_exceeded: true,
-            deadline_step: summary.deadline_step,
-            read_ms: readMs,
-            timings: readTimings,
-          });
-          break;
-        }
-
-        const rawRows = chunk.rows.slice(0, caps.rows);
-        const endNormalize = meter.begin("normalize");
-        const normalizeStart = Date.now();
-
-        summary.rows_read += rawRows.length;
-
-
-        if (checkpoint && !rawRows.length && checkpoint.exhausted) {
-          // Every row group has already been transformed — close the file out.
-          await admin.from("intuizi_ingest_files").update({
-            status: "done",
-            row_group_cursor: checkpoint.nextRowGroup,
-            row_groups_total: checkpoint.rowGroupsTotal,
-            rows_offset: checkpoint.nextRowsOffset,
-            finished_at: new Date().toISOString(),
-            error_message: null,
-          }).eq("id", fileRow.id);
-          summary.files_processed++;
-          summary.files.push({
-            object_key: cand.key,
-            status: "done",
-            complete: true,
-            rows: 0,
-            row_group_cursor: checkpoint.nextRowGroup,
-            row_groups_total: checkpoint.rowGroupsTotal,
-          });
-          continue;
-        }
-
-
-        // ---- Roll rows up per identifier ---------------------------------
-        const perIdentifier = new Map<string, {
-          tags: Map<string, OntologyTag>;
-          signals: Json[];
-          confidence: number;
-          labels: string[];
-        }>();
-
-        const addNorm = (norm: ReturnType<typeof normalizeRow>) => {
-          if (!norm) return;
-          const entry = perIdentifier.get(norm.primary_identifier) ?? {
-            tags: new Map<string, OntologyTag>(),
-            signals: [],
-            confidence: 0,
-            labels: [],
-          };
-          for (const t of norm.tags) entry.tags.set(t.code, t);
-          if (entry.signals.length < 25) entry.signals.push(norm.signals as Json);
-          entry.confidence = Math.max(entry.confidence, norm.confidence);
-          if (norm.label && entry.labels.length < 4) entry.labels.push(norm.label);
-          perIdentifier.set(norm.primary_identifier, entry);
-        };
-
-        for (const raw of rawRows) {
-          addNorm(normalizeRow(cand.report_type, raw as Record<string, unknown>));
-        }
-
-        // Fallback A — audience-level summary report (taxonomy rollup, no device
-        // identifier). Folded into one synthetic activation profile and scored.
-        if (!perIdentifier.size && rawRows.length) {
-          const summaryRows = (rawRows as Record<string, unknown>[]).filter(isSummaryRow);
-          for (const norm of normalizeSummaryRows(cand.report_type, summaryRows, cand.key)) {
-            addNorm(norm);
-          }
-        }
-
-        // Fallback B — roster delivery (maid / hem only). No ontological content,
-        // so nothing to score: register the identifiers against the matching
-        // activation profile so the audience is joinable downstream.
-        if (!perIdentifier.size && rawRows.length) {
-          const rosterIds = Array.from(new Set(
-            (rawRows as Record<string, unknown>[])
-              .filter(isRosterRow)
-              .map((r) => identifierOf(r))
-              .filter(Boolean),
-          ));
-          if (rosterIds.length) {
-            const activation = activationIdFromKey(cand.key);
-            let activationSourceId: string | null = null;
-            if (activation) {
-              const { data: actRow } = await admin
-                .from("intuizi_identifiers")
-                .select("audio_source_id")
-                .eq("primary_identifier", `activation:${activation}`)
-                .maybeSingle();
-              activationSourceId = actRow?.audio_source_id ?? null;
-            }
-            const nowIso = new Date().toISOString();
-            for (let i = 0; i < rosterIds.length; i += 500) {
-              const chunk = rosterIds.slice(i, i + 500).map((id) => ({
-                primary_identifier: id,
-                audio_source_id: activationSourceId,
-                observation_count: 1,
-                last_seen_at: nowIso,
-                [SIGNAL_COLUMN[cand.report_type]]: {
-                  scope: "roster",
-                  activation_id: activation,
-                  object_key: cand.key,
-                  registered_at: nowIso,
-                },
-              }));
-              const { error: rosterErr } = await admin
-                .from("intuizi_identifiers")
-                .upsert(chunk, { onConflict: "primary_identifier" });
-              if (rosterErr) throw rosterErr;
-            }
-            const rosterComplete = !checkpoint || checkpoint.exhausted;
-            await admin.from("intuizi_ingest_files").update({
-              status: rosterComplete ? "done" : "partial",
-              total_rows: rawRows.length,
-              processed_rows: (fileRow.processed_rows ?? 0) + rosterIds.length,
-              failed_rows: 0,
-              cursor_offset: rosterIds.length,
-              row_group_cursor: checkpoint?.nextRowGroup ?? 0,
-              row_groups_total: checkpoint?.rowGroupsTotal ?? null,
-              rows_offset: checkpoint?.nextRowsOffset ?? 0,
-              finished_at: rosterComplete ? nowIso : null,
-              error_message: null,
-            }).eq("id", fileRow.id);
-            summary.files_processed++;
-            summary.roster_identifiers += rosterIds.length;
-            summary.files.push({
-              object_key: cand.key,
-              status: rosterComplete ? "done" : "partial",
-              complete: rosterComplete,
-              rows: rawRows.length,
-              row_group_cursor: checkpoint?.nextRowGroup ?? null,
-              row_groups_total: checkpoint?.rowGroupsTotal ?? null,
-            });
-            if (!rosterComplete) summary.complete = false;
-            continue;
-          }
-        }
-
-        if (!perIdentifier.size && rawRows.length) {
-          const cols = Object.keys(rawRows[0] ?? {}).slice(0, 12).join(", ");
+        if (!sqsConfigured()) {
           throw new Error(
-            `no usable rows — identifier or taxonomy fields missing. columns seen: ${cols}`,
+            "the ingest queue is not configured yet — set SQS_QUEUE_URL (and the " +
+              "IAM key needs sqs:SendMessage on it) so report files can be handed " +
+              "to the EC2 worker. See deploy/ingest-worker/README.md.",
           );
         }
 
+        const endDispatch = meter.begin("dispatch");
+        const dispatchStart = Date.now();
+        const fileTraceId = `${runTraceId}.${cand.key.slice(-24)}`;
+        const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
+        const resumeRowsOffset = Number(fileRow.rows_offset ?? 0) || 0;
 
-        let scoredInFile = 0;
-        let failedInFile = 0;
-        let unchangedInFile = 0;
-        const normalizeMs = Date.now() - normalizeStart;
-        summary.phase_ms.normalize += normalizeMs;
-        endNormalize({ object_key: cand.key, rows: rawRows.length, identifiers: perIdentifier.size });
-        const endScore = meter.begin("score");
-        const scoreStart = Date.now();
-
-
-
-
-
-        // ---- Decoupled scoring -------------------------------------------
-        // Scoring (AI gateway + embeddings) used to run inline here, which made
-        // total run time proportional to the identifier count and reliably hit
-        // the wall-clock budget or a WORKER_RESOURCE_LIMIT kill before any
-        // analysis landed. The ingest run now only *enqueues* one task per
-        // identifier — a handful of cheap DB writes — and `intuizi-score-worker`
-        // drains the queue in small self-chaining batches. Pipeline throughput
-        // is therefore unbounded while each invocation stays well inside limits.
-        const queueRows = [...perIdentifier].map(([identifier, entry]) => ({
+        const sent = await sendIngestMessage({
           object_key: cand.key,
           report_type: cand.report_type,
-          identifier,
+          file_id: fileRow.id,
           activation_id: activationIdFromKey(cand.key),
           owner_id: ownerId,
-          label: `Intuizi ${cand.report_type}: ${entry.labels[0] ?? identifier.slice(0, 12)}`,
-          tags: [...entry.tags.values()],
-          signals: entry.signals,
-          confidence: entry.confidence,
-          trace_id: `${runTraceId}.${identifier.slice(0, 8)}`,
-        }));
-
-        for (let i = 0; i < queueRows.length; i += QUEUE_CHUNK) {
-          const chunk = queueRows.slice(i, i + QUEUE_CHUNK);
-          const { error: qErr } = await admin
-            .from("intuizi_score_queue")
-            .upsert(chunk, { onConflict: "object_key,identifier", ignoreDuplicates: true });
-          if (qErr) {
-            failedInFile += chunk.length;
-            summary.errors.push(`enqueue: ${qErr.message}`);
-          } else {
-            scoredInFile += chunk.length;
-            summary.identifiers_queued += chunk.length;
-          }
-        }
-
-        // A probe run scores a single identifier synchronously so the operator
-        // gets an immediate credits / connectivity verdict before the queue runs.
-        if (probeOnly && queueRows.length) {
-          try {
-            await scoreIdentifier(admin, queueRows[0] as never, rateMetrics as never, { traceId: queueRows[0].trace_id } as never);
-            summary.identifiers_scored++;
-            await admin.from("intuizi_ingest_state").update({
-              paused: false,
-              pause_reason: null,
-              paused_at: null,
-              parked_until: null,
-              consecutive_rate_limits: 0,
-            }).eq("id", "singleton");
-          } catch (e) {
-            const st = statusOf(e);
-            const msg = errMsg(e);
-            failedInFile++;
-            summary.errors.push(`probe ${queueRows[0].identifier}: ${msg}`);
-            if (st === 402 || st === 403) {
-              breakerTripped = true;
-              summary.paused = true;
-              summary.pause_reason = msg.slice(0, 500);
-              await admin.from("intuizi_ingest_state").update({
-                paused: true,
-                pause_reason: msg.slice(0, 500),
-                paused_at: new Date().toISOString(),
-              }).eq("id", "singleton");
-            } else if (st === 429) {
-              const next = (state?.consecutive_rate_limits ?? 0) + 1;
-              await admin.from("intuizi_ingest_state").update({
-                consecutive_rate_limits: next,
-                last_error: msg.slice(0, 500),
-                ...(next >= 3
-                  ? { parked_until: new Date(Date.now() + 30 * 60 * 1000).toISOString() }
-                  : {}),
-              }).eq("id", "singleton");
-              if (next >= 3) {
-                breakerTripped = true;
-                summary.paused = true;
-                summary.pause_reason = `rate limited ${next}x — parked until the next scheduled run`;
-              }
-            }
-          }
-        }
-
-        const scoreMs = Date.now() - scoreStart;
-        summary.phase_ms.score += scoreMs;
-        endScore({
-          object_key: cand.key,
-          scored: scoredInFile,
-          failed: failedInFile,
-          identifier_cap: identifierBudget,
-          row_group_cursor: checkpoint?.startRowGroup ?? null,
+          trace_id: fileTraceId,
+          row_group_cursor: resumeGroup,
+          rows_offset: resumeRowsOffset,
+          max_rows: caps.rows,
         });
-        const remaining = perIdentifier.size - scoredInFile - failedInFile - unchangedInFile;
-        // A Parquet file is only "done" once its last row group is transformed.
-        const chunkComplete = !checkpoint || checkpoint.exhausted;
-        const fileStatus = breakerTripped
-          ? "paused"
-          : (remaining > 0 || !chunkComplete ? "partial" : "done");
+
+        const dispatchMs = Date.now() - dispatchStart;
+        summary.phase_ms.dispatch += dispatchMs;
+        endDispatch({ object_key: cand.key, message_id: sent.message_id });
+
         const endPersist = meter.begin("persist");
         const persistStart = Date.now();
         await admin.from("intuizi_ingest_files").update({
-
-          status: fileStatus,
-          total_rows: rawRows.length,
-          processed_rows: (fileRow.processed_rows ?? 0) + scoredInFile,
-          failed_rows: failedInFile,
-          cursor_offset: perIdentifier.size - remaining,
-          // Only advance the row-group checkpoint when this chunk's rows were
-          // fully drained, so nothing is skipped on resume.
-          row_group_cursor: checkpoint
-            ? (remaining > 0 || breakerTripped ? checkpoint.startRowGroup : checkpoint.nextRowGroup)
-            : 0,
-          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
-          rows_offset: checkpoint
-            ? (remaining > 0 || breakerTripped ? checkpoint.rowsOffset : checkpoint.nextRowsOffset)
-            : 0,
-          finished_at: fileStatus === "done" ? new Date().toISOString() : null,
-          error_message: failedInFile ? summary.errors.slice(-3).join("\n").slice(0, 2000) : null,
+          status: "enqueued",
+          enqueued_at: new Date().toISOString(),
+          queue_message_id: sent.message_id,
+          trace_id: fileTraceId,
+          worker_id: null,
+          heartbeat_at: new Date().toISOString(),
+          dispatch_attempts: (Number(fileRow.dispatch_attempts ?? 0) || 0) + 1,
+          error_message: null,
+          finished_at: null,
         }).eq("id", fileRow.id);
-
         summary.phase_ms.persist += Date.now() - persistStart;
         endPersist({ object_key: cand.key });
 
-        // Structured per-file coverage + timing + rate-limit metrics.
+        summary.files_dispatched++;
+        // Dispatch is a handoff, not a completion: the run is only "complete"
+        // once the worker closes every file out through the callback.
+        summary.complete = false;
+
         console.log(JSON.stringify({
-          evt: "ingest_file_coverage",
+          evt: "ingest_file_dispatched",
+          trace_id: fileTraceId,
           object_key: cand.key,
-          report_type: fileRow.report_type ?? "unknown",
-          activation_id: cand.key.toLowerCase().match(/activation[_-]?id(\d+)/)?.[1] ?? null,
-          status: fileStatus,
-          rows: rawRows.length,
-          identifiers: perIdentifier.size,
-          enriched: scoredInFile,
-          failed: failedInFile,
-          unchanged: unchangedInFile,
-          identifier_only: Math.max(0, remaining),
-          row_group_cursor: checkpoint?.nextRowGroup ?? null,
-          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
-          coverage_pct: perIdentifier.size
-            ? Math.round((scoredInFile / perIdentifier.size) * 100)
-            : null,
-          sign_ms: signMs,
-          read_ms: readMs,
-          normalize_ms: normalizeMs,
-          score_ms: scoreMs,
-          read_timings: readTimings,
+          report_type: cand.report_type,
+          activation_id: activationIdFromKey(cand.key),
+          resume_at_group: resumeGroup,
+          resume_rows_offset: resumeRowsOffset,
+          rows_per_message: caps.rows,
+          message_id: sent.message_id,
+          dispatch_ms: dispatchMs,
           time_remaining_ms: timeLeftMs(),
-          ...rateMetrics.snapshot(),
         }));
 
         summary.files.push({
           object_key: cand.key,
-          read_ms: readMs,
-          normalize_ms: normalizeMs,
-          score_ms: scoreMs,
-          timings: readTimings,
-
-          status: fileStatus,
-          complete: fileStatus === "done",
-          rows: rawRows.length,
-          identifiers: perIdentifier.size,
-          enriched: scoredInFile,
-          failed: failedInFile,
-          row_group_cursor: checkpoint
-            ? (remaining > 0 || breakerTripped ? checkpoint.startRowGroup : checkpoint.nextRowGroup)
-            : null,
-          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+          report_type: cand.report_type,
+          status: "enqueued",
+          complete: false,
+          trace_id: fileTraceId,
+          message_id: sent.message_id,
+          row_group_cursor: resumeGroup,
+          row_groups_total: fileRow.row_groups_total ?? null,
+          dispatch_ms: dispatchMs,
         });
-        if (fileStatus !== "done") summary.complete = false;
 
-        summary.files_processed++;
-
+        // A probe run (paused state) hands off exactly one file, so the operator
+        // learns whether the queue path works again without draining the backlog.
+        if (probeOnly) {
+          await admin.from("intuizi_ingest_state").update({
+            paused: false,
+            pause_reason: null,
+            paused_at: null,
+            parked_until: null,
+            consecutive_rate_limits: 0,
+          }).eq("id", "singleton");
+          break;
+        }
       } catch (e) {
         const st = statusOf(e);
         const msg = errMsg(e);
+        // Dispatch failed, so nothing is in flight: park the row back in
+        // `discovered` rather than `failed`, so the next run retries it.
         await admin.from("intuizi_ingest_files").update({
-          status: "failed",
+          status: "discovered",
           error_message: msg.slice(0, 2000),
-          finished_at: new Date().toISOString(),
+          dispatch_attempts: (Number(fileRow.dispatch_attempts ?? 0) || 0) + 1,
+          finished_at: null,
         }).eq("id", fileRow.id);
         summary.files_failed++;
         summary.errors.push(`${cand.key}: ${msg}`);
+        summary.complete = false;
 
-        if (st === 402 || st === 403) {
+        // A queue-level auth/permission problem will fail identically for every
+        // remaining file — stop the run instead of burning the whole batch.
+        if (st === 403 || /AccessDenied|InvalidClientTokenId|SignatureDoesNotMatch|not configured/i.test(msg)) {
           breakerTripped = true;
           summary.paused = true;
           summary.pause_reason = msg.slice(0, 500);
@@ -1614,16 +1376,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Roster-only deliveries carry device identifiers but no taxonomy content,
-    // so nothing can be scored until a companion report arrives. Report it
-    // explicitly instead of letting it look like a silent success.
-    const rosterOnly = summary.roster_identifiers > 0 && summary.identifiers_scored === 0;
-    if (rosterOnly) {
-      summary.errors.push(
-        "roster-only delivery: identifiers were registered but no taxonomy columns were present, so no semantic scores were produced. Ingest the matching CTV/apps/visitation/demographics/origin report for this activation.",
-      );
+    // Queue depth, so the caller sees how much work is still in flight after a
+    // dispatch-only run (this run's own handoffs are part of it).
+    try {
+      const attrs = await queueAttributes();
+      (summary as Json).queue = attrs;
+    } catch (e) {
+      (summary as Json).queue = { error: errMsg(e).slice(0, 300) };
     }
-    (summary as Json).roster_only = rosterOnly;
 
     if (summary.time_budget_exhausted || summary.files_failed || breakerTripped) {
       summary.complete = false;
@@ -1637,7 +1397,7 @@ Deno.serve(async (req) => {
       at: new Date().toISOString(),
       budget_ms: budgetMs,
       elapsed_ms: summary.elapsed_ms,
-      timed_out: summary.time_budget_exhausted || summary.deadline_exceeded,
+      timed_out: summary.time_budget_exhausted,
       resource_kill: Boolean(body.after_resource_limit) || summary.memory_pressure,
       mem_peak_mb: summary.mem_peak_mb ?? undefined,
       rows_cap: caps.rows,

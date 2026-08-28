@@ -1,0 +1,22 @@
+# Pinned runtime for the SonicSIM semantic (CLAP) service — Step 2.
+# Installed into its OWN venv at /opt/semantic-svc/.venv so it never perturbs
+# the librosa venv on the same box.
+#
+# NOTE: this EC2 instance has no GPU (2 vCPU / 7GB), so torch is the CPU wheel.
+# If you later move to a GPU box, swap the --index-url for the CUDA build that
+# matches your NVIDIA driver and re-pin torch/torchaudio together.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+gunicorn==23.0.0
+pydantic==2.10.4
+requests==2.32.3
+numpy==1.26.4
+torch==2.4.1
+torchaudio==2.4.1
+torchvision==0.19.1
+librosa==0.10.2.post1
+soundfile==0.12.1
+transformers==4.44.2
+laion-clap==1.1.6

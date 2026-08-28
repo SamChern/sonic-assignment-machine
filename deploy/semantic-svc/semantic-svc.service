@@ -1,0 +1,46 @@
+[Unit]
+Description=SonicSIM Semantic Service (LAION-CLAP embeddings + text/audio bridge)
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/semantic-svc
+
+# Own venv — deliberately separate from /opt/librosa-mcp/.venv so torch pins
+# for CLAP never break the librosa service running on the same box.
+Environment=PATH=/opt/semantic-svc/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/semantic-svc
+# CLAP checkpoint cache — keep off / so ProtectSystem=strict stays valid.
+Environment=HF_HOME=/opt/semantic-svc/cache
+Environment=TORCH_HOME=/opt/semantic-svc/cache
+# CPU box: don't let torch oversubscribe the 2 vCPUs and starve nginx/librosa.
+Environment=OMP_NUM_THREADS=2
+Environment=MKL_NUM_THREADS=2
+
+# install.sh writes /etc/semantic-svc.env containing SEMANTIC_SVC_TOKEN=...
+EnvironmentFile=/etc/semantic-svc.env
+
+# Loopback only — nginx fronts with TLS + the outer Bearer check.
+ExecStart=/opt/semantic-svc/.venv/bin/gunicorn server_semantic:app \
+  --config /opt/semantic-svc/gunicorn.conf.py
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+# Hardening (mirrors librosa-rest.service)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=false
+ReadWritePaths=/tmp /opt/semantic-svc
+
+# Resource caps — CLAP resident model is ~1.5GB; leave headroom for librosa.
+MemoryMax=3G
+
+[Install]
+WantedBy=multi-user.target

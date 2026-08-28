@@ -15,6 +15,7 @@ import {
   type TaxonomyNodeVectors,
   weightedTagVector,
 } from '../_shared/context.ts';
+import { controlNumber } from '../_shared/control.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -191,6 +192,11 @@ Deno.serve(async (req) => {
       ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
       : null;
 
+    // Control Room knobs (60s cached; fall back to the shipped defaults).
+    const knnK = Math.round(
+      await controlNumber(supabaseAdmin, 'knn.k', 5, { min: 1, max: 32 }),
+    );
+
     // === OPTIMIZATION 1: Check cache for existing analyses ===
     const cachedResults: SourceResult[] = [];
     const uncachedSources: AudioSource[] = [];
@@ -319,7 +325,7 @@ Deno.serve(async (req) => {
             if (subject && subject.vector.length === 1536) {
               const { data: knn } = await supabaseAdmin.rpc('match_audio_profiles', {
                 query_embedding: subject.vector,
-                match_count: 5,
+                match_count: knnK,
                 exclude_id: s.audio_source_id,
               });
               const ctx = buildNeighborExemplars(knn as unknown[] as Record<string, unknown>[]);
@@ -349,7 +355,7 @@ Deno.serve(async (req) => {
             if (embedding) {
               const { data: knn } = await supabaseAdmin.rpc('match_audio_profiles', {
                 query_embedding: embedding,
-                match_count: 5,
+                match_count: knnK,
                 exclude_id: s.audio_source_id,
               });
               const ctx = buildNeighborExemplars(knn as unknown[] as Record<string, unknown>[]);

@@ -363,20 +363,19 @@ const PostIngestionWizard = () => {
       return;
     }
 
-    // --- Stage: ingest -----------------------------------------------------
-    setStage("ingest", { state: "running", summary: "processing files…" });
+    // --- Stage: dispatch + worker transform --------------------------------
+    // The edge function is a control plane now: it hands each file to the EC2
+    // DuckDB worker over the queue and returns in milliseconds. The transform
+    // itself happens off-platform and reports back, so this stage dispatches and
+    // then watches the ledger instead of holding an edge invocation open.
+    setStage("ingest", { state: "running", summary: "handing files to the ingest worker…" });
     const perFile: [string, string][] = [];
     const ingestErrors: string[] = [];
-    const stillPartial: ActivationFile[] = [];
-    let rowsRead = 0;
-    let scored = 0;
-    let roster = 0;
-    let queued = 0;
+    const dispatchedKeys: string[] = [];
+    let dispatched = 0;
 
-    const estimates: ResumeEstimate[] = [];
     const deadlineInfos: DeadlineInfo[] = [];
     const phaseSamples: PhaseRun[] = [];
-
 
     for (const f of dataFiles) {
       const t0 = Date.now();
@@ -385,7 +384,7 @@ const PostIngestionWizard = () => {
         { object_key: f.object_key, report_type: f.report_type ?? undefined },
         (attempt, nextShrink) => {
           ingestErrors.push(
-            `${fileName(f.object_key)}: hit the worker compute limit — retry ${attempt} re-runs the same chunk at ${Math.round(nextShrink * 100)}% workload.`,
+            `${fileName(f.object_key)}: the dispatch run hit a compute limit — retry ${attempt} re-dispatches at ${Math.round(nextShrink * 100)}% row slice.`,
           );
           setLiveRun({ key: f.object_key, startedAt: Date.now(), budgetMs: lastBudgetMs.current });
         },
@@ -395,13 +394,12 @@ const PostIngestionWizard = () => {
       if (retries > 0 && !error) {
         perFile.push([
           fileName(f.object_key),
-          `recovered after ${retries} compute-limit retr${retries === 1 ? "y" : "ies"} at ${Math.round((shrink ?? 1) * 100)}% workload`,
+          `dispatched after ${retries} retr${retries === 1 ? "y" : "ies"} at ${Math.round((shrink ?? 1) * 100)}% row slice`,
         ]);
       }
       if (error) {
         ingestErrors.push(`${fileName(f.object_key)}: ${error.message}`);
-        perFile.push([fileName(f.object_key), "failed · resumable"]);
-        stillPartial.push(f);
+        perFile.push([fileName(f.object_key), "not dispatched · retryable"]);
         deadlineInfos.push({
           key: f.object_key,
           budgetMs: lastBudgetMs.current,
@@ -410,70 +408,40 @@ const PostIngestionWizard = () => {
           elapsedMs: wallMs,
           timeRemainingMs: 0,
           deadlineExceeded: true,
-          deadlineStep: isResourceLimit(error.message, error.detail)
-            ? "worker compute limit (CPU/memory) — reduced-workload retries also failed"
-            : "gateway timeout / invoke error",
+          deadlineStep: "dispatch failed — the queue rejected the hand-off",
           phaseMs: null,
         });
         continue;
       }
-      const res = data as {
-        rows_read?: number;
-        identifiers_scored?: number;
-        identifiers_queued?: number;
-        roster_identifiers?: number;
-        time_budget_exhausted?: boolean;
-        complete?: boolean;
-        run_budget_ms?: number;
-        default_run_budget_ms?: number;
-        budget_reason?: string;
-        elapsed_ms?: number;
-        time_remaining_ms?: number;
-        deadline_exceeded?: boolean;
-        deadline_step?: string | null;
-        phase_ms?: Record<string, number>;
-        phase_usage?: Record<string, { ms?: number; heap_delta_mb?: number; peak_heap_mb?: number }>;
-        mem_peak_mb?: number | null;
-        memory_pressure?: boolean;
-        work_caps?: { rows?: number; identifiers?: number; shrink?: number; reason?: string };
-        files?: {
-          object_key?: string;
-          complete?: boolean;
-          row_group_cursor?: number | null;
-          row_groups_total?: number | null;
-        }[];
-        errors?: string[];
-      };
+      const res = data as IngestDispatchSummary;
 
-      if (res.memory_pressure) {
+      if (res.errors?.length) ingestErrors.push(...res.errors);
+      if (res.paused) {
         ingestErrors.push(
-          `${fileName(f.object_key)}: checkpointed early under memory pressure (peak heap ${res.mem_peak_mb ?? "?"} MB) — the next run uses ${res.work_caps?.rows ?? "fewer"} rows per file.`,
+          `Ingest is paused: ${res.pause_reason ?? "see the queue status panel"}. Resolve it and re-run — nothing is lost.`,
         );
       }
-      rowsRead += res.rows_read ?? 0;
-      scored += res.identifiers_scored ?? 0;
-      queued += res.identifiers_queued ?? 0;
-      roster += res.roster_identifiers ?? 0;
-      if (res.errors?.length) ingestErrors.push(...res.errors);
 
       const fileState = res.files?.find((x) => x.object_key === f.object_key);
-      const complete = fileState?.complete ?? (res.complete !== false);
-      if (!complete) stillPartial.push(f);
+      if (fileState?.status === "enqueued") {
+        dispatched++;
+        dispatchedKeys.push(f.object_key);
+      }
+      if (res.audio_files_scored) {
+        perFile.push([fileName(f.object_key), "audio object analysed inline"]);
+      }
 
-      // Estimate how much of the file the NEXT run finishes under the server's
-      // tuned run budget, from this run's throughput (groups per elapsed ms).
-      const budgetMs = res.run_budget_ms ?? 70_000;
+      const budgetMs = res.run_budget_ms ?? 30_000;
       lastBudgetMs.current = budgetMs;
-      const elapsed = res.elapsed_ms ?? wallMs;
       deadlineInfos.push({
         key: f.object_key,
         budgetMs,
         defaultBudgetMs: res.default_run_budget_ms ?? null,
         budgetReason: res.budget_reason ?? null,
-        elapsedMs: elapsed,
+        elapsedMs: res.elapsed_ms ?? wallMs,
         timeRemainingMs: res.time_remaining_ms ?? null,
-        deadlineExceeded: Boolean(res.deadline_exceeded || res.time_budget_exhausted),
-        deadlineStep: res.deadline_step ?? null,
+        deadlineExceeded: Boolean(res.time_budget_exhausted),
+        deadlineStep: res.time_budget_exhausted ? "run budget reached during discovery" : null,
         phaseMs: res.phase_ms ?? null,
       });
 
@@ -503,65 +471,91 @@ const PostIngestionWizard = () => {
           phases,
           resourceLimit: retries > 0,
           memoryPressure: Boolean(res.memory_pressure),
-          culprit: res.deadline_step ?? null,
+          culprit: null,
         });
       }
 
-
-      const total = fileState?.row_groups_total ?? null;
-      const cursor = fileState?.row_group_cursor ?? 0;
-      const groupsThisRun = Math.max(0, cursor - (resumeCursors.current[f.object_key] ?? 0));
-      const groupsRemaining = total != null ? Math.max(0, total - cursor) : null;
-      const msPerGroup = groupsThisRun > 0 ? elapsed / groupsThisRun : null;
-      const groupsNextRun =
-        msPerGroup && groupsRemaining != null
-          ? Math.max(1, Math.min(groupsRemaining, Math.floor(budgetMs / msPerGroup)))
-          : null;
-      const etaMs =
-        msPerGroup && groupsRemaining != null ? Math.round(groupsRemaining * msPerGroup) : null;
-      resumeCursors.current[f.object_key] = cursor;
-
-      if (!complete) {
-        estimates.push({
-          key: f.object_key,
-          cursor,
-          total,
-          groupsRemaining,
-          groupsNextRun,
-          etaMs,
-          runsRemaining:
-            groupsNextRun && groupsRemaining != null
-              ? Math.ceil(groupsRemaining / groupsNextRun)
-              : null,
-        });
+      if (fileState?.status === "enqueued") {
+        const resumeNote = (fileState.row_group_cursor ?? 0) > 0
+          ? ` · resuming at row group ${fileState.row_group_cursor}`
+          : "";
+        perFile.push([
+          fileName(f.object_key),
+          `queued for the worker${resumeNote} · trace ${(fileState.trace_id ?? res.trace_id ?? "").slice(-10)}`,
+        ]);
       }
-
-      if (res.time_budget_exhausted) {
-        ingestErrors.push(
-          `${fileName(f.object_key)}: stopped at the ${Math.round(budgetMs / 1000)}s run budget — press Resume to continue from row group ${cursor}.`,
-        );
-      }
-      const progress =
-        total != null ? ` · row group ${cursor}/${total}` : "";
-      perFile.push([
-        fileName(f.object_key),
-        `${res.rows_read ?? 0} rows · ${res.identifiers_queued ?? 0} queued for scoring · ${res.roster_identifiers ?? 0} roster${progress} · ${complete ? "complete" : "partial"}`,
-      ]);
     }
 
-    setPartialFiles(stillPartial);
-    setResumeEstimates(estimates);
     setDeadlines(deadlineInfos);
     if (phaseSamples.length) {
       setPhaseRuns((prev) => [...prev, ...phaseSamples].slice(-PHASE_HISTORY_MAX));
     }
 
+    setStage("ingest", {
+      state: ingestErrors.length ? (dispatched ? "warn" : "error") : "running",
+      summary: dispatched
+        ? `${dispatched} file(s) handed to the ingest worker — waiting for the transform…`
+        : "no file was handed off",
+      outputs: perFile,
+      notes: ingestErrors.length ? ingestErrors : undefined,
+    });
 
+    // Watch the ledger while the worker decodes and normalizes off-platform.
+    const ledger = dispatchedKeys.length
+      ? await awaitWorkerFiles(dispatchedKeys, (rows) => {
+        const done = rows.filter((r) => r.status === "done").length;
+        const readSoFar = rows.reduce((n, r) => n + (r.processed_rows ?? 0), 0);
+        setStage("ingest", {
+          state: "running",
+          summary: `worker transforming · ${done}/${rows.length} file(s) complete · ${readSoFar.toLocaleString()} rows normalized`,
+          outputs: perFile,
+          notes: ingestErrors.length ? ingestErrors : undefined,
+        });
+      })
+      : [];
+
+    const stillPartial = dataFiles.filter((f) => {
+      const row = ledger.find((r) => r.object_key === f.object_key);
+      return row ? row.status !== "done" : dispatchedKeys.includes(f.object_key);
+    });
+    const rowsRead = ledger.reduce((n, r) => n + (r.processed_rows ?? 0), 0);
+    const failedLedger = ledger.filter((r) => r.status === "failed");
+    for (const r of failedLedger) {
+      ingestErrors.push(`${fileName(r.object_key)}: worker reported ${r.error_message ?? "a failure"}`);
+    }
+
+    const estimates: ResumeEstimate[] = ledger
+      .filter((r) => r.status !== "done")
+      .map((r) => {
+        const total = r.row_groups_total ?? null;
+        const cursor = r.row_group_cursor ?? 0;
+        return {
+          key: r.object_key,
+          cursor,
+          total,
+          groupsRemaining: total != null ? Math.max(0, total - cursor) : null,
+          groupsNextRun: null,
+          etaMs: null,
+          runsRemaining: null,
+        };
+      });
+
+    setPartialFiles(stillPartial);
+    setResumeEstimates(estimates);
+
+    for (const r of ledger) {
+      perFile.push([
+        fileName(r.object_key),
+        `${(r.processed_rows ?? 0).toLocaleString()} rows normalized${
+          r.row_groups_total != null ? ` · row group ${r.row_group_cursor ?? 0}/${r.row_groups_total}` : ""
+        } · ${r.status}`,
+      ]);
+    }
 
     setStage("ingest", {
       state: ingestErrors.length || stillPartial.length ? (rowsRead ? "warn" : "error") : "ok",
-      summary: `${rowsRead} rows read · ${queued} profile(s) queued for background scoring · ${roster} identifier(s) registered · ${
-        stillPartial.length ? `${stillPartial.length} file(s) partial` : "all files complete"
+      summary: `${rowsRead.toLocaleString()} rows normalized by the worker · ${
+        stillPartial.length ? `${stillPartial.length} file(s) still in flight` : "all files complete"
       }`,
       outputs: perFile,
       notes: ingestErrors.length ? ingestErrors : undefined,

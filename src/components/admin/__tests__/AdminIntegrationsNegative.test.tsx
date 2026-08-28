@@ -18,6 +18,13 @@ vi.mock("sonner", () => ({ toast: toastMock }));
 
 const getMock = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/useEC2Api", () => ({ useEC2Api: () => ({ get: getMock }) }));
+// `Ec2StatusPanel` embeds the semantic-service card, which runs its own health
+// probes and renders its own "Checking…"/Refresh affordances. These tests cover
+// the EC2 card only, so the nested panel is stubbed out.
+vi.mock("@/components/admin/SemanticServicePanel", () => ({
+  default: () => null,
+}));
+
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");

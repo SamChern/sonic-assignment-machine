@@ -1,0 +1,410 @@
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  CheckCircle2,
+  GitCompareArrows,
+  Loader2,
+  RefreshCw,
+  Upload,
+  Waves,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  IntuiziCatalogTree,
+  type CrosswalkDecision,
+  type CrosswalkProposal,
+} from "@/components/admin/IntuiziCatalogTree";
+import type { CatalogNode } from "@/lib/intuiziTaxonomy";
+
+/** Vocabularies crosswalked against `aset.*` — mirrors CROSSWALK_PREFIXES. */
+const PREFIXES = [
+  { value: "all", label: "All vocabularies" },
+  { value: "iab.", label: "IAB content (iab.*)" },
+  { value: "ctv.genre.", label: "CTV genres (ctv.genre.*)" },
+  { value: "app.cat.", label: "App categories (app.cat.*)" },
+  { value: "poi.brand.", label: "POI brands (poi.brand.*)" },
+];
+
+interface PrefixStat { total: number; proposed: number; approved: number }
+
+interface Coverage {
+  eligible_total?: number;
+  proposed_total?: number;
+  approved_total?: number;
+  by_prefix?: Record<string, PrefixStat>;
+  iab_fully_approved?: boolean;
+  aset_nodes?: number;
+  aset_embedded?: number;
+  aset_pending_embedding?: number;
+}
+
+interface ListedNode {
+  id: string;
+  code: string;
+  label: string | null;
+  has_audio_embedding: boolean;
+  approved: boolean;
+  matches: CrosswalkProposal[];
+}
+
+/** Builds a nested tree from dotted taxonomy codes (`iab.arts.music`). */
+function treeFromCodes(nodes: ListedNode[]): CatalogNode[] {
+  const byCode = new Map<string, CatalogNode>();
+  const ensure = (code: string, label: string | null, meta: Record<string, unknown>) => {
+    const existing = byCode.get(code);
+    if (existing) {
+      if (label) existing.label = label;
+      Object.assign(existing.meta, meta);
+      return existing;
+    }
+    const node: CatalogNode = {
+      id: code,
+      label: label ?? code.split(".").slice(-1)[0],
+      parentId: null,
+      meta,
+      children: [],
+    };
+    byCode.set(code, node);
+    return node;
+  };
+
+  for (const n of nodes) {
+    ensure(n.code, n.label, {
+      embedded: n.has_audio_embedding ? "yes" : "no",
+      approved: n.approved ? "yes" : "no",
+    });
+    const parts = n.code.split(".");
+    for (let i = parts.length - 1; i > 1; i--) {
+      const childCode = parts.slice(0, i).join(".");
+      const parentCode = parts.slice(0, i - 1).join(".");
+      const child = ensure(childCode, null, {});
+      const parent = ensure(parentCode, null, {});
+      if (child.parentId === null) {
+        child.parentId = parentCode;
+        parent.children.push(child);
+      }
+    }
+  }
+
+  return [...byCode.values()]
+    .filter((n) => n.parentId === null)
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/**
+ * Step 5 — AudioSet ontology import, crosswalk proposal and human approval.
+ * Admin-only; every call goes through admin-guarded edge functions.
+ */
+export const AudioSetCrosswalkPanel = () => {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [embedding, setEmbedding] = useState(false);
+  const [proposing, setProposing] = useState(false);
+  const [loadingList, setLoadingList] = useState(false);
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const [prefix, setPrefix] = useState("iab.");
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [coverage, setCoverage] = useState<Coverage>({});
+  const [nodes, setNodes] = useState<ListedNode[]>([]);
+  const [log, setLog] = useState<string | null>(null);
+
+  const call = useCallback(async (fn: string, body: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke(fn, { body });
+    if (error) throw new Error(error.message);
+    const payload = data as Record<string, unknown>;
+    if (payload?.success === false) throw new Error(String(payload.error ?? "Request failed"));
+    return payload;
+  }, []);
+
+  const mergeCoverage = (payload: Record<string, unknown>) =>
+    setCoverage((prev) => ({
+      ...prev,
+      ...(payload as Coverage),
+    }));
+
+  const refresh = useCallback(async () => {
+    setLoadingList(true);
+    try {
+      const [status, list] = await Promise.all([
+        call("taxonomy-audioset-import", { status_only: true }),
+        call("taxonomy-crosswalk", {
+          action: "list",
+          prefix: prefix === "all" ? undefined : prefix,
+          pending_only: pendingOnly,
+          limit: 400,
+        }),
+      ]);
+      mergeCoverage(status);
+      mergeCoverage(list);
+      setNodes((list.nodes as ListedNode[]) ?? []);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load crosswalk");
+    } finally {
+      setLoadingList(false);
+    }
+  }, [call, prefix, pendingOnly]);
+
+  const onImport = async (file: File) => {
+    setImporting(true);
+    setLog(null);
+    try {
+      const parsed = JSON.parse(await file.text());
+      const res = await call("taxonomy-audioset-import", { ontology: parsed });
+      mergeCoverage(res);
+      setLog(
+        `Imported ${res.inserted ?? 0} new / updated ${res.updated ?? 0} AudioSet nodes (${res.nodes ?? 0} parsed).`,
+      );
+      toast.success(`AudioSet ontology imported (${res.aset_nodes ?? 0} aset.* nodes)`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const onEmbed = async () => {
+    setEmbedding(true);
+    try {
+      const res = await call("semantic-backfill", { limit: 500 });
+      const status = await call("taxonomy-audioset-import", { status_only: true });
+      mergeCoverage(status);
+      setLog(`Embedded ${res.embedded ?? 0} nodes (${res.failed ?? 0} failed).`);
+      toast.success(`Embedded ${res.embedded ?? 0} taxonomy nodes`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Backfill failed");
+    } finally {
+      setEmbedding(false);
+    }
+  };
+
+  const onPropose = async () => {
+    setProposing(true);
+    try {
+      const res = await call("taxonomy-crosswalk", {
+        action: "propose",
+        prefix: prefix === "all" ? undefined : prefix,
+        top_k: 3,
+        limit: 500,
+        recompute: true,
+      });
+      mergeCoverage(res);
+      setLog(
+        `Proposed mappings for ${res.proposed ?? 0} nodes · ${res.skipped_no_embedding ?? 0} skipped (no embedding).`,
+      );
+      await refresh();
+      toast.success("Crosswalk proposals refreshed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Proposal run failed");
+    } finally {
+      setProposing(false);
+    }
+  };
+
+  const onDecide = async (code: string, target: string, decision: CrosswalkDecision) => {
+    setDeciding(code);
+    try {
+      const res = await call("taxonomy-crosswalk", {
+        action: "decide",
+        code,
+        decision,
+        targets: [target],
+      });
+      mergeCoverage(res);
+      const matches = (res.matches as CrosswalkProposal[]) ?? [];
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.code === code
+            ? { ...n, matches, approved: matches.some((m) => m.approved) }
+            : n,
+        ),
+      );
+      toast.success(`${decision === "approve" ? "Approved" : decision === "reject" ? "Rejected" : "Cleared"} ${target}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Decision failed");
+    } finally {
+      setDeciding(null);
+    }
+  };
+
+  const roots = useMemo(() => treeFromCodes(nodes), [nodes]);
+  const crosswalkMap = useMemo(() => {
+    const map: Record<string, CrosswalkProposal[]> = {};
+    for (const n of nodes) map[n.code] = n.matches;
+    return map;
+  }, [nodes]);
+
+  const iab = coverage.by_prefix?.["iab."];
+  const approvalPct = coverage.eligible_total
+    ? Math.round(((coverage.approved_total ?? 0) / coverage.eligible_total) * 100)
+    : 0;
+
+  return (
+    <Card className="space-y-4 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Waves className="h-4 w-4 text-primary" />
+        <h3 className="text-sm font-semibold">AudioSet ontology &amp; crosswalk</h3>
+        <Badge variant="outline" className="text-[10px]">
+          {coverage.aset_nodes ?? 0} aset.* nodes
+        </Badge>
+        <Badge variant="outline" className="text-[10px]">
+          {coverage.aset_embedded ?? 0} embedded
+        </Badge>
+        {coverage.iab_fully_approved && (
+          <Badge className="gap-1 text-[10px]" variant="secondary">
+            <CheckCircle2 className="h-3 w-3" /> IAB fully approved
+          </Badge>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="ml-auto h-7 text-[11px]"
+          onClick={() => void refresh()}
+          disabled={loadingList}
+        >
+          {loadingList ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+          Refresh
+        </Button>
+      </div>
+
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Import <code className="font-mono">ontology.json</code> from the AudioSet ontology repo, embed the
+        nodes in the sonic space, then review the top-3 proposed mappings for every ingest vocabulary and
+        approve the ones that hold up.
+      </p>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className="space-y-1">
+          <Label className="text-[11px]">1 · Import ontology.json</Label>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void onImport(f);
+            }}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full text-[11px]"
+            disabled={importing}
+            onClick={() => fileRef.current?.click()}
+          >
+            {importing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}
+            Choose file
+          </Button>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px]">
+            2 · Embed nodes {coverage.aset_pending_embedding ? `(${coverage.aset_pending_embedding} pending)` : ""}
+          </Label>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full text-[11px]"
+            disabled={embedding}
+            onClick={() => void onEmbed()}
+          >
+            {embedding ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Waves className="mr-1 h-3 w-3" />}
+            Run semantic backfill
+          </Button>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px]">3 · Propose crosswalk (top 3)</Label>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full text-[11px]"
+            disabled={proposing}
+            onClick={() => void onPropose()}
+          >
+            {proposing
+              ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              : <GitCompareArrows className="mr-1 h-3 w-3" />}
+            Propose mappings
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <span>
+            {coverage.approved_total ?? 0} / {coverage.eligible_total ?? 0} nodes approved
+          </span>
+          {iab && (
+            <Badge variant="outline" className="text-[10px]">
+              iab.*: {iab.approved}/{iab.total} approved · {iab.proposed} proposed
+            </Badge>
+          )}
+        </div>
+        <Progress value={approvalPct} className="h-1.5" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={prefix}
+          onValueChange={(v) => {
+            setPrefix(v);
+            setNodes([]);
+          }}
+        >
+          <SelectTrigger className="h-8 w-52 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PREFIXES.map((p) => (
+              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-1.5">
+          <Switch
+            id="crosswalk-pending"
+            checked={pendingOnly}
+            onCheckedChange={setPendingOnly}
+          />
+          <Label htmlFor="crosswalk-pending" className="text-[11px]">Needs approval only</Label>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 text-[11px]"
+          onClick={() => void refresh()}
+          disabled={loadingList}
+        >
+          Load nodes
+        </Button>
+      </div>
+
+      <IntuiziCatalogTree
+        roots={roots}
+        crosswalk={crosswalkMap}
+        onDecide={(code, target, decision) => void onDecide(code, target, decision)}
+        decidingCode={deciding}
+        emptyHint="No nodes loaded — pick a vocabulary and hit “Load nodes”."
+      />
+
+      {log && <p className="text-[11px] text-muted-foreground">{log}</p>}
+    </Card>
+  );
+};
+
+export default AudioSetCrosswalkPanel;

@@ -2089,6 +2089,15 @@ export type Database = {
           social_score: number
         }[]
       }
+      match_audioset_nodes: {
+        Args: { match_count?: number; query_embedding: string }
+        Returns: {
+          code: string
+          id: string
+          label: string
+          similarity: number
+        }[]
+      }
       normalize_score_to_percentile: {
         Args: { pop_mean: number; pop_stddev: number; raw_score: number }
         Returns: number

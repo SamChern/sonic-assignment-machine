@@ -5,6 +5,7 @@
 // precise geo/device values are carried as metadata and never used as features.
 
 import type { OntologyTag } from "./ontology.ts";
+import { iabLabel } from "./iabLabels.ts";
 import { readParquetChunk, type ParquetCheckpoint, type ParquetTimings } from "./parquet.ts";
 export type { ParquetCheckpoint };
 
@@ -268,7 +269,7 @@ export function normalizeRow(
     if (genre) tags.push({ code: `ctv.genre.${slug(genre)}`, label: `CTV genre: ${genre}`, parent_code: "ctv.genre" });
     if (type) tags.push({ code: `ctv.type.${slug(type)}`, label: `CTV content type: ${type}`, parent_code: "ctv.type" });
     if (channel) tags.push({ code: `ctv.channel.${slug(channel)}`, label: `CTV channel: ${channel}`, parent_code: "ctv.channel" });
-    for (const c of iab) tags.push({ code: `iab.${slug(c)}`, label: `IAB category ${c}`, parent_code: "iab" });
+    for (const c of iab) tags.push({ code: `iab.${slug(c)}`, label: iabLabel(c), parent_code: "iab" });
 
     // Web-report extras: page path tokens are the closest thing to content
     // topics, and the referrer host adds discovery context.

@@ -78,6 +78,7 @@ export const WorkspaceSonicSim = ({ organizationId, orgName }: Props) => {
 
   return (
     <SonicSimPanel
+      lens="enterprise"
       subjects={subjects}
       description="Play this organization's sonic fingerprint, or any single analysis, as a live audioscope in the ontological network."
     />

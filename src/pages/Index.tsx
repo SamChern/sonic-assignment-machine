@@ -890,6 +890,7 @@ const Index = () => {
           {/* Tab 4: See my SonicSIM — animated audioscope */}
           <TabsContent value="sonicsim" className="space-y-6">
             <SonicSimPanel
+              lens="consumer"
               onSubjectChange={(s) =>
                 setSonicSimSubject(s && !s.id.startsWith("fingerprint-") ? s.label : null)
               }

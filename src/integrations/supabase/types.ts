@@ -2259,6 +2259,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      client_control: { Args: { _key: string }; Returns: Json }
       has_org_access: { Args: { _org: string }; Returns: boolean }
       has_org_write: { Args: { _org: string }; Returns: boolean }
       has_role: {

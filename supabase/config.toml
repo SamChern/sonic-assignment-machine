@@ -36,3 +36,9 @@ verify_jwt = false
 # service-role token or INGEST_WORKER_SECRET, validated in code.
 [functions.ingest-worker-callback]
 verify_jwt = false
+
+# The Semantic Scope's meaning lens. Auth is validated in code (the function
+# rejects anything without a live session token) so it can also be driven with
+# the service-role key from tests.
+[functions.scope-window-score]
+verify_jwt = false

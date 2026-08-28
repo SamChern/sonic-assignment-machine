@@ -18,12 +18,23 @@ import {
   prefersReducedMotion,
   writeMotionPref,
 } from "@/lib/audioscope";
+import {
+  createSilhouetteSignal,
+  silhouetteDivergence,
+  type SilhouetteTag,
+} from "@/lib/audioscope/silhouette";
 
 export interface AudioscopeCompareEntity {
   id: string;
   label: string;
   color: string;
   scores: CategoryScores;
+  /**
+   * Tag-weighted mix for Intuizi subjects that have no audio: the trace becomes
+   * their *expected sonic silhouette*, so two silhouettes overlaid here is the
+   * similarity score explained visually.
+   */
+  tags?: SilhouetteTag[] | null;
 }
 
 interface AudioscopeCompareProps {
@@ -86,14 +97,24 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
     );
   }, [pair]);
 
+  /** The axes that actually carry the distance — highlighted, not just listed. */
+  const divergence = useMemo(
+    () =>
+      pair.length < 2
+        ? null
+        : silhouetteDivergence(pair[0].scores, pair[1].scores),
+    [pair],
+  );
+
   const staticDeltas = useMemo(
     () =>
       AUDIOSCOPE_CATEGORIES.map((c, i) => ({
         category: c,
         band: i + 1,
         delta: Math.round(deltas[i] ?? 0),
+        divergent: Boolean(divergence?.axes.find((a) => a.category === c)?.divergent),
       })).sort((a, b) => b.delta - a.delta),
-    [deltas],
+    [deltas, divergence],
   );
 
   useEffect(() => {
@@ -117,7 +138,9 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
     const points = isMobile ? 300 : 640;
     const signals = entities.slice(0, 4).map((e) => ({
       entity: e,
-      signal: createSyntheticSignal({ scores: e.scores, seed: e.id }),
+      signal: e.tags?.length
+        ? createSilhouetteSignal({ scores: e.scores, tags: e.tags, seed: e.id })
+        : createSyntheticSignal({ scores: e.scores, seed: e.id }),
       buf: new Float32Array(points),
     }));
 
@@ -266,7 +289,9 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
 
   if (entities.length === 0) return null;
 
-  const sim = typeof similarity === "number" ? Math.round(similarity) : null;
+  const sim =
+    typeof similarity === "number" ? Math.round(similarity) : divergence?.similarity ?? null;
+  const divergentAxes = staticDeltas.filter((d) => d.divergent);
   const lock = sim == null ? null : sim >= 80 ? "In phase" : sim >= 55 ? "Partial lock" : "Out of phase";
 
   return (
@@ -284,6 +309,19 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
           <p className="mt-1 text-xs text-muted-foreground">
             Overlaid waveforms per fingerprint — the red band is the divergence the similarity score measures.
           </p>
+          {divergentAxes.length ? (
+            <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span>Divergent axes:</span>
+              {divergentAxes.map((d) => (
+                <span
+                  key={d.category}
+                  className="rounded border border-destructive/50 bg-destructive/10 px-1.5 text-[10px] text-foreground"
+                >
+                  {CATEGORY_LABELS[d.category] ?? d.category} Δ{d.delta}
+                </span>
+              ))}
+            </p>
+          ) : null}
         </div>
         <div role="group" aria-label="Comparison playback controls" className="flex items-center gap-1.5">
           {lock ? (

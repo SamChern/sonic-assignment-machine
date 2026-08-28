@@ -8,6 +8,13 @@ import {
   type EvidenceKind,
 } from '../_shared/evidence.ts';
 import { chatCompletion, GatewayError, stableHash } from '../_shared/inference.ts';
+import {
+  buildNeighborExemplars,
+  describeTagSubject,
+  type NeighborExemplar,
+  type TaxonomyNodeVectors,
+  weightedTagVector,
+} from '../_shared/context.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,12 +30,18 @@ interface AudioSource {
   type: 'file' | 'track';
   audio_source_id?: string;
   spotify_id?: string; // For cache key lookup
+  /** Optional direct audio location. When absent the tag-only path is used. */
+  file_url?: string | null;
   acoustic_profile?: string; // Optional pre-formatted acoustic summary
   taxonomy_context?: string; // Optional CTV taxonomy + calibration prior block
   /** Phase 2 — which evidence tier produced `acoustic_profile`. */
   evidence?: EvidenceKind;
   /** Hash of the acoustic/taxonomy evidence actually used for scoring. */
   feature_hash?: string;
+  /** Step 4 — retrieved kNN exemplars recorded per call. */
+  context_neighbors?: NeighborExemplar[];
+  /** Step 4 — true when scored from tag embeddings, no librosa involved. */
+  tag_only?: boolean;
 }
 
 
@@ -37,6 +50,7 @@ interface AnalysisRequest {
   user_id?: string;
   save_results?: boolean;
 }
+
 
 interface CategoryResult {
   name: string;
@@ -237,8 +251,17 @@ Deno.serve(async (req) => {
       // librosa (cached measurements) -> provider audio features (Spotify) ->
       // nearest-neighbour prior over profile_embedding -> metadata only.
       if (supabaseAdmin) {
-        // Tier 1 — cached librosa features.
-        const ids = uncachedSources.map(s => s.audio_source_id).filter(Boolean) as string[];
+        // Step 4 — a subject with taxonomy context but no audio location is
+        // scored from its tag embeddings. It never touches the librosa branch.
+        for (const s of uncachedSources) {
+          s.tag_only = !!s.taxonomy_context && !s.file_url;
+        }
+
+        // Tier 1 — cached librosa features (audio-backed subjects only).
+        const ids = uncachedSources
+          .filter(s => !s.tag_only)
+          .map(s => s.audio_source_id)
+          .filter(Boolean) as string[];
         if (ids.length > 0) {
           const { data: featRows } = await supabaseAdmin
             .from('audio_sources')
@@ -246,7 +269,7 @@ Deno.serve(async (req) => {
             .in('id', ids);
           const byId = new Map((featRows ?? []).map(r => [r.id, r.librosa_features]));
           for (const s of uncachedSources) {
-            if (!s.audio_source_id) continue;
+            if (!s.audio_source_id || s.tag_only) continue;
             const profile = formatLibrosaProfile(byId.get(s.audio_source_id));
             if (profile) {
               s.acoustic_profile = profile;
@@ -256,7 +279,9 @@ Deno.serve(async (req) => {
         }
 
         // Tier 2 — provider-supplied audio features (never touches EC2).
-        const needProvider = uncachedSources.filter(s => !s.acoustic_profile && s.spotify_id);
+        const needProvider = uncachedSources.filter(
+          s => !s.acoustic_profile && s.spotify_id && !s.tag_only,
+        );
         if (needProvider.length > 0) {
           const providerMap = await fetchProviderFeatures(
             needProvider.map(s => s.spotify_id!) as string[],
@@ -270,17 +295,82 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Tier 3 — borrow the character of the nearest analyzed neighbours.
+        // Step 4 — tag-only subject vectors: weight-normalized sum of tag
+        // embeddings, preferring grounded CLAP `audio_embedding` per node.
+        for (const s of uncachedSources) {
+          if (!s.tag_only || !s.audio_source_id) continue;
+          try {
+            const { data: tagRows } = await supabaseAdmin
+              .from('audio_source_tags')
+              .select('weight, taxonomy_nodes(id, code, label, embedding, audio_embedding, grounding_count)')
+              .eq('audio_source_id', s.audio_source_id);
+            const nodes: TaxonomyNodeVectors[] = (tagRows ?? [])
+              // deno-lint-ignore no-explicit-any
+              .map((r: any) => (r.taxonomy_nodes ? { ...r.taxonomy_nodes, weight: r.weight } : null))
+              .filter(Boolean) as TaxonomyNodeVectors[];
+            if (nodes.length === 0) continue;
+            const subject = weightedTagVector(nodes);
+            s.taxonomy_context = [s.taxonomy_context, describeTagSubject(nodes, subject)]
+              .filter(Boolean)
+              .join(' ');
+
+            // kNN exemplars from the subject vector when dimensions line up
+            // with the catalog space (`vector(1536)`).
+            if (subject && subject.vector.length === 1536) {
+              const { data: knn } = await supabaseAdmin.rpc('match_audio_profiles', {
+                query_embedding: subject.vector,
+                match_count: 5,
+                exclude_id: s.audio_source_id,
+              });
+              const ctx = buildNeighborExemplars(knn as unknown[] as Record<string, unknown>[]);
+              if (ctx.exemplars.length > 0) {
+                s.context_neighbors = ctx.exemplars;
+                s.taxonomy_context = [s.taxonomy_context, ctx.text].filter(Boolean).join(' ');
+                s.evidence = 'neighbors';
+              }
+            }
+          } catch (e) {
+            console.error('Tag-only subject vector failed:', e);
+          }
+        }
+
+        // Tier 3 — CaMML-style exemplars from the nearest analyzed sources.
         const needNeighbors = uncachedSources.filter(
-          s => !s.acoustic_profile && s.audio_source_id,
+          s => !s.acoustic_profile && s.audio_source_id && !s.context_neighbors,
         );
         for (const s of needNeighbors) {
+          try {
+            const { data: row } = await supabaseAdmin
+              .from('audio_sources')
+              .select('profile_embedding')
+              .eq('id', s.audio_source_id!)
+              .maybeSingle();
+            const embedding = row?.profile_embedding;
+            if (embedding) {
+              const { data: knn } = await supabaseAdmin.rpc('match_audio_profiles', {
+                query_embedding: embedding,
+                match_count: 5,
+                exclude_id: s.audio_source_id,
+              });
+              const ctx = buildNeighborExemplars(knn as unknown[] as Record<string, unknown>[]);
+              if (ctx.exemplars.length > 0) {
+                s.context_neighbors = ctx.exemplars;
+                s.taxonomy_context = [s.taxonomy_context, ctx.text].filter(Boolean).join(' ');
+                s.evidence = 'neighbors';
+                continue;
+              }
+            }
+          } catch (e) {
+            console.error('Exemplar retrieval failed:', e);
+          }
+          // Fallback to the legacy aggregate prior when kNN yields nothing.
           const prior = await neighborPrior(supabaseAdmin, s.audio_source_id!);
           if (prior) {
             s.taxonomy_context = [s.taxonomy_context, prior.text].filter(Boolean).join(' ');
             s.evidence = 'neighbors';
           }
         }
+
 
         for (const s of uncachedSources) if (!s.evidence) s.evidence = 'none';
         console.log(
@@ -299,12 +389,14 @@ Deno.serve(async (req) => {
       // stops re-analysis from re-prompting the LLM.
       for (const s of uncachedSources) {
         s.feature_hash = await stableHash({
-          v: 1,
+          v: 2,
           evidence: s.evidence ?? 'none',
           acoustic: s.acoustic_profile ?? null,
           taxonomy: s.taxonomy_context ?? null,
+          exemplars: (s.context_neighbors ?? []).map(n => `${n.id}:${n.similarity}`),
         });
       }
+
 
       let toAnalyze = uncachedSources;
       if (supabaseAdmin) {
@@ -417,9 +509,20 @@ OTHER RULES:
   Treat those priors as a Bayesian anchor — your scores should stay within
   ~1 std of the prior unless the acoustics clearly contradict it. This keeps
   scores comparable across the catalog.
+- When "exemplarN(similarity=... emotional=... tags=[...])" entries appear, they
+  are retrieved few-shot examples: real already-scored sources with their cosine
+  similarity to this subject. Weight each exemplar by its similarity — a 0.9
+  neighbour is strong evidence, a 0.4 neighbour is weak. Interpolate between the
+  exemplars rather than copying any single one, and deviate when the acoustic
+  line or tags clearly differ.
+- When a "subject=tags_only" line appears there is NO audio for this subject.
+  Score entirely from the tag weights and exemplars: heavier tag weights
+  dominate the profile, spoken-word/talk tags raise Communication and lower
+  Artistic, and stay closer to the exemplar range since acoustics are unknown.
 - If a source has neither an "acoustic:" nor a "taxonomy:" line, score it from
   its name and genre knowledge alone and stay closer to moderate values; the
   system records lower confidence for those.`;
+
 
 
 
@@ -672,9 +775,8 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         const spread = Math.max(0.1, Math.min(1, stddev / 30));
         // Phase 2 — weight confidence by the acoustic evidence tier that was
         // actually available (librosa > provider > neighbours > metadata).
-        const evidence =
-          uncachedSources.find(s => s.name === sourceResult.name)?.evidence ??
-          'librosa'; // cached analyses were scored with their own evidence
+        const matched = uncachedSources.find(s => s.name === sourceResult.name);
+        const evidence = matched?.evidence ?? 'librosa'; // cached analyses kept their own evidence
         const confidence = blendConfidence(spread, evidence);
 
 
@@ -683,8 +785,10 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
           audio_source_id: sourceIdMap.get(sourceResult.name) || null,
           source_name: sourceResult.name,
           confidence,
+          context_neighbors: matched?.context_neighbors ?? null,
           ...categories,
         };
+
       });
 
       // Single bulk insert instead of N individual inserts

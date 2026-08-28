@@ -298,22 +298,32 @@ export function amzDates() {
 
 /** Sign a request with SigV4 in the Authorization header. */
 async function signedFetch(
-  method: "GET" | "HEAD",
+  method: "GET" | "HEAD" | "PUT",
   path: string,
   query: Record<string, string> = {},
+  payload?: Uint8Array,
+  extraHeaders: Record<string, string> = {},
 ): Promise<Response> {
   const cfg = directConfig();
   const { amzDate, dateStamp } = amzDates();
-  const payloadHash = await sha256Hex("");
+  const payloadHash = await sha256Hex(payload ?? "");
 
   const canonicalQuery = Object.keys(query)
     .sort()
     .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(query[k])}`)
     .join("&");
 
-  const canonicalHeaders =
-    `host:${cfg.host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
-  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  // Extra headers participate in the signature, so they are folded into the
+  // canonical header block in the lowercase-sorted order SigV4 requires.
+  const headerMap: Record<string, string> = {
+    host: cfg.host,
+    "x-amz-content-sha256": payloadHash,
+    "x-amz-date": amzDate,
+  };
+  for (const [k, v] of Object.entries(extraHeaders)) headerMap[k.toLowerCase()] = v;
+  const sortedNames = Object.keys(headerMap).sort();
+  const canonicalHeaders = sortedNames.map((n) => `${n}:${headerMap[n]}\n`).join("");
+  const signedHeaders = sortedNames.join(";");
   const canonicalRequest =
     `${method}\n${path}\n${canonicalQuery}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
 
@@ -326,13 +336,16 @@ async function signedFetch(
   return await fetch(url, {
     method,
     headers: {
+      ...extraHeaders,
       Authorization:
         `AWS4-HMAC-SHA256 Credential=${cfg.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
       "x-amz-content-sha256": payloadHash,
       "x-amz-date": amzDate,
     },
+    ...(payload ? { body: payload } : {}),
   });
 }
+
 
 /** Build a presigned GET URL (query-string SigV4) valid for expiresIn seconds. */
 async function presignGet(objectKey: string, expiresIn = 900): Promise<string> {

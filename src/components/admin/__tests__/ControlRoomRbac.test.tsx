@@ -208,14 +208,16 @@ describe("subject_key isolation", () => {
     expect(agg.error).toBeNull();
     expect((agg.data as { member_count: number }[])[0].member_count).toBe(412);
 
+    // `sonic_cohort_members` has no policies at all: nothing is readable.
     const members = await supabaseMock.from("sonic_cohort_members").select("subject_key");
-    expect(members.data).toEqual([]);
+    expect(members.data).toBeNull();
   });
 
   it("consumer role has no access to Intuizi-derived tables", async () => {
     state.role = "user";
+    // `sonic_cohort_members` has no policies at all: nothing is readable.
     const members = await supabaseMock.from("sonic_cohort_members").select("subject_key");
-    expect(members.data).toEqual([]);
+    expect(members.data).toBeNull();
     const cohorts = await supabaseMock.from("sonic_cohorts").select("*");
     expect(cohorts.data).toBeNull();
   });

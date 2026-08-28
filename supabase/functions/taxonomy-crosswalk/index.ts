@@ -6,12 +6,15 @@
 //             taxonomy_nodes.crosswalk -> { audioset: { matches: [...] } }.
 //   list    : read proposals (+approval state) for review in the admin UI.
 //   decide  : approve / reject / clear specific proposals on one node.
+//   auto_approve : bulk-approve the best proposal per node when its cosine
+//             similarity clears a threshold; weaker nodes stay in manual review.
 //   status  : coverage — how many crosswalk-eligible nodes have >=1 approval,
 //             broken out by prefix (the Step 5 verification gate).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 import {
   applyDecision,
+  autoApproveTargets,
   AUDIOSET_PREFIX,
   AUDIOSET_VERSION,
   CROSSWALK_PREFIXES,
@@ -122,6 +125,51 @@ Deno.serve(async (req) => {
         decision,
         matches: readCrosswalk(next)?.matches ?? [],
         approved: hasApproved(next),
+        ...(await coverage(admin)),
+      });
+    }
+
+    if (action === "auto_approve") {
+      const threshold = Number(body.threshold ?? 0.7);
+      if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 1) {
+        return json({ success: false, error: "threshold must be between 0 and 1" }, 400);
+      }
+      const limit = clamp(Number(body.limit ?? 1000), 1, 1000);
+      const maxPerNode = clamp(Number(body.max_per_node ?? 1), 1, 3);
+      // pending_only: never revisit nodes that already carry an approval.
+      const rows = await eligibleNodes(admin, prefixFilter, limit, true);
+
+      let approved = 0;
+      let below_threshold = 0;
+      let failed = 0;
+      const skipped: string[] = [];
+
+      for (const n of rows) {
+        const targets = autoApproveTargets(n.crosswalk, threshold, maxPerNode);
+        if (targets.length === 0) {
+          below_threshold++;
+          if (skipped.length < 50) skipped.push(n.code);
+          continue;
+        }
+        const next = applyDecision(n.crosswalk, targets, "approve", actor);
+        const { error: upErr } = await admin
+          .from("taxonomy_nodes")
+          .update({ crosswalk: next, updated_at: new Date().toISOString() })
+          .eq("id", n.id);
+        if (upErr) failed++;
+        else approved++;
+      }
+
+      return json({
+        success: failed === 0,
+        threshold,
+        max_per_node: maxPerNode,
+        candidates: rows.length,
+        approved,
+        below_threshold,
+        failed,
+        needs_manual_review: skipped,
+        duration_ms: Date.now() - startedAt,
         ...(await coverage(admin)),
       });
     }

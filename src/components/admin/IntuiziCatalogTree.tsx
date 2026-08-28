@@ -142,6 +142,14 @@ const NodeRow = ({
               {countNodes(node.children)}
             </Badge>
           )}
+          {!!proposals && (
+            <Badge
+              variant={approvedCount > 0 ? "secondary" : "outline"}
+              className={`shrink-0 px-1 py-0 text-[9px] ${approvedCount > 0 ? "" : "text-amber-500"}`}
+            >
+              {approvedCount > 0 ? `${approvedCount} mapped` : `${proposals.length} proposed`}
+            </Badge>
+          )}
         </button>
         <button
           onClick={() => {
@@ -162,6 +170,15 @@ const NodeRow = ({
           {metaEntries.map(([k, v]) => `${k}: ${String(v)}`).join(" · ")}
         </p>
       )}
+      {open && !!proposals && (
+        <CrosswalkRows
+          code={node.id}
+          proposals={proposals}
+          depth={depth}
+          onDecide={onDecide}
+          busy={decidingCode === node.id}
+        />
+      )}
       {open &&
         node.children.map((child) => (
           <NodeRow
@@ -171,21 +188,34 @@ const NodeRow = ({
             expanded={expanded}
             toggle={toggle}
             onPick={onPick}
+            crosswalk={crosswalk}
+            onDecide={onDecide}
+            decidingCode={decidingCode}
           />
         ))}
     </div>
   );
 };
 
-interface Props {
+interface Props extends CrosswalkProps {
   roots: CatalogNode[];
   /** Number of parents inferred from child rows rather than returned directly. */
   synthesizedParents?: number;
   onPick?: (node: CatalogNode) => void;
+  emptyHint?: string;
 }
 
 /** Nested, searchable view of an Intuizi reference catalog. */
-export const IntuiziCatalogTree = ({ roots, synthesizedParents = 0, onPick }: Props) => {
+export const IntuiziCatalogTree = ({
+  roots,
+  synthesizedParents = 0,
+  onPick,
+  crosswalk,
+  onDecide,
+  decidingCode,
+  emptyHint,
+}: Props) => {
+
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 

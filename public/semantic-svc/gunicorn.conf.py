@@ -6,7 +6,7 @@
 # torch already uses both cores internally.
 import os
 
-bind = os.environ.get("SEMANTIC_BIND", "127.0.0.1:8767")
+bind = os.environ.get("SEMANTIC_BIND", "127.0.0.1:8769")
 
 workers = int(os.environ.get("SEMANTIC_WORKERS", 1))
 worker_class = "uvicorn.workers.UvicornWorker"

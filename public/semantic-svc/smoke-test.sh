@@ -2,7 +2,7 @@
 # smoke-test.sh — verify the semantic service end to end.
 #
 #   bash smoke-test.sh https://<host>/semantic "$TOKEN"
-#   bash smoke-test.sh http://127.0.0.1:8767 "$(sudo cat /etc/semantic-svc.token)"
+#   bash smoke-test.sh http://127.0.0.1:8769 "$(sudo cat /etc/semantic-svc.token)"
 set -euo pipefail
 
 BASE="${1:?usage: smoke-test.sh <base-url> <token>}"

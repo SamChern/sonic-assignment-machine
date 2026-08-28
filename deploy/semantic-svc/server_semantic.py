@@ -2,7 +2,7 @@
 #
 # Sibling of deploy/librosa-mcp/server_rest.py, same conventions: FastAPI behind
 # gunicorn/uvicorn on loopback, nginx fronts with TLS + Bearer auth, systemd unit
-# supervises. It runs on the SAME EC2 box as librosa-rest, on port 8767.
+# supervises. It runs on the SAME EC2 box as librosa-rest, on port 8769.
 #
 # Endpoints:
 #   GET  /healthz                       -> model + bridge version currently loaded
@@ -19,7 +19,7 @@
 # Auth: Authorization: Bearer <SEMANTIC_SVC_TOKEN>. Same defense-in-depth as
 # librosa-rest (nginx checks too).
 #
-# Run: uvicorn server_semantic:app --host 127.0.0.1 --port 8767
+# Run: uvicorn server_semantic:app --host 127.0.0.1 --port 8769
 
 from __future__ import annotations
 

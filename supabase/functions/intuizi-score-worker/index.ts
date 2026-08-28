@@ -264,7 +264,7 @@ Deno.serve(async (req) => {
     while (timeLeft() > SAFETY_MS && !paused) {
       const { data: claimed, error: claimErr } = await admin.rpc(
         "claim_intuizi_score_jobs",
-        { p_limit: Math.max(1, Math.min(BATCH, concurrency)) },
+        { p_limit: concurrency === 1 ? 1 : BATCH },
       );
       if (claimErr) return json({ success: false, error: claimErr.message }, 500);
       const tasks = (claimed ?? []) as QueuedTask[];

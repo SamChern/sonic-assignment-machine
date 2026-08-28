@@ -136,6 +136,8 @@ export interface IngestMessage {
   /** Mid-file resume point so a redelivery never re-normalizes finished rows. */
   row_group_cursor?: number;
   rows_offset?: number;
+  /** Row slice the worker should process before checkpointing and re-queueing. */
+  max_rows?: number;
 }
 
 export interface SendResult {

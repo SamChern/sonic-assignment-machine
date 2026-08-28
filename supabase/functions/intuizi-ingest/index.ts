@@ -1001,7 +1001,7 @@ Deno.serve(async (req) => {
     shrink: Number(body.shrink ?? 0) || undefined,
     afterResourceLimit: Boolean(body.after_resource_limit),
     maxRows: Number(body.max_rows ?? 0) || undefined,
-    maxIdentifiers: Number(body.max_identifiers ?? 0) || undefined,
+    maxFiles: Number(body.max_files ?? 0) || undefined,
     memPeakMb: Number(prevSummary.mem_peak_mb ?? 0) || null,
   });
   console.log(JSON.stringify({

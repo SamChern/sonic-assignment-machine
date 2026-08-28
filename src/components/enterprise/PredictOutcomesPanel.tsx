@@ -150,7 +150,7 @@ const PredictOutcomesPanel = ({
         ciHigh += Math.max(a, b);
       }
     }
-    return { predicted: base + delta, delta, ciLow: delta + ciLow - delta, ciHigh, conclusive };
+    return { predicted: base + delta, delta, ciLow, ciHigh, conclusive };
   }, [result, deltas]);
 
   return (

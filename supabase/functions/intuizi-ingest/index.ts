@@ -1116,7 +1116,7 @@ Deno.serve(async (req) => {
       }
     } else {
       for (const { prefix, report_type } of ingestPrefixes()) {
-        if (candidates.length >= MAX_FILES_PER_RUN) break;
+        if (candidates.length >= caps.files) break;
         let objects: Awaited<ReturnType<typeof listObjects>> = [];
         try {
           objects = await listObjects(prefix, 100);
@@ -1132,14 +1132,29 @@ Deno.serve(async (req) => {
 
         const { data: seen } = await admin
           .from("intuizi_ingest_files")
-          .select("object_key,status")
+          .select("object_key,status,etag,heartbeat_at")
           .in("object_key", dataObjects.map((o) => o.key));
-        const done = new Set(
-          (seen ?? []).filter((s) => s.status === "done").map((s) => s.object_key),
+
+        // Skip finished files, and files a worker is actively holding. A claim
+        // whose heartbeat went quiet is NOT skipped — it gets re-dispatched,
+        // which is safe because the worker resumes from the saved cursor and
+        // the score queue upsert is idempotent per (object_key, identifier).
+        const staleBefore = Date.now() - STALE_CLAIM_MS;
+        const skip = new Set(
+          (seen ?? []).filter((s) => {
+            if (s.status === "done") return true;
+            if (s.status !== "enqueued" && s.status !== "processing") return false;
+            const beat = s.heartbeat_at ? new Date(s.heartbeat_at).getTime() : 0;
+            return beat >= staleBefore;
+          }).map((s) => s.object_key),
         );
+        const etags = new Map((seen ?? []).map((s) => [s.object_key, s.etag]));
 
         for (const o of dataObjects) {
-          if (done.has(o.key) || claimed.has(o.key)) continue;
+          if (skip.has(o.key) || claimed.has(o.key)) continue;
+          // A re-upload under the same key changes the ETag: treat it as new work.
+          const knownEtag = etags.get(o.key);
+          if (knownEtag && o.etag && knownEtag === o.etag && skip.has(o.key)) continue;
           // Audio files are ingested as real audio, not as report rows.
           const rt: ReportType | "audio" | null = isAudioKey(o.key)
             ? "audio"
@@ -1150,7 +1165,7 @@ Deno.serve(async (req) => {
           }
           claimed.add(o.key);
           candidates.push({ key: o.key, report_type: rt, size: o.size, etag: o.etag });
-          if (candidates.length >= MAX_FILES_PER_RUN) break;
+          if (candidates.length >= caps.files) break;
         }
       }
     }

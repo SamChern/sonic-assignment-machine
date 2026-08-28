@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   GitCompareArrows,
+  Gauge,
   Loader2,
   RefreshCw,
   Upload,
@@ -19,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -113,6 +115,8 @@ export const AudioSetCrosswalkPanel = () => {
   const [importing, setImporting] = useState(false);
   const [embedding, setEmbedding] = useState(false);
   const [proposing, setProposing] = useState(false);
+  const [autoApproving, setAutoApproving] = useState(false);
+  const [threshold, setThreshold] = useState(0.7);
   const [loadingList, setLoadingList] = useState(false);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [prefix, setPrefix] = useState("iab.");
@@ -211,6 +215,29 @@ export const AudioSetCrosswalkPanel = () => {
       toast.error(e instanceof Error ? e.message : "Proposal run failed");
     } finally {
       setProposing(false);
+    }
+  };
+
+  const onAutoApprove = async () => {
+    setAutoApproving(true);
+    try {
+      const res = await call("taxonomy-crosswalk", {
+        action: "auto_approve",
+        prefix: prefix === "all" ? undefined : prefix,
+        threshold,
+        limit: 1000,
+      });
+      mergeCoverage(res);
+      setLog(
+        `Auto-approved ${res.approved ?? 0} nodes at cosine >= ${threshold.toFixed(2)} · ` +
+          `${res.below_threshold ?? 0} left for manual review.`,
+      );
+      await refresh();
+      toast.success(`Auto-approved ${res.approved ?? 0} mappings`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Auto-approval failed");
+    } finally {
+      setAutoApproving(false);
     }
   };
 
@@ -342,6 +369,40 @@ export const AudioSetCrosswalkPanel = () => {
             Propose mappings
           </Button>
         </div>
+      </div>
+
+      <div className="space-y-2 rounded-md border border-border/60 bg-muted/30 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Gauge className="h-3.5 w-3.5 text-primary" />
+          <Label className="text-[11px] font-medium">4 · Auto-approve above similarity</Label>
+          <Badge variant="outline" className="ml-auto font-mono text-[10px]">
+            {threshold.toFixed(2)}
+          </Badge>
+        </div>
+        <Slider
+          value={[threshold]}
+          min={0.5}
+          max={0.95}
+          step={0.01}
+          onValueChange={([v]) => setThreshold(v)}
+          aria-label="Auto-approval similarity threshold"
+        />
+        <p className="text-[10px] leading-relaxed text-muted-foreground">
+          Approves the single best proposal per node when it clears the threshold. Nodes you already
+          approved or rejected by hand are never touched, and weaker matches stay in the review queue below.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full text-[11px]"
+          disabled={autoApproving}
+          onClick={() => void onAutoApprove()}
+        >
+          {autoApproving
+            ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+            : <CheckCircle2 className="mr-1 h-3 w-3" />}
+          Auto-approve {prefix === "all" ? "all vocabularies" : prefix + "*"}
+        </Button>
       </div>
 
       <div className="space-y-1">

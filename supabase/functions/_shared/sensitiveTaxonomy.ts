@@ -20,12 +20,23 @@ export const SENSITIVE_PATTERNS: RegExp[] = [
   /\b(prison|jail|correctional|probation|immigration[\s_-]?cent|political[\s_-]?part|campaign[\s_-]?office|labor[\s_-]?union|lgbt|gay[\s_-]?bar|adult[\s_-]?entertainment|strip[\s_-]?club)\b/i,
 ];
 
+// Suppression applies to place/visitation classes only. Content genres
+// ("IAB7 Health & Fitness", "Church bell" as a sound event) are legitimate
+// sonic signal and must stay taggable — only where-a-person-physically-went
+// data is sensitive.
+export const POI_CODE_PREFIXES = ["visit.", "poi.", "place.", "geo.", "brand.visit."];
+
+export function isPoiCode(code: string): boolean {
+  return POI_CODE_PREFIXES.some((p) => (code ?? "").toLowerCase().startsWith(p));
+}
+
 /**
- * True when a taxonomy code or label describes a sensitive class that must be
- * suppressed. Matching is intentionally conservative in one direction only:
- * false positives cost a tag, false negatives cost compliance.
+ * True when a POI/visitation taxonomy code or label describes a sensitive class
+ * that must be suppressed. Matching is intentionally conservative in one
+ * direction only: false positives cost a tag, false negatives cost compliance.
  */
 export function isSensitiveTag(code: string, label?: string | null): boolean {
+  if (!isPoiCode(code)) return false;
   const haystack = `${code ?? ""} ${label ?? ""}`.replace(/[._]/g, " ");
   return SENSITIVE_PATTERNS.some((re) => re.test(haystack));
 }

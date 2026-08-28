@@ -1542,6 +1542,72 @@ export type Database = {
         }
         Relationships: []
       }
+      retention_runs: {
+        Row: {
+          analyses_deleted: number
+          cohort_members_deleted: number
+          created_at: string
+          cutoff: string
+          details: Json
+          embeddings_deleted: number
+          error: string | null
+          finished_at: string | null
+          id: string
+          identifiers_deleted: number
+          kind: string
+          queue_rows_deleted: number
+          retention_days: number
+          sources_deleted: number
+          started_at: string
+          status: string
+          subjects_matched: number
+          tags_deleted: number
+          updated_at: string
+        }
+        Insert: {
+          analyses_deleted?: number
+          cohort_members_deleted?: number
+          created_at?: string
+          cutoff: string
+          details?: Json
+          embeddings_deleted?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          identifiers_deleted?: number
+          kind?: string
+          queue_rows_deleted?: number
+          retention_days?: number
+          sources_deleted?: number
+          started_at?: string
+          status?: string
+          subjects_matched?: number
+          tags_deleted?: number
+          updated_at?: string
+        }
+        Update: {
+          analyses_deleted?: number
+          cohort_members_deleted?: number
+          created_at?: string
+          cutoff?: string
+          details?: Json
+          embeddings_deleted?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          identifiers_deleted?: number
+          kind?: string
+          queue_rows_deleted?: number
+          retention_days?: number
+          sources_deleted?: number
+          started_at?: string
+          status?: string
+          subjects_matched?: number
+          tags_deleted?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       semantic_call_log: {
         Row: {
           action: string
@@ -1924,6 +1990,7 @@ export type Database = {
           id: string
           label: string
           parent_code: string | null
+          suppressed: boolean
           taxonomy_version: string
           updated_at: string
         }
@@ -1937,6 +2004,7 @@ export type Database = {
           id?: string
           label: string
           parent_code?: string | null
+          suppressed?: boolean
           taxonomy_version?: string
           updated_at?: string
         }
@@ -1950,6 +2018,7 @@ export type Database = {
           id?: string
           label?: string
           parent_code?: string | null
+          suppressed?: boolean
           taxonomy_version?: string
           updated_at?: string
         }
@@ -2199,6 +2268,8 @@ export type Database = {
         }[]
       }
       require_admin: { Args: never; Returns: undefined }
+      run_intuizi_retention: { Args: { p_days?: number }; Returns: Json }
+      scan_intuizi_custody: { Args: never; Returns: Json }
       touch_audio_profile_embedding: {
         Args: { p_cache_key: string; p_model: string }
         Returns: undefined

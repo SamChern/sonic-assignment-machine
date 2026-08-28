@@ -19,7 +19,7 @@ const LEGACY: Record<string, number> = {
   "src/pages/SemanticAnalysis.tsx": 1216,
   "src/components/admin/IntuiziConsolePanel.tsx": 1131,
   "src/components/PostIngestionWizard.tsx": 1098,
-  "src/components/AggregateNetworkVisualization.tsx": 987,
+  "src/components/AggregateNetworkVisualization.tsx": 887,
   "src/components/SpeechNormalizationPanel.tsx": 815,
   "src/pages/IngestionCompatibility.tsx": 809,
   "src/components/enterprise/CategoryProfileEditor.tsx": 779,

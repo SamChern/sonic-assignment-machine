@@ -216,6 +216,28 @@ export function applyDecision(
   return base;
 }
 
+/**
+ * Picks the proposals an auto-approval pass should accept: the best-scoring
+ * match at or above `threshold`, skipping anything a human already rejected and
+ * anything already approved. Returns an empty list when nothing qualifies, so a
+ * node with only weak proposals stays in the manual review queue.
+ */
+export function autoApproveTargets(
+  crosswalk: unknown,
+  threshold: number,
+  maxPerNode = 1,
+): string[] {
+  const matches = readCrosswalk(crosswalk)?.matches ?? [];
+  if (matches.some((m) => m.approved)) return [];
+  return matches
+    .filter((m) => !m.rejected && Number(m.similarity) >= threshold)
+    .sort((a, b) => Number(b.similarity) - Number(a.similarity))
+    .slice(0, Math.max(1, maxPerNode))
+    .map((m) => m.code);
+}
+
+
+
 /** Text handed to CLAP for an AudioSet node (mirrors semantic-backfill wording). */
 export function audiosetText(node: { label: string; description?: string | null }): string {
   const label = (node.label ?? "").trim();

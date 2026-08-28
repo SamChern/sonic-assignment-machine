@@ -1375,16 +1375,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Roster-only deliveries carry device identifiers but no taxonomy content,
-    // so nothing can be scored until a companion report arrives. Report it
-    // explicitly instead of letting it look like a silent success.
-    const rosterOnly = summary.roster_identifiers > 0 && summary.identifiers_scored === 0;
-    if (rosterOnly) {
-      summary.errors.push(
-        "roster-only delivery: identifiers were registered but no taxonomy columns were present, so no semantic scores were produced. Ingest the matching CTV/apps/visitation/demographics/origin report for this activation.",
-      );
+    // Queue depth, so the caller sees how much work is still in flight after a
+    // dispatch-only run (this run's own handoffs are part of it).
+    try {
+      const attrs = await queueAttributes();
+      (summary as Json).queue = attrs;
+    } catch (e) {
+      (summary as Json).queue = { error: errMsg(e).slice(0, 300) };
     }
-    (summary as Json).roster_only = rosterOnly;
 
     if (summary.time_budget_exhausted || summary.files_failed || breakerTripped) {
       summary.complete = false;
@@ -1398,7 +1396,7 @@ Deno.serve(async (req) => {
       at: new Date().toISOString(),
       budget_ms: budgetMs,
       elapsed_ms: summary.elapsed_ms,
-      timed_out: summary.time_budget_exhausted || summary.deadline_exceeded,
+      timed_out: summary.time_budget_exhausted,
       resource_kill: Boolean(body.after_resource_limit) || summary.memory_pressure,
       mem_peak_mb: summary.mem_peak_mb ?? undefined,
       rows_cap: caps.rows,

@@ -113,12 +113,51 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Step 11 — capture click identifiers and campaign params alongside the hit
+    // so KPI joins never depend on platform reporting.
+    const pageUrl = trim(body.page_url ?? body.url, 1000);
+    const fromUrl = (name: string): string | null => {
+      if (!pageUrl) return null;
+      try {
+        return trim(new URL(pageUrl).searchParams.get(name), 400);
+      } catch {
+        return null;
+      }
+    };
+    const param = (snake: string, short: string) =>
+      trim((body as Record<string, unknown>)[snake] ?? (body as Record<string, unknown>)[short], 400) ??
+      fromUrl(snake);
+
+    const gclid = param("gclid", "gid");
+    const utm = {
+      utm_source: param("utm_source", "us"),
+      utm_medium: param("utm_medium", "um"),
+      utm_campaign: param("utm_campaign", "uc"),
+      utm_term: param("utm_term", "ut"),
+      utm_content: param("utm_content", "uo"),
+    };
+
+    let consent: Record<string, unknown> = {};
+    const rawConsent = body.consent ?? body.c;
+    if (rawConsent) {
+      try {
+        consent = typeof rawConsent === "string"
+          ? JSON.parse(rawConsent)
+          : (rawConsent as Record<string, unknown>);
+      } catch {
+        consent = {};
+      }
+    }
+
     const { error } = await admin.from("pixel_events").insert({
+      gclid,
+      ...utm,
+      consent,
       organization_id: tag.organization_id,
       tag_id: tagId,
       event_name: trim(body.event_name ?? body.e, 80) ?? "page_view",
       external_user_id: trim(body.external_user_id ?? body.u, 200),
-      page_url: trim(body.page_url ?? body.url, 1000),
+      page_url: pageUrl,
       referrer: trim(body.referrer ?? body.r, 1000),
       kpi_metric: kpiMetric,
       kpi_value: kpiValue,

@@ -14,6 +14,13 @@ const toastMock = vi.hoisted(() => ({
   info: vi.fn(),
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
+// `Ec2StatusPanel` embeds the semantic-service card, which runs its own health
+// probes and renders its own "Checking…"/Refresh affordances. These tests cover
+// the EC2 card only, so the nested panel is stubbed out.
+vi.mock("@/components/admin/SemanticServicePanel", () => ({
+  default: () => null,
+}));
+
 
 import { Ec2StatusPanel } from "@/components/admin/Ec2StatusPanel";
 

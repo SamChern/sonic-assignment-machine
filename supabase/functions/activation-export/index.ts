@@ -53,8 +53,8 @@ Deno.serve(async (req) => {
   try {
     let actorId: string | null = null;
     try {
-      const ctx = await requireAdmin(req, admin);
-      actorId = (ctx as { userId?: string } | undefined)?.userId ?? null;
+      const caller = await requireAdmin(req, admin);
+      actorId = caller.userId;
     } catch (e) {
       if (e instanceof AuthzError) return json({ success: false, error: e.message }, e.status);
       throw e;

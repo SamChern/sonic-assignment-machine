@@ -174,3 +174,134 @@ export async function clapEmbedAudio(
     return null;
   }
 }
+
+/**
+ * Batched text embeddings (up to 256 per call, the service's cap). Returns one
+ * entry per input, `null` where the service returned an unusable vector, and
+ * `null` for the whole array when the call itself failed.
+ */
+export async function clapEmbedTexts(
+  cfg: SemanticSvcConfig,
+  texts: string[],
+  /** Keep CLAP's native 512-d output (for vector(512) columns) instead of projecting. */
+  raw = false,
+): Promise<(number[] | null)[] | null> {
+
+  if (semanticSvcBreakerOpen()) return null;
+  if (texts.length === 0) return [];
+  try {
+    const r = await post(cfg, "/embed_text", { texts }, TIMEOUT_MS);
+    if (!r.ok) throw new Error(`semantic-svc ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const j = await r.json();
+    const rows = j?.vectors;
+    if (!Array.isArray(rows) || rows.length !== texts.length) {
+      throw new Error(`unexpected batch shape ${Array.isArray(rows) ? rows.length : "none"}`);
+    }
+    failures = 0;
+    return rows.map((v: unknown) =>
+      Array.isArray(v) && v.length === TEXT_DIM
+        ? (raw ? (v as number[]) : projectTo1536(v as number[]))
+        : null
+    );
+
+  } catch (e) {
+    noteFailure(e);
+    return null;
+  }
+}
+
+/**
+ * Project 512-d vectors to 1536-d through the service's /bridge endpoint.
+ * Used when a trained bridge (`bridge_id`) should be applied instead of the
+ * local identity tiling.
+ */
+export async function clapBridge(
+  cfg: SemanticSvcConfig,
+  vectors: number[][],
+  bridgeId?: string | null,
+  weightsUrl?: string | null,
+): Promise<{ vectors: number[][]; mode: string } | null> {
+  if (semanticSvcBreakerOpen()) return null;
+  try {
+    const r = await post(
+      cfg,
+      "/bridge",
+      { vectors, bridge_id: bridgeId ?? null, weights_url: weightsUrl ?? null },
+      TIMEOUT_MS,
+    );
+    if (!r.ok) throw new Error(`semantic-svc ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const j = await r.json();
+    const rows = j?.vectors;
+    if (!Array.isArray(rows) || rows.length !== vectors.length) {
+      throw new Error("unexpected bridge response shape");
+    }
+    failures = 0;
+    return { vectors: rows as number[][], mode: String(j?.mode ?? "unknown") };
+  } catch (e) {
+    noteFailure(e);
+    return null;
+  }
+}
+
+/** GET /healthz on the configured service. */
+export async function semanticSvcHealth(
+  cfg: SemanticSvcConfig,
+): Promise<{ ok: boolean; status: number; body: unknown; duration_ms: number; error?: string }> {
+  const started = Date.now();
+  try {
+    const r = await fetch(`${cfg.url}/healthz`, {
+      headers: { Authorization: `Bearer ${cfg.token}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    const text = await r.text();
+    let body: unknown = null;
+    try { body = JSON.parse(text); } catch { body = text.slice(0, 300); }
+    return {
+      ok: r.ok && (body as { ok?: boolean })?.ok === true,
+      status: r.status,
+      body,
+      duration_ms: Date.now() - started,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      status: 0,
+      body: null,
+      duration_ms: Date.now() - started,
+      error: e instanceof Error ? e.message : "network error",
+    };
+  }
+}
+
+/** Fire-and-forget row in public.semantic_call_log. Never throws. */
+export async function logSemanticCall(
+  // deno-lint-disable-next-line no-explicit-any
+  supabase: any | null,
+  entry: {
+    action: string;
+    outcome: "ok" | "error" | "skipped";
+    cache_hit?: boolean;
+    duration_ms?: number | null;
+    http_status?: number | null;
+    dims?: number | null;
+    subject_ref?: string | null;
+    error_message?: string | null;
+  },
+): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from("semantic_call_log").insert({
+      action: entry.action,
+      outcome: entry.outcome,
+      cache_hit: entry.cache_hit ?? false,
+      duration_ms: entry.duration_ms ?? null,
+      http_status: entry.http_status ?? null,
+      dims: entry.dims ?? null,
+      subject_ref: entry.subject_ref ?? null,
+      error_message: entry.error_message ?? null,
+    });
+  } catch (e) {
+    console.warn("semantic_call_log write failed:", e instanceof Error ? e.message : e);
+  }
+}
+

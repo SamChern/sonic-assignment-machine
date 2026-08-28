@@ -22,8 +22,11 @@ import {
   Network,
   Image as ImageIcon,
   Accessibility,
+  Waves,
 } from "lucide-react";
 import Audioscope, { type AudioscopeMode } from "./Audioscope";
+import SemanticScope, { type ScopeLens } from "./SemanticScope";
+import type { SilhouetteTag } from "@/lib/audioscope/silhouette";
 import {
   PANE_ANCHOR_ATTR,
   SHORTCUT_HINT,
@@ -50,6 +53,8 @@ export interface SonicSimSubject {
   /** Playable audio (upload blob URL or provider preview) — enables the real-audio scope. */
   audioUrl?: string | null;
   features?: AudioscopeFeatureHints | null;
+  /** Tag mix for zero-audio (Intuizi) subjects — drives the silhouette trace. */
+  tags?: SilhouetteTag[] | null;
 }
 
 interface SonicSimPanelProps {
@@ -58,12 +63,21 @@ interface SonicSimPanelProps {
   onSubjectChange?: (subject: SonicSimSubject | null) => void;
   title?: string;
   description?: string;
-  defaultMode?: AudioscopeMode;
+  defaultMode?: PanelMode;
   height?: number;
+  /**
+   * Role lens for the Semantic Scope: consumers get the playful instrument,
+   * enterprise the silhouette compare, admins the kNN/prior debug readout.
+   */
+  lens?: ScopeLens;
 }
 
-const MODES: { key: AudioscopeMode; label: string; icon: typeof Activity }[] = [
+/** The panel adds the three-lens Semantic Scope on top of the canvas modes. */
+export type PanelMode = AudioscopeMode | "semantic";
+
+const MODES: { key: PanelMode; label: string; icon: typeof Activity }[] = [
   { key: "scope", label: "Scope", icon: Activity },
+  { key: "semantic", label: "Semantic scope", icon: Waves },
   { key: "radial", label: "Identity ring", icon: Radar },
   { key: "nodes", label: "Node pulse", icon: Network },
 ];
@@ -92,9 +106,10 @@ export const SonicSimPanel = ({
   description = "Play your sonic fingerprint, or any single semantic analysis, as a live audioscope.",
   defaultMode = "radial",
   height = 340,
+  lens = "consumer",
 }: SonicSimPanelProps) => {
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id ?? "");
-  const [mode, setMode] = useState<AudioscopeMode>(defaultMode);
+  const [mode, setMode] = useState<PanelMode>(defaultMode);
   const [playing, setPlaying] = useState(() => !initialStatic(MOTION_PREF_KEY));
   const [speed, setSpeed] = useState(0.25);
   // Stored choice wins; otherwise reduced-motion users get the still frame by default.
@@ -422,19 +437,37 @@ export const SonicSimPanel = ({
 
 
       <div ref={wrapRef} className="bg-background/40 px-4 pb-4">
-        <Audioscope
-          key={`${subject.id}-${mode}-${replayKey}`}
-          scores={subject.scores}
-          seed={subject.id}
-          features={subject.features ?? null}
-          mode={mode}
-          playing={playing && !isStatic}
-          speed={speed}
-          staticFrame={isStatic ? STATIC_FRAME_T : null}
-          mediaEl={liveEl}
-          height={fullscreen ? Math.max(420, Math.round(window.innerHeight * 0.7)) : height}
-          caption={subject.sublabel ?? subject.label}
-        />
+        {mode === "semantic" ? (
+          <SemanticScope
+            key={`${subject.id}-semantic-${replayKey}`}
+            scores={subject.scores}
+            seed={subject.id}
+            features={subject.features ?? null}
+            mediaEl={liveEl}
+            tags={subject.tags ?? null}
+            playing={playing && !isStatic}
+            speed={speed}
+            staticFrame={isStatic ? STATIC_FRAME_T : null}
+            height={fullscreen ? Math.max(360, Math.round(window.innerHeight * 0.5)) : height}
+            lens={lens}
+            caption={subject.sublabel ?? subject.label}
+            subjectRef={subject.id}
+          />
+        ) : (
+          <Audioscope
+            key={`${subject.id}-${mode}-${replayKey}`}
+            scores={subject.scores}
+            seed={subject.id}
+            features={subject.features ?? null}
+            mode={mode as AudioscopeMode}
+            playing={playing && !isStatic}
+            speed={speed}
+            staticFrame={isStatic ? STATIC_FRAME_T : null}
+            mediaEl={liveEl}
+            height={fullscreen ? Math.max(420, Math.round(window.innerHeight * 0.7)) : height}
+            caption={subject.sublabel ?? subject.label}
+          />
+        )}
 
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
           {AUDIOSCOPE_CATEGORIES.map((c) => (

@@ -1265,6 +1265,7 @@ const AdminDashboard = () => {
 
           <TabsContent value="sonicsim" className="space-y-6">
             <SonicSimPanel
+              lens="debug"
               title={entityMode === "signal" ? "See this cohort's SonicSIM" : "See my SonicSIM"}
               description="Animated audioscope of any fingerprint in the current scope — switch subjects to compare identity rings and node pulses."
               subjects={scopedFingerprints.map((fp: any) => ({

@@ -30,6 +30,18 @@ interface AudioscopeProps {
   className?: string;
   /** Corner caption drawn inside the canvas. */
   caption?: string;
+  /**
+   * Externally-owned signal provider. When supplied, the scope renders it
+   * instead of building its own — this is how the Semantic Scope keeps the
+   * time, frequency and meaning lenses on one shared signal.
+   */
+  signal?: AudioscopeSignal | null;
+  /**
+   * Called once per painted frame with the buffers the scope just drew, so
+   * sibling lenses can consume the same samples without a second analyser.
+   * Must stay cheap: it runs inside the animation loop.
+   */
+  onFrame?: (t: number, wave: Float32Array, spectrum: Float32Array) => void;
 }
 
 function readVar(name: string, fallback: string): string {
@@ -50,10 +62,15 @@ export const Audioscope = ({
   height = 320,
   className,
   caption,
+  signal: externalSignal = null,
+  onFrame,
 }: AudioscopeProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const signalRef = useRef<AudioscopeSignal | null>(null);
+  const ownsSignalRef = useRef(false);
+  const onFrameRef = useRef(onFrame);
+  onFrameRef.current = onFrame;
   const visibleRef = useRef(true);
   const startRef = useRef<number>(0);
   const elapsedRef = useRef<number>(0);
@@ -71,7 +88,13 @@ export const Audioscope = ({
 
   // Build (or rebuild) the signal provider.
   useEffect(() => {
-    signalRef.current?.dispose();
+    if (ownsSignalRef.current) signalRef.current?.dispose();
+    // A caller-owned signal is never disposed here — its owner does that.
+    if (externalSignal) {
+      signalRef.current = externalSignal;
+      ownsSignalRef.current = false;
+      return;
+    }
     let signal: AudioscopeSignal | null = null;
     if (mediaEl) {
       try {
@@ -82,11 +105,13 @@ export const Audioscope = ({
     }
     // Falls back to the synthesized scope so the view never renders empty.
     signalRef.current = signal ?? createSyntheticSignal({ scores, seed, features });
+    ownsSignalRef.current = true;
     return () => {
-      signalRef.current?.dispose();
+      if (ownsSignalRef.current) signalRef.current?.dispose();
       signalRef.current = null;
+      ownsSignalRef.current = false;
     };
-  }, [mediaEl, scores, seed, features]);
+  }, [externalSignal, mediaEl, scores, seed, features]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -317,6 +342,15 @@ export const Audioscope = ({
         if (mode === "radial") drawRadial(w, h, t);
         else if (mode === "nodes") drawNodes(w, h, t);
         else drawScope(w, h, t);
+        // Hand the freshly filled buffers to sibling lenses (frequency strip,
+        // Meyda features) so they stay frame-accurate with the trace.
+        if (onFrameRef.current) {
+          if (mode !== "scope") {
+            signalRef.current.waveform(wave, t);
+            signalRef.current.spectrum(spec, t);
+          }
+          onFrameRef.current(t, wave, spec);
+        }
       }
       if (caption) {
         ctx.globalAlpha = 0.75;
@@ -364,7 +398,7 @@ export const Audioscope = ({
       window.removeEventListener("resize", resize);
       io.disconnect();
     };
-  }, [mode, playing, speed, staticFrame, reduced, isMobile, height, caption, scores]);
+  }, [mode, playing, speed, staticFrame, reduced, isMobile, height, caption, scores, externalSignal]);
 
   return (
     <canvas

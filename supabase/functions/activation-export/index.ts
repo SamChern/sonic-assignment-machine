@@ -102,24 +102,32 @@ Deno.serve(async (req) => {
     }
 
     // ---- collect + normalize EIDs (never logged, never returned) ------------
+    // Members flagged `holdout` (Step 11c) are withheld from the file so pixel
+    // events split into exposed vs. holdout and activation-lift can report lift.
     const eids = new Set<string>();
     let skipped = 0;
+    let heldOut = 0;
     for (let offset = 0; ; offset += PAGE) {
       const { data, error } = await admin
         .from("sonic_cohort_members")
-        .select("subject_key")
+        .select("subject_key, holdout")
         .eq("cohort_id", c.id)
         .order("subject_key", { ascending: true })
         .range(offset, offset + PAGE - 1);
       if (error) throw new Error(`member read failed: ${error.message}`);
-      const rows = (data ?? []) as { subject_key: string }[];
+      const rows = (data ?? []) as { subject_key: string; holdout: boolean }[];
       for (const r of rows) {
+        if (r.holdout) {
+          heldOut++;
+          continue;
+        }
         const eid = await toActivationEid(r.subject_key);
         if (eid && isActivationEid(eid)) eids.add(eid);
         else skipped++;
       }
       if (rows.length < PAGE) break;
     }
+
 
     if (eids.size < MIN_MEMBERS) {
       return json({
@@ -138,6 +146,7 @@ Deno.serve(async (req) => {
         dry_run: true,
         cohort: { slug: c.slug, name: c.name, member_count: c.member_count },
         row_count: eids.size,
+        holdout: heldOut,
         skipped,
         object_key: objectKey,
         elapsed_ms: Date.now() - startedAt,
@@ -191,6 +200,7 @@ Deno.serve(async (req) => {
       object_key: objectKey,
       dt,
       row_count: eids.size,
+      holdout: heldOut,
       bytes: payload.byteLength,
       skipped,
       elapsed_ms: Date.now() - startedAt,

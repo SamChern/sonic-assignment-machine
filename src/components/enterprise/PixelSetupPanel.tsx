@@ -146,9 +146,14 @@ const PixelSetupPanel = ({
         <Skeleton className="h-32 w-full" />
       ) : (
         tags.map((t) => {
-          const snippet = `<script src="${window.location.origin}/ss-pixel.js" data-tag="${t.tag_id}"></script>
+          const snippet = `<script>
+  // Optional: pass your CMP decision through with every hit.
+  window.ssConsent = { ad_storage: 'denied', analytics_storage: 'denied' };
+</script>
+<script src="${window.location.origin}/ss-pixel.js" data-tag="${t.tag_id}"></script>
 <script>
-  // fire when the KPI moment happens
+  // fire when the KPI moment happens — gclid and utm_* are read from the URL
+  // automatically, so KPI joins never depend on platform reporting.
   ssq('event', 'video_complete', {
     kpi_metric: 'vcr',
     kpi_value: 1,

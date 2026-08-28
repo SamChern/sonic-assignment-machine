@@ -15,7 +15,18 @@
   function send(eventName, opts) {
     if (!tag) return;
     opts = opts || {};
+    var q = new URLSearchParams(location.search);
+    var p = function (name) {
+      return (opts[name] || q.get(name)) || null;
+    };
     var payload = {
+      gclid: p("gclid"),
+      utm_source: p("utm_source"),
+      utm_medium: p("utm_medium"),
+      utm_campaign: p("utm_campaign"),
+      utm_term: p("utm_term"),
+      utm_content: p("utm_content"),
+      consent: opts.consent || (window.ssConsent || null),
       tag_id: tag,
       event_name: eventName || "page_view",
       external_user_id: opts.external_user_id || null,

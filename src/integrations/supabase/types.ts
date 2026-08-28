@@ -284,6 +284,59 @@ export type Database = {
           },
         ]
       }
+      category_outcome_priors: {
+        Row: {
+          category: string
+          ci_high: number | null
+          ci_low: number | null
+          cohort_slug: string | null
+          created_at: string
+          exposed_n: number
+          holdout_n: number
+          id: string
+          kpi: string
+          lift: number
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          ci_high?: number | null
+          ci_low?: number | null
+          cohort_slug?: string | null
+          created_at?: string
+          exposed_n?: number
+          holdout_n?: number
+          id?: string
+          kpi: string
+          lift?: number
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          ci_high?: number | null
+          ci_low?: number | null
+          cohort_slug?: string | null
+          created_at?: string
+          exposed_n?: number
+          holdout_n?: number
+          id?: string
+          kpi?: string
+          lift?: number
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "category_outcome_priors_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       control_audit: {
         Row: {
           changed_at: string
@@ -1424,9 +1477,11 @@ export type Database = {
       }
       pixel_events: {
         Row: {
+          consent: Json
           created_at: string
           event_name: string
           external_user_id: string | null
+          gclid: string | null
           id: string
           kpi_metric: string | null
           kpi_value: number | null
@@ -1436,11 +1491,18 @@ export type Database = {
           props: Json
           referrer: string | null
           tag_id: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
         }
         Insert: {
+          consent?: Json
           created_at?: string
           event_name: string
           external_user_id?: string | null
+          gclid?: string | null
           id?: string
           kpi_metric?: string | null
           kpi_value?: number | null
@@ -1450,11 +1512,18 @@ export type Database = {
           props?: Json
           referrer?: string | null
           tag_id: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
         }
         Update: {
+          consent?: Json
           created_at?: string
           event_name?: string
           external_user_id?: string | null
+          gclid?: string | null
           id?: string
           kpi_metric?: string | null
           kpi_value?: number | null
@@ -1464,6 +1533,11 @@ export type Database = {
           props?: Json
           referrer?: string | null
           tag_id?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
         }
         Relationships: [
           {
@@ -1822,18 +1896,21 @@ export type Database = {
         Row: {
           added_at: string
           cohort_id: string
+          holdout: boolean
           similarity: number | null
           subject_key: string
         }
         Insert: {
           added_at?: string
           cohort_id: string
+          holdout?: boolean
           similarity?: number | null
           subject_key: string
         }
         Update: {
           added_at?: string
           cohort_id?: string
+          holdout?: boolean
           similarity?: number | null
           subject_key?: string
         }
@@ -2291,6 +2368,19 @@ export type Database = {
       }
       match_audioset_nodes: {
         Args: { match_count?: number; query_embedding: string }
+        Returns: {
+          code: string
+          id: string
+          label: string
+          similarity: number
+        }[]
+      }
+      match_taxonomy_nodes: {
+        Args: {
+          code_prefix?: string
+          match_count?: number
+          query_embedding: string
+        }
         Returns: {
           code: string
           id: string

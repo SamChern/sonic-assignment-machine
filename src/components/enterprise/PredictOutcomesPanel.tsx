@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,18 @@ interface OutcomeResult {
   top_predicted: { record_id: string; label: string; predicted: number; actual: number | null }[];
 }
 
+interface LiftReport {
+  exposed_events: number;
+  holdout_events: number;
+  exposed_mean: number;
+  holdout_mean: number;
+  absolute_lift: number;
+  relative_lift: number | null;
+  measurable: boolean;
+  priors_written: number;
+  note?: string;
+}
+
 interface DatasetOption {
   id: string;
   name: string;
@@ -85,6 +98,11 @@ const PredictOutcomesPanel = ({
   const [result, setResult] = useState<OutcomeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [gate, setGate] = useState<{ matched_rows: number; min_rows: number } | null>(null);
+  const [cohortSlugs, setCohortSlugs] = useState<{ slug: string; name: string }[]>([]);
+  const [liftSlug, setLiftSlug] = useState<string>("");
+  const [liftRunning, setLiftRunning] = useState(false);
+  const [lift, setLift] = useState<LiftReport | null>(null);
+  const [liftError, setLiftError] = useState<string | null>(null);
   /** Counterfactual deltas, in points, per category. */
   const [deltas, setDeltas] = useState<Record<CategoryName, number>>(
     Object.fromEntries(CATEGORIES.map((c) => [c, 0])) as Record<CategoryName, number>,
@@ -123,6 +141,43 @@ const PredictOutcomesPanel = ({
       setRunning(false);
     }
   }, [organizationId, kpi, kpiSource, datasetId]);
+
+  // Enterprise members read cohorts as aggregates only — never member keys.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase.rpc("org_cohort_aggregates", { _org: organizationId });
+      if (cancelled) return;
+      const rows = (data ?? []) as { slug: string; name: string }[];
+      setCohortSlugs(rows);
+      setLiftSlug((prev) => prev || rows[0]?.slug || "");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId]);
+
+  const measureLift = useCallback(async () => {
+    setLiftRunning(true);
+    setLiftError(null);
+    setLift(null);
+    try {
+      const { data, error: fnErr } = await supabase.functions.invoke("activation-lift", {
+        body: { organization_id: organizationId, cohort_slug: liftSlug, kpi },
+      });
+      if (fnErr && !data) throw new Error(fnErr.message);
+      if (!data?.success) throw new Error(data?.error ?? fnErr?.message ?? "Lift not available");
+      setLift(data as LiftReport);
+      toast({
+        title: "Lift measured",
+        description: `${data.exposed_events} exposed vs. ${data.holdout_events} holdout events.`,
+      });
+    } catch (e) {
+      setLiftError((e as Error).message);
+    } finally {
+      setLiftRunning(false);
+    }
+  }, [organizationId, liftSlug, kpi]);
 
   /** Predicted KPI at the counterfactual point, plus the supported interval. */
   const counterfactual = useMemo(() => {
@@ -389,6 +444,66 @@ const PredictOutcomesPanel = ({
             </div>
           </Card>
         </>
+      )}
+      {cohortSlugs.length > 0 && (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">Measure activation lift</h3>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Each activation file withholds about a tenth of the cohort. Comparing tag events from
+            the exposed and withheld groups gives lift rather than correlation, and the result is
+            written back into your calibration.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Select value={liftSlug} onValueChange={setLiftSlug}>
+              <SelectTrigger className="w-[240px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {cohortSlugs.map((c) => (
+                  <SelectItem key={c.slug} value={c.slug}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={measureLift} disabled={liftRunning || !liftSlug}>
+              {liftRunning ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="mr-1 h-4 w-4" />
+              )}
+              Measure lift
+            </Button>
+          </div>
+          {liftError && (
+            <p className="mt-3 flex items-start gap-1 text-[11px] text-destructive">
+              <AlertTriangle className="mt-[2px] h-3 w-3 shrink-0" />
+              {liftError}
+            </p>
+          )}
+          {lift && (
+            <div className="mt-3 space-y-1 text-xs">
+              <p>
+                Exposed {lift.exposed_mean.toFixed(4)} ({lift.exposed_events} events) vs. holdout{" "}
+                {lift.holdout_mean.toFixed(4)} ({lift.holdout_events} events)
+              </p>
+              <p className={lift.absolute_lift >= 0 ? "text-primary" : "text-destructive"}>
+                Lift {lift.absolute_lift >= 0 ? "+" : ""}
+                {lift.absolute_lift.toFixed(4)}
+                {lift.relative_lift !== null && ` (${(lift.relative_lift * 100).toFixed(1)}%)`}
+              </p>
+              {lift.note && <p className="text-[11px] text-muted-foreground">{lift.note}</p>}
+              {lift.priors_written > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  {lift.priors_written} per-axis priors written back to calibration.
+                </p>
+              )}
+            </div>
+          )}
+        </Card>
       )}
     </div>
   );

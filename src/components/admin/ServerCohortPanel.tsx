@@ -107,8 +107,20 @@ export function ServerCohortPanel() {
         body: { cohort_slug: slug },
       });
       if (error) throw error;
-      const res = data as { success?: boolean; error?: string; row_count?: number };
-      if (res?.success) toast.success(`Activation file written — ${res.row_count?.toLocaleString()} EIDs`);
+      const res = data as {
+        success?: boolean;
+        error?: string;
+        row_count?: number;
+        holdout?: number;
+      };
+      if (res?.success) {
+        toast.success(
+          `Activation file written — ${res.row_count?.toLocaleString()} EIDs` +
+            (res.holdout
+              ? ` · ${res.holdout.toLocaleString()} withheld as holdout for lift measurement`
+              : ""),
+        );
+      }
       else toast.error(res?.error ?? "Export failed");
       await load();
     } catch (e) {

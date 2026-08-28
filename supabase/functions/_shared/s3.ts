@@ -56,7 +56,14 @@ interface S3Driver {
   listObjects(prefix: string, maxKeys: number): Promise<S3Object[]>;
   signReadUrl(objectKey: string): Promise<string>;
   headObject(objectKey: string): Promise<S3ObjectHead>;
+  putObject(objectKey: string, body: Uint8Array, opts?: PutObjectOptions): Promise<void>;
 }
+
+export interface PutObjectOptions {
+  contentType?: string;
+  contentEncoding?: string;
+}
+
 
 // ---------------------------------------------------------------------------
 // Backend 1: Lovable connector gateway (temporary path)

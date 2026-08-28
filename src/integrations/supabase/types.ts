@@ -1542,6 +1542,48 @@ export type Database = {
         }
         Relationships: []
       }
+      semantic_call_log: {
+        Row: {
+          action: string
+          cache_hit: boolean
+          created_at: string
+          dims: number | null
+          duration_ms: number | null
+          error_message: string | null
+          http_status: number | null
+          id: string
+          outcome: string
+          service: string
+          subject_ref: string | null
+        }
+        Insert: {
+          action: string
+          cache_hit?: boolean
+          created_at?: string
+          dims?: number | null
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          outcome: string
+          service?: string
+          subject_ref?: string | null
+        }
+        Update: {
+          action?: string
+          cache_hit?: boolean
+          created_at?: string
+          dims?: number | null
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          outcome?: string
+          service?: string
+          subject_ref?: string | null
+        }
+        Relationships: []
+      }
       semantic_normalization: {
         Row: {
           created_at: string

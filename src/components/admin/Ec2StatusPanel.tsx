@@ -8,6 +8,8 @@ import { useEC2Api } from "@/hooks/useEC2Api";
 import { EC2_ENDPOINTS } from "@/config/ec2";
 import { Activity, CheckCircle2, Plug, RefreshCw, Server, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import SemanticServicePanel from "./SemanticServicePanel";
+
 
 interface HealthCheck {
   at: string;
@@ -157,6 +159,10 @@ export const Ec2StatusPanel = () => {
           ))}
         </dl>
       </Card>
+
+      <SemanticServicePanel />
+
+
 
       <Card className="border-border/60 bg-card/70 p-4 backdrop-blur-sm">
         <div className="mb-3 flex items-center gap-2">

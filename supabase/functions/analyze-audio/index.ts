@@ -389,12 +389,14 @@ Deno.serve(async (req) => {
       // stops re-analysis from re-prompting the LLM.
       for (const s of uncachedSources) {
         s.feature_hash = await stableHash({
-          v: 1,
+          v: 2,
           evidence: s.evidence ?? 'none',
           acoustic: s.acoustic_profile ?? null,
           taxonomy: s.taxonomy_context ?? null,
+          exemplars: (s.context_neighbors ?? []).map(n => `${n.id}:${n.similarity}`),
         });
       }
+
 
       let toAnalyze = uncachedSources;
       if (supabaseAdmin) {

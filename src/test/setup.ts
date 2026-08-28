@@ -13,3 +13,14 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => {},
   }),
 });
+
+// Radix sliders/switches measure their thumb via ResizeObserver, which jsdom
+// does not implement.
+if (!("ResizeObserver" in globalThis)) {
+  class RO {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = RO;
+}

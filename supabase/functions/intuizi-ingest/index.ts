@@ -1021,17 +1021,15 @@ Deno.serve(async (req) => {
 
   const summary = {
     trace_id: runTraceId,
+    /** Control-plane mode marker, so the UI can label the run correctly. */
+    mode: "dispatch" as const,
+    /** Report files handed to the EC2 worker this run. */
+    files_dispatched: 0,
+    /** Audio objects analysed inline (that path never left the edge). */
     files_processed: 0,
     files_failed: 0,
-    identifiers_scored: 0,
-    /** Identifiers handed to the background scoring worker this run. */
-    identifiers_queued: 0,
-
-    roster_identifiers: 0,
     audio_files_scored: 0,
 
-
-    rows_read: 0,
     probe_only: probeOnly,
     paused: false,
     pause_reason: null as string | null,
@@ -1044,14 +1042,10 @@ Deno.serve(async (req) => {
     budget_reason: tuned.reason,
     /** Ms left in the budget when the run returned. */
     time_remaining_ms: budgetMs,
-    /** True when a single Parquet read had to abort at the deadline. */
-    deadline_exceeded: false,
-    /** Which step ran out of budget, when one did. */
-    deadline_step: null as string | null,
     /** Wall-clock duration of this run (ms). */
     elapsed_ms: 0,
     /** Per-step duration breakdown (ms). */
-    phase_ms: { discover: 0, sign: 0, read: 0, normalize: 0, score: 0, persist: 0 },
+    phase_ms: { discover: 0, dispatch: 0, persist: 0, audio: 0 },
     /** Per-step CPU-time proxy + heap growth, to attribute a compute kill. */
     phase_usage: {} as Record<string, unknown>,
     /** Caps this run used, and why they were reduced. */

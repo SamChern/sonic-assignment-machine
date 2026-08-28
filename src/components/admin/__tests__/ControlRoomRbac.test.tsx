@@ -58,11 +58,10 @@ const H = vi.hoisted(() => {
       if (table === "sonic_cohorts") return [{ slug: "night-drive", member_count: 412 }];
       return [];
     };
-    // Aggregate cohort rows are readable by enterprise roles; member rows never are.
-    const readable =
-      table === "sonic_cohorts"
-        ? state.role === "admin" || state.role === "enterprise_viewer"
-        : isAdmin();
+    // The cohort tables themselves are admin-only. Enterprise roles reach
+    // aggregates through the `org_cohort_aggregates` RPC, which never exposes a
+    // `subject_key`, and member rows are unreachable for every non-service role.
+    const readable = isAdmin();
     const result = () => (readable ? { data: rowsFor(), error: null } : denied());
 
     const chain: Record<string, unknown> = {};
@@ -80,8 +79,28 @@ const H = vi.hoisted(() => {
     return chain;
   };
 
+  const rpc = async (fn: string, _args?: unknown) => {
+    if (fn !== "org_cohort_aggregates") return denied();
+    if (state.role === "admin" || state.role === "enterprise_viewer") {
+      return {
+        data: [
+          {
+            cohort_id: "c1",
+            slug: "night-drive",
+            name: "Night drive",
+            member_count: 412,
+            narrative: "Late-night low-tempo listening",
+          },
+        ],
+        error: null,
+      };
+    }
+    return denied();
+  };
+
   const supabaseMock = {
     from: (table: string) => builder(table),
+    rpc,
     auth: { getSession: async () => ({ data: { session: { user: { id: "u1" } } } }) },
   };
 
@@ -204,9 +223,16 @@ describe.each<[Role, RegExp]>([
 describe("subject_key isolation", () => {
   it("enterprise viewers read cohort aggregates but never member subject keys", async () => {
     state.role = "enterprise_viewer";
-    const agg = await supabaseMock.from("sonic_cohorts").select("*");
+    // Aggregates only, via the org-scoped RPC — no subject_key column exists there.
+    const agg = await supabaseMock.rpc("org_cohort_aggregates", { _org: "org1" });
     expect(agg.error).toBeNull();
-    expect((agg.data as { member_count: number }[])[0].member_count).toBe(412);
+    const rows = agg.data as Record<string, unknown>[];
+    expect(rows[0].member_count).toBe(412);
+    expect(Object.keys(rows[0])).not.toContain("subject_key");
+
+    // The raw cohort table stays admin-only.
+    const raw = await supabaseMock.from("sonic_cohorts").select("*");
+    expect(raw.data).toBeNull();
 
     // `sonic_cohort_members` has no policies at all: nothing is readable.
     const members = await supabaseMock.from("sonic_cohort_members").select("subject_key");
@@ -220,5 +246,7 @@ describe("subject_key isolation", () => {
     expect(members.data).toBeNull();
     const cohorts = await supabaseMock.from("sonic_cohorts").select("*");
     expect(cohorts.data).toBeNull();
+    const agg = await supabaseMock.rpc("org_cohort_aggregates", { _org: "org1" });
+    expect(agg.data).toBeNull();
   });
 });

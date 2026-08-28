@@ -16,6 +16,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from iab_labels import iab_label
+
 REPORT_TYPES = ("ctv", "apps", "visitation", "demographics", "origin")
 
 _PATH_STOP = {

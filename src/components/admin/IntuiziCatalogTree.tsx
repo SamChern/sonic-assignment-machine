@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronRight, Copy, Layers } from "lucide-react";
+import { Check, ChevronRight, Copy, Layers, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,25 @@ import {
   type CatalogNode,
 } from "@/lib/intuiziTaxonomy";
 
-interface RowProps {
+/** One proposed AudioSet mapping awaiting (or holding) an admin decision. */
+export interface CrosswalkProposal {
+  code: string;
+  label: string | null;
+  similarity: number;
+  approved: boolean;
+  rejected?: boolean;
+}
+
+export type CrosswalkDecision = "approve" | "reject" | "clear";
+
+interface CrosswalkProps {
+  /** Proposals keyed by taxonomy code (== CatalogNode.id here). */
+  crosswalk?: Record<string, CrosswalkProposal[]>;
+  onDecide?: (code: string, target: string, decision: CrosswalkDecision) => void;
+  decidingCode?: string | null;
+}
+
+interface RowProps extends CrosswalkProps {
   node: CatalogNode;
   depth: number;
   expanded: Set<string>;
@@ -18,10 +36,87 @@ interface RowProps {
   onPick?: (node: CatalogNode) => void;
 }
 
-const NodeRow = ({ node, depth, expanded, toggle, onPick }: RowProps) => {
+const CrosswalkRows = ({
+  code,
+  proposals,
+  depth,
+  onDecide,
+  busy,
+}: {
+  code: string;
+  proposals: CrosswalkProposal[];
+  depth: number;
+  onDecide?: (code: string, target: string, decision: CrosswalkDecision) => void;
+  busy: boolean;
+}) => (
+  <div className="space-y-1" style={{ paddingLeft: `${depth * 14 + 26}px` }}>
+    {proposals.map((p) => (
+      <div
+        key={p.code}
+        className="flex flex-wrap items-center gap-1.5 rounded border border-border/50 bg-muted/20 px-1.5 py-1"
+      >
+        <span className="font-mono text-[10px] text-muted-foreground">{p.code}</span>
+        <span className="truncate text-[10px]">{p.label ?? ""}</span>
+        <Badge variant="outline" className="px-1 py-0 text-[9px]">
+          {(p.similarity * 100).toFixed(0)}%
+        </Badge>
+        {p.approved && (
+          <Badge className="px-1 py-0 text-[9px]" variant="secondary">approved</Badge>
+        )}
+        {p.rejected && !p.approved && (
+          <Badge variant="outline" className="px-1 py-0 text-[9px] text-muted-foreground">
+            rejected
+          </Badge>
+        )}
+        {onDecide && (
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              className="h-6 px-1.5 text-[10px]"
+              onClick={() => onDecide(code, p.code, p.approved ? "clear" : "approve")}
+              aria-label={p.approved ? `Unapprove ${p.code}` : `Approve mapping ${p.code}`}
+            >
+              <Check className="mr-0.5 h-3 w-3" />
+              {p.approved ? "Undo" : "Approve"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              className="h-6 px-1.5 text-[10px]"
+              onClick={() => onDecide(code, p.code, "reject")}
+              aria-label={`Reject mapping ${p.code}`}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
+    ))}
+    {!proposals.length && (
+      <p className="text-[10px] text-muted-foreground">No AudioSet proposals yet.</p>
+    )}
+  </div>
+);
+
+const NodeRow = ({
+  node,
+  depth,
+  expanded,
+  toggle,
+  onPick,
+  crosswalk,
+  onDecide,
+  decidingCode,
+}: RowProps) => {
   const open = expanded.has(node.id);
   const hasKids = node.children.length > 0;
   const metaEntries = Object.entries(node.meta).filter(([k]) => k !== "synthesized");
+  const proposals = crosswalk?.[node.id];
+  const approvedCount = (proposals ?? []).filter((p) => p.approved).length;
+
 
   return (
     <div>

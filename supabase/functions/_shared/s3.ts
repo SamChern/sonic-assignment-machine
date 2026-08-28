@@ -505,7 +505,14 @@ const enterpriseDriver: S3Driver = {
     enterpriseConfig();
     return notImplemented("headObject");
   },
+
+  putObject(_objectKey, _body, _opts) {
+    // TODO(enterprise): upload activation files through the enterprise endpoint.
+    enterpriseConfig();
+    return notImplemented("putObject");
+  },
 };
+
 
 // ---------------------------------------------------------------------------
 // Public interface — callers never touch a driver directly

@@ -7,6 +7,8 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { Suspense, lazy, useEffect } from "react";
 
 import MobileBottomNav from "@/components/MobileBottomNav";
+import MobileAuthFallback from "@/components/MobileAuthFallback";
+
 import VersionStatusPanel from "@/components/VersionStatusPanel";
 import Index from "./pages/Index";
 

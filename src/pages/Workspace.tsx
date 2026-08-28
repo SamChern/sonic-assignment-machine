@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
+import { useUiPreferenceValue } from "@/hooks/useUiPreference";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,27 +43,70 @@ import {
 } from "lucide-react";
 
 
-const TABS = [
-  { key: "analyses", label: "Analyses", icon: Sparkles },
-  { key: "sonicsim", label: "See my SonicSIM", icon: Activity },
-  { key: "data", label: "My data", icon: Upload },
-  { key: "discover", label: "Discovery", icon: Compass },
-  { key: "categories", label: "Categories", icon: Sliders },
-  { key: "users", label: "Predict users", icon: Target },
-  { key: "outcomes", label: "Predict outcomes", icon: LineChart },
-  { key: "tags", label: "Tracking & pixels", icon: Tag },
+/**
+ * The workspace nav mirrors the loop the product actually runs — bring data in,
+ * understand it, predict from it, activate on it — so the grouping teaches the
+ * funnel instead of presenting nine equal-weight tabs.
+ */
+const GROUPS = [
+  {
+    key: "data",
+    label: "Data",
+    icon: Upload,
+    tabs: [
+      { key: "data", label: "My data", icon: Upload },
+      { key: "discover", label: "Discovery", icon: Compass },
+    ],
+  },
+  {
+    key: "understand",
+    label: "Understand",
+    icon: Sparkles,
+    tabs: [
+      { key: "analyses", label: "Analyses", icon: Sparkles },
+      { key: "sonicsim", label: "See my SonicSIM", icon: Activity },
+      { key: "categories", label: "Categories", icon: Sliders },
+    ],
+  },
+  {
+    key: "predict",
+    label: "Predict",
+    icon: Target,
+    tabs: [
+      { key: "users", label: "Predict users", icon: Target },
+      { key: "outcomes", label: "Predict outcomes", icon: LineChart },
+    ],
+  },
+  {
+    key: "activate",
+    label: "Activate",
+    icon: Tag,
+    tabs: [{ key: "tags", label: "Tracking & pixels", icon: Tag }],
+  },
 ] as const;
+
+type GroupKey = (typeof GROUPS)[number]["key"];
+
+const ALL_TABS = GROUPS.flatMap((g) => g.tabs.map((t) => ({ ...t, group: g.key })));
+
+const groupOf = (tabKey: string): GroupKey =>
+  (ALL_TABS.find((t) => t.key === tabKey)?.group ?? "understand") as GroupKey;
 
 const Workspace = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { orgs, active, activeId, setActiveId, canWrite, isOrgAdmin, loading } = useOrganization();
   const [params, setParams] = useSearchParams();
-  const tabPrefKey = user ? `sonicsim.workspace.tab.${user.id}` : null;
-  const storedTab = tabPrefKey ? localStorage.getItem(tabPrefKey) : null;
+  // Tab choice follows the user across devices; the URL still wins for deep links.
+  const [storedTab, setStoredTab] = useUiPreferenceValue<string>(
+    "workspace.tab",
+    "analyses",
+    (v) => typeof v === "string" && ALL_TABS.some((t) => t.key === v),
+  );
   const validTab = (value: string | null) =>
-    value && TABS.some((t) => t.key === value) ? value : null;
+    value && ALL_TABS.some((t) => t.key === value) ? value : null;
   const tab = validTab(params.get("tab")) ?? validTab(storedTab) ?? "analyses";
+  const group = useMemo(() => groupOf(tab), [tab]);
   const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
   const [analysisCount, setAnalysisCount] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -100,16 +144,16 @@ const Workspace = () => {
 
 
   const setTab = (next: string) => {
-    if (tabPrefKey) {
-      try {
-        localStorage.setItem(tabPrefKey, next);
-      } catch {
-        /* storage unavailable */
-      }
-    }
+    setStoredTab(next);
     const p = new URLSearchParams(params);
     p.set("tab", next);
     setParams(p, { replace: true });
+  };
+
+  /** Switching group lands on that group's first tab. */
+  const setGroup = (next: string) => {
+    const g = GROUPS.find((x) => x.key === next);
+    if (g) setTab(g.tabs[0].key);
   };
 
   if (loading) {
@@ -246,9 +290,24 @@ const Workspace = () => {
           ))}
         </div>
 
-        <Tabs value={tab} onValueChange={setTab} className="mt-6">
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 border border-border/60 bg-card/70 p-1 backdrop-blur-sm sm:flex sm:flex-wrap sm:justify-start">
-            {TABS.map((t) => (
+        <Tabs value={group} onValueChange={setGroup} className="mt-6">
+          <TabsList className="grid h-auto w-full grid-cols-4 gap-1 border border-border/60 bg-card/70 p-1 backdrop-blur-sm">
+            {GROUPS.map((g) => (
+              <TabsTrigger
+                key={g.key}
+                value={g.key}
+                className="min-w-0 whitespace-normal px-2 text-[11px] leading-tight sm:text-sm"
+              >
+                <g.icon className="mr-1 h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0">{g.label}</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        <Tabs value={tab} onValueChange={setTab} className="mt-3">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 border border-border/60 bg-card/50 p-1 backdrop-blur-sm sm:flex sm:flex-wrap sm:justify-start">
+            {(GROUPS.find((g) => g.key === group) ?? GROUPS[1]).tabs.map((t) => (
               <TabsTrigger
                 key={t.key}
                 value={t.key}
@@ -259,7 +318,6 @@ const Workspace = () => {
               </TabsTrigger>
             ))}
           </TabsList>
-
 
         <TabsContent value="analyses" className="mt-4">
           <WorkspaceAnalyses key={refreshKey} organizationId={active.organization_id} />

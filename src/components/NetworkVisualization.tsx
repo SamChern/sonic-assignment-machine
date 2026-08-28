@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Check, ZoomIn, ZoomOut, RotateCcw, Maximize, Tag, EyeOff } from "lucide-react";
+import { Activity, Tag, EyeOff } from "lucide-react";
 import * as d3 from "d3";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
-import emotionIcon from "@/assets/emotion-sam.png";
-import socialIcon from "@/assets/social-sam.png";
-import contextIcon from "@/assets/context-sam.png";
-import cognitionIcon from "@/assets/cognition-sam.png";
-import communicationIcon from "@/assets/communication-sam.png";
-import artisticIcon from "@/assets/artistic-sam.png";
+import { useGraphZoom } from "@/components/graph/useGraphZoom";
+import { GraphZoomControls } from "@/components/graph/GraphZoomControls";
+import { CategoryLegend } from "@/components/network-graph/CategoryLegend";
+import { NodeTooltip } from "@/components/network-graph/NodeTooltip";
+import { SimilarityPanel } from "@/components/network-graph/SimilarityPanel";
+import {
+  CATEGORY_COLORS,
+  type SourceAnalysis,
+  type CategorySimilarity,
+  type SourcePairSimilarity,
+  type SimilarityMetrics,
+} from "@/components/network-graph/types";
 
 interface Node {
   id: string;
@@ -29,38 +35,6 @@ interface Link {
   strength: number;
 }
 
-interface CategoryScore {
-  name: string;
-  score: number;
-  description: string;
-}
-
-interface SourceAnalysis {
-  name: string;
-  categories: CategoryScore[];
-}
-
-interface CategorySimilarity {
-  name: string;
-  similarity: number;
-  variance: number;
-  interpretation: 'high' | 'moderate' | 'low';
-}
-
-interface SourcePairSimilarity {
-  source1: string;
-  source2: string;
-  similarity: number;
-}
-
-interface SimilarityMetrics {
-  overall: number;
-  byCategory: CategorySimilarity[];
-  sourcePairs: SourcePairSimilarity[];
-  dominantCategory?: string;
-  distinctiveCategory?: string;
-}
-
 interface NetworkVisualizationProps {
   sources: SourceAnalysis[];
   sourceImages?: Array<{ name: string; imageUrl: string }>;
@@ -77,7 +51,6 @@ export const NetworkVisualization = ({
   highlightSourceName = null,
 }: NetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [pinnedNode, setPinnedNode] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
@@ -86,82 +59,17 @@ export const NetworkVisualization = ({
     byCategory: [],
     sourcePairs: [],
   });
-  const [showDetails, setShowDetails] = useState(false);
   /** Audioscope-style pulse on the graph nodes (purely visual, CSS driven). */
   const [animateNodes, setAnimateNodes] = useState(false);
-  const [currentZoom, setCurrentZoom] = useState(1);
   const [showLabels, setShowLabels] = useState(false);
 
-  // Zoom control functions
-  const handleZoomIn = () => {
-    if (svgRef.current && zoomRef.current) {
-      d3.select(svgRef.current)
-        .transition()
-        .duration(300)
-        .call(zoomRef.current.scaleBy, 1.3);
-    }
-  };
-
-  const handleZoomOut = () => {
-    if (svgRef.current && zoomRef.current) {
-      d3.select(svgRef.current)
-        .transition()
-        .duration(300)
-        .call(zoomRef.current.scaleBy, 0.7);
-    }
-  };
-
-  const handleZoomReset = () => {
-    if (svgRef.current && zoomRef.current) {
-      d3.select(svgRef.current)
-        .transition()
-        .duration(300)
-        .call(zoomRef.current.transform, d3.zoomIdentity);
-    }
-  };
+  const { currentZoom, createZoomBehavior, zoomIn, zoomOut, zoomReset, fitToView } = useGraphZoom(svgRef);
 
   const handleFitToView = () => {
-    if (!svgRef.current || !zoomRef.current || networkNodesRef.length === 0) return;
-
-    const width = svgRef.current.clientWidth;
-    const height = svgRef.current.clientHeight;
-    const padding = 80;
-
-    // Calculate bounding box of all nodes
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    networkNodesRef.forEach(node => {
-      const x = node.x ?? width / 2;
-      const y = node.y ?? height / 2;
-      const r = 10 + (node.score / 100) * 25 + 50; // Account for node size and labels
-      minX = Math.min(minX, x - r);
-      maxX = Math.max(maxX, x + r);
-      minY = Math.min(minY, y - r);
-      maxY = Math.max(maxY, y + r);
-    });
-
-    const boundingWidth = maxX - minX;
-    const boundingHeight = maxY - minY;
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-
-    // Calculate scale to fit all nodes with padding
-    const scale = Math.min(
-      (width - padding * 2) / boundingWidth,
-      (height - padding * 2) / boundingHeight,
-      2 // Max zoom of 2x
+    fitToView(
+      networkNodesRef.map((n) => ({ x: n.x, y: n.y, radius: 10 + (n.score / 100) * 25 + 50 })),
+      80,
     );
-
-    // Calculate translation to center the nodes
-    const translateX = width / 2 - centerX * scale;
-    const translateY = height / 2 - centerY * scale;
-
-    d3.select(svgRef.current)
-      .transition()
-      .duration(500)
-      .call(
-        zoomRef.current.transform,
-        d3.zoomIdentity.translate(translateX, translateY).scale(scale)
-      );
   };
 
   useEffect(() => {
@@ -173,15 +81,7 @@ export const NetworkVisualization = ({
     // Clear previous content
     d3.select(svgRef.current).selectAll("*").remove();
 
-    // Blue and green gradient color palette for categories
-    const categoryColors: Record<string, string> = {
-      'Emotional': 'hsl(200, 85%, 55%)',
-      'Cognitive': 'hsl(160, 75%, 50%)',
-      'Social': 'hsl(180, 80%, 60%)',
-      'Communication': 'hsl(140, 70%, 55%)',
-      'Contextual': 'hsl(220, 75%, 60%)',
-      'Artistic': 'hsl(170, 80%, 55%)',
-    };
+    const categoryColors = CATEGORY_COLORS;
 
     // Check if we're viewing a single source's fingerprint
     const isSingleSource = sources.length === 1;
@@ -395,19 +295,11 @@ export const NetworkVisualization = ({
       .attr("width", width)
       .attr("height", height);
 
-    // Create zoom behavior
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.3, 4])
-      .on("zoom", (event) => {
-        mainGroup.attr("transform", event.transform);
-        setCurrentZoom(event.transform.k);
-      });
-
-    zoomRef.current = zoom;
-    svg.call(zoom);
-
     // Main group for all zoomable content
     const mainGroup = svg.append("g").attr("class", "main-group");
+
+    const zoom = createZoomBehavior((transform) => mainGroup.attr("transform", transform.toString()));
+    svg.call(zoom);
 
     // Store nodes reference for fit-to-view
     networkNodesRef = nodes;
@@ -826,49 +718,14 @@ export const NetworkVisualization = ({
             style={{ background: "transparent" }}
           />
 
-          {/* Zoom controls - Top Right */}
-          <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-card/95 backdrop-blur-sm rounded-lg p-2 border border-border/50 shadow-lg">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleZoomOut}
-              title="Zoom out"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <span className="text-xs text-muted-foreground min-w-[3rem] text-center font-medium">
-              {Math.round(currentZoom * 100)}%
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleZoomIn}
-              title="Zoom in"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-            <div className="w-px h-6 bg-border mx-1" />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleZoomReset}
-              title="Reset zoom"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleFitToView}
-              title="Fit all nodes to view"
-            >
-              <Maximize className="h-4 w-4" />
-            </Button>
-            <div className="w-px h-6 bg-border mx-1" />
+          <GraphZoomControls
+            className="top-4 right-4"
+            currentZoom={currentZoom}
+            onZoomIn={zoomIn}
+            onZoomOut={zoomOut}
+            onZoomReset={zoomReset}
+            onFitToView={handleFitToView}
+          >
             <Button
               variant={showLabels ? "ghost" : "secondary"}
               size="icon"
@@ -888,390 +745,21 @@ export const NetworkVisualization = ({
             >
               <Activity className="h-4 w-4" />
             </Button>
-          </div>
-          
-          {/* Enhanced Similarity Metrics - Bottom Left */}
-          <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-4 shadow-lg z-20 max-w-[400px]">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-xs font-semibold text-foreground">SonicSIM.ai Similarity</div>
-              {sources.length > 1 && (
-                <button
-                  onClick={() => setShowDetails(!showDetails)}
-                  className="text-[10px] text-primary hover:text-primary/80 transition-colors px-2 py-1 bg-primary/10 rounded"
-                >
-                  {showDetails ? 'Hide Details' : 'View Details'}
-                </button>
-              )}
-            </div>
-            
-            {/* Overall Score */}
-            <div className="relative h-6 rounded-full overflow-hidden border border-border/30 mb-2">
-              <div
-                className="h-full rounded-full transition-all duration-1000 ease-out"
-                style={{
-                  width: `${similarityMetrics.overall}%`,
-                  background: similarityMetrics.overall > 75 
-                    ? "linear-gradient(90deg, hsl(160, 75%, 50%), hsl(140, 70%, 55%))"
-                    : similarityMetrics.overall > 50
-                    ? "linear-gradient(90deg, hsl(180, 80%, 60%), hsl(160, 75%, 50%))"
-                    : "linear-gradient(90deg, hsl(200, 85%, 55%), hsl(180, 80%, 60%))",
-                }}
-              />
-            </div>
-            <div className="text-center mb-2">
-              <div className="text-2xl font-bold text-foreground">{similarityMetrics.overall}%</div>
-              <div className="text-[10px] text-muted-foreground">
-                {similarityMetrics.overall > 75 
-                  ? "Cohesive identity cluster - high brand consistency"
-                  : similarityMetrics.overall > 50
-                  ? "Balanced mix - complementary with distinctiveness"
-                  : "Diverse semantic profiles - great for range analysis"}
-              </div>
-            </div>
+          </GraphZoomControls>
 
-            {/* Detailed Breakdown - Only for multi-source */}
-            {showDetails && sources.length > 1 && (
-              <div className="mt-4 pt-4 border-t border-border/30 space-y-3 max-h-[300px] overflow-y-auto">
-                {/* Category-Level Breakdown */}
-                <div>
-                  <div className="text-[10px] font-semibold text-foreground mb-2">Category Alignment</div>
-                  <div className="space-y-1.5">
-                    {similarityMetrics.byCategory
-                      .sort((a, b) => b.similarity - a.similarity)
-                      .map((cat) => (
-                        <div key={cat.name} className="space-y-1">
-                          <div className="flex items-center justify-between text-[9px]">
-                            <span className="text-foreground/80">{cat.name}</span>
-                            <span className={`font-medium ${
-                              cat.interpretation === 'high' ? 'text-green-400' :
-                              cat.interpretation === 'moderate' ? 'text-yellow-400' :
-                              'text-red-400'
-                            }`}>
-                              {Math.round(cat.similarity * 100)}%
-                            </span>
-                          </div>
-                          <div className="h-1.5 bg-border/30 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${cat.similarity * 100}%`,
-                                backgroundColor: 
-                                  cat.interpretation === 'high' ? 'hsl(160, 75%, 50%)' :
-                                  cat.interpretation === 'moderate' ? 'hsl(180, 80%, 60%)' :
-                                  'hsl(200, 85%, 55%)',
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
+          <SimilarityPanel similarityMetrics={similarityMetrics} isMultiSource={sources.length > 1} />
 
-                {/* Source Pair Similarities */}
-                {similarityMetrics.sourcePairs.length > 0 && (
-                  <div>
-                    <div className="text-[10px] font-semibold text-foreground mb-2">Source Pair Comparisons</div>
-                    <div className="space-y-1">
-                      {similarityMetrics.sourcePairs.slice(0, 3).map((pair, idx) => (
-                        <div key={idx} className="text-[9px] flex items-center justify-between text-foreground/70">
-                          <span className="truncate flex-1">{pair.source1} ↔ {pair.source2}</span>
-                          <span className="ml-2 font-medium">{Math.round(pair.similarity * 100)}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+          <CategoryLegend selectedCategories={selectedCategories} setSelectedCategories={setSelectedCategories} />
 
-                {/* Key Insights */}
-                {(similarityMetrics.dominantCategory || similarityMetrics.distinctiveCategory) && (
-                  <div>
-                    <div className="text-[10px] font-semibold text-foreground mb-2">Key Insights</div>
-                    <div className="space-y-1 text-[9px] text-foreground/70">
-                      {similarityMetrics.dominantCategory && (
-                        <div className="flex items-start gap-1">
-                          <span className="text-green-400">●</span>
-                          <span>Most unified: <span className="font-medium text-foreground">{similarityMetrics.dominantCategory}</span></span>
-                        </div>
-                      )}
-                      {similarityMetrics.distinctiveCategory && (
-                        <div className="flex items-start gap-1">
-                          <span className="text-red-400">●</span>
-                          <span>Most distinctive: <span className="font-medium text-foreground">{similarityMetrics.distinctiveCategory}</span></span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          
-          {/* Category Legend - Bottom Right */}
-          <div className="absolute bottom-4 right-4 bg-card/95 backdrop-blur-md border border-primary/20 rounded-lg p-3 shadow-lg z-20">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-semibold text-foreground">Category Legend</div>
-              {selectedCategories.size > 0 && (
-                <button
-                  onClick={() => setSelectedCategories(new Set())}
-                  className="text-[10px] px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-colors duration-200"
-                >
-                  Clear All
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-              {Object.entries({
-                'Emotional': 'hsl(200, 85%, 55%)',
-                'Cognitive': 'hsl(160, 75%, 50%)',
-                'Social': 'hsl(180, 80%, 60%)',
-                'Communication': 'hsl(140, 70%, 55%)',
-                'Contextual': 'hsl(220, 75%, 60%)',
-                'Artistic': 'hsl(170, 80%, 55%)',
-              }).map(([category, color]) => {
-                const isSelected = selectedCategories.has(category);
-                const isAnySelected = selectedCategories.size > 0;
-                
-                return (
-                <div 
-                  key={category} 
-                  className="flex items-center gap-1.5 group cursor-pointer relative"
-                  style={{
-                    padding: '2px 4px',
-                    borderRadius: '4px',
-                    backgroundColor: isSelected ? 'hsl(var(--primary) / 0.1)' : 'transparent',
-                    border: isSelected ? '1px solid hsl(var(--primary) / 0.3)' : '1px solid transparent',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-                  }}
-                  onClick={() => {
-                    setSelectedCategories(prev => {
-                      const newSet = new Set(prev);
-                      if (newSet.has(category)) {
-                        newSet.delete(category);
-                      } else {
-                        newSet.add(category);
-                      }
-                      return newSet;
-                    });
-                  }}
-                >
-                  {category === 'Emotional' ? (
-                    <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
-                      style={{
-                        backgroundColor: color,
-                        WebkitMaskImage: `url(${emotionIcon})`,
-                        WebkitMaskSize: '90% 90%',
-                        WebkitMaskPosition: 'center',
-                        WebkitMaskRepeat: 'no-repeat',
-                        maskImage: `url(${emotionIcon})`,
-                        maskSize: '90% 90%',
-                        maskPosition: 'center',
-                        maskRepeat: 'no-repeat',
-                        border: 'none',
-                        outline: '0',
-                        display: 'block',
-                        filter: 'drop-shadow(0 0 0px transparent)',
-                      }}
-                    />
-                  ) : category === 'Social' ? (
-                    <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
-                      style={{
-                        backgroundColor: color,
-                        WebkitMaskImage: `url(${socialIcon})`,
-                        WebkitMaskSize: '90% 90%',
-                        WebkitMaskPosition: 'center',
-                        WebkitMaskRepeat: 'no-repeat',
-                        maskImage: `url(${socialIcon})`,
-                        maskSize: '90% 90%',
-                        maskPosition: 'center',
-                        maskRepeat: 'no-repeat',
-                        border: 'none',
-                        outline: '0',
-                        display: 'block',
-                        filter: 'drop-shadow(0 0 0px transparent)',
-                      }}
-                    />
-                  ) : category === 'Cognitive' ? (
-                    <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
-                      style={{
-                        backgroundColor: color,
-                        WebkitMaskImage: `url(${cognitionIcon})`,
-                        WebkitMaskSize: '90% 90%',
-                        WebkitMaskPosition: 'center',
-                        WebkitMaskRepeat: 'no-repeat',
-                        maskImage: `url(${cognitionIcon})`,
-                        maskSize: '90% 90%',
-                        maskPosition: 'center',
-                        maskRepeat: 'no-repeat',
-                        border: 'none',
-                        outline: '0',
-                        display: 'block',
-                        filter: 'drop-shadow(0 0 0px transparent)',
-                      }}
-                    />
-                  ) : category === 'Communication' ? (
-                    <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
-                      style={{
-                        backgroundColor: color,
-                        WebkitMaskImage: `url(${communicationIcon})`,
-                        WebkitMaskSize: '90% 90%',
-                        WebkitMaskPosition: 'center',
-                        WebkitMaskRepeat: 'no-repeat',
-                        maskImage: `url(${communicationIcon})`,
-                        maskSize: '90% 90%',
-                        maskPosition: 'center',
-                        maskRepeat: 'no-repeat',
-                        border: 'none',
-                        outline: '0',
-                        display: 'block',
-                        filter: 'drop-shadow(0 0 0px transparent)',
-                      }}
-                    />
-                  ) : category === 'Contextual' ? (
-                    <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
-                      style={{
-                        backgroundColor: color,
-                        WebkitMaskImage: `url(${contextIcon})`,
-                        WebkitMaskSize: '90% 90%',
-                        WebkitMaskPosition: 'center',
-                        WebkitMaskRepeat: 'no-repeat',
-                        maskImage: `url(${contextIcon})`,
-                        maskSize: '90% 90%',
-                        maskPosition: 'center',
-                        maskRepeat: 'no-repeat',
-                        border: 'none',
-                        outline: '0',
-                        display: 'block',
-                        filter: 'drop-shadow(0 0 0px transparent)',
-                      }}
-                    />
-                  ) : category === 'Artistic' ? (
-                    <div
-                      className="h-3 w-3 transition-all duration-200 group-hover:scale-140"
-                      style={{
-                        backgroundColor: color,
-                        WebkitMaskImage: `url(${artisticIcon})`,
-                        WebkitMaskSize: '90% 90%',
-                        WebkitMaskPosition: 'center',
-                        WebkitMaskRepeat: 'no-repeat',
-                        maskImage: `url(${artisticIcon})`,
-                        maskSize: '90% 90%',
-                        maskPosition: 'center',
-                        maskRepeat: 'no-repeat',
-                        border: 'none',
-                        outline: '0',
-                        display: 'block',
-                        filter: 'drop-shadow(0 0 0px transparent)',
-                      }}
-                    />
-                  ) : (
-                    <div
-                      className="h-2.5 w-2.5 rounded-full transition-all duration-200 group-hover:scale-140"
-                      style={{ 
-                        backgroundColor: color,
-                        filter: 'drop-shadow(0 0 0px transparent)',
-                      }}
-                    />
-                  )}
-                  <span 
-                    className="text-xs flex-1"
-                    style={{
-                      color: isAnySelected && !isSelected ? 'hsl(var(--muted-foreground) / 0.4)' : 'hsl(var(--muted-foreground))',
-                      fontWeight: isSelected ? 600 : 400,
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    }}
-                  >
-                    {category}
-                  </span>
-                  <div 
-                    className="overflow-hidden"
-                    style={{
-                      width: isSelected ? '12px' : '0px',
-                      opacity: isSelected ? 1 : 0,
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    }}
-                  >
-                    <Check className="h-3 w-3 text-primary" strokeWidth={3} />
-                  </div>
-                </div>
-              );
-              })}
-            </div>
-          </div>
-
-          {/* Enhanced Hover/Pinned Tooltip */}
-          {hoveredNode && (() => {
-            try {
-              const tooltipData = JSON.parse(hoveredNode);
-              const isPinned = tooltipData.isPinned;
-              return (
-                <div 
-                  className={`absolute top-4 left-1/2 -translate-x-1/2 bg-card/98 backdrop-blur-xl border rounded-xl shadow-2xl z-30 animate-fade-in ${
-                    isPinned 
-                      ? 'border-primary/60 max-w-sm px-5 py-4' 
-                      : 'border-primary/40 max-w-xs px-5 py-4'
-                  }`}
-                  onClick={(e) => {
-                    if (isPinned) {
-                      e.stopPropagation();
-                      setPinnedNode(null);
-                      setHoveredNode(null);
-                    }
-                  }}
-                  style={{ cursor: isPinned ? 'pointer' : 'default' }}
-                >
-                  <div className="flex items-start gap-3">
-                    <div 
-                      className={`rounded-full mt-1 flex-shrink-0 ${isPinned ? 'w-4 h-4' : 'w-3 h-3'}`}
-                      style={{ 
-                        backgroundColor: 
-                          tooltipData.category === 'Emotional' ? 'hsl(200, 85%, 55%)' :
-                          tooltipData.category === 'Cognitive' ? 'hsl(160, 75%, 50%)' :
-                          tooltipData.category === 'Social' ? 'hsl(180, 80%, 60%)' :
-                          tooltipData.category === 'Communication' ? 'hsl(140, 70%, 55%)' :
-                          tooltipData.category === 'Contextual' ? 'hsl(220, 75%, 60%)' :
-                          'hsl(170, 80%, 55%)',
-                        boxShadow: isPinned ? '0 0 12px currentColor' : '0 0 8px currentColor',
-                      }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs text-muted-foreground truncate">{tooltipData.source}</div>
-                        {isPinned && (
-                          <span className="text-[10px] text-primary/70 bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
-                            Click to close
-                          </span>
-                        )}
-                      </div>
-                      <div className={`font-semibold text-foreground flex items-center gap-2 ${isPinned ? 'text-base mt-1' : 'text-sm'}`}>
-                        <span>{tooltipData.category}</span>
-                        <span className="text-primary font-bold">{tooltipData.score}%</span>
-                      </div>
-                      {tooltipData.description && (
-                        <p className={`text-muted-foreground leading-relaxed ${isPinned ? 'text-sm mt-3' : 'text-xs mt-2'}`}>
-                          {tooltipData.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            } catch {
-              // Fallback for simple string tooltip
-              return (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-md border border-primary/30 rounded-lg px-4 py-2 shadow-lg z-30">
-                  <div className="text-xs font-semibold text-foreground whitespace-nowrap">
-                    {hoveredNode}
-                  </div>
-                </div>
-              );
-            }
-          })()}
+          {hoveredNode && (
+            <NodeTooltip
+              hoveredNode={hoveredNode}
+              onDismissPinned={() => {
+                setPinnedNode(null);
+                setHoveredNode(null);
+              }}
+            />
+          )}
         </div>
       </div>
     </Card>

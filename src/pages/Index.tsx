@@ -1,13 +1,15 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { AudioUploader } from "@/components/AudioUploader";
-import { AnalysisResults, predictCategory, getCategoryStyles, getCategoryIcon } from "@/components/AnalysisResults";
+import SonicSimPanel from "@/components/visuals/SonicSimPanel";
+import ListenTab from "@/components/home/ListenTab";
+import UnderstandTab from "@/components/home/UnderstandTab";
+import LibraryTab from "@/components/home/LibraryTab";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Save, Shield, Activity, ChevronDown, ChevronUp, Users as UsersIcon, Building2 } from "lucide-react";
+import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Shield, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import heroBackground from "@/assets/hero-background.jpg";
@@ -15,29 +17,36 @@ import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 
-const NetworkVisualization = lazy(() =>
-  import("@/components/NetworkVisualization").then((m) => ({ default: m.NetworkVisualization }))
-);
 import { Badge } from "@/components/ui/badge";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Check, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
 import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
 import { WaveformBackground } from "@/components/WaveformBackground";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { TasteNeighbors } from "@/components/TasteNeighbors";
 import { useFingerprints } from "@/hooks/useFingerprints";
-import { cn } from "@/lib/utils";
-import { AudioJobsPanel } from "@/components/AudioJobsPanel";
-import { UploadProgressPanel } from "@/components/UploadProgressPanel";
-import SonicSimPanel from "@/components/visuals/SonicSimPanel";
 import { analysisToScores, fingerprintToScores } from "@/lib/audioscope";
 
 
 
+
+/**
+ * The consumer surface collapsed from five tabs to three. Old deep links
+ * (?tab=select, ?tab=network, ?tab=sonicsim, ?tab=discover) still resolve, so
+ * bookmarks and the mobile nav keep working.
+ */
+const TAB_ALIASES: Record<string, string> = {
+  select: "listen",
+  sonicsim: "listen",
+  listen: "listen",
+  network: "understand",
+  analysis: "understand",
+  understand: "understand",
+  discover: "library",
+  library: "library",
+};
+
+const normalizeTab = (tab: string | null) => (tab && TAB_ALIASES[tab]) || "listen";
 
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
@@ -62,12 +71,10 @@ const Index = () => {
   const [sonicSimSubject, setSonicSimSubject] = useState<string | null>(null);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [open, setOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<string>(
-    () => searchParams.get("tab") ?? "select",
+    () => normalizeTab(searchParams.get("tab")),
   );
-  const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [showGetStartedDialog, setShowGetStartedDialog] = useState(false);
   const logoRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
@@ -76,7 +83,10 @@ const Index = () => {
   // can deep-link into a specific tab from any route.
   const urlTab = searchParams.get("tab");
   useEffect(() => {
-    if (urlTab && urlTab !== activeTab) setActiveTab(urlTab);
+    if (urlTab) {
+      const next = normalizeTab(urlTab);
+      if (next !== activeTab) setActiveTab(next);
+    }
   }, [urlTab]);
 
   const handleTabChange = (next: string) => {
@@ -112,7 +122,7 @@ const Index = () => {
 
   const handleGetStarted = () => {
     setShowGetStartedDialog(false);
-    setActiveTab("select");
+    setActiveTab("listen");
   };
 
 
@@ -161,7 +171,7 @@ const Index = () => {
       }
     });
     toast.success(`Added ${sources.length} source(s) to analysis`);
-    setActiveTab("select");
+    setActiveTab("listen");
   };
 
   const removeFile = (index: number) => {
@@ -271,7 +281,7 @@ const Index = () => {
 
       setResults({ sources: resultsWithIcons, images: imageData });
       setIsAnalyzing(false);
-      setActiveTab("network"); // Switch to network tab after analysis
+      setActiveTab("understand"); // Switch to network tab after analysis
       
       // Show detailed success message
       const cachedMsg = cacheStats.cached > 0 ? ` (${cacheStats.cached} cached, ${cacheStats.fresh} analyzed)` : '';
@@ -321,6 +331,29 @@ const Index = () => {
   const clearCategoryFilters = () => {
     setSelectedCategories([]);
   };
+
+  /** Scope subjects: the aggregate fingerprint first, then recent analyses. */
+  const scopeSubjects = useMemo(
+    () => [
+      ...(myFingerprint
+        ? [
+            {
+              id: `fingerprint-${myFingerprint.user_id}`,
+              label: "My sonic fingerprint (aggregate)",
+              sublabel: `Aggregate · ${myFingerprint.total_sources_analyzed} sources`,
+              scores: fingerprintToScores(myFingerprint as never),
+            },
+          ]
+        : []),
+      ...(myAnalyses || []).slice(0, 25).map((a) => ({
+        id: a.id,
+        label: a.source_name,
+        sublabel: `Analysis · ${a.source_name}`,
+        scores: analysisToScores(a as never),
+      })),
+    ],
+    [myFingerprint, myAnalyses],
+  );
 
   return (
     <div className="min-h-screen">
@@ -499,431 +532,69 @@ const Index = () => {
 
 
 
-      {/* Main Content with Tabs */}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
+      {/* Main content — three consumer moments: Listen, Understand, Library */}
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
-          <TabsList className="mb-6 sm:mb-8 grid h-auto min-h-12 w-full max-w-full grid-cols-2 items-stretch gap-1 sm:grid-cols-5">
-            <TabsTrigger value="select" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3">
+          <TabsList className="mb-6 grid h-auto min-h-12 w-full max-w-full grid-cols-3 items-stretch gap-1 sm:mb-8">
+            <TabsTrigger value="listen" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3">
               <FileAudio className="h-4 w-4 shrink-0" />
-              <span className="hidden truncate sm:inline">Select Sources</span>
-              <span className="truncate sm:hidden">Sources</span>
+              <span className="truncate">Listen</span>
             </TabsTrigger>
-            <TabsTrigger value="network" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!results}>
+            <TabsTrigger value="understand" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3">
               <Network className="h-4 w-4 shrink-0" />
-              <span className="truncate">Network</span>
+              <span className="truncate">Understand</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!results}>
+            <TabsTrigger value="library" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3">
               <ListTree className="h-4 w-4 shrink-0" />
-              <span className="truncate">Analysis</span>
-            </TabsTrigger>
-            <TabsTrigger value="sonicsim" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!user}>
-              <Activity className="h-4 w-4 shrink-0" />
-              <span className="hidden truncate sm:inline">See my SonicSIM</span>
-              <span className="truncate sm:hidden">SonicSIM</span>
-            </TabsTrigger>
-            <TabsTrigger value="discover" className="flex h-auto min-h-10 min-w-0 items-center justify-center gap-2 px-2 py-2.5 sm:px-3" disabled={!user}>
-              <UsersIcon className="h-4 w-4 shrink-0" />
-              <span className="truncate">Discover</span>
+              <span className="truncate">Library</span>
             </TabsTrigger>
           </TabsList>
 
-
-          {/* Tab 1: Select Audio Sources */}
-          <TabsContent value="select" className="space-y-8">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-6">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-foreground">
-                  Select Audio Sources
-                  {totalItems > 0 && <span className="text-primary ml-2">({totalItems} selected)</span>}
-                </h2>
-
-                {user && (
-                  <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
-                    <Save className="h-3.5 w-3.5 text-green-500" />
-                    <span>Auto-saving selections & fingerprints to your library</span>
-                  </p>
-                )}
-              </div>
-              
-              {totalItems > 0 && (
-                <Button
-                  size="lg"
-                  className="gradient-primary shadow-elegant"
-                  onClick={handleAnalyze}
-                  disabled={isAnalyzing}
-                >
-                  <Sparkles className="mr-2 h-5 w-5" />
-                  {isAnalyzing ? "Analyzing..." : `Analyze ${totalItems} Source${totalItems > 1 ? 's' : ''}`}
-                </Button>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <AudioUploader 
-                onFileSelect={handleFileSelect} 
-                selectedFile={null}
-                onSpotifyTrack={handleSpotifyTrack}
-                onLibrarySelect={handleLibrarySelect}
-              />
-              {user && <AudioJobsPanel />}
-            </div>
-
-            
-            {/* Selected Sources Display - Compact & Collapsible */}
-            {totalItems > 0 && (
-              <Collapsible open={sourcesExpanded} onOpenChange={setSourcesExpanded}>
-                <Card className="p-3 bg-secondary/10 border-secondary/20">
-                  <div className="flex items-center justify-between">
-                    <CollapsibleTrigger asChild>
-                      <button className="flex items-center gap-2 text-left">
-                        <span className="text-sm font-medium text-foreground">Selected Sources</span>
-                        <Badge variant="secondary" className="text-xs">{totalItems}</Badge>
-                        {sourcesExpanded ? (
-                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </button>
-                    </CollapsibleTrigger>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-xs h-6 px-2 text-muted-foreground hover:text-destructive"
-                      onClick={() => {
-                        setSelectedFiles([]);
-                        setSpotifyTracks([]);
-                      }}
-                    >
-                      Clear all
-                    </Button>
-                  </div>
-                  
-                  <CollapsibleContent className="mt-3">
-                    <div className="flex flex-wrap gap-2">
-                      {selectedFiles.map((file, index) => (
-                        <Badge 
-                          key={`file-${index}`} 
-                          variant="outline" 
-                          className="py-1 px-2 gap-1.5 bg-secondary/20"
-                        >
-                          <FileAudio className="h-3 w-3 text-primary" />
-                          <span className="text-xs max-w-[120px] truncate">{file.name}</span>
-                          <button 
-                            onClick={() => removeFile(index)}
-                            className="ml-1 hover:text-destructive"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                      
-                      {spotifyTracks.map((track) => (
-                        <Badge 
-                          key={track.id} 
-                          variant="outline" 
-                          className="py-1 px-2 gap-1.5 bg-secondary/20"
-                        >
-                          {track.album.images[0] && (
-                            <img
-                              src={track.album.images[0].url}
-                              alt={track.album.name}
-                              className="w-4 h-4 rounded"
-                            />
-                          )}
-                          <span className="text-xs max-w-[120px] truncate">
-                            {track.name} - {track.artists[0]?.name}
-                          </span>
-                          <button 
-                            onClick={() => removeTrack(track.id)}
-                            className="ml-1 hover:text-destructive"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
-            )}
-
-            {/* Loading State with Progress — docks above the sticky bottom nav on mobile */}
-            {isAnalyzing && analysisProgress && (
-              <UploadProgressPanel
-                status={analysisProgress.status}
-                total={analysisProgress.total}
-              />
-            )}
-          </TabsContent>
-
-
-          {/* Tab 2: Ontological Identity Network */}
-          <TabsContent value="network" className="space-y-6">
-            {/* Filter Controls */}
-            {results && results.sources.length > 1 && (
-              <Card className="p-4 bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
-                <div className="flex items-center gap-4 flex-wrap">
-                  <label className="text-sm font-semibold text-foreground whitespace-nowrap">
-                    Filter by Source:
-                  </label>
-                  <Popover open={open} onOpenChange={setOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={open}
-                        className="w-[300px] justify-between bg-background border-border"
-                      >
-                        {selectedSources.length === 0
-                          ? `All Sources (${results.sources.length})`
-                          : `${selectedSources.length} selected`}
-                        <Check className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[300px] p-0 bg-background border-border z-50">
-                      <Command className="bg-background">
-                        <CommandInput placeholder="Search sources..." className="h-9" />
-                        <CommandEmpty>No source found.</CommandEmpty>
-                        <CommandGroup className="max-h-64 overflow-auto">
-                          {results.sources.map((source: any) => (
-                            <CommandItem
-                              key={source.name}
-                              value={source.name}
-                              onSelect={() => toggleSource(source.name)}
-                              className="cursor-pointer"
-                            >
-                              <Check
-                                className={`mr-2 h-4 w-4 ${
-                                  selectedSources.includes(source.name) ? "opacity-100" : "opacity-0"
-                                }`}
-                              />
-                              <span className="truncate">
-                                {source.name.length > 35 ? source.name.substring(0, 35) + '...' : source.name}
-                              </span>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  {selectedSources.length > 0 && (
-                    <>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedSources.map((sourceName) => (
-                          <Badge key={sourceName} variant="secondary" className="gap-1">
-                            {sourceName.length > 20 ? sourceName.substring(0, 20) + '...' : sourceName}
-                            <X
-                              className="h-3 w-3 cursor-pointer hover:text-destructive"
-                              onClick={() => toggleSource(sourceName)}
-                            />
-                          </Badge>
-                        ))}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={clearAllFilters}
-                        className="text-xs"
-                      >
-                        Clear All
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </Card>
-            )}
-
-            <Suspense
-              fallback={
-                <div className="flex h-[400px] items-center justify-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                </div>
-              }
-            >
-              <NetworkVisualization
-                sources={filteredSources}
-                sourceImages={filteredImages}
-                highlightSourceName={sonicSimSubject}
-              />
-            </Suspense>
-          </TabsContent>
-
-          {/* Tab 3: Per-Source Semantic Analysis */}
-          <TabsContent value="analysis" className="space-y-6">
-            {/* Category Filter Chips */}
-            {results && results.sources.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-foreground mr-1">Filter:</span>
-                {["Emotional", "Cognitive", "Social", "Communication", "Contextual", "Artistic"].map((cat) => {
-                  const styles = getCategoryStyles(cat);
-                  const active = selectedCategories.includes(cat);
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => toggleCategory(cat)}
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-200",
-                        active
-                          ? [styles.bg, styles.border, styles.text, "shadow-sm"].join(" ")
-                          : "bg-muted/50 border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      )}
-                    >
-                      {getCategoryIcon(cat)}
-                      <span>{cat}</span>
-                    </button>
-                  );
-                })}
-                {selectedCategories.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearCategoryFilters}
-                    className="text-xs h-7 px-2"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-            )}
-
-            {/* Filter Controls */}
-            {results && results.sources.length > 1 && (
-              <Card className="p-4 bg-card/80 backdrop-blur-sm shadow-elegant border-border/50">
-                <div className="flex items-center gap-4 flex-wrap">
-                  <label className="text-sm font-semibold text-foreground whitespace-nowrap">
-                    Filter by Source:
-                  </label>
-                  <Popover open={open} onOpenChange={setOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={open}
-                        className="w-[300px] justify-between bg-background border-border"
-                      >
-                        {selectedSources.length === 0
-                          ? `All Sources (${results.sources.length})`
-                          : `${selectedSources.length} selected`}
-                        <Check className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[300px] p-0 bg-background border-border z-50">
-                      <Command className="bg-background">
-                        <CommandInput placeholder="Search sources..." className="h-9" />
-                        <CommandEmpty>No source found.</CommandEmpty>
-                        <CommandGroup className="max-h-64 overflow-auto">
-                          {results.sources.map((source: any) => (
-                            <CommandItem
-                              key={source.name}
-                              value={source.name}
-                              onSelect={() => toggleSource(source.name)}
-                              className="cursor-pointer"
-                            >
-                              <Check
-                                className={`mr-2 h-4 w-4 ${
-                                  selectedSources.includes(source.name) ? "opacity-100" : "opacity-0"
-                                }`}
-                              />
-                              <span className="truncate">
-                                {source.name.length > 35 ? source.name.substring(0, 35) + '...' : source.name}
-                              </span>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  {selectedSources.length > 0 && (
-                    <>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedSources.map((sourceName) => (
-                          <Badge key={sourceName} variant="secondary" className="gap-1">
-                            {sourceName.length > 20 ? sourceName.substring(0, 20) + '...' : sourceName}
-                            <X
-                              className="h-3 w-3 cursor-pointer hover:text-destructive"
-                              onClick={() => toggleSource(sourceName)}
-                            />
-                          </Badge>
-                        ))}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={clearAllFilters}
-                        className="text-xs"
-                      >
-                        Clear All
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </Card>
-            )}
-
-            {(() => {
-              const baseSources = selectedSources.length === 0
-                ? results?.sources || []
-                : (results?.sources || []).filter((source: any) =>
-                    selectedSources.some(selected => selected.trim() === source.name.trim())
-                  );
-              const categoryFiltered = selectedCategories.length === 0
-                ? baseSources
-                : baseSources.filter((source: any) => {
-                    const top = predictCategory(source.categories);
-                    return top ? selectedCategories.includes(top.name) : false;
-                  });
-              const analysisImages = selectedSources.length === 0
-                ? results?.images || []
-                : (results?.images || []).filter((img: any) =>
-                    selectedSources.some(selected => selected.trim() === img.name.trim())
-                  );
-              return (
-                <AnalysisResults
-                  results={categoryFiltered}
-                  isAnalyzing={false}
-                  sourceImages={analysisImages}
-                />
-              );
-            })()}
-          </TabsContent>
-
-          {/* Tab 4: See my SonicSIM — animated audioscope */}
-          <TabsContent value="sonicsim" className="space-y-6">
-            <SonicSimPanel
-              lens="consumer"
-              onSubjectChange={(s) =>
+          <TabsContent value="listen">
+            <ListenTab
+              isSignedIn={!!user}
+              selectedFiles={selectedFiles}
+              spotifyTracks={spotifyTracks}
+              totalItems={totalItems}
+              isAnalyzing={isAnalyzing}
+              analysisProgress={analysisProgress}
+              scopeSubjects={scopeSubjects}
+              onFileSelect={handleFileSelect}
+              onSpotifyTrack={handleSpotifyTrack}
+              onLibrarySelect={handleLibrarySelect}
+              onRemoveFile={removeFile}
+              onRemoveTrack={removeTrack}
+              onClearAll={() => {
+                setSelectedFiles([]);
+                setSpotifyTracks([]);
+              }}
+              onAnalyze={handleAnalyze}
+              onScopeSubjectChange={(s) =>
                 setSonicSimSubject(s && !s.id.startsWith("fingerprint-") ? s.label : null)
               }
-              subjects={[
-                ...(myFingerprint
-                  ? [
-                      {
-                        id: `fingerprint-${myFingerprint.user_id}`,
-                        label: "My sonic fingerprint (aggregate)",
-                        sublabel: `Aggregate · ${myFingerprint.total_sources_analyzed} sources`,
-                        scores: fingerprintToScores(myFingerprint as any),
-                      },
-                    ]
-                  : []),
-                ...(myAnalyses || []).slice(0, 25).map((a) => ({
-                  id: a.id,
-                  label: a.source_name,
-                  sublabel: `Analysis · ${a.source_name}`,
-                  scores: analysisToScores(a as any),
-                })),
-              ]}
             />
           </TabsContent>
 
-          {/* Tab 5: Discover — Taste Neighbors */}
-          <TabsContent value="discover" className="space-y-6">
-            {user && (
-              <TasteNeighbors
-                currentUserId={user.id}
-                currentFingerprint={myFingerprint}
-                allFingerprints={allFingerprints}
-              />
-            )}
+          <TabsContent value="understand">
+            <UnderstandTab
+              results={results}
+              selectedSources={selectedSources}
+              selectedCategories={selectedCategories}
+              highlightSourceName={sonicSimSubject}
+              onToggleSource={toggleSource}
+              onClearSources={clearAllFilters}
+              onToggleCategory={toggleCategory}
+              onClearCategories={clearCategoryFilters}
+            />
+          </TabsContent>
+
+          <TabsContent value="library">
+            <LibraryTab
+              userId={user?.id ?? null}
+              myFingerprint={myFingerprint}
+              allFingerprints={allFingerprints}
+              myAnalyses={(myAnalyses || []) as never}
+            />
           </TabsContent>
         </Tabs>
       </div>

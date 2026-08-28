@@ -51,7 +51,7 @@ import { NetworkVisualization } from "@/components/NetworkVisualization";
 
 import { AnalysisResults } from "@/components/AnalysisResults";
 import { AggregateNetworkVisualization } from "@/components/AggregateNetworkVisualization";
-import { FingerprintComparison } from "@/components/FingerprintComparison";
+import { ScopeCompareLens } from "@/components/visuals/ScopeCompareLens";
 import { useFingerprints } from "@/hooks/useFingerprints";
 import SonicSimPanel from "@/components/visuals/SonicSimPanel";
 import { fingerprintToScores } from "@/lib/audioscope";
@@ -1196,64 +1196,23 @@ const AdminWorkbench = () => {
           {/* Scope & compare — the audioscope and the overlay read of the same
               fingerprints, one lens instead of two tabs. */}
           <TabsContent value="scope" className="space-y-6">
-            <SonicSimPanel
+            <ScopeCompareLens
               lens="debug"
-              title={entityMode === "signal" ? "See this cohort's SonicSIM" : "See my SonicSIM"}
-              description="Animated audioscope of any fingerprint in the current scope — switch subjects to compare identity rings and node pulses."
-              subjects={scopedFingerprints.map((fp: any) => ({
-                id: fp.user_id,
-                label: fp.username || "User",
-                sublabel: `${fp.total_sources_analyzed ?? 0} sources analyzed`,
-                scores: fingerprintToScores(fp, compareMode === "recent" ? "recent" : "all"),
-              }))}
+              fingerprints={scopedFingerprints}
+              toScores={(fp, m) => fingerprintToScores(fp, m === "recent" ? "recent" : "all")}
+              mode={compareMode === "recent" ? "recent" : "all"}
+              onModeChange={(m) => setCompareMode(m as FingerprintMode)}
+              entityMode={entityMode as "user" | "signal" | "provider"}
+              scopeSummary={
+                entityMode === "signal"
+                  ? `identifier cohorts • ${scopedFingerprints.length} cohort fingerprint${scopedFingerprints.length !== 1 ? "s" : ""} from ${signalPoints.length.toLocaleString()} identifiers`
+                  : activeFilterCount > 0
+                    ? `${entityMode === "user" ? "users" : "signal providers"} filter • ${scopedFingerprints.length} of ${allFingerprints.length} fingerprints`
+                    : `all ${allFingerprints.length} fingerprints`
+              }
+              onRefresh={refreshFingerprints}
+              refreshing={fingerprintsLoading}
             />
-          
-            <div className="flex justify-between items-center flex-wrap gap-3">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">
-                  {entityMode === "signal" ? "Compare Cohort Fingerprints" : "Compare User Fingerprints"}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {entityMode === "signal"
-                    ? "Overlay identifier cohorts against each other and the meta rollup"
-                    : "Select 2 or more users to overlay their radar charts side-by-side"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Scope: {entityMode === "signal"
-                    ? `identifier cohorts • ${scopedFingerprints.length} cohort fingerprint${scopedFingerprints.length !== 1 ? "s" : ""} from ${signalPoints.length.toLocaleString()} identifiers`
-                    : activeFilterCount > 0
-                      ? `${entityMode === "user" ? "users" : "signal providers"} filter • ${scopedFingerprints.length} of ${allFingerprints.length} fingerprints`
-                      : `all ${allFingerprints.length} fingerprints`}
-
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="inline-flex rounded-md border border-border p-0.5 bg-muted">
-                  <Button
-                    size="sm"
-                    variant={compareMode === "all" ? "default" : "ghost"}
-                    className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
-                    onClick={() => setCompareMode("all")}
-                  >
-                    <History className="h-3.5 w-3.5" />
-                    All-Time
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={compareMode === "recent" ? "default" : "ghost"}
-                    className="h-9 shrink-0 gap-1.5 whitespace-nowrap"
-                    onClick={() => setCompareMode("recent")}
-                  >
-                    <Clock className="h-3.5 w-3.5" />
-                    Last 30 Days
-                  </Button>
-                </div>
-                <Button variant="outline" size="sm" onClick={refreshFingerprints} disabled={fingerprintsLoading}>
-                  {fingerprintsLoading ? 'Loading...' : 'Refresh'}
-                </Button>
-              </div>
-            </div>
-            <FingerprintComparison fingerprints={scopedFingerprints} mode={compareMode} />
           </TabsContent>
 
           <TabsContent value="analysis" className="space-y-6">

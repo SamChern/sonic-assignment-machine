@@ -14,6 +14,7 @@ export type Category = typeof CATEGORIES[number];
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { embedCached } from "./inference.ts";
+import { isSensitiveTag } from "./sensitiveTaxonomy.ts";
 
 // Dedicated service-role client used only for the embedding cache, so callers
 // that do not already hold a client still get cache hits.
@@ -39,33 +40,43 @@ export async function embed(text: string): Promise<number[] | null> {
   return await embedCached(embedCacheClient, text);
 }
 
-/** Find or create a taxonomy node for a tag code; returns its id. */
+/**
+ * Find or create a taxonomy node for a tag code; returns its id, or null when
+ * the node is suppressed (sensitive POI class — health, worship, shelters …).
+ * Suppressed nodes are never tagged onto an audio source.
+ */
 export async function resolveTag(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   tag: OntologyTag,
-): Promise<string> {
+): Promise<string | null> {
   const { data: existing } = await supabase
-    .from("taxonomy_nodes").select("id").eq("code", tag.code).maybeSingle();
-  if (existing) return existing.id as string;
+    .from("taxonomy_nodes").select("id, suppressed").eq("code", tag.code).maybeSingle();
+  if (existing) return existing.suppressed ? null : (existing.id as string);
 
   const label = tag.label ?? tag.code;
-  const embedding = await embed(
-    `${tag.code} :: ${label}${tag.parent_code ? ` (under ${tag.parent_code})` : ""}`,
-  );
+  // New nodes get their suppression flag at creation time so a sensitive class
+  // is never taggable, not even on the run that first discovers it.
+  const suppressed = isSensitiveTag(tag.code, label);
+  const embedding = suppressed
+    ? null
+    : await embed(
+      `${tag.code} :: ${label}${tag.parent_code ? ` (under ${tag.parent_code})` : ""}`,
+    );
   const { data: inserted, error } = await supabase
     .from("taxonomy_nodes")
-    .insert({ code: tag.code, label, parent_code: tag.parent_code ?? null, embedding })
+    .insert({ code: tag.code, label, parent_code: tag.parent_code ?? null, embedding, suppressed })
     .select("id").single();
   if (error) {
     // Concurrent insert — re-read.
     const { data: retry } = await supabase
-      .from("taxonomy_nodes").select("id").eq("code", tag.code).maybeSingle();
-    if (retry) return retry.id as string;
+      .from("taxonomy_nodes").select("id, suppressed").eq("code", tag.code).maybeSingle();
+    if (retry) return retry.suppressed ? null : (retry.id as string);
     throw error;
   }
-  return inserted.id as string;
+  return suppressed ? null : (inserted.id as string);
 }
+
 
 /** Build the calibration prior block that gets handed to analyze-audio. */
 export async function buildTaxonomyContext(

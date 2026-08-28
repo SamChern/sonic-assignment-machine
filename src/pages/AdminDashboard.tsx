@@ -62,6 +62,7 @@ import { useEC2Api } from "@/hooks/useEC2Api";
 import { calculateSimilarity, type FingerprintMode } from "@/lib/fingerprintMath";
 import { SignalCohortPanel } from "@/components/SignalCohortPanel";
 import { ServerCohortPanel } from "@/components/admin/ServerCohortPanel";
+import { ComplianceCard } from "@/components/admin/ComplianceCard";
 import { IdentifierFilterBar } from "@/components/IdentifierFilterBar";
 import {
   EMPTY_IDENTIFIER_FILTER,
@@ -1324,6 +1325,7 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="ec2" className="space-y-4">
+            <ComplianceCard />
             <Ec2StatusPanel />
             <LibrosaHealthPanel />
           </TabsContent>

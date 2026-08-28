@@ -324,9 +324,13 @@ async function runScore(
   // 2. Taxonomy tags
   enter("tags");
   const nodeIds: string[] = [];
+  let suppressedTags = 0;
   for (const t of tags) {
     try {
-      nodeIds.push(await resolveTag(admin, t));
+      // resolveTag returns null for suppressed sensitive classes — skip them.
+      const nid = await resolveTag(admin, t);
+      if (nid) nodeIds.push(nid);
+      else suppressedTags++;
     } catch (e) {
       const verdict = classifyFailure(e);
       // Credits / policy / rate limits must stop the task; a single unresolved
@@ -338,6 +342,11 @@ async function runScore(
       } else console.warn("tag resolve failed", t.code, errMsg(e));
     }
   }
+  if (suppressedTags) {
+    console.log(
+      JSON.stringify({ evt: "suppressed_tags_skipped", count: suppressedTags, report_type: task.report_type }),
+    );
+  }
   if (nodeIds.length) {
     await admin.from("audio_source_tags").upsert(
       nodeIds.map((nid) => ({
@@ -348,6 +357,7 @@ async function runScore(
       { onConflict: "audio_source_id,node_id" },
     );
   }
+
 
   // 3. Calibration priors + kNN warm start.
   //    `stepScale` < 1 means a previous attempt was killed for compute: keep the

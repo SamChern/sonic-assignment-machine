@@ -292,8 +292,12 @@ export const IntuiziCatalogTree = ({
             expanded={expanded}
             toggle={toggle}
             onPick={onPick}
+            crosswalk={crosswalk}
+            onDecide={onDecide}
+            decidingCode={decidingCode}
           />
         ))}
+
         {!filtered.length && (
           <p className="p-2 text-[11px] text-muted-foreground">No entries match “{query}”.</p>
         )}

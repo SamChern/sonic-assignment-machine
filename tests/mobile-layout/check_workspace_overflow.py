@@ -112,7 +112,9 @@ async def main() -> None:
                 )
                 check(name, not r["clipped"], f"elements past the viewport edge: {r['clipped']}")
 
-                check(name, len(r["tabs"]) == len(TABS), f"expected {len(TABS)} tab triggers, got {len(r['tabs'])}")
+                expected = 4 + GROUP_SIZES[tab]
+                check(name, len(r["tabs"]) == expected, f"expected {expected} tab triggers, got {len(r['tabs'])}")
+
                 for t in r["tabs"]:
                     check(name, not t["truncated"], f"tab label truncated: {t['label']!r}")
                     check(

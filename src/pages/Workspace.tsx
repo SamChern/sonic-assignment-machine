@@ -296,11 +296,12 @@ const Workspace = () => {
               <TabsTrigger
                 key={g.key}
                 value={g.key}
-                className="min-w-0 whitespace-normal px-2 text-[11px] leading-tight sm:text-sm"
+                className="min-w-0 whitespace-normal px-1 text-[11px] leading-tight sm:px-2 sm:text-sm"
               >
-                <g.icon className="mr-1 h-3.5 w-3.5 shrink-0" />
-                <span className="min-w-0">{g.label}</span>
+                <g.icon className="hidden h-3.5 w-3.5 shrink-0 sm:mr-1 sm:inline-block" />
+                <span className="min-w-0 break-words">{g.label}</span>
               </TabsTrigger>
+
             ))}
           </TabsList>
         </Tabs>
@@ -311,11 +312,12 @@ const Workspace = () => {
               <TabsTrigger
                 key={t.key}
                 value={t.key}
-                className="min-w-0 justify-start whitespace-normal px-2 text-center text-[11px] leading-tight sm:justify-center sm:whitespace-nowrap sm:text-xs"
+                className="min-w-0 justify-start whitespace-normal px-1 text-center text-[11px] leading-tight sm:justify-center sm:px-2 sm:whitespace-nowrap sm:text-xs"
               >
-                <t.icon className="mr-1 h-3.5 w-3.5 shrink-0" />
-                <span className="min-w-0">{t.label}</span>
+                <t.icon className="mr-1 hidden h-3.5 w-3.5 shrink-0 sm:inline-block" />
+                <span className="min-w-0 break-words">{t.label}</span>
               </TabsTrigger>
+
             ))}
           </TabsList>
 

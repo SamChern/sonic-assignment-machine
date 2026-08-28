@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useUiPreferenceValue } from "@/hooks/useUiPreference";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -224,14 +225,11 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
   const [compareId, setCompareId] = useState<string>("");
   const [compare, setCompare] = useState<Bundle | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
-  const [threshold, setThreshold] = useState<number>(() => {
-    const saved = Number(localStorage.getItem("sonicsim.lowConfidenceThreshold"));
-    return Number.isFinite(saved) && saved > 0 ? saved : 0.15;
-  });
-
-  useEffect(() => {
-    localStorage.setItem("sonicsim.lowConfidenceThreshold", String(threshold));
-  }, [threshold]);
+  const [threshold, setThreshold] = useUiPreferenceValue<number>(
+    "confidence.lowThreshold",
+    0.15,
+    (v) => typeof v === "number" && v > 0 && v <= 1,
+  );
 
 
   const load = useCallback(async (id: string) => {

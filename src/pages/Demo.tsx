@@ -10,19 +10,21 @@ import featureVideo from "@/assets/sonicsim-features.mp4.asset.json";
 
 type CaptionStyle = "high-contrast" | "minimal";
 
+import { useUiPreferenceValue } from "@/hooks/useUiPreference";
+
 const SOURCES: Record<CaptionStyle, string> = {
   "high-contrast": "/demo/sonicsim-demo-high-contrast.mp4",
   minimal: "/demo/sonicsim-demo-minimal.mp4",
 };
 
-const STORAGE_KEY = "sonicsim-caption-style";
 
 const Demo = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [style, setStyle] = useState<CaptionStyle>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved === "minimal" ? "minimal" : "high-contrast";
-  });
+  const [style, setStyle] = useUiPreferenceValue<CaptionStyle>(
+    "demo.captionStyle",
+    "high-contrast",
+    (v) => v === "minimal" || v === "high-contrast",
+  );
 
   // Swap the burned-in caption variant while preserving playback position/state.
   useEffect(() => {
@@ -40,7 +42,6 @@ const Demo = () => {
       video.removeEventListener("loadedmetadata", restore);
     };
     video.addEventListener("loadedmetadata", restore);
-    localStorage.setItem(STORAGE_KEY, style);
 
     return () => video.removeEventListener("loadedmetadata", restore);
   }, [style]);

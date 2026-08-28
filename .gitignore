@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python bytecode from EC2 deploy bundles
+__pycache__/
+*.pyc

@@ -16,6 +16,8 @@ const Auth = lazy(() => import("./pages/Auth"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AdminWorkbench = lazy(() => import("./pages/admin/AdminWorkbench"));
+const AdminEc2 = lazy(() => import("./pages/admin/AdminEc2"));
 const AdminIntegrations = lazy(() => import("./pages/AdminIntegrations"));
 const AdminConnected = lazy(() => import("./pages/AdminConnected"));
 const AdminCTV = lazy(() => import("./pages/AdminCTV"));
@@ -98,6 +100,8 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
 
               <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/workbench" element={<AdminWorkbench />} />
+              <Route path="/admin/ec2" element={<AdminEc2 />} />
               <Route path="/admin/integrations" element={<AdminIntegrations />} />
               <Route path="/admin/connected" element={<AdminConnected />} />
               <Route path="/admin/ctv" element={<AdminCTV />} />

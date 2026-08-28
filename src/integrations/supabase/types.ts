@@ -1623,6 +1623,72 @@ export type Database = {
         }
         Relationships: []
       }
+      sonic_cohort_exports: {
+        Row: {
+          activation_id: string | null
+          bytes: number
+          cohort_id: string | null
+          cohort_slug: string
+          created_at: string
+          dt: string
+          error: string | null
+          id: string
+          object_key: string | null
+          organization_id: string | null
+          row_count: number
+          started_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          activation_id?: string | null
+          bytes?: number
+          cohort_id?: string | null
+          cohort_slug: string
+          created_at?: string
+          dt?: string
+          error?: string | null
+          id?: string
+          object_key?: string | null
+          organization_id?: string | null
+          row_count?: number
+          started_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          activation_id?: string | null
+          bytes?: number
+          cohort_id?: string | null
+          cohort_slug?: string
+          created_at?: string
+          dt?: string
+          error?: string | null
+          id?: string
+          object_key?: string | null
+          organization_id?: string | null
+          row_count?: number
+          started_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sonic_cohort_exports_cohort_id_fkey"
+            columns: ["cohort_id"]
+            isOneToOne: false
+            referencedRelation: "sonic_cohorts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sonic_cohort_exports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sonic_cohort_members: {
         Row: {
           added_at: string

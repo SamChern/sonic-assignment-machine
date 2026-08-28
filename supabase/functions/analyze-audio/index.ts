@@ -775,9 +775,8 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         const spread = Math.max(0.1, Math.min(1, stddev / 30));
         // Phase 2 — weight confidence by the acoustic evidence tier that was
         // actually available (librosa > provider > neighbours > metadata).
-        const evidence =
-          uncachedSources.find(s => s.name === sourceResult.name)?.evidence ??
-          'librosa'; // cached analyses were scored with their own evidence
+        const matched = uncachedSources.find(s => s.name === sourceResult.name);
+        const evidence = matched?.evidence ?? 'librosa'; // cached analyses kept their own evidence
         const confidence = blendConfidence(spread, evidence);
 
 
@@ -786,8 +785,10 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
           audio_source_id: sourceIdMap.get(sourceResult.name) || null,
           source_name: sourceResult.name,
           confidence,
+          context_neighbors: matched?.context_neighbors ?? null,
           ...categories,
         };
+
       });
 
       // Single bulk insert instead of N individual inserts

@@ -5,6 +5,8 @@
  * and tag weights. Keep in sync with the edge function when rules change.
  */
 
+import { iabLabel } from "./iabLabels";
+
 export const REPORT_TYPES = [
   "ctv",
   "apps",
@@ -205,7 +207,7 @@ export function inspectRow(
           const cats = multi(hit.value);
           value = cats;
           for (const c of cats)
-            fieldTags.push({ code: `iab.${slug(c)}`, label: `IAB category ${c}`, parent_code: "iab" });
+            fieldTags.push({ code: `iab.${slug(c)}`, label: iabLabel(c), parent_code: "iab" });
         }
         if (s.field === "page") {
           const topics = pathTopics(hit.value);

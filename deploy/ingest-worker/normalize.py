@@ -149,7 +149,7 @@ def normalize_row(report_type: str, row: Dict[str, Any]) -> Optional[Dict[str, A
         if channel:
             tag(f"ctv.channel.{slug(channel)}", f"CTV channel: {channel}", "ctv.channel")
         for c in iab:
-            tag(f"iab.{slug(c)}", f"IAB category {c}", "iab")
+            tag(f"iab.{slug(c)}", iab_label(c), "iab")
 
         page = pick(row, "page", "path", "url")
         topics = path_topics(page)

@@ -5,7 +5,7 @@ folder runs **on your EC2 box**, alongside the existing librosa services. The
 app never calls it directly — edge functions reach it through the same
 `aws-proxy` path already used for librosa.
 
-- Port `8767` (loopback), public path `/semantic/*` via nginx
+- Port `8769` (loopback), public path `/semantic/*` via nginx
 - Own venv at `/opt/semantic-svc/.venv` (never shares the librosa venv)
 - Model: LAION-CLAP `630k-audioset-best`, 512-d text and audio embeddings
 - Bridge: 512 → 1536 projection, **identity stub** until Step 8 trains weights

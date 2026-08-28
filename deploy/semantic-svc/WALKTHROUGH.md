@@ -79,7 +79,7 @@ commentary:
 | `==> auth token` | generating the service password |
 | `==> warm the CLAP checkpoint` | downloading the model, ~2 GB — the longest wait |
 | `==> systemd` | registering the service so it restarts on reboot |
-| `==> waiting for :8767` then `up` | **success** |
+| `==> waiting for :8769` then `up` | **success** |
 
 At the end it prints a JSON health line and a "NEXT STEPS" box. If you see `up`
 and JSON, step 3 worked.
@@ -143,7 +143,7 @@ map $http_authorization $semantic_auth_ok {
 }
 limit_req_zone $binary_remote_addr zone=semantic_svc:10m rate=5r/s;
 upstream semantic_svc_upstream {
-    server 127.0.0.1:8767 max_fails=3 fail_timeout=15s;
+    server 127.0.0.1:8769 max_fails=3 fail_timeout=15s;
     keepalive 8;
 }
 ```
@@ -272,7 +272,7 @@ change, no downtime on this box.
 
 | Thing | Value |
 | --- | --- |
-| Port (internal only) | `8767` |
+| Port (internal only) | `8769` |
 | Public path | `https://<host>/semantic/` |
 | Install folder | `/opt/semantic-svc` |
 | Token file | `/etc/semantic-svc.token` |

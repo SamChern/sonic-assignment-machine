@@ -10,7 +10,7 @@ set -euo pipefail
 
 APP_DIR=/opt/semantic-svc
 VENV="$APP_DIR/.venv"
-PORT=8767
+PORT=8769
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "==> apt deps"

@@ -113,7 +113,9 @@ const App = () => (
             </Routes>
           </Suspense>
           </div>
+          <MobileAuthFallback />
           <MobileBottomNav />
+
           <VersionStatusPanel />
 
         </BrowserRouter>

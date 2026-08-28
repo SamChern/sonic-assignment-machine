@@ -251,8 +251,17 @@ Deno.serve(async (req) => {
       // librosa (cached measurements) -> provider audio features (Spotify) ->
       // nearest-neighbour prior over profile_embedding -> metadata only.
       if (supabaseAdmin) {
-        // Tier 1 — cached librosa features.
-        const ids = uncachedSources.map(s => s.audio_source_id).filter(Boolean) as string[];
+        // Step 4 — a subject with taxonomy context but no audio location is
+        // scored from its tag embeddings. It never touches the librosa branch.
+        for (const s of uncachedSources) {
+          s.tag_only = !!s.taxonomy_context && !s.file_url;
+        }
+
+        // Tier 1 — cached librosa features (audio-backed subjects only).
+        const ids = uncachedSources
+          .filter(s => !s.tag_only)
+          .map(s => s.audio_source_id)
+          .filter(Boolean) as string[];
         if (ids.length > 0) {
           const { data: featRows } = await supabaseAdmin
             .from('audio_sources')
@@ -260,7 +269,7 @@ Deno.serve(async (req) => {
             .in('id', ids);
           const byId = new Map((featRows ?? []).map(r => [r.id, r.librosa_features]));
           for (const s of uncachedSources) {
-            if (!s.audio_source_id) continue;
+            if (!s.audio_source_id || s.tag_only) continue;
             const profile = formatLibrosaProfile(byId.get(s.audio_source_id));
             if (profile) {
               s.acoustic_profile = profile;
@@ -270,7 +279,9 @@ Deno.serve(async (req) => {
         }
 
         // Tier 2 — provider-supplied audio features (never touches EC2).
-        const needProvider = uncachedSources.filter(s => !s.acoustic_profile && s.spotify_id);
+        const needProvider = uncachedSources.filter(
+          s => !s.acoustic_profile && s.spotify_id && !s.tag_only,
+        );
         if (needProvider.length > 0) {
           const providerMap = await fetchProviderFeatures(
             needProvider.map(s => s.spotify_id!) as string[],
@@ -284,17 +295,82 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Tier 3 — borrow the character of the nearest analyzed neighbours.
+        // Step 4 — tag-only subject vectors: weight-normalized sum of tag
+        // embeddings, preferring grounded CLAP `audio_embedding` per node.
+        for (const s of uncachedSources) {
+          if (!s.tag_only || !s.audio_source_id) continue;
+          try {
+            const { data: tagRows } = await supabaseAdmin
+              .from('audio_source_tags')
+              .select('weight, taxonomy_nodes(id, code, label, embedding, audio_embedding, grounding_count)')
+              .eq('audio_source_id', s.audio_source_id);
+            const nodes: TaxonomyNodeVectors[] = (tagRows ?? [])
+              // deno-lint-ignore no-explicit-any
+              .map((r: any) => (r.taxonomy_nodes ? { ...r.taxonomy_nodes, weight: r.weight } : null))
+              .filter(Boolean) as TaxonomyNodeVectors[];
+            if (nodes.length === 0) continue;
+            const subject = weightedTagVector(nodes);
+            s.taxonomy_context = [s.taxonomy_context, describeTagSubject(nodes, subject)]
+              .filter(Boolean)
+              .join(' ');
+
+            // kNN exemplars from the subject vector when dimensions line up
+            // with the catalog space (`vector(1536)`).
+            if (subject && subject.vector.length === 1536) {
+              const { data: knn } = await supabaseAdmin.rpc('match_audio_profiles', {
+                query_embedding: subject.vector,
+                match_count: 5,
+                exclude_id: s.audio_source_id,
+              });
+              const ctx = buildNeighborExemplars(knn as unknown[] as Record<string, unknown>[]);
+              if (ctx.exemplars.length > 0) {
+                s.context_neighbors = ctx.exemplars;
+                s.taxonomy_context = [s.taxonomy_context, ctx.text].filter(Boolean).join(' ');
+                s.evidence = 'neighbors';
+              }
+            }
+          } catch (e) {
+            console.error('Tag-only subject vector failed:', e);
+          }
+        }
+
+        // Tier 3 — CaMML-style exemplars from the nearest analyzed sources.
         const needNeighbors = uncachedSources.filter(
-          s => !s.acoustic_profile && s.audio_source_id,
+          s => !s.acoustic_profile && s.audio_source_id && !s.context_neighbors,
         );
         for (const s of needNeighbors) {
+          try {
+            const { data: row } = await supabaseAdmin
+              .from('audio_sources')
+              .select('profile_embedding')
+              .eq('id', s.audio_source_id!)
+              .maybeSingle();
+            const embedding = row?.profile_embedding;
+            if (embedding) {
+              const { data: knn } = await supabaseAdmin.rpc('match_audio_profiles', {
+                query_embedding: embedding,
+                match_count: 5,
+                exclude_id: s.audio_source_id,
+              });
+              const ctx = buildNeighborExemplars(knn as unknown[] as Record<string, unknown>[]);
+              if (ctx.exemplars.length > 0) {
+                s.context_neighbors = ctx.exemplars;
+                s.taxonomy_context = [s.taxonomy_context, ctx.text].filter(Boolean).join(' ');
+                s.evidence = 'neighbors';
+                continue;
+              }
+            }
+          } catch (e) {
+            console.error('Exemplar retrieval failed:', e);
+          }
+          // Fallback to the legacy aggregate prior when kNN yields nothing.
           const prior = await neighborPrior(supabaseAdmin, s.audio_source_id!);
           if (prior) {
             s.taxonomy_context = [s.taxonomy_context, prior.text].filter(Boolean).join(' ');
             s.evidence = 'neighbors';
           }
         }
+
 
         for (const s of uncachedSources) if (!s.evidence) s.evidence = 'none';
         console.log(

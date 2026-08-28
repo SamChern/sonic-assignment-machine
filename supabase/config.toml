@@ -31,3 +31,8 @@ verify_jwt = false
 
 [functions.analysis-job-status]
 verify_jwt = false
+
+# The EC2 DuckDB ingest worker has no user session: it authenticates with the
+# service-role token or INGEST_WORKER_SECRET, validated in code.
+[functions.ingest-worker-callback]
+verify_jwt = false

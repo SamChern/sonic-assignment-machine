@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useUiPreferenceValue } from "@/hooks/useUiPreference";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -95,32 +96,21 @@ const IntegrationStatus = () => {
   } | null>(null);
   const [running, setRunning] = useState(false);
 
-  const stagePrefsKey = user ? `sonicsim.pipeline.expandedStages.${user.id}` : null;
+  // Collapse/expand choices ride on the unified preference store, so the shape
+  // of this page follows the operator across devices.
+  const [stagePrefs, setStagePrefs] = useUiPreferenceValue<Record<string, boolean>>(
+    "pipeline.expandedStages",
+    {},
+    (v) => !!v && typeof v === "object" && !Array.isArray(v),
+  );
 
-  // Restore this user's saved collapse/expand choices.
   useEffect(() => {
-    if (!stagePrefsKey) return;
-    try {
-      const raw = localStorage.getItem(stagePrefsKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") setExpandedStages(parsed as Record<string, boolean>);
-      }
-    } catch {
-      /* ignore malformed prefs */
-    }
-  }, [stagePrefsKey]);
+    if (Object.keys(stagePrefs).length) setExpandedStages(stagePrefs);
+  }, [stagePrefs]);
 
   const persistStages = useCallback(
-    (next: Record<string, boolean>) => {
-      if (!stagePrefsKey) return;
-      try {
-        localStorage.setItem(stagePrefsKey, JSON.stringify(next));
-      } catch {
-        /* storage unavailable */
-      }
-    },
-    [stagePrefsKey],
+    (next: Record<string, boolean>) => setStagePrefs(next),
+    [setStagePrefs],
   );
 
   const toggle = (key: string) =>

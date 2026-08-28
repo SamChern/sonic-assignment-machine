@@ -9,6 +9,8 @@ import { toast } from "@/hooks/use-toast";
 import IngestDebugPanel from "@/components/IngestDebugPanel";
 import IngestByKeyPanel from "@/components/IngestByKeyPanel";
 import EnrichmentReadinessPanel from "@/components/EnrichmentReadinessPanel";
+import AudioSetCrosswalkPanel from "@/components/admin/AudioSetCrosswalkPanel";
+
 
 
 import {

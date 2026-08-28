@@ -8,6 +8,13 @@ import {
   type EvidenceKind,
 } from '../_shared/evidence.ts';
 import { chatCompletion, GatewayError, stableHash } from '../_shared/inference.ts';
+import {
+  buildNeighborExemplars,
+  describeTagSubject,
+  type NeighborExemplar,
+  type TaxonomyNodeVectors,
+  weightedTagVector,
+} from '../_shared/context.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,12 +30,18 @@ interface AudioSource {
   type: 'file' | 'track';
   audio_source_id?: string;
   spotify_id?: string; // For cache key lookup
+  /** Optional direct audio location. When absent the tag-only path is used. */
+  file_url?: string | null;
   acoustic_profile?: string; // Optional pre-formatted acoustic summary
   taxonomy_context?: string; // Optional CTV taxonomy + calibration prior block
   /** Phase 2 — which evidence tier produced `acoustic_profile`. */
   evidence?: EvidenceKind;
   /** Hash of the acoustic/taxonomy evidence actually used for scoring. */
   feature_hash?: string;
+  /** Step 4 — retrieved kNN exemplars recorded per call. */
+  context_neighbors?: NeighborExemplar[];
+  /** Step 4 — true when scored from tag embeddings, no librosa involved. */
+  tag_only?: boolean;
 }
 
 
@@ -37,6 +50,7 @@ interface AnalysisRequest {
   user_id?: string;
   save_results?: boolean;
 }
+
 
 interface CategoryResult {
   name: string;

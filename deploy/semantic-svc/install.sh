@@ -30,6 +30,12 @@ fi
 sudo -u ubuntu "$VENV/bin/pip" install -q --upgrade pip wheel
 # torch CPU wheels are ~200MB; this step takes several minutes on first run.
 sudo -u ubuntu "$VENV/bin/pip" install -q -r "$APP_DIR/requirements.txt"
+# laion-clap metadata hard-pins numpy==1.23.5 (unbuildable on py3.12 and
+# incompatible with torch 2.4). Its real deps are pinned in requirements.txt,
+# so install the package itself without resolving its metadata.
+sudo -u ubuntu "$VENV/bin/pip" install -q --no-deps laion-clap==1.1.6
+sudo -u ubuntu "$VENV/bin/python" -c "import laion_clap, numpy; print('clap ok, numpy', numpy.__version__)"
+
 
 echo "==> auth token"
 if [ ! -f /etc/semantic-svc.token ]; then

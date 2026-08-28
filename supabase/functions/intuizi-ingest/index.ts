@@ -1280,6 +1280,7 @@ Deno.serve(async (req) => {
           trace_id: fileTraceId,
           row_group_cursor: resumeGroup,
           rows_offset: resumeRowsOffset,
+          max_rows: caps.rows,
         });
 
         const dispatchMs = Date.now() - dispatchStart;

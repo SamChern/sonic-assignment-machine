@@ -2,6 +2,7 @@ import { History, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SonicSimPanel } from "@/components/visuals/SonicSimPanel";
 import { FingerprintComparison } from "@/components/FingerprintComparison";
+import type { SonicSimSubject } from "@/components/visuals/SonicSimPanel";
 
 export type ScopeCompareMode = "all" | "recent";
 
@@ -9,7 +10,7 @@ interface ScopeCompareLensProps {
   /** Fingerprints already narrowed by the caller's filters. */
   fingerprints: any[];
   /** Maps a fingerprint to the six-axis scores the audioscope animates. */
-  toScores: (fingerprint: any, mode: ScopeCompareMode) => Record<string, number>;
+  toScores: (fingerprint: any, mode: ScopeCompareMode) => SonicSimSubject["scores"];
   mode: ScopeCompareMode;
   onModeChange: (mode: ScopeCompareMode) => void;
   /** "signal" swaps the copy from users to identifier cohorts. */

@@ -61,6 +61,7 @@ import { fingerprintToScores } from "@/lib/audioscope";
 import { useEC2Api } from "@/hooks/useEC2Api";
 import { calculateSimilarity, type FingerprintMode } from "@/lib/fingerprintMath";
 import { SignalCohortPanel } from "@/components/SignalCohortPanel";
+import { ServerCohortPanel } from "@/components/admin/ServerCohortPanel";
 import { IdentifierFilterBar } from "@/components/IdentifierFilterBar";
 import {
   EMPTY_IDENTIFIER_FILTER,
@@ -900,20 +901,24 @@ const AdminDashboard = () => {
 
           <TabsContent value="users" className="space-y-4">
             {entityMode === "signal" ? (
-              <SignalCohortPanel
-                points={signalPoints}
-                cohorts={cohorts}
-                meta={meta}
-                cohortCount={cohortCount}
-                onCohortCountChange={(k) => {
-                  setCohortCountTouched(true);
-                  setCohortCount(k);
-                }}
-                selectedCohortKeys={selectedCohortKeys}
-                onToggleCohort={toggleCohortFilter}
-                loading={signalsLoading}
-              />
+              <div className="space-y-4">
+                <ServerCohortPanel />
+                <SignalCohortPanel
+                  points={signalPoints}
+                  cohorts={cohorts}
+                  meta={meta}
+                  cohortCount={cohortCount}
+                  onCohortCountChange={(k) => {
+                    setCohortCountTouched(true);
+                    setCohortCount(k);
+                  }}
+                  selectedCohortKeys={selectedCohortKeys}
+                  onToggleCohort={toggleCohortFilter}
+                  loading={signalsLoading}
+                />
+              </div>
             ) : entityMode === "user" ? (
+
               <div className="space-y-3">
                 {/* Streamlined list toolbar: search + sort */}
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

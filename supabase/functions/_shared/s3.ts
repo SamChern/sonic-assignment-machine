@@ -56,7 +56,14 @@ interface S3Driver {
   listObjects(prefix: string, maxKeys: number): Promise<S3Object[]>;
   signReadUrl(objectKey: string): Promise<string>;
   headObject(objectKey: string): Promise<S3ObjectHead>;
+  putObject(objectKey: string, body: Uint8Array, opts?: PutObjectOptions): Promise<void>;
 }
+
+export interface PutObjectOptions {
+  contentType?: string;
+  contentEncoding?: string;
+}
+
 
 // ---------------------------------------------------------------------------
 // Backend 1: Lovable connector gateway (temporary path)
@@ -179,7 +186,42 @@ const gatewayDriver: S3Driver = {
       etag: res.headers.get("ETag")?.replace(/"/g, "") ?? null,
     };
   },
+
+  // Object bytes cannot be PUT through the gateway proxy, so a short-lived
+  // signed write URL is requested and the body uploaded straight to S3.
+  async putObject(objectKey, body, opts) {
+    const res = await fetch(
+      `${GATEWAY_BASE}/api/v1/sign_storage_url?provider=${CONNECTOR}&mode=write`,
+      {
+        method: "POST",
+        headers: { ...gatewayHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ object_path: objectKey }),
+      },
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      throw Object.assign(new Error(`S3 write sign failed [${res.status}]: ${text}`), {
+        status: res.status,
+      });
+    }
+    const { url } = await res.json();
+    if (!url) throw new Error("S3 write sign returned no url");
+
+    const headers: Record<string, string> = {
+      "Content-Type": opts?.contentType ?? "application/octet-stream",
+    };
+    if (opts?.contentEncoding) headers["Content-Encoding"] = opts.contentEncoding;
+
+    const put = await fetch(url as string, { method: "PUT", headers, body });
+    if (!put.ok) {
+      const text = await put.text();
+      throw Object.assign(new Error(`S3 put failed [${put.status}]: ${text}`), {
+        status: put.status,
+      });
+    }
+  },
 };
+
 
 // ---------------------------------------------------------------------------
 // Backend 2: direct AWS S3 with an IAM user access key (SigV4)
@@ -256,22 +298,32 @@ export function amzDates() {
 
 /** Sign a request with SigV4 in the Authorization header. */
 async function signedFetch(
-  method: "GET" | "HEAD",
+  method: "GET" | "HEAD" | "PUT",
   path: string,
   query: Record<string, string> = {},
+  payload?: Uint8Array,
+  extraHeaders: Record<string, string> = {},
 ): Promise<Response> {
   const cfg = directConfig();
   const { amzDate, dateStamp } = amzDates();
-  const payloadHash = await sha256Hex("");
+  const payloadHash = await sha256Hex(payload ?? "");
 
   const canonicalQuery = Object.keys(query)
     .sort()
     .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(query[k])}`)
     .join("&");
 
-  const canonicalHeaders =
-    `host:${cfg.host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
-  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  // Extra headers participate in the signature, so they are folded into the
+  // canonical header block in the lowercase-sorted order SigV4 requires.
+  const headerMap: Record<string, string> = {
+    host: cfg.host,
+    "x-amz-content-sha256": payloadHash,
+    "x-amz-date": amzDate,
+  };
+  for (const [k, v] of Object.entries(extraHeaders)) headerMap[k.toLowerCase()] = v;
+  const sortedNames = Object.keys(headerMap).sort();
+  const canonicalHeaders = sortedNames.map((n) => `${n}:${headerMap[n]}\n`).join("");
+  const signedHeaders = sortedNames.join(";");
   const canonicalRequest =
     `${method}\n${path}\n${canonicalQuery}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
 
@@ -284,13 +336,16 @@ async function signedFetch(
   return await fetch(url, {
     method,
     headers: {
+      ...extraHeaders,
       Authorization:
         `AWS4-HMAC-SHA256 Credential=${cfg.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
       "x-amz-content-sha256": payloadHash,
       "x-amz-date": amzDate,
     },
+    ...(payload ? { body: payload } : {}),
   });
 }
+
 
 /** Build a presigned GET URL (query-string SigV4) valid for expiresIn seconds. */
 async function presignGet(objectKey: string, expiresIn = 900): Promise<string> {
@@ -377,7 +432,23 @@ const directDriver: S3Driver = {
       etag: res.headers.get("ETag")?.replace(/"/g, "") ?? null,
     };
   },
+
+  async putObject(objectKey, body, opts) {
+    const extra: Record<string, string> = {
+      "content-type": opts?.contentType ?? "application/octet-stream",
+    };
+    if (opts?.contentEncoding) extra["content-encoding"] = opts.contentEncoding;
+    const res = await signedFetch("PUT", `/${encodeKeyPath(objectKey)}`, {}, body, extra);
+    if (!res.ok) {
+      const text = await res.text();
+      throw Object.assign(new Error(`S3 put failed [${res.status}]: ${text}`), {
+        status: res.status,
+      });
+    }
+    await res.arrayBuffer();
+  },
 };
+
 
 // ---------------------------------------------------------------------------
 // Backend 3: enterprise ingestion path (PLACEHOLDER)
@@ -434,7 +505,14 @@ const enterpriseDriver: S3Driver = {
     enterpriseConfig();
     return notImplemented("headObject");
   },
+
+  putObject(_objectKey, _body, _opts) {
+    // TODO(enterprise): upload activation files through the enterprise endpoint.
+    enterpriseConfig();
+    return notImplemented("putObject");
+  },
 };
+
 
 // ---------------------------------------------------------------------------
 // Public interface — callers never touch a driver directly
@@ -541,4 +619,14 @@ export function headObject(objectKey: string): Promise<S3ObjectHead> {
   const d = driver();
   return memo(headCache, `${d.name}|${objectKey}`, HEAD_TTL_MS, () => d.headObject(objectKey));
 }
+
+/** Write object bytes (outbound activation files). Never memoized. */
+export function putObject(
+  objectKey: string,
+  body: Uint8Array,
+  opts?: PutObjectOptions,
+): Promise<void> {
+  return driver().putObject(objectKey, body, opts);
+}
+
 

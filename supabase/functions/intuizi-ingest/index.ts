@@ -1227,14 +1227,11 @@ Deno.serve(async (req) => {
             error_message: null,
           }).eq("id", fileRow.id);
           summary.files_processed++;
-
-        // Nudge the background scorer so queued identifiers start immediately
-        // instead of waiting for the next scheduled worker tick.
-        if (summary.identifiers_queued > 0) {
+          summary.audio_files_scored++;
+          // Nudge the background scorer so the audio identifier starts now
+          // instead of waiting for the next scheduled worker tick.
           admin.functions.invoke("intuizi-score-worker", { body: { source: "ingest" } })
             .catch((e: unknown) => console.warn("score worker kick failed", errMsg(e)));
-        }
-          summary.audio_files_scored++;
         } catch (e) {
           const msg = errMsg(e);
           await admin.from("intuizi_ingest_files").update({

@@ -189,6 +189,22 @@ export function activeEmbeddingSpace(): string {
   return `gateway:${GATEWAY_EMBED_MODEL}`;
 }
 
+/**
+ * Async form of `activeEmbeddingSpace()` that also accounts for the EC2
+ * semantic service (CLAP), whose credentials live in the admin credentials
+ * table rather than in env. Every cache read/write goes through this so a CLAP
+ * vector is never compared with a gateway vector.
+ */
+export async function resolveEmbeddingSpace(
+  // deno-lint-disable-next-line no-explicit-any
+  supabase: any | null,
+): Promise<string> {
+  const cfg = await getSemanticSvcConfig(supabase);
+  if (cfg) return cfg.space;
+  return activeEmbeddingSpace();
+}
+
+
 /** Zero-pad a shorter vector up to the pgvector column width. */
 function padTo(v: number[], dims: number): number[] {
   if (v.length === dims) return v;

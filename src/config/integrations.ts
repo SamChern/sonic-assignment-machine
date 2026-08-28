@@ -230,6 +230,43 @@ export const INTEGRATIONS: Integration[] = [
     testEndpoint: "librosa-rest-test",
   },
   {
+    id: "semantic_svc",
+    kind: "rest",
+    name: "Semantic Service",
+    description:
+      "EC2 semantic-svc: CLAP/audio + text embeddings and ontology scoring used by the semantic analysis pipeline. Runs on the same box as Librosa, behind nginx with a Bearer token.",
+    docsUrl: "https://sonicsimai.lovable.app/semantic-svc/bootstrap.sh",
+    setupSteps: [
+      "On the EC2 box: curl -fsSL https://sonicsimai.lovable.app/semantic-svc/bootstrap.sh | sudo bash — installs semantic-svc on 127.0.0.1:8769 as a systemd service.",
+      "Add the /semantic/ location block (see deploy/semantic-svc/nginx-semantic-svc.conf) to the ACTIVE nginx vhost, keeping upstream + auth in /etc/nginx/conf.d/semantic-svc.conf, then `sudo nginx -t && sudo systemctl reload nginx`.",
+      "Read the token: `sudo cat /etc/semantic-svc.token`.",
+      "Verify: `curl -H 'Authorization: Bearer <token>' https://YOUR_HOST/semantic/healthz` returns `{\"ok\":true,...}`.",
+      "Paste the base URL (ending in /semantic, no trailing slash) and the token below, then click Test Connection. Prefer https:// once inbound 443 is open on the security group.",
+    ],
+    fields: [
+      {
+        key: "SEMANTIC_SVC_URL",
+        label: "Base URL",
+        type: "text",
+        placeholder: "https://your-ec2-host/semantic",
+        helpText:
+          "Base URL of the semantic service, without trailing slash. The tester appends /healthz automatically.",
+        required: true,
+      },
+      {
+        key: "SEMANTIC_SVC_TOKEN",
+        label: "Bearer Token",
+        type: "password",
+        placeholder: "64-char hex string from /etc/semantic-svc.token",
+        helpText:
+          "Token enforced by the nginx /semantic/ block. Sent as `Authorization: Bearer <token>`.",
+        required: true,
+      },
+    ],
+    testEndpoint: "semantic-svc-test",
+  },
+
+  {
     id: "pandora",
     kind: "rest",
     name: "Pandora",

@@ -4,7 +4,9 @@ import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { User, Heart, Brain, Users, MessageCircle, Map, Palette, Layers, ZoomIn, ZoomOut, RotateCcw, Maximize } from "lucide-react";
+import { User, Heart, Brain, Users, MessageCircle, Map, Palette, Layers } from "lucide-react";
+import { useGraphZoom } from "@/components/graph/useGraphZoom";
+import { GraphZoomControls } from "@/components/graph/GraphZoomControls";
 import samLogo from "@/assets/sam-logo.png";
 
 // Store nodes reference for fit-to-view calculation
@@ -198,83 +200,20 @@ export const AggregateNetworkVisualization = ({
   onUserClick 
 }: AggregateNetworkVisualizationProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [hoveredUser, setHoveredUser] = useState<UserFingerprint | null>(null);
   const [hoveredCluster, setHoveredCluster] = useState<Cluster | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const [currentZoom, setCurrentZoom] = useState(1);
 
-  // Zoom control functions
-  const handleZoomIn = () => {
-    if (svgRef.current && zoomRef.current) {
-      d3.select(svgRef.current)
-        .transition()
-        .duration(300)
-        .call(zoomRef.current.scaleBy, 1.3);
-    }
-  };
+  // Zoom/pan/fit behaviour is shared with the single-source graph; the aggregate
+  // canvas is a fixed 500px tall, and its nodes carry label + ring padding.
+  const { currentZoom, createZoomBehavior, zoomIn, zoomOut, zoomReset, fitToView } =
+    useGraphZoom(svgRef, 500);
 
-  const handleZoomOut = () => {
-    if (svgRef.current && zoomRef.current) {
-      d3.select(svgRef.current)
-        .transition()
-        .duration(300)
-        .call(zoomRef.current.scaleBy, 0.7);
-    }
-  };
-
-  const handleZoomReset = () => {
-    if (svgRef.current && zoomRef.current) {
-      d3.select(svgRef.current)
-        .transition()
-        .duration(300)
-        .call(zoomRef.current.transform, d3.zoomIdentity);
-    }
-  };
-
-  const handleFitToView = () => {
-    if (!svgRef.current || !zoomRef.current || nodesRef.length === 0) return;
-
-    const width = svgRef.current.clientWidth || 800;
-    const height = 500;
-    const padding = 60;
-
-    // Calculate bounding box of all nodes
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    nodesRef.forEach(node => {
-      const x = node.x ?? width / 2;
-      const y = node.y ?? height / 2;
-      const r = node.radius + 40; // Account for labels and rings
-      minX = Math.min(minX, x - r);
-      maxX = Math.max(maxX, x + r);
-      minY = Math.min(minY, y - r);
-      maxY = Math.max(maxY, y + r);
-    });
-
-    const boundingWidth = maxX - minX;
-    const boundingHeight = maxY - minY;
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-
-    // Calculate scale to fit all nodes with padding
-    const scale = Math.min(
-      (width - padding * 2) / boundingWidth,
-      (height - padding * 2) / boundingHeight,
-      2 // Max zoom of 2x
+  const handleFitToView = () =>
+    fitToView(
+      nodesRef.map((n) => ({ ...n, radius: n.radius + 40 })),
+      60,
     );
-
-    // Calculate translation to center the nodes
-    const translateX = width / 2 - centerX * scale;
-    const translateY = height / 2 - centerY * scale;
-
-    d3.select(svgRef.current)
-      .transition()
-      .duration(500)
-      .call(
-        zoomRef.current.transform,
-        d3.zoomIdentity.translate(translateX, translateY).scale(scale)
-      );
-  };
 
   // Compute clusters
   const clusters = useMemo(() => {
@@ -341,15 +280,10 @@ export const AggregateNetworkVisualization = ({
 
     svg.attr("width", width).attr("height", height);
 
-    // Create zoom behavior
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.3, 4])
-      .on("zoom", (event) => {
-        mainGroup.attr("transform", event.transform);
-        setCurrentZoom(event.transform.k);
-      });
-
-    zoomRef.current = zoom;
+    // Create zoom behavior (shared graph core)
+    const zoom = createZoomBehavior((transform) => {
+      mainGroup.attr("transform", transform.toString());
+    });
     svg.call(zoom);
 
     // Main group for all zoomable content
@@ -654,49 +588,15 @@ export const AggregateNetworkVisualization = ({
           </div>
         </div>
 
-        {/* Zoom controls - bottom left */}
-        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 bg-card/95 backdrop-blur-sm rounded-lg p-2 border border-border/50 shadow-lg">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleZoomOut}
-            title="Zoom out"
-          >
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          <span className="text-xs text-muted-foreground min-w-[3rem] text-center font-medium">
-            {Math.round(currentZoom * 100)}%
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleZoomIn}
-            title="Zoom in"
-          >
-            <ZoomIn className="h-4 w-4" />
-          </Button>
-          <div className="w-px h-6 bg-border mx-1" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleZoomReset}
-            title="Reset zoom"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleFitToView}
-            title="Fit all nodes to view"
-          >
-            <Maximize className="h-4 w-4" />
-          </Button>
-        </div>
+        {/* Zoom controls - bottom left (shared toolbar) */}
+        <GraphZoomControls
+          className="bottom-4 left-4"
+          currentZoom={currentZoom}
+          onZoomIn={zoomIn}
+          onZoomOut={zoomOut}
+          onZoomReset={zoomReset}
+          onFitToView={handleFitToView}
+        />
 
         {/* Cluster legend in top right */}
         {clusters.length > 0 && (

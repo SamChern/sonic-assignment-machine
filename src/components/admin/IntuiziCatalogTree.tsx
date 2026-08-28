@@ -242,10 +242,12 @@ export const IntuiziCatalogTree = ({
   if (!roots.length) {
     return (
       <p className="text-[11px] text-muted-foreground">
-        No catalog entries loaded yet — pick a dataset and catalog above, then hit Lookup.
+        {emptyHint ??
+          "No catalog entries loaded yet — pick a dataset and catalog above, then hit Lookup."}
       </p>
     );
   }
+
 
   return (
     <div className="w-full space-y-2">

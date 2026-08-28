@@ -16,6 +16,13 @@
 // When EC2_INFERENCE_URL is unset the behaviour is byte-for-byte the previous
 // gateway behaviour.
 
+import {
+  clapEmbedAudio,
+  clapEmbedText,
+  getSemanticSvcConfig,
+  semanticSvcBreakerOpen,
+} from "./semanticSvc.ts";
+
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
 const EC2_URL = (Deno.env.get("EC2_INFERENCE_URL") ?? "").replace(/\/+$/, "");
 const EC2_KEY = Deno.env.get("EC2_INFERENCE_API_KEY") ?? Deno.env.get("AWS_API_KEY") ?? "";
@@ -214,11 +221,22 @@ function padTo(v: number[], dims: number): number[] {
 }
 
 /**
- * Embed a text string. Order: EC2 server -> Lovable gateway.
+ * Embed a text string. Order: EC2 semantic-svc (CLAP) -> EC2 OpenAI-compatible
+ * server -> Lovable gateway.
  * Returns null on non-terminal failure (embeddings are enrichment, never fatal).
  * Terminal gateway denials (402/403/429) are thrown so callers can trip a breaker.
  */
-export async function embedText(text: string): Promise<number[] | null> {
+export async function embedText(
+  text: string,
+  // deno-lint-disable-next-line no-explicit-any
+  supabase: any | null = null,
+): Promise<number[] | null> {
+  const svc = await getSemanticSvcConfig(supabase);
+  if (svc && !semanticSvcBreakerOpen()) {
+    const v = await clapEmbedText(svc, text);
+    if (v) return v;
+  }
+
   if (ec2Available(EC2_EMBED_MODEL)) {
     try {
       const r = await postJson(
@@ -287,7 +305,7 @@ export async function embedCached(
 ): Promise<number[] | null> {
   if (!supabase) return await embedText(text);
   const hash = await stableHash(text);
-  const model = activeEmbeddingSpace();
+  const model = await resolveEmbeddingSpace(supabase);
   try {
     const { data } = await supabase
       .from("embedding_cache")
@@ -303,7 +321,7 @@ export async function embedCached(
     console.warn("embedding_cache read failed:", e instanceof Error ? e.message : e);
   }
 
-  const vec = await embedText(text);
+  const vec = await embedText(text, supabase);
   if (vec) {
     try {
       await supabase
@@ -335,7 +353,7 @@ export async function embedAudioProfileCached(
   cacheKey: string | null,
   profileText: string,
 ): Promise<{ vector: number[] | null; source: "audio_cache" | "text_cache" | "computed" }> {
-  const model = activeEmbeddingSpace();
+  const model = await resolveEmbeddingSpace(supabase);
 
   if (supabase && cacheKey) {
     try {
@@ -414,6 +432,22 @@ export async function embedAudioProfileCached(
 
 
 
+/**
+ * Embed the audio itself with CLAP (semantic-svc), given a public/signed
+ * http(s) URL. Returns null when the service is not configured or fails —
+ * callers fall back to profile-text embeddings.
+ */
+export async function embedAudioUrl(
+  // deno-lint-disable-next-line no-explicit-any
+  supabase: any | null,
+  url: string,
+): Promise<{ vector: number[] | null; space: string | null }> {
+  const cfg = await getSemanticSvcConfig(supabase);
+  if (!cfg) return { vector: null, space: null };
+  const vector = await clapEmbedAudio(cfg, url);
+  return { vector, space: vector ? cfg.space : null };
+}
+
 /** Describes the active routing, for admin diagnostics. */
 export function inferenceStatus() {
   return {
@@ -425,5 +459,6 @@ export function inferenceStatus() {
     ec2_required: EC2_REQUIRED,
     ec2_breaker_open: Date.now() < ec2OpenUntil,
     gateway_fallback: !EC2_REQUIRED,
+    semantic_svc_breaker_open: semanticSvcBreakerOpen(),
   };
 }

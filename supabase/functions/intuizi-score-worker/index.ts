@@ -33,10 +33,13 @@ const corsHeaders = {
 
 /** Wall-clock ceiling per invocation; well under the 150s gateway idle limit. */
 const RUN_BUDGET_MS = 60_000;
-/** Tasks claimed per batch. Small batches keep peak memory flat. */
-const BATCH = 3;
+/** Tasks claimed per batch; matches the max in-flight scoring concurrency. */
+const BATCH = 4;
+/** Max identifiers scored concurrently. Dropped to 1 under rate-limit pressure. */
+const MAX_CONCURRENCY = 4;
 /** Stop claiming when a single task took longer than this share of the budget. */
 const SAFETY_MS = 12_000;
+
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

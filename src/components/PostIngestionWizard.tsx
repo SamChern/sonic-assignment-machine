@@ -230,6 +230,44 @@ async function invokeIngestWithRetry(
   return { data: null, error: lastError, retries: RESOURCE_RETRY_SHRINK.length, shrink: undefined };
 }
 
+/** How long the wizard watches the off-platform worker before handing off. */
+const WORKER_WAIT_MS = 8 * 60_000;
+const WORKER_POLL_MS = 4_000;
+
+/**
+ * Poll the ingest ledger while the EC2 worker decodes and normalizes.
+ *
+ * The wizard no longer waits on an edge invocation (that is exactly what used to
+ * hit the 150s gateway limit), so progress is read from the rows the worker
+ * updates through `ingest-worker-callback`. Returns as soon as every file is in
+ * a terminal state, or when the watch window closes — the transform keeps
+ * running server-side either way.
+ */
+async function awaitWorkerFiles(
+  keys: string[],
+  onProgress: (rows: LedgerRow[]) => void,
+): Promise<LedgerRow[]> {
+  const terminal = new Set(["done", "failed", "partial"]);
+  const deadline = Date.now() + WORKER_WAIT_MS;
+  let rows: LedgerRow[] = [];
+
+  for (;;) {
+    const { data } = await supabase
+      .from("intuizi_ingest_files")
+      .select(
+        "object_key,status,processed_rows,total_rows,row_group_cursor,row_groups_total,error_message,heartbeat_at",
+      )
+      .in("object_key", keys);
+    rows = (data ?? []) as LedgerRow[];
+    onProgress(rows);
+
+    const settled = rows.length === keys.length &&
+      rows.every((r) => terminal.has(r.status));
+    if (settled || Date.now() >= deadline) return rows;
+    await new Promise((r) => setTimeout(r, WORKER_POLL_MS));
+  }
+}
+
 /* ------------------------------------------------------------- component */
 
 const PostIngestionWizard = () => {

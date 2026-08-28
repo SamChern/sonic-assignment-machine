@@ -15,6 +15,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireAdmin } from "../_shared/admin.ts";
 import { cosine, kmeans, suggestK } from "../_shared/kmeans.ts";
+import { controlNumber } from "../_shared/control.ts";
 import { isAggregateKey } from "../_shared/activationEid.ts";
 
 const corsHeaders = {
@@ -162,9 +163,14 @@ Deno.serve(async (req) => {
         return v.length === dims ? v : v.slice(0, dims);
       });
 
+      // Control Room knob: `cohort.k` (explicit request body still wins).
+      const defaultK = await controlNumber(admin, "cohort.k", suggestK(clusterable.length), {
+        min: 2,
+        max: 24,
+      });
       const k = Math.max(
         1,
-        Math.min(12, Number(body.k ?? suggestK(clusterable.length)) || suggestK(clusterable.length)),
+        Math.min(24, Math.round(Number(body.k ?? defaultK) || defaultK)),
       );
       const { assignments, centroids } = kmeans(vectors, k);
 

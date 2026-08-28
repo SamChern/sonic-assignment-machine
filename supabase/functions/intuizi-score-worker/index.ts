@@ -11,6 +11,7 @@
 // (scheduled tick + self-chaining).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { controlNumber } from "../_shared/control.ts";
 import { AuthzError, requireAdmin } from "../_shared/admin.ts";
 import {
   createRateMetrics,
@@ -35,7 +36,7 @@ const corsHeaders = {
 const RUN_BUDGET_MS = 60_000;
 /** Tasks claimed per batch. Larger than the lane count so lanes stay fed and a
  *  single slow identifier no longer stalls the whole batch at a barrier. */
-const BATCH = 12;
+const BATCH_DEFAULT = 12;
 /** Max identifiers scored concurrently. Dropped to 1 under rate-limit pressure. */
 const MAX_CONCURRENCY = 4;
 /** Stop claiming when a single task took longer than this share of the budget. */
@@ -67,6 +68,12 @@ Deno.serve(async (req) => {
       if (e instanceof AuthzError) return json({ success: false, error: e.message }, e.status);
       throw e;
     }
+
+    // Control Room knob (60s cached), falls back to the shipped default.
+    const batchSize = Math.round(
+      await controlNumber(admin, "ingest.score_batch_size", BATCH_DEFAULT, { min: 1, max: 64 }),
+    );
+
 
     const reqBody = await req.json().catch(() => ({})) as {
       source?: string;
@@ -264,7 +271,7 @@ Deno.serve(async (req) => {
     while (timeLeft() > SAFETY_MS && !paused) {
       const { data: claimed, error: claimErr } = await admin.rpc(
         "claim_intuizi_score_jobs",
-        { p_limit: concurrency === 1 ? 1 : BATCH },
+        { p_limit: concurrency === 1 ? 1 : batchSize },
       );
       if (claimErr) return json({ success: false, error: claimErr.message }, 500);
       const tasks = (claimed ?? []) as QueuedTask[];

@@ -35,6 +35,7 @@ import {
   Layers,
   Search,
   ArrowUpDown,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -1316,6 +1317,10 @@ const AdminDashboard = () => {
               <Button size="sm" variant="outline" onClick={() => navigate("/admin/activations")}>
                 <ShieldCheck className="mr-1 h-4 w-4" /> Activation access
               </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate("/admin/control-room")}>
+                <SlidersHorizontal className="mr-1 h-4 w-4" /> Control Room
+              </Button>
+
             </div>
             <IntuiziConsolePanel />
           </TabsContent>

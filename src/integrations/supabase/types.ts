@@ -284,6 +284,69 @@ export type Database = {
           },
         ]
       }
+      control_audit: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: number
+          key: string
+          new_value: Json | null
+          old_value: Json | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: never
+          key: string
+          new_value?: Json | null
+          old_value?: Json | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: never
+          key?: string
+          new_value?: Json | null
+          old_value?: Json | null
+        }
+        Relationships: []
+      }
+      control_registry: {
+        Row: {
+          bounds: Json | null
+          category: string
+          created_at: string
+          description: string | null
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+          value_type: string
+        }
+        Insert: {
+          bounds?: Json | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+          value_type: string
+        }
+        Update: {
+          bounds?: Json | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+          value_type?: string
+        }
+        Relationships: []
+      }
       ctv_ingest_batches: {
         Row: {
           created_at: string
@@ -2237,6 +2300,19 @@ export type Database = {
       normalize_score_to_percentile: {
         Args: { pop_mean: number; pop_stddev: number; raw_score: number }
         Returns: number
+      }
+      org_cohort_aggregates: {
+        Args: { _org: string }
+        Returns: {
+          cohort_id: string
+          description: string
+          export_eligible: boolean
+          last_exported_at: string
+          member_count: number
+          name: string
+          narrative: string
+          slug: string
+        }[]
       }
       prune_analysis_telemetry: {
         Args: {

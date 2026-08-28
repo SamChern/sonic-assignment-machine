@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  autoApproveTargets,
   applyDecision,
   audiosetSlug,
   audiosetText,
@@ -93,4 +94,42 @@ Deno.test("applyDecision flips only targeted matches and keeps sibling keys", ()
 Deno.test("audiosetText builds a CLAP-friendly prompt", () => {
   assertEquals(audiosetText({ label: "Speech" }), "the sound of Speech");
   assert(audiosetText({ label: "Music", description: "An art form." }).includes("An art form."));
+});
+
+Deno.test("autoApproveTargets picks the best match above the threshold", () => {
+  const cw = {
+    audioset: {
+      version: "audioset-v1",
+      matches: [
+        { code: "aset.a", label: "A", similarity: 0.62, approved: false, rejected: false },
+        { code: "aset.b", label: "B", similarity: 0.81, approved: false, rejected: false },
+        { code: "aset.c", label: "C", similarity: 0.74, approved: false, rejected: false },
+      ],
+    },
+  };
+  assertEquals(autoApproveTargets(cw, 0.7), ["aset.b"]);
+  assertEquals(autoApproveTargets(cw, 0.7, 2), ["aset.b", "aset.c"]);
+  assertEquals(autoApproveTargets(cw, 0.9), []);
+});
+
+Deno.test("autoApproveTargets respects human decisions", () => {
+  const rejectedBest = {
+    audioset: {
+      version: "audioset-v1",
+      matches: [
+        { code: "aset.b", label: "B", similarity: 0.81, approved: false, rejected: true },
+        { code: "aset.c", label: "C", similarity: 0.74, approved: false, rejected: false },
+      ],
+    },
+  };
+  assertEquals(autoApproveTargets(rejectedBest, 0.7), ["aset.c"]);
+
+  const alreadyApproved = {
+    audioset: {
+      version: "audioset-v1",
+      matches: [{ code: "aset.b", label: "B", similarity: 0.81, approved: true, rejected: false }],
+    },
+  };
+  assertEquals(autoApproveTargets(alreadyApproved, 0.7), []);
+  assertEquals(autoApproveTargets(null, 0.7), []);
 });

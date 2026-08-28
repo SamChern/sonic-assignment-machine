@@ -33,8 +33,9 @@ const corsHeaders = {
 
 /** Wall-clock ceiling per invocation; well under the 150s gateway idle limit. */
 const RUN_BUDGET_MS = 60_000;
-/** Tasks claimed per batch; matches the max in-flight scoring concurrency. */
-const BATCH = 4;
+/** Tasks claimed per batch. Larger than the lane count so lanes stay fed and a
+ *  single slow identifier no longer stalls the whole batch at a barrier. */
+const BATCH = 12;
 /** Max identifiers scored concurrently. Dropped to 1 under rate-limit pressure. */
 const MAX_CONCURRENCY = 4;
 /** Stop claiming when a single task took longer than this share of the budget. */
@@ -263,7 +264,7 @@ Deno.serve(async (req) => {
     while (timeLeft() > SAFETY_MS && !paused) {
       const { data: claimed, error: claimErr } = await admin.rpc(
         "claim_intuizi_score_jobs",
-        { p_limit: Math.max(1, Math.min(BATCH, concurrency)) },
+        { p_limit: concurrency === 1 ? 1 : BATCH },
       );
       if (claimErr) return json({ success: false, error: claimErr.message }, 500);
       const tasks = (claimed ?? []) as QueuedTask[];

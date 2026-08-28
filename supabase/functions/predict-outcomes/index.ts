@@ -1,11 +1,22 @@
-// Predict SonicSIM-Outcomes: fits a ridge regression from the 6 semantic
-// category scores to a chosen KPI, using either KPI values uploaded with the
-// dataset or KPI values captured by the organization's tracking tag.
+// Predict SonicSIM-Outcomes — Step 11c: honest outcomes.
 //
-// Returns per-category coefficients (which category moves the KPI), model fit,
-// and a ranked list of the records the model predicts will perform best.
+// Fits the chosen KPI against the 6 semantic categories with ridge regression
+// and bootstrap confidence intervals. Three rules:
+//   1. the fit runs on the EC2 semantic worker when it exposes /fit_ridge,
+//      otherwise in-process with the identical estimator;
+//   2. a sample-sufficiency gate (control_registry `predict.min_kpi_rows`)
+//      refuses category-level claims below the threshold;
+//   3. any effect whose CI includes zero is returned flagged as "not yet
+//      distinguishable" so the UI can grey it out rather than invent a claim.
+//
+// Also returns per-axis counterfactual deltas (predicted KPI change for +10
+// points on one axis, with its interval) so the regression becomes a planning
+// instrument, and any measured activation lift priors for the same KPI.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireOrgMember } from "../_shared/org.ts";
+import { controlNumber } from "../_shared/control.ts";
+import { crossesZero, fitRidgeWithBootstrap, type RidgeFit } from "../_shared/ridge.ts";
+import { getSemanticSvcConfig } from "../_shared/semanticSvc.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,26 +35,58 @@ const CATEGORIES = [
   "artistic",
 ] as const;
 
-const RIDGE = 1e-3;
+const LAMBDA = 1e-2;
 
-/** Solves (XᵗX + λI)β = Xᵗy by Gaussian elimination with partial pivoting. */
-function solve(a: number[][], b: number[]): number[] | null {
-  const n = b.length;
-  const m = a.map((row, i) => [...row, b[i]]);
-  for (let col = 0; col < n; col++) {
-    let pivot = col;
-    for (let r = col + 1; r < n; r++) {
-      if (Math.abs(m[r][col]) > Math.abs(m[pivot][col])) pivot = r;
-    }
-    if (Math.abs(m[pivot][col]) < 1e-12) return null;
-    [m[col], m[pivot]] = [m[pivot], m[col]];
-    for (let r = 0; r < n; r++) {
-      if (r === col) continue;
-      const f = m[r][col] / m[col][col];
-      for (let c = col; c <= n; c++) m[r][c] -= f * m[col][c];
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+/** Try the EC2 worker first; fall back to the in-process estimator. */
+async function fitRemoteOrLocal(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  X: number[][],
+  y: number[],
+  iters: number,
+): Promise<{ fit: RidgeFit; engine: "ec2" | "edge" }> {
+  const cfg = await getSemanticSvcConfig(admin);
+  if (cfg) {
+    try {
+      const res = await fetch(`${cfg.url}/fit_ridge`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${cfg.token}`,
+        },
+        body: JSON.stringify({ X, y, lambda: LAMBDA, bootstrap_iters: iters }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (res.ok) {
+        const b = await res.json();
+        if (Array.isArray(b?.beta) && Array.isArray(b?.ci)) {
+          return {
+            fit: {
+              beta: b.beta.map(Number),
+              ci: b.ci.map((c: number[]) => [Number(c[0]), Number(c[1])] as [number, number]),
+              r2: Number(b.r2 ?? 0),
+              n: X.length,
+              lambda: LAMBDA,
+              bootstrap_iters: Number(b.bootstrap_iters ?? iters),
+            },
+            engine: "ec2",
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("ridge fit on EC2 unavailable:", e instanceof Error ? e.message : e);
     }
   }
-  return m.map((row, i) => row[n] / row[i][i]);
+  const fit = fitRidgeWithBootstrap(X, y, { lambda: LAMBDA, iters });
+  if (!fit) throw new Error("Model could not be fitted — the score columns are collinear.");
+  return { fit, engine: "edge" };
 }
 
 Deno.serve(async (req) => {
@@ -60,6 +103,13 @@ Deno.serve(async (req) => {
     if (!kpi) throw new AuthzError("kpi is required", 400);
     const datasetId = body.dataset_id ? String(body.dataset_id) : null;
     const kpiSource = body.kpi_source === "pixel" ? "pixel" : "upload";
+
+    const minRows = Math.round(
+      await controlNumber(admin, "predict.min_kpi_rows", 24, { min: 8, max: 500 }),
+    );
+    const iters = Math.round(
+      await controlNumber(admin, "predict.bootstrap_iters", 200, { min: 50, max: 2000 }),
+    );
 
     let recQuery = admin
       .from("enterprise_records")
@@ -108,13 +158,17 @@ Deno.serve(async (req) => {
     }
 
     const training = (records ?? []).filter((r) => targets.has(r.id));
-    if (training.length < 12) {
+
+    // ---- sample-sufficiency gate -------------------------------------------
+    if (training.length < minRows) {
       return new Response(
         JSON.stringify({
           success: false,
-          error:
-            `Not enough matched rows to fit a model — found ${training.length}, need at least 12 records that have both semantic scores and a ${kpi} value.`,
+          gated: true,
           matched_rows: training.length,
+          min_rows: minRows,
+          error:
+            `Not enough evidence for category-level claims — ${training.length} of the ${minRows} scored rows with a ${kpi} value required. Attach more KPI values, or capture live events with the tracking tag.`,
         }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -126,35 +180,30 @@ Deno.serve(async (req) => {
       ...CATEGORIES.map((c) => Number(r[`${c}_score`] ?? 0) / 100),
     ]);
     const y = training.map((r) => targets.get(r.id)!);
-    const p = 7;
 
-    const xtx = Array.from({ length: p }, (_, i) =>
-      Array.from({ length: p }, (_, j) =>
-        X.reduce((s, row) => s + row[i] * row[j], 0) + (i === j && i > 0 ? RIDGE * X.length : 0),
-      ),
-    );
-    const xty = Array.from({ length: p }, (_, i) => X.reduce((s, row, k) => s + row[i] * y[k], 0));
-
-    const beta = solve(xtx, xty);
-    if (!beta) throw new Error("Model could not be fitted — the score columns are collinear.");
+    const { fit, engine } = await fitRemoteOrLocal(admin, X, y, iters);
+    const beta = fit.beta;
 
     const predict = (row: number[]) => row.reduce((s, v, i) => s + v * beta[i], 0);
     const meanY = y.reduce((a, b) => a + b, 0) / y.length;
-    let ssRes = 0;
-    let ssTot = 0;
-    for (let i = 0; i < y.length; i++) {
-      const pred = predict(X[i]);
-      ssRes += (y[i] - pred) ** 2;
-      ssTot += (y[i] - meanY) ** 2;
-    }
-    const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
 
-    const drivers = CATEGORIES.map((c, i) => ({
-      category: c,
-      coefficient: beta[i + 1],
-      /** Predicted KPI change for a +10 point move in this category. */
-      per_10_points: beta[i + 1] * 0.1,
-    })).sort((a, b) => Math.abs(b.coefficient) - Math.abs(a.coefficient));
+    const drivers = CATEGORIES.map((c, i) => {
+      const ci = fit.ci[i + 1] ?? [Number.NaN, Number.NaN];
+      const inconclusive = crossesZero(ci);
+      return {
+        category: c,
+        coefficient: beta[i + 1],
+        per_10_points: beta[i + 1] * 0.1,
+        /** +10 point counterfactual interval on the same scale. */
+        per_10_ci: [ci[0] * 0.1, ci[1] * 0.1] as [number, number],
+        ci_low: ci[0],
+        ci_high: ci[1],
+        inconclusive,
+      };
+    }).sort((a, b) => {
+      if (a.inconclusive !== b.inconclusive) return a.inconclusive ? 1 : -1;
+      return Math.abs(b.coefficient) - Math.abs(a.coefficient);
+    });
 
     const ranked = (records ?? [])
       .map((r) => ({
@@ -166,14 +215,36 @@ Deno.serve(async (req) => {
       .sort((a, b) => b.predicted - a.predicted)
       .slice(0, 25);
 
+    // Measured activation lift priors for this KPI, when the loop has closed.
+    const { data: priors } = await admin
+      .from("category_outcome_priors")
+      .select("category, lift, ci_low, ci_high, exposed_n, holdout_n, cohort_slug, updated_at")
+      .eq("organization_id", organizationId)
+      .eq("kpi", kpi)
+      .order("updated_at", { ascending: false })
+      .limit(24);
+
+    const mean_scores = Object.fromEntries(
+      CATEGORIES.map((c) => [
+        c,
+        training.reduce((s, r) => s + Number(r[`${c}_score`] ?? 0), 0) / training.length,
+      ]),
+    );
+
     const result = {
       kpi,
       kpi_source: kpiSource,
+      engine,
       matched_rows: training.length,
+      min_rows: minRows,
+      bootstrap_iters: fit.bootstrap_iters,
       intercept: beta[0],
-      r2,
+      r2: fit.r2,
       mean_actual: meanY,
+      mean_scores,
       drivers,
+      conclusive_count: drivers.filter((d) => !d.inconclusive).length,
+      lift_priors: priors ?? [],
       top_predicted: ranked,
     };
 
@@ -181,22 +252,17 @@ Deno.serve(async (req) => {
       organization_id: organizationId,
       kind: "outcomes",
       kpi,
-      params: { dataset_id: datasetId, kpi_source: kpiSource },
+      params: { dataset_id: datasetId, kpi_source: kpiSource, engine, min_rows: minRows },
       weights: Object.fromEntries(drivers.map((d) => [d.category, d.coefficient])),
       result,
       status: "complete",
       created_by: caller.userId,
     });
 
-    return new Response(JSON.stringify({ success: true, ...result }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ success: true, ...result });
   } catch (e) {
     const status = e instanceof AuthzError ? e.status : 500;
     console.error("predict-outcomes failed:", (e as Error).message);
-    return new Response(JSON.stringify({ success: false, error: (e as Error).message }), {
-      status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ success: false, error: (e as Error).message }, status);
   }
 });

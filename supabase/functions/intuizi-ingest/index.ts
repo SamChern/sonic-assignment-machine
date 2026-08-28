@@ -608,7 +608,52 @@ Deno.serve(async (req) => {
 
   // ---- Owner controls -----------------------------------------------------
   if (action === "status") {
-    return json({ state, s3_configured: s3Configured(), s3: s3BackendInfo() });
+    return json({
+      state,
+      s3_configured: s3Configured(),
+      s3: s3BackendInfo(),
+      // Control-plane mode: dispatch only works once the queue is configured.
+      dispatch: sqsInfo(),
+    });
+  }
+
+  // ---- Control-plane queue health -----------------------------------------
+  // Depth of the file queue plus the ledger's view of in-flight work, so the
+  // admin can tell "nothing dispatched" apart from "worker is not draining".
+  if (action === "queue_status") {
+    const [{ data: pending }, { data: inflight }, { data: stalled }] = await Promise.all([
+      admin.from("intuizi_ingest_files")
+        .select("object_key,report_type,enqueued_at,dispatch_attempts")
+        .in("status", ["discovered", "partial"]).order("discovered_at").limit(50),
+      admin.from("intuizi_ingest_files")
+        .select("object_key,report_type,status,enqueued_at,heartbeat_at,worker_id,processed_rows,total_rows")
+        .in("status", ["enqueued", "processing"]).order("enqueued_at").limit(50),
+      admin.from("intuizi_ingest_files")
+        .select("object_key,status,heartbeat_at,worker_id")
+        .in("status", ["enqueued", "processing"])
+        .lt("heartbeat_at", new Date(Date.now() - STALE_CLAIM_MS).toISOString())
+        .limit(50),
+    ]);
+
+    let queue: Awaited<ReturnType<typeof queueAttributes>> | null = null;
+    let queueError: string | null = null;
+    if (sqsConfigured()) {
+      try {
+        queue = await queueAttributes();
+      } catch (e) {
+        queueError = errMsg(e).slice(0, 400);
+      }
+    }
+
+    return json({
+      dispatch: sqsInfo(),
+      queue,
+      queue_error: queueError,
+      awaiting_dispatch: pending ?? [],
+      in_flight: inflight ?? [],
+      stalled: stalled ?? [],
+      stale_claim_ms: STALE_CLAIM_MS,
+    });
   }
 
   // ---- Access probe --------------------------------------------------------

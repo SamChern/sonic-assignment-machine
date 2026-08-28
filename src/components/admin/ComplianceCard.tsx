@@ -65,7 +65,15 @@ export const ComplianceCard = () => {
 
   const runRetention = async () => {
     setBusy("retention");
-    const { data, error } = await supabase.rpc("run_intuizi_retention", { p_days: 90 });
+    const { data: knob } = await supabase
+      .from("control_registry")
+      .select("value")
+      .eq("key", "retention.days")
+      .maybeSingle();
+    const retentionDays = Number(knob?.value ?? 90) || 90;
+    const { data, error } = await supabase.rpc("run_intuizi_retention", {
+      p_days: retentionDays,
+    });
     setBusy(null);
     if (error) {
       toast.error(`Retention run failed: ${error.message}`);

@@ -1259,408 +1259,117 @@ Deno.serve(async (req) => {
         etag: string | null;
       };
 
-
+      // ---- Report file: DISPATCH ONLY ------------------------------------
+      // No decoding here. One SQS message tells the EC2 DuckDB worker which
+      // object to read and where to resume, and the worker reports rows back
+      // through `ingest-worker-callback`, which enqueues the scoring tasks.
       try {
-        const signStart = Date.now();
-        const url = await signReadUrl(cand.key);
-        const signMs = Date.now() - signStart;
-        summary.phase_ms.sign += signMs;
-        // Resume from the last transformed row group instead of re-reading rows
-        // that were already normalized in an earlier (possibly timed-out) run.
-        const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
-        const resumeRowsOffset = Number(fileRow.rows_offset ?? 0) || 0;
-        const endRead = meter.begin("read");
-        const readStart = Date.now();
-        const chunk = await fetchObjectChunk(
-          url,
-          cand.key,
-          caps.rows,
-          EXPECTED_ROWS_PER_USER,
-          resumeGroup,
-          readDeadlineAt,
-          resumeRowsOffset,
-        );
-        const readMs = Date.now() - readStart;
-        summary.phase_ms.read += readMs;
-        endRead({ object_key: cand.key, resume_at_group: resumeGroup, rows: chunk.rows.length, row_cap: caps.rows });
-        const checkpoint = chunk.checkpoint;
-        const readTimings = (chunk.timings ?? null) as Record<string, unknown> | null;
-        console.log(JSON.stringify({
-          evt: "ingest_file_read_timings",
-          object_key: cand.key,
-          resume_at_group: resumeGroup,
-          sign_ms: signMs,
-          read_ms: readMs,
-          rows: chunk.rows.length,
-          deadline_exceeded: Boolean(chunk.deadlineExceeded),
-          time_remaining_ms: timeLeftMs(),
-          ...(readTimings ?? {}),
-        }));
-
-        // The reader stopped early to stay inside the run budget: persist the
-        // unchanged cursor as `partial` and let the wizard's Resume continue.
-        if (chunk.deadlineExceeded) {
-          summary.time_budget_exhausted = true;
-          summary.deadline_exceeded = true;
-          summary.deadline_step = String(readTimings?.abortedAt ?? "decode");
-          summary.complete = false;
-          await admin.from("intuizi_ingest_files").update({
-            status: "partial",
-            row_group_cursor: checkpoint?.startRowGroup ?? resumeGroup,
-            row_groups_total: checkpoint?.rowGroupsTotal ?? fileRow.row_groups_total ?? null,
-            error_message: null,
-          }).eq("id", fileRow.id);
-          summary.files.push({
-            object_key: cand.key,
-            status: "partial",
-            complete: false,
-            rows: 0,
-            row_group_cursor: checkpoint?.startRowGroup ?? resumeGroup,
-            row_groups_total: checkpoint?.rowGroupsTotal ?? null,
-            deadline_exceeded: true,
-            deadline_step: summary.deadline_step,
-            read_ms: readMs,
-            timings: readTimings,
-          });
-          break;
-        }
-
-        const rawRows = chunk.rows.slice(0, caps.rows);
-        const endNormalize = meter.begin("normalize");
-        const normalizeStart = Date.now();
-
-        summary.rows_read += rawRows.length;
-
-
-        if (checkpoint && !rawRows.length && checkpoint.exhausted) {
-          // Every row group has already been transformed — close the file out.
-          await admin.from("intuizi_ingest_files").update({
-            status: "done",
-            row_group_cursor: checkpoint.nextRowGroup,
-            row_groups_total: checkpoint.rowGroupsTotal,
-            rows_offset: checkpoint.nextRowsOffset,
-            finished_at: new Date().toISOString(),
-            error_message: null,
-          }).eq("id", fileRow.id);
-          summary.files_processed++;
-          summary.files.push({
-            object_key: cand.key,
-            status: "done",
-            complete: true,
-            rows: 0,
-            row_group_cursor: checkpoint.nextRowGroup,
-            row_groups_total: checkpoint.rowGroupsTotal,
-          });
-          continue;
-        }
-
-
-        // ---- Roll rows up per identifier ---------------------------------
-        const perIdentifier = new Map<string, {
-          tags: Map<string, OntologyTag>;
-          signals: Json[];
-          confidence: number;
-          labels: string[];
-        }>();
-
-        const addNorm = (norm: ReturnType<typeof normalizeRow>) => {
-          if (!norm) return;
-          const entry = perIdentifier.get(norm.primary_identifier) ?? {
-            tags: new Map<string, OntologyTag>(),
-            signals: [],
-            confidence: 0,
-            labels: [],
-          };
-          for (const t of norm.tags) entry.tags.set(t.code, t);
-          if (entry.signals.length < 25) entry.signals.push(norm.signals as Json);
-          entry.confidence = Math.max(entry.confidence, norm.confidence);
-          if (norm.label && entry.labels.length < 4) entry.labels.push(norm.label);
-          perIdentifier.set(norm.primary_identifier, entry);
-        };
-
-        for (const raw of rawRows) {
-          addNorm(normalizeRow(cand.report_type, raw as Record<string, unknown>));
-        }
-
-        // Fallback A — audience-level summary report (taxonomy rollup, no device
-        // identifier). Folded into one synthetic activation profile and scored.
-        if (!perIdentifier.size && rawRows.length) {
-          const summaryRows = (rawRows as Record<string, unknown>[]).filter(isSummaryRow);
-          for (const norm of normalizeSummaryRows(cand.report_type, summaryRows, cand.key)) {
-            addNorm(norm);
-          }
-        }
-
-        // Fallback B — roster delivery (maid / hem only). No ontological content,
-        // so nothing to score: register the identifiers against the matching
-        // activation profile so the audience is joinable downstream.
-        if (!perIdentifier.size && rawRows.length) {
-          const rosterIds = Array.from(new Set(
-            (rawRows as Record<string, unknown>[])
-              .filter(isRosterRow)
-              .map((r) => identifierOf(r))
-              .filter(Boolean),
-          ));
-          if (rosterIds.length) {
-            const activation = activationIdFromKey(cand.key);
-            let activationSourceId: string | null = null;
-            if (activation) {
-              const { data: actRow } = await admin
-                .from("intuizi_identifiers")
-                .select("audio_source_id")
-                .eq("primary_identifier", `activation:${activation}`)
-                .maybeSingle();
-              activationSourceId = actRow?.audio_source_id ?? null;
-            }
-            const nowIso = new Date().toISOString();
-            for (let i = 0; i < rosterIds.length; i += 500) {
-              const chunk = rosterIds.slice(i, i + 500).map((id) => ({
-                primary_identifier: id,
-                audio_source_id: activationSourceId,
-                observation_count: 1,
-                last_seen_at: nowIso,
-                [SIGNAL_COLUMN[cand.report_type]]: {
-                  scope: "roster",
-                  activation_id: activation,
-                  object_key: cand.key,
-                  registered_at: nowIso,
-                },
-              }));
-              const { error: rosterErr } = await admin
-                .from("intuizi_identifiers")
-                .upsert(chunk, { onConflict: "primary_identifier" });
-              if (rosterErr) throw rosterErr;
-            }
-            const rosterComplete = !checkpoint || checkpoint.exhausted;
-            await admin.from("intuizi_ingest_files").update({
-              status: rosterComplete ? "done" : "partial",
-              total_rows: rawRows.length,
-              processed_rows: (fileRow.processed_rows ?? 0) + rosterIds.length,
-              failed_rows: 0,
-              cursor_offset: rosterIds.length,
-              row_group_cursor: checkpoint?.nextRowGroup ?? 0,
-              row_groups_total: checkpoint?.rowGroupsTotal ?? null,
-              rows_offset: checkpoint?.nextRowsOffset ?? 0,
-              finished_at: rosterComplete ? nowIso : null,
-              error_message: null,
-            }).eq("id", fileRow.id);
-            summary.files_processed++;
-            summary.roster_identifiers += rosterIds.length;
-            summary.files.push({
-              object_key: cand.key,
-              status: rosterComplete ? "done" : "partial",
-              complete: rosterComplete,
-              rows: rawRows.length,
-              row_group_cursor: checkpoint?.nextRowGroup ?? null,
-              row_groups_total: checkpoint?.rowGroupsTotal ?? null,
-            });
-            if (!rosterComplete) summary.complete = false;
-            continue;
-          }
-        }
-
-        if (!perIdentifier.size && rawRows.length) {
-          const cols = Object.keys(rawRows[0] ?? {}).slice(0, 12).join(", ");
+        if (!sqsConfigured()) {
           throw new Error(
-            `no usable rows — identifier or taxonomy fields missing. columns seen: ${cols}`,
+            "the ingest queue is not configured yet — set SQS_QUEUE_URL (and the " +
+              "IAM key needs sqs:SendMessage on it) so report files can be handed " +
+              "to the EC2 worker. See deploy/ingest-worker/README.md.",
           );
         }
 
+        const endDispatch = meter.begin("dispatch");
+        const dispatchStart = Date.now();
+        const fileTraceId = `${runTraceId}.${cand.key.slice(-24)}`;
+        const resumeGroup = Number(fileRow.row_group_cursor ?? 0) || 0;
+        const resumeRowsOffset = Number(fileRow.rows_offset ?? 0) || 0;
 
-        let scoredInFile = 0;
-        let failedInFile = 0;
-        let unchangedInFile = 0;
-        const normalizeMs = Date.now() - normalizeStart;
-        summary.phase_ms.normalize += normalizeMs;
-        endNormalize({ object_key: cand.key, rows: rawRows.length, identifiers: perIdentifier.size });
-        const endScore = meter.begin("score");
-        const scoreStart = Date.now();
-
-
-
-
-
-        // ---- Decoupled scoring -------------------------------------------
-        // Scoring (AI gateway + embeddings) used to run inline here, which made
-        // total run time proportional to the identifier count and reliably hit
-        // the wall-clock budget or a WORKER_RESOURCE_LIMIT kill before any
-        // analysis landed. The ingest run now only *enqueues* one task per
-        // identifier — a handful of cheap DB writes — and `intuizi-score-worker`
-        // drains the queue in small self-chaining batches. Pipeline throughput
-        // is therefore unbounded while each invocation stays well inside limits.
-        const queueRows = [...perIdentifier].map(([identifier, entry]) => ({
+        const sent = await sendIngestMessage({
           object_key: cand.key,
           report_type: cand.report_type,
-          identifier,
+          file_id: fileRow.id,
           activation_id: activationIdFromKey(cand.key),
           owner_id: ownerId,
-          label: `Intuizi ${cand.report_type}: ${entry.labels[0] ?? identifier.slice(0, 12)}`,
-          tags: [...entry.tags.values()],
-          signals: entry.signals,
-          confidence: entry.confidence,
-          trace_id: `${runTraceId}.${identifier.slice(0, 8)}`,
-        }));
-
-        for (let i = 0; i < queueRows.length; i += QUEUE_CHUNK) {
-          const chunk = queueRows.slice(i, i + QUEUE_CHUNK);
-          const { error: qErr } = await admin
-            .from("intuizi_score_queue")
-            .upsert(chunk, { onConflict: "object_key,identifier", ignoreDuplicates: true });
-          if (qErr) {
-            failedInFile += chunk.length;
-            summary.errors.push(`enqueue: ${qErr.message}`);
-          } else {
-            scoredInFile += chunk.length;
-            summary.identifiers_queued += chunk.length;
-          }
-        }
-
-        // A probe run scores a single identifier synchronously so the operator
-        // gets an immediate credits / connectivity verdict before the queue runs.
-        if (probeOnly && queueRows.length) {
-          try {
-            await scoreIdentifier(admin, queueRows[0] as never, rateMetrics as never, { traceId: queueRows[0].trace_id } as never);
-            summary.identifiers_scored++;
-            await admin.from("intuizi_ingest_state").update({
-              paused: false,
-              pause_reason: null,
-              paused_at: null,
-              parked_until: null,
-              consecutive_rate_limits: 0,
-            }).eq("id", "singleton");
-          } catch (e) {
-            const st = statusOf(e);
-            const msg = errMsg(e);
-            failedInFile++;
-            summary.errors.push(`probe ${queueRows[0].identifier}: ${msg}`);
-            if (st === 402 || st === 403) {
-              breakerTripped = true;
-              summary.paused = true;
-              summary.pause_reason = msg.slice(0, 500);
-              await admin.from("intuizi_ingest_state").update({
-                paused: true,
-                pause_reason: msg.slice(0, 500),
-                paused_at: new Date().toISOString(),
-              }).eq("id", "singleton");
-            } else if (st === 429) {
-              const next = (state?.consecutive_rate_limits ?? 0) + 1;
-              await admin.from("intuizi_ingest_state").update({
-                consecutive_rate_limits: next,
-                last_error: msg.slice(0, 500),
-                ...(next >= 3
-                  ? { parked_until: new Date(Date.now() + 30 * 60 * 1000).toISOString() }
-                  : {}),
-              }).eq("id", "singleton");
-              if (next >= 3) {
-                breakerTripped = true;
-                summary.paused = true;
-                summary.pause_reason = `rate limited ${next}x — parked until the next scheduled run`;
-              }
-            }
-          }
-        }
-
-        const scoreMs = Date.now() - scoreStart;
-        summary.phase_ms.score += scoreMs;
-        endScore({
-          object_key: cand.key,
-          scored: scoredInFile,
-          failed: failedInFile,
-          identifier_cap: identifierBudget,
-          row_group_cursor: checkpoint?.startRowGroup ?? null,
+          trace_id: fileTraceId,
+          row_group_cursor: resumeGroup,
+          rows_offset: resumeRowsOffset,
         });
-        const remaining = perIdentifier.size - scoredInFile - failedInFile - unchangedInFile;
-        // A Parquet file is only "done" once its last row group is transformed.
-        const chunkComplete = !checkpoint || checkpoint.exhausted;
-        const fileStatus = breakerTripped
-          ? "paused"
-          : (remaining > 0 || !chunkComplete ? "partial" : "done");
+
+        const dispatchMs = Date.now() - dispatchStart;
+        summary.phase_ms.dispatch += dispatchMs;
+        endDispatch({ object_key: cand.key, message_id: sent.message_id });
+
         const endPersist = meter.begin("persist");
         const persistStart = Date.now();
         await admin.from("intuizi_ingest_files").update({
-
-          status: fileStatus,
-          total_rows: rawRows.length,
-          processed_rows: (fileRow.processed_rows ?? 0) + scoredInFile,
-          failed_rows: failedInFile,
-          cursor_offset: perIdentifier.size - remaining,
-          // Only advance the row-group checkpoint when this chunk's rows were
-          // fully drained, so nothing is skipped on resume.
-          row_group_cursor: checkpoint
-            ? (remaining > 0 || breakerTripped ? checkpoint.startRowGroup : checkpoint.nextRowGroup)
-            : 0,
-          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
-          rows_offset: checkpoint
-            ? (remaining > 0 || breakerTripped ? checkpoint.rowsOffset : checkpoint.nextRowsOffset)
-            : 0,
-          finished_at: fileStatus === "done" ? new Date().toISOString() : null,
-          error_message: failedInFile ? summary.errors.slice(-3).join("\n").slice(0, 2000) : null,
+          status: "enqueued",
+          enqueued_at: new Date().toISOString(),
+          queue_message_id: sent.message_id,
+          trace_id: fileTraceId,
+          worker_id: null,
+          heartbeat_at: new Date().toISOString(),
+          dispatch_attempts: (Number(fileRow.dispatch_attempts ?? 0) || 0) + 1,
+          error_message: null,
+          finished_at: null,
         }).eq("id", fileRow.id);
-
         summary.phase_ms.persist += Date.now() - persistStart;
         endPersist({ object_key: cand.key });
 
-        // Structured per-file coverage + timing + rate-limit metrics.
+        summary.files_dispatched++;
+        // Dispatch is a handoff, not a completion: the run is only "complete"
+        // once the worker closes every file out through the callback.
+        summary.complete = false;
+
         console.log(JSON.stringify({
-          evt: "ingest_file_coverage",
+          evt: "ingest_file_dispatched",
+          trace_id: fileTraceId,
           object_key: cand.key,
-          report_type: fileRow.report_type ?? "unknown",
-          activation_id: cand.key.toLowerCase().match(/activation[_-]?id(\d+)/)?.[1] ?? null,
-          status: fileStatus,
-          rows: rawRows.length,
-          identifiers: perIdentifier.size,
-          enriched: scoredInFile,
-          failed: failedInFile,
-          unchanged: unchangedInFile,
-          identifier_only: Math.max(0, remaining),
-          row_group_cursor: checkpoint?.nextRowGroup ?? null,
-          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
-          coverage_pct: perIdentifier.size
-            ? Math.round((scoredInFile / perIdentifier.size) * 100)
-            : null,
-          sign_ms: signMs,
-          read_ms: readMs,
-          normalize_ms: normalizeMs,
-          score_ms: scoreMs,
-          read_timings: readTimings,
+          report_type: cand.report_type,
+          activation_id: activationIdFromKey(cand.key),
+          resume_at_group: resumeGroup,
+          resume_rows_offset: resumeRowsOffset,
+          rows_per_message: caps.rows,
+          message_id: sent.message_id,
+          dispatch_ms: dispatchMs,
           time_remaining_ms: timeLeftMs(),
-          ...rateMetrics.snapshot(),
         }));
 
         summary.files.push({
           object_key: cand.key,
-          read_ms: readMs,
-          normalize_ms: normalizeMs,
-          score_ms: scoreMs,
-          timings: readTimings,
-
-          status: fileStatus,
-          complete: fileStatus === "done",
-          rows: rawRows.length,
-          identifiers: perIdentifier.size,
-          enriched: scoredInFile,
-          failed: failedInFile,
-          row_group_cursor: checkpoint
-            ? (remaining > 0 || breakerTripped ? checkpoint.startRowGroup : checkpoint.nextRowGroup)
-            : null,
-          row_groups_total: checkpoint?.rowGroupsTotal ?? null,
+          report_type: cand.report_type,
+          status: "enqueued",
+          complete: false,
+          trace_id: fileTraceId,
+          message_id: sent.message_id,
+          row_group_cursor: resumeGroup,
+          row_groups_total: fileRow.row_groups_total ?? null,
+          dispatch_ms: dispatchMs,
         });
-        if (fileStatus !== "done") summary.complete = false;
 
-        summary.files_processed++;
-
+        // A probe run (paused state) hands off exactly one file, so the operator
+        // learns whether the queue path works again without draining the backlog.
+        if (probeOnly) {
+          await admin.from("intuizi_ingest_state").update({
+            paused: false,
+            pause_reason: null,
+            paused_at: null,
+            parked_until: null,
+            consecutive_rate_limits: 0,
+          }).eq("id", "singleton");
+          break;
+        }
       } catch (e) {
         const st = statusOf(e);
         const msg = errMsg(e);
+        // Dispatch failed, so nothing is in flight: park the row back in
+        // `discovered` rather than `failed`, so the next run retries it.
         await admin.from("intuizi_ingest_files").update({
-          status: "failed",
+          status: "discovered",
           error_message: msg.slice(0, 2000),
-          finished_at: new Date().toISOString(),
+          dispatch_attempts: (Number(fileRow.dispatch_attempts ?? 0) || 0) + 1,
+          finished_at: null,
         }).eq("id", fileRow.id);
         summary.files_failed++;
         summary.errors.push(`${cand.key}: ${msg}`);
+        summary.complete = false;
 
-        if (st === 402 || st === 403) {
+        // A queue-level auth/permission problem will fail identically for every
+        // remaining file — stop the run instead of burning the whole batch.
+        if (st === 403 || /AccessDenied|InvalidClientTokenId|SignatureDoesNotMatch|not configured/i.test(msg)) {
           breakerTripped = true;
           summary.paused = true;
           summary.pause_reason = msg.slice(0, 500);

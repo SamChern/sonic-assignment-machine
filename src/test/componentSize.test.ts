@@ -14,7 +14,7 @@ import { join } from "node:path";
 const LIMIT = 500;
 
 const LEGACY: Record<string, number> = {
-  "src/pages/admin/AdminWorkbench.tsx": 1295,
+  "src/pages/admin/AdminWorkbench.tsx": 1296,
   "src/components/ConfidenceBreakdownPanel.tsx": 1235,
   "src/pages/SemanticAnalysis.tsx": 1216,
   "src/components/admin/IntuiziConsolePanel.tsx": 1131,

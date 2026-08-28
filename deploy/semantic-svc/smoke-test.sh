@@ -15,7 +15,7 @@ ok()   { printf '   ok: %s\n' "$1"; }
 bad()  { printf '   FAIL: %s\n' "$1"; fails=$((fails + 1)); }
 
 step "healthz"
-health=$(curl -sf "$BASE/healthz") || { bad "healthz unreachable"; echo "$fails failure(s)"; exit 1; }
+health=$(curl -sf -H "$AUTH" "$BASE/healthz") || { bad "healthz unreachable"; echo "$fails failure(s)"; exit 1; }
 echo "$health"
 python3 - "$health" <<'PY' && ok "healthz shape" || bad "healthz shape"
 import json, sys

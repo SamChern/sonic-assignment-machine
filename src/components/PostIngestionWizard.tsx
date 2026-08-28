@@ -83,6 +83,54 @@ interface LiveRun {
   budgetMs: number;
 }
 
+/**
+ * What one control-plane run reports back. Since the transform moved to the EC2
+ * DuckDB worker, a run reports the HAND-OFF (dispatch) — row counts arrive later
+ * through the worker callback, which is why the wizard then watches the ledger.
+ */
+interface IngestDispatchSummary {
+  trace_id?: string;
+  mode?: string;
+  files_dispatched?: number;
+  files_failed?: number;
+  audio_files_scored?: number;
+  paused?: boolean;
+  pause_reason?: string | null;
+  time_budget_exhausted?: boolean;
+  complete?: boolean;
+  run_budget_ms?: number;
+  default_run_budget_ms?: number;
+  budget_reason?: string;
+  elapsed_ms?: number;
+  time_remaining_ms?: number;
+  memory_pressure?: boolean;
+  phase_ms?: Record<string, number>;
+  phase_usage?: Record<string, { ms?: number; heap_delta_mb?: number; peak_heap_mb?: number }>;
+  queue?: { visible?: number; in_flight?: number; delayed?: number; error?: string };
+  work_caps?: { rows?: number; files?: number; shrink?: number; reason?: string };
+  files?: {
+    object_key?: string;
+    status?: string;
+    trace_id?: string | null;
+    message_id?: string | null;
+    row_group_cursor?: number | null;
+    row_groups_total?: number | null;
+  }[];
+  errors?: string[];
+}
+
+/** Ledger row the wizard polls while the off-platform worker transforms a file. */
+interface LedgerRow {
+  object_key: string;
+  status: string;
+  processed_rows: number | null;
+  total_rows: number | null;
+  row_group_cursor: number | null;
+  row_groups_total: number | null;
+  error_message: string | null;
+  heartbeat_at: string | null;
+}
+
 
 type StageState = "idle" | "running" | "ok" | "warn" | "error";
 
@@ -180,6 +228,44 @@ async function invokeIngestWithRetry(
     onRetry?.(attempt + 1, next, detail);
   }
   return { data: null, error: lastError, retries: RESOURCE_RETRY_SHRINK.length, shrink: undefined };
+}
+
+/** How long the wizard watches the off-platform worker before handing off. */
+const WORKER_WAIT_MS = 8 * 60_000;
+const WORKER_POLL_MS = 4_000;
+
+/**
+ * Poll the ingest ledger while the EC2 worker decodes and normalizes.
+ *
+ * The wizard no longer waits on an edge invocation (that is exactly what used to
+ * hit the 150s gateway limit), so progress is read from the rows the worker
+ * updates through `ingest-worker-callback`. Returns as soon as every file is in
+ * a terminal state, or when the watch window closes — the transform keeps
+ * running server-side either way.
+ */
+async function awaitWorkerFiles(
+  keys: string[],
+  onProgress: (rows: LedgerRow[]) => void,
+): Promise<LedgerRow[]> {
+  const terminal = new Set(["done", "failed", "partial"]);
+  const deadline = Date.now() + WORKER_WAIT_MS;
+  let rows: LedgerRow[] = [];
+
+  for (;;) {
+    const { data } = await supabase
+      .from("intuizi_ingest_files")
+      .select(
+        "object_key,status,processed_rows,total_rows,row_group_cursor,row_groups_total,error_message,heartbeat_at",
+      )
+      .in("object_key", keys);
+    rows = (data ?? []) as LedgerRow[];
+    onProgress(rows);
+
+    const settled = rows.length === keys.length &&
+      rows.every((r) => terminal.has(r.status));
+    if (settled || Date.now() >= deadline) return rows;
+    await new Promise((r) => setTimeout(r, WORKER_POLL_MS));
+  }
 }
 
 /* ------------------------------------------------------------- component */

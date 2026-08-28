@@ -1,0 +1,26 @@
+[Unit]
+Description=SonicSIM Intuizi ingest worker (DuckDB decode + normalize)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/sonicsim/ingest-worker
+EnvironmentFile=/etc/sonicsim/ingest-worker.env
+ExecStart=/opt/sonicsim/ingest-worker/.venv/bin/python worker.py
+# SIGTERM lets the worker finish the file it claimed before exiting, so no
+# message is abandoned mid-slice.
+KillSignal=SIGTERM
+TimeoutStopSec=180
+Restart=always
+RestartSec=5
+# 2 vCPU / 7 GB box: keep the worker from starving nginx and the librosa service.
+CPUQuota=140%
+MemoryMax=3G
+Nice=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

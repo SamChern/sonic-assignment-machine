@@ -12,95 +12,85 @@ import { MemoryRouter } from "react-router-dom";
 
 type Role = "anon" | "user" | "moderator" | "enterprise_viewer" | "admin";
 
-let role: Role = "admin";
+const H = vi.hoisted(() => {
+  const state = { role: "admin" as string };
+  const updateCalls: { table: string; value: unknown }[] = [];
 
-const REGISTRY_ROWS = [
-  {
-    key: "knn.k",
-    value: 5,
-    value_type: "number",
-    bounds: { min: 1, max: 32, step: 1 },
-    description: "Nearest neighbors",
-    category: "scoring",
-    updated_at: new Date().toISOString(),
-    updated_by: null,
-  },
-  {
-    key: "retention.days",
-    value: 90,
-    value_type: "number",
-    bounds: { min: 7, max: 365, step: 1 },
-    description: "Retention window",
-    category: "compliance",
-    updated_at: new Date().toISOString(),
-    updated_by: null,
-  },
-];
+  const REGISTRY_ROWS = [
+    {
+      key: "knn.k",
+      value: 5,
+      value_type: "number",
+      bounds: { min: 1, max: 32, step: 1 },
+      description: "Nearest neighbors",
+      category: "scoring",
+      updated_at: new Date().toISOString(),
+      updated_by: null,
+    },
+    {
+      key: "retention.days",
+      value: 90,
+      value_type: "number",
+      bounds: { min: 7, max: 365, step: 1 },
+      description: "Retention window",
+      category: "compliance",
+      updated_at: new Date().toISOString(),
+      updated_by: null,
+    },
+  ];
 
-const AUDIT_ROWS = [
-  {
-    id: 1,
-    key: "knn.k",
-    old_value: 4,
-    new_value: 5,
-    changed_at: new Date().toISOString(),
-  },
-];
+  const AUDIT_ROWS = [
+    { id: 1, key: "knn.k", old_value: 4, new_value: 5, changed_at: new Date().toISOString() },
+  ];
 
-const isAdmin = () => role === "admin";
-const denied = () =>
-  role === "anon"
-    ? { data: null, error: { message: "401: JWT is required" } }
-    : { data: null, error: { message: "403: permission denied" } };
+  const isAdmin = () => state.role === "admin";
+  const denied = () =>
+    state.role === "anon"
+      ? { data: null, error: { message: "401: JWT is required" } }
+      : { data: null, error: { message: "403: permission denied" } };
 
-export const updateCalls: { table: string; value: unknown }[] = [];
-
-/** Minimal chainable query builder that mirrors the RLS outcome per role. */
-// deno-lint-ignore no-explicit-any
-function builder(table: string): any {
-  const rowsFor = () => {
-    if (table === "control_registry") return REGISTRY_ROWS;
-    if (table === "control_audit") return AUDIT_ROWS;
-    if (table === "sonic_cohorts") return [{ slug: "night-drive", member_count: 412 }];
-    return [];
-  };
-  // Aggregate cohort rows are readable by enterprise roles; member rows never are.
-  const readable =
-    table === "sonic_cohorts"
-      ? role === "admin" || role === "enterprise_viewer"
-      : isAdmin();
-
-  const result = () =>
-    readable ? { data: rowsFor(), error: null } : denied();
-
-  const chain: Record<string, unknown> = {};
-  for (const m of ["select", "order", "eq", "limit"]) {
-    chain[m] = () => chain;
-  }
-  chain.update = (value: unknown) => {
-    updateCalls.push({ table, value });
-    return {
-      eq: async () => (isAdmin() ? { data: null, error: null } : denied()),
+  /** Minimal chainable query builder that mirrors the RLS outcome per role. */
+  // deno-lint-ignore no-explicit-any
+  const builder = (table: string): any => {
+    const rowsFor = () => {
+      if (table === "control_registry") return REGISTRY_ROWS;
+      if (table === "control_audit") return AUDIT_ROWS;
+      if (table === "sonic_cohorts") return [{ slug: "night-drive", member_count: 412 }];
+      return [];
     };
-  };
-  chain.maybeSingle = async () => {
-    const r = result();
-    return { data: Array.isArray(r.data) ? (r.data[0] ?? null) : r.data, error: r.error };
-  };
-  chain.then = (
-    resolve: (v: { data: unknown; error: unknown }) => unknown,
-  ) => Promise.resolve(result()).then(resolve);
-  return chain;
-}
+    // Aggregate cohort rows are readable by enterprise roles; member rows never are.
+    const readable =
+      table === "sonic_cohorts"
+        ? state.role === "admin" || state.role === "enterprise_viewer"
+        : isAdmin();
+    const result = () => (readable ? { data: rowsFor(), error: null } : denied());
 
-const supabaseMock = {
-  from: (table: string) => builder(table),
-  auth: {
-    getSession: async () => ({ data: { session: { user: { id: "u1" } } } }),
-  },
-};
+    const chain: Record<string, unknown> = {};
+    for (const m of ["select", "order", "eq", "limit"]) chain[m] = () => chain;
+    chain.update = (value: unknown) => {
+      updateCalls.push({ table, value });
+      return { eq: async () => (isAdmin() ? { data: null, error: null } : denied()) };
+    };
+    chain.maybeSingle = async () => {
+      const r = result();
+      return { data: Array.isArray(r.data) ? (r.data[0] ?? null) : r.data, error: r.error };
+    };
+    chain.then = (resolve: (v: { data: unknown; error: unknown }) => unknown) =>
+      Promise.resolve(result()).then(resolve);
+    return chain;
+  };
 
-vi.mock("@/integrations/supabase/client", () => ({ supabase: supabaseMock }));
+  const supabaseMock = {
+    from: (table: string) => builder(table),
+    auth: { getSession: async () => ({ data: { session: { user: { id: "u1" } } } }) },
+  };
+
+  return { state, updateCalls, supabaseMock };
+});
+
+const { state, updateCalls, supabaseMock } = H;
+
+vi.mock("@/integrations/supabase/client", () => ({ supabase: H.supabaseMock }));
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock("sonner", () => ({ toast: toastMock }));
@@ -115,8 +105,8 @@ vi.mock("react-router-dom", async () => {
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({
-    user: role === "anon" ? null : { id: "u1" },
-    isAdmin: role === "admin",
+    user: H.state.role === "anon" ? null : { id: "u1" },
+    isAdmin: H.state.role === "admin",
     loading: false,
   }),
 }));
@@ -139,7 +129,7 @@ beforeEach(() => {
 
 describe("Control Room — admin", () => {
   beforeEach(() => {
-    role = "admin";
+    state.role = "admin";
   });
 
   it("renders grouped knobs from the registry with audit history", async () => {
@@ -185,7 +175,7 @@ describe.each<[Role, RegExp]>([
   ["enterprise_viewer", /403/],
 ])("Control Room RBAC — %s is denied", (r, expected) => {
   beforeEach(() => {
-    role = r;
+    state.role = r;
   });
 
   it("is redirected away from the page", async () => {
@@ -213,7 +203,7 @@ describe.each<[Role, RegExp]>([
 
 describe("subject_key isolation", () => {
   it("enterprise viewers read cohort aggregates but never member subject keys", async () => {
-    role = "enterprise_viewer";
+    state.role = "enterprise_viewer";
     const agg = await supabaseMock.from("sonic_cohorts").select("*");
     expect(agg.error).toBeNull();
     expect((agg.data as { member_count: number }[])[0].member_count).toBe(412);
@@ -223,7 +213,7 @@ describe("subject_key isolation", () => {
   });
 
   it("consumer role has no access to Intuizi-derived tables", async () => {
-    role = "user";
+    state.role = "user";
     const members = await supabaseMock.from("sonic_cohort_members").select("subject_key");
     expect(members.data).toEqual([]);
     const cohorts = await supabaseMock.from("sonic_cohorts").select("*");

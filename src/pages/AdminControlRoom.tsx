@@ -20,6 +20,7 @@ import {
   useControlRegistry,
   type ControlKnob,
 } from "@/hooks/useControlRegistry";
+import { ResolverPanel } from "@/components/admin/ResolverPanel";
 
 const CATEGORY_LABELS: Record<string, string> = {
   scoring: "Scoring core",

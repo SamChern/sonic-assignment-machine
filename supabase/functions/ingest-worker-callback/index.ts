@@ -350,6 +350,69 @@ Deno.serve(async (req) => {
     });
   }
 
+  // ---- Loaded (Step 2.5-alt): rollups staged, promote them ------------------
+  if (phase === "loaded") {
+    const rollupRows = Math.max(Number(body.rows ?? body.rows_read ?? 0) || 0, 0);
+    const { error: rpcErr } = await admin.rpc("complete_ingest_file", {
+      p_id: file.id,
+      p_rows: rollupRows,
+      p_status: "loaded",
+    });
+    if (rpcErr) return json({ success: false, error: rpcErr.message }, 500);
+    console.log(JSON.stringify({
+      evt: "worker_file_loaded",
+      trace_id: traceId,
+      object_key: file.object_key,
+      worker_id: workerId,
+      rollup_rows: rollupRows,
+    }));
+    // Promote inline so the worker's next claim does not race the mapping.
+    const { data: promo, error: promoErr } = await admin.functions.invoke("promote-rollups", {
+      body: {
+        object_key: file.object_key,
+        report_type: file.report_type,
+        trace_id: traceId,
+      },
+    });
+    if (promoErr) {
+      console.error(JSON.stringify({
+        evt: "promote_invoke_failed",
+        trace_id: traceId,
+        object_key: file.object_key,
+        error: String(promoErr),
+      }));
+      return json({ success: true, file_id: file.id, status: "loaded", promoted: false });
+    }
+    return json({
+      success: true,
+      file_id: file.id,
+      status: "loaded",
+      promoted: true,
+      promote: promo ?? null,
+    });
+  }
+
+  // ---- Skipped (Step 2.5-alt): summary-only file, nothing to learn ---------
+  if (phase === "skipped") {
+    const reason = typeof body.reason === "string"
+      ? body.reason
+      : "no identifier/taxonomy columns";
+    const { error: rpcErr } = await admin.rpc("skip_ingest_file", {
+      p_id: file.id,
+      p_reason: reason.slice(0, 2000),
+    });
+    if (rpcErr) return json({ success: false, error: rpcErr.message }, 500);
+    console.log(JSON.stringify({
+      evt: "worker_file_skipped",
+      trace_id: traceId,
+      object_key: file.object_key,
+      worker_id: workerId,
+      reason: reason.slice(0, 300),
+    }));
+    return json({ success: true, file_id: file.id, status: "skipped" });
+  }
+
+
   // ---- Failed: park the file so the next dispatch retries it ---------------
   if (phase === "failed") {
     const msg = typeof body.error === "string" ? body.error : "worker reported a failure";

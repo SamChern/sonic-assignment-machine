@@ -149,6 +149,8 @@ Deno.serve(async (req) => {
     }
 
     const after = await readCoverage(admin);
+    // Bump grounding_count wherever analyzed audio is now attached to a node.
+    const grounding = await refreshGrounding(admin);
     await logSemanticCall(admin, {
       action: "backfill_taxonomy",
       outcome: failed > 0 && embedded === 0 ? "error" : "ok",
@@ -168,8 +170,10 @@ Deno.serve(async (req) => {
       breaker_open: semanticSvcBreakerOpen(),
       duration_ms: Date.now() - startedAt,
       ...after,
+      ...grounding,
     });
   } catch (e) {
+
     const msg = e instanceof Error ? e.message : "Unknown";
     return json({ success: false, error: msg }, 500);
   }

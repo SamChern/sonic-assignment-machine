@@ -482,7 +482,7 @@ Deno.serve(async (req) => {
         member_count: keys.length,
         holdout,
         exposed: keys.length - holdout,
-        holdout_pct: holdoutPct,
+        holdout_pct: pctHoldout,
         export_eligible: keys.length >= 1000,
       });
     }

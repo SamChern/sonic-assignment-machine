@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   try {
-    await requireAdmin(req, admin);
+    await requireAdmin(req, admin as Any);
   } catch (e) {
     const status = e instanceof AuthzError ? e.status : 500;
     return jsonResponse({ success: false, error: errMsg(e) }, status);

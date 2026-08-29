@@ -1721,6 +1721,62 @@ export type Database = {
         }
         Relationships: []
       }
+      resolution_queue: {
+        Row: {
+          attempts: number
+          context: Json
+          created_at: string
+          first_seen_at: string
+          id: string
+          last_error: string | null
+          last_seen_at: string
+          resolved_node_id: string | null
+          sightings: number
+          status: string
+          symbol: string
+          symbol_type: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          context?: Json
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_error?: string | null
+          last_seen_at?: string
+          resolved_node_id?: string | null
+          sightings?: number
+          status?: string
+          symbol: string
+          symbol_type?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          context?: Json
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_error?: string | null
+          last_seen_at?: string
+          resolved_node_id?: string | null
+          sightings?: number
+          status?: string
+          symbol?: string
+          symbol_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resolution_queue_resolved_node_id_fkey"
+            columns: ["resolved_node_id"]
+            isOneToOne: false
+            referencedRelation: "taxonomy_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       retention_runs: {
         Row: {
           analyses_deleted: number
@@ -2172,6 +2228,9 @@ export type Database = {
           id: string
           label: string
           parent_code: string | null
+          proposal: Json | null
+          reviewed: boolean
+          source: string
           suppressed: boolean
           taxonomy_version: string
           updated_at: string
@@ -2186,6 +2245,9 @@ export type Database = {
           id?: string
           label: string
           parent_code?: string | null
+          proposal?: Json | null
+          reviewed?: boolean
+          source?: string
           suppressed?: boolean
           taxonomy_version?: string
           updated_at?: string
@@ -2200,6 +2262,9 @@ export type Database = {
           id?: string
           label?: string
           parent_code?: string | null
+          proposal?: Json | null
+          reviewed?: boolean
+          source?: string
           suppressed?: boolean
           taxonomy_version?: string
           updated_at?: string

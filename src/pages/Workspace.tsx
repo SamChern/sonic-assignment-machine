@@ -26,6 +26,8 @@ import PredictOutcomesPanel from "@/components/enterprise/PredictOutcomesPanel";
 import PixelSetupPanel from "@/components/enterprise/PixelSetupPanel";
 import CategoryProfileEditor from "@/components/enterprise/CategoryProfileEditor";
 import WorkspaceSonicSim from "@/components/enterprise/WorkspaceSonicSim";
+import OrgComplianceStrip from "@/components/enterprise/OrgComplianceStrip";
+
 import sonicSimLogo from "@/assets/SonicSIM_transp.png";
 import {
   Activity,

@@ -29,6 +29,10 @@ interface FileRow {
   discovered_at: string;
   started_at: string | null;
   finished_at: string | null;
+  /** Which EC2 worker leased the file, and when it last checked in. */
+  worker_id: string | null;
+  heartbeat_at: string | null;
+
 }
 
 interface RunSummary {
@@ -80,7 +84,7 @@ const IngestDebugPanel = () => {
       supabase
         .from("intuizi_ingest_files")
         .select(
-          "id, object_key, report_type, status, total_rows, processed_rows, failed_rows, partition_date, size_bytes, error_message, discovered_at, started_at, finished_at",
+          "id, object_key, report_type, status, total_rows, processed_rows, failed_rows, partition_date, size_bytes, error_message, discovered_at, started_at, finished_at, worker_id, heartbeat_at",
         )
         .order("discovered_at", { ascending: false })
         .limit(20),
@@ -216,6 +220,13 @@ const IngestDebugPanel = () => {
                     <span>
                       rows {f.processed_rows ?? 0}/{f.total_rows ?? 0}
                       {f.failed_rows ? ` · ${f.failed_rows} failed` : ""}
+                    </span>
+                    <span>
+                      worker{" "}
+                      <span className="font-mono text-foreground">
+                        {f.worker_id ?? "unclaimed"}
+                      </span>
+                      {f.heartbeat_at ? ` · heartbeat ${relative(f.heartbeat_at)}` : ""}
                     </span>
                     <span
                       title={

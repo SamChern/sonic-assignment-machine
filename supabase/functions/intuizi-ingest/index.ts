@@ -1025,6 +1025,9 @@ Deno.serve(async (req) => {
     mode: "dispatch" as const,
     /** Report files handed to the EC2 worker this run. */
     files_dispatched: 0,
+    /** Files left in `discovered` for the EC2 worker to lease (queue-free mode). */
+    files_awaiting_pull: 0,
+
     /** Audio objects analysed inline (that path never left the edge). */
     files_processed: 0,
     files_failed: 0,
@@ -1258,12 +1261,31 @@ Deno.serve(async (req) => {
       // through `ingest-worker-callback`, which enqueues the scoring tasks.
       try {
         if (!sqsConfigured()) {
-          throw new Error(
-            "the ingest queue is not configured yet — set SQS_QUEUE_URL (and the " +
-              "IAM key needs sqs:SendMessage on it) so report files can be handed " +
-              "to the EC2 worker. See deploy/ingest-worker/README.md.",
-          );
+          // Pull mode: no queue needed. The ledger row stays `discovered` and the
+          // EC2 worker leases it through `ingest-worker-callback`, so discovery
+          // is a success here, not a failure.
+          summary.files_awaiting_pull++;
+          summary.complete = false;
+          summary.files.push({
+            object_key: cand.key,
+            report_type: cand.report_type,
+            status: "discovered",
+            complete: false,
+            trace_id: `${runTraceId}.${cand.key.slice(-24)}`,
+            message_id: null,
+            row_group_cursor: Number(fileRow.row_group_cursor ?? 0) || 0,
+            row_groups_total: fileRow.row_groups_total ?? null,
+            dispatch_ms: 0,
+          });
+          console.log(JSON.stringify({
+            evt: "ingest_file_awaiting_pull",
+            trace_id: runTraceId,
+            object_key: cand.key,
+            report_type: cand.report_type,
+          }));
+          continue;
         }
+
 
         const endDispatch = meter.begin("dispatch");
         const dispatchStart = Date.now();

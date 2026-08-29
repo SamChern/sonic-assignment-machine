@@ -2347,6 +2347,18 @@ export type Database = {
         Returns: boolean
       }
       is_org_owner: { Args: { _org: string }; Returns: boolean }
+      lease_ingest_file: {
+        Args: { p_stale_after?: string; p_worker_id: string }
+        Returns: {
+          file_id: string
+          object_key: string
+          report_type: string
+          row_group_cursor: number
+          rows_offset: number
+          total_rows: number
+          trace_id: string
+        }[]
+      }
       log_intuizi_custody_scan: { Args: never; Returns: Json }
       match_audio_profiles: {
         Args: {

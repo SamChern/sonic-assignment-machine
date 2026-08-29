@@ -86,10 +86,12 @@ export function sqsInfo() {
   const cfg = sqsConfig();
   return {
     configured: true as const,
+    mode: "sqs" as const,
     region: cfg.region,
     // Queue name only — never echo the account ID back to a client.
     queue: cfg.path.split("/").filter(Boolean).pop() ?? null,
   };
+
 }
 
 /** POST a form-encoded, SigV4-signed SQS action (Query protocol). */

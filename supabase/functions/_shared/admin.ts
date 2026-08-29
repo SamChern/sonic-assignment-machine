@@ -39,8 +39,16 @@ export async function requireAdmin(
   const authHeader = req.headers.get("Authorization") ?? "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
 
+  // Scheduled runs: constant-time-ish compare on a dedicated job secret.
+  const jobSecret = Deno.env.get("INTERNAL_JOB_SECRET");
+  const presented = req.headers.get("x-internal-job-secret");
+  if (jobSecret && presented && presented.length === jobSecret.length && presented === jobSecret) {
+    return { isInternal: true, userId: null };
+  }
+
   if (!bearer) throw new AuthzError("Missing auth", 401);
   if (bearer === SERVICE_KEY) return { isInternal: true, userId: null };
+
 
   const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${bearer}` } },

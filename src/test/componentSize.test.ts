@@ -21,7 +21,9 @@ const LEGACY: Record<string, number> = {
   "src/components/PostIngestionWizard.tsx": 1098,
   "src/components/AggregateNetworkVisualization.tsx": 887,
   "src/components/SpeechNormalizationPanel.tsx": 815,
-  "src/pages/IngestionCompatibility.tsx": 809,
+  // Ratcheted down after the report shapes/merge moved to src/lib/compatibilityReport.ts.
+  "src/pages/IngestionCompatibility.tsx": 739,
+
   "src/components/enterprise/CategoryProfileEditor.tsx": 779,
   "src/components/NetworkVisualization.tsx": 767,
   "src/pages/IntegrationStatus.tsx": 758,

@@ -1,0 +1,11 @@
+REVOKE ALL ON public.embedding_bridges FROM anon;
+REVOKE ALL ON public.sonic_cohorts FROM anon;
+REVOKE ALL ON public.sonic_cohort_members FROM anon;
+REVOKE ALL ON public.sonic_cohort_members FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.embedding_bridges FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.sonic_cohorts FROM authenticated;
+GRANT SELECT ON public.embedding_bridges TO authenticated;
+GRANT SELECT ON public.sonic_cohorts TO authenticated;
+GRANT ALL ON public.embedding_bridges TO service_role;
+GRANT ALL ON public.sonic_cohorts TO service_role;
+GRANT ALL ON public.sonic_cohort_members TO service_role;

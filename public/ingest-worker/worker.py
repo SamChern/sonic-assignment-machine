@@ -149,6 +149,17 @@ class Callback:
             time.sleep(min(120, 2 ** attempt))
         raise RuntimeError(f"callback failed after retries: {last}")
 
+    def post_once(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """One callback attempt for idempotent operations already retried by lease."""
+        res = self.session.post(
+            CALLBACK_URL,
+            json={**payload, "worker_id": WORKER_ID},
+            timeout=120,
+        )
+        if res.status_code >= 300:
+            raise RuntimeError(f"callback {res.status_code}: {res.text[:200]}")
+        return res.json()
+
     def heartbeat(self, stats: Dict[str, Any]) -> None:
         """Best-effort liveness ping — one attempt, never blocks the work loop."""
         try:
@@ -278,7 +289,7 @@ def process_rollups(
             for (s, c, d), w in agg.items()
         ]
         for chunk in batched(staged, ROLLUP_CHUNK):
-            cb.post({
+            cb.post_once({
                 **base,
                 "phase": "rollups",
                 "source_offset": chunk_offset,

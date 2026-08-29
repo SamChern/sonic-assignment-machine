@@ -16,7 +16,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireAdmin } from "../_shared/admin.ts";
 import { putObject } from "../_shared/s3.ts";
-import { isActivationEid, toActivationEid } from "../_shared/activationEid.ts";
+import {
+  activationCsv,
+  activationDate,
+  activationObjectKey,
+  activationRefusal,
+  buildActivationFile,
+  MIN_ACTIVATION_MEMBERS,
+} from "../_shared/activationFile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +31,7 @@ const corsHeaders = {
 };
 
 const PAGE = 1000;
-const MIN_MEMBERS = 1000;
+const MIN_MEMBERS = MIN_ACTIVATION_MEMBERS;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -101,9 +108,7 @@ Deno.serve(async (req) => {
     if (!body.cohort_slug) {
       return json({ success: false, error: "cohort_slug is required" }, 400);
     }
-    const dt = /^\d{4}-\d{2}-\d{2}$/.test(body.dt ?? "")
-      ? body.dt!
-      : new Date().toISOString().slice(0, 10);
+    const dt = activationDate(body.dt);
 
     const { data: cohort, error: cohortErr } = await admin
       .from("sonic_cohorts")
@@ -121,11 +126,11 @@ Deno.serve(async (req) => {
       export_eligible: boolean;
     };
 
-    if (!c.export_eligible) {
+    const refusal = activationRefusal(c.member_count, c.export_eligible, c.slug);
+    if (refusal) {
       return json({
         success: false,
-        error:
-          `cohort "${c.slug}" is not export eligible — ${c.member_count} members, minimum is ${MIN_MEMBERS}`,
+        error: refusal,
         member_count: c.member_count,
         min_members: MIN_MEMBERS,
       }, 409);
@@ -134,10 +139,7 @@ Deno.serve(async (req) => {
     // ---- collect + normalize EIDs (never logged, never returned) ------------
     // Members flagged `holdout` (Step 11c) are withheld from the file so pixel
     // events split into exposed vs. holdout and activation-lift can report lift.
-    const eids = new Set<string>();
-    const subjectKeys: string[] = [];
-    let skipped = 0;
-    let heldOut = 0;
+    const members: { subject_key: string; holdout: boolean }[] = [];
     for (let offset = 0; ; offset += PAGE) {
       const { data, error } = await admin
         .from("sonic_cohort_members")
@@ -147,39 +149,30 @@ Deno.serve(async (req) => {
         .range(offset, offset + PAGE - 1);
       if (error) throw new Error(`member read failed: ${error.message}`);
       const rows = (data ?? []) as { subject_key: string; holdout: boolean }[];
-      for (const r of rows) {
-        if (r.holdout) {
-          heldOut++;
-          continue;
-        }
-        const eid = await toActivationEid(r.subject_key);
-        if (eid && isActivationEid(eid)) {
-          eids.add(eid);
-          subjectKeys.push(r.subject_key);
-        } else skipped++;
-      }
+      members.push(...rows);
       if (rows.length < PAGE) break;
     }
 
+    const file = await buildActivationFile(members);
+    const { eids, subjectKeys, heldOut, skipped } = file;
 
-
-    if (eids.size < MIN_MEMBERS) {
+    if (eids.length < MIN_MEMBERS) {
       return json({
         success: false,
         error:
-          `only ${eids.size} usable identifiers after normalization — minimum is ${MIN_MEMBERS}`,
+          `only ${eids.length} usable identifiers after normalization — minimum is ${MIN_MEMBERS}`,
         skipped,
       }, 409);
     }
 
-    const objectKey = `outbound/activation/dt=${dt}/cohort=${c.slug}/part-000.csv.gz`;
+    const objectKey = activationObjectKey(c.slug, dt);
 
     if (body.dry_run) {
       return json({
         success: true,
         dry_run: true,
         cohort: { slug: c.slug, name: c.name, member_count: c.member_count },
-        row_count: eids.size,
+        row_count: eids.length,
         holdout: heldOut,
         skipped,
         object_key: objectKey,
@@ -187,7 +180,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const payload = await gzip(Array.from(eids).sort().join("\n") + "\n");
+    const payload = await gzip(activationCsv(eids));
 
     const { data: inserted } = await admin
       .from("sonic_cohort_exports")
@@ -198,7 +191,7 @@ Deno.serve(async (req) => {
         activation_id: body.activation_id ?? null,
         object_key: objectKey,
         dt,
-        row_count: eids.size,
+        row_count: eids.length,
         bytes: payload.byteLength,
         status: "running",
         started_by: actorId,
@@ -228,7 +221,7 @@ Deno.serve(async (req) => {
       last_synced_at: new Date().toISOString(),
       last_export_at: new Date().toISOString(),
       last_export_object_key: objectKey,
-      last_export_row_count: eids.size,
+      last_export_row_count: eids.length,
     };
     let activationsRecorded = 0;
 
@@ -258,7 +251,7 @@ Deno.serve(async (req) => {
       cohort: { slug: c.slug, name: c.name, member_count: c.member_count },
       object_key: objectKey,
       dt,
-      row_count: eids.size,
+      row_count: eids.length,
       holdout: heldOut,
       bytes: payload.byteLength,
       skipped,

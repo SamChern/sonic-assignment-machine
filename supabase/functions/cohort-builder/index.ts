@@ -30,6 +30,9 @@ const LEASE_SECONDS = 240;
 const DEFAULT_MAX_SUBJECTS = 4000;
 const PAGE = 1000;
 const MEMBER_CHUNK = 500;
+// Vector columns are wide (1536 floats); read them in small slices so a chunk
+// never trips the statement timeout.
+const VEC_PAGE = 200;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -118,12 +121,13 @@ Deno.serve(async (req) => {
       const vectorByKey = new Map<string, number[]>();
 
       const cacheKeys = subjects.map((s) => s.key);
-      for (let i = 0; i < cacheKeys.length; i += PAGE) {
-        const slice = cacheKeys.slice(i, i + PAGE);
-        const { data } = await admin
+      for (let i = 0; i < cacheKeys.length; i += VEC_PAGE) {
+        const slice = cacheKeys.slice(i, i + VEC_PAGE);
+        const { data, error } = await admin
           .from("audio_profile_embeddings")
           .select("cache_key, embedding")
           .in("cache_key", slice);
+        if (error) throw new Error(`profile embedding read failed: ${error.message}`);
         for (const row of (data ?? []) as { cache_key: string; embedding: unknown }[]) {
           const vec = parseVector(row.embedding);
           if (vec) vectorByKey.set(row.cache_key, vec);
@@ -133,13 +137,14 @@ Deno.serve(async (req) => {
       const pending = subjects.filter((s) => !vectorByKey.has(s.key));
       const srcIds = Array.from(new Set(pending.map((s) => s.audioSourceId)));
       const vectorBySource = new Map<string, number[]>();
-      for (let i = 0; i < srcIds.length; i += PAGE) {
-        const slice = srcIds.slice(i, i + PAGE);
-        const { data } = await admin
+      for (let i = 0; i < srcIds.length; i += VEC_PAGE) {
+        const slice = srcIds.slice(i, i + VEC_PAGE);
+        const { data, error } = await admin
           .from("audio_sources")
           .select("id, profile_embedding")
           .in("id", slice)
           .not("profile_embedding", "is", null);
+        if (error) throw new Error(`source embedding read failed: ${error.message}`);
         for (const row of (data ?? []) as { id: string; profile_embedding: unknown }[]) {
           const vec = parseVector(row.profile_embedding);
           if (vec) vectorBySource.set(row.id, vec);
@@ -263,7 +268,11 @@ Deno.serve(async (req) => {
       console.log(JSON.stringify({ evt: "cohort_builder_run", source: body.source ?? "manual", ...out }));
       return json(out);
     } finally {
-      await admin.rpc("release_named_lease", { p_id: LEASE_ID, p_owner: leaseOwner }).catch(() => {});
+      try {
+        await admin.rpc("release_named_lease", { p_id: LEASE_ID, p_owner: leaseOwner });
+      } catch (_) {
+        // A stale lease expires on its own; never mask the real result.
+      }
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";

@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   FileArchive,
   Loader2,
+  Clock,
 } from "lucide-react";
 
 const MIN_MEMBERS = 1000;
@@ -64,7 +65,7 @@ export function ServerCohortPanel() {
         .from("sonic_cohort_exports")
         .select("id, cohort_slug, object_key, dt, row_count, bytes, status, error, created_at")
         .order("created_at", { ascending: false })
-        .limit(10),
+        .limit(60),
     ]);
     if (cohortRes.error) toast.error(`Could not load cohorts: ${cohortRes.error.message}`);
     setCohorts((cohortRes.data ?? []) as ServerCohort[]);
@@ -75,6 +76,16 @@ export function ServerCohortPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Newest succeeded export per cohort slug — drives the "Last activation" line.
+  const lastActivation = useMemo(() => {
+    const map = new Map<string, CohortExport>();
+    for (const x of exports) {
+      if (x.status !== "succeeded") continue;
+      if (!map.has(x.cohort_slug)) map.set(x.cohort_slug, x);
+    }
+    return map;
+  }, [exports]);
 
   const totalMembers = useMemo(
     () => cohorts.reduce((sum, c) => sum + (c.member_count ?? 0), 0),
@@ -112,12 +123,16 @@ export function ServerCohortPanel() {
         error?: string;
         row_count?: number;
         holdout?: number;
+        activations_recorded?: number;
       };
       if (res?.success) {
         toast.success(
           `Activation file written — ${res.row_count?.toLocaleString()} EIDs` +
             (res.holdout
               ? ` · ${res.holdout.toLocaleString()} withheld as holdout for lift measurement`
+              : "") +
+            (res.activations_recorded
+              ? ` · logged against ${res.activations_recorded} activation grant${res.activations_recorded === 1 ? "" : "s"}`
               : ""),
         );
       }
@@ -188,6 +203,17 @@ export function ServerCohortPanel() {
                 </Badge>
               </div>
               {c.narrative && <p className="text-xs text-muted-foreground">{c.narrative}</p>}
+              {(() => {
+                const last = lastActivation.get(c.slug);
+                return (
+                  <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    {last
+                      ? `Last activation ${new Date(last.created_at).toLocaleString()} · ${(last.row_count ?? 0).toLocaleString()} EIDs`
+                      : "Never activated"}
+                  </p>
+                );
+              })()}
               {!c.export_eligible && (
                 <p className="text-[11px] text-amber-500">
                   Below the {MIN_MEMBERS.toLocaleString()}-subject minimum for an Activation file.
@@ -219,7 +245,7 @@ export function ServerCohortPanel() {
             Recent Activation exports
           </h4>
           <ul className="space-y-2">
-            {exports.map((x) => (
+            {exports.slice(0, 10).map((x) => (
               <li key={x.id} className="rounded-md border border-border/60 bg-muted/30 p-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge

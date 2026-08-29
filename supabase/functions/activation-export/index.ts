@@ -16,7 +16,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireAdmin } from "../_shared/admin.ts";
 import { putObject } from "../_shared/s3.ts";
-import { isActivationEid, toActivationEid } from "../_shared/activationEid.ts";
+import {
+  activationCsv,
+  activationDate,
+  activationObjectKey,
+  activationRefusal,
+  buildActivationFile,
+  MIN_ACTIVATION_MEMBERS,
+} from "../_shared/activationFile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +31,7 @@ const corsHeaders = {
 };
 
 const PAGE = 1000;
-const MIN_MEMBERS = 1000;
+const MIN_MEMBERS = MIN_ACTIVATION_MEMBERS;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -38,6 +45,36 @@ async function gzip(text: string): Promise<Uint8Array> {
   const buf = await new Response(stream).arrayBuffer();
   return new Uint8Array(buf);
 }
+
+/**
+ * Which Intuizi activations delivered these subjects? Read from the scoring
+ * queue, which carries the activation each identifier arrived under. Subject
+ * keys stay inside this function — only activation ids come back.
+ */
+async function resolveActivationIds(
+  admin: ReturnType<typeof createClient>,
+  subjectKeys: string[],
+): Promise<string[]> {
+  const found = new Set<string>();
+  const sample = subjectKeys.slice(0, 5000);
+  for (let i = 0; i < sample.length; i += PAGE) {
+    const slice = sample.slice(i, i + PAGE);
+    const { data, error } = await admin
+      .from("intuizi_score_queue")
+      .select("activation_id")
+      .in("identifier", slice)
+      .not("activation_id", "is", null);
+    if (error) {
+      console.error("activation grant resolution failed", error.message);
+      break;
+    }
+    for (const row of (data ?? []) as { activation_id: string | null }[]) {
+      if (row.activation_id) found.add(row.activation_id);
+    }
+  }
+  return Array.from(found);
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -71,9 +108,7 @@ Deno.serve(async (req) => {
     if (!body.cohort_slug) {
       return json({ success: false, error: "cohort_slug is required" }, 400);
     }
-    const dt = /^\d{4}-\d{2}-\d{2}$/.test(body.dt ?? "")
-      ? body.dt!
-      : new Date().toISOString().slice(0, 10);
+    const dt = activationDate(body.dt);
 
     const { data: cohort, error: cohortErr } = await admin
       .from("sonic_cohorts")
@@ -91,11 +126,11 @@ Deno.serve(async (req) => {
       export_eligible: boolean;
     };
 
-    if (!c.export_eligible) {
+    const refusal = activationRefusal(c.member_count, c.export_eligible, c.slug);
+    if (refusal) {
       return json({
         success: false,
-        error:
-          `cohort "${c.slug}" is not export eligible — ${c.member_count} members, minimum is ${MIN_MEMBERS}`,
+        error: refusal,
         member_count: c.member_count,
         min_members: MIN_MEMBERS,
       }, 409);
@@ -104,9 +139,7 @@ Deno.serve(async (req) => {
     // ---- collect + normalize EIDs (never logged, never returned) ------------
     // Members flagged `holdout` (Step 11c) are withheld from the file so pixel
     // events split into exposed vs. holdout and activation-lift can report lift.
-    const eids = new Set<string>();
-    let skipped = 0;
-    let heldOut = 0;
+    const members: { subject_key: string; holdout: boolean }[] = [];
     for (let offset = 0; ; offset += PAGE) {
       const { data, error } = await admin
         .from("sonic_cohort_members")
@@ -116,36 +149,30 @@ Deno.serve(async (req) => {
         .range(offset, offset + PAGE - 1);
       if (error) throw new Error(`member read failed: ${error.message}`);
       const rows = (data ?? []) as { subject_key: string; holdout: boolean }[];
-      for (const r of rows) {
-        if (r.holdout) {
-          heldOut++;
-          continue;
-        }
-        const eid = await toActivationEid(r.subject_key);
-        if (eid && isActivationEid(eid)) eids.add(eid);
-        else skipped++;
-      }
+      members.push(...rows);
       if (rows.length < PAGE) break;
     }
 
+    const file = await buildActivationFile(members);
+    const { eids, subjectKeys, heldOut, skipped } = file;
 
-    if (eids.size < MIN_MEMBERS) {
+    if (eids.length < MIN_MEMBERS) {
       return json({
         success: false,
         error:
-          `only ${eids.size} usable identifiers after normalization — minimum is ${MIN_MEMBERS}`,
+          `only ${eids.length} usable identifiers after normalization — minimum is ${MIN_MEMBERS}`,
         skipped,
       }, 409);
     }
 
-    const objectKey = `outbound/activation/dt=${dt}/cohort=${c.slug}/part-000.csv.gz`;
+    const objectKey = activationObjectKey(c.slug, dt);
 
     if (body.dry_run) {
       return json({
         success: true,
         dry_run: true,
         cohort: { slug: c.slug, name: c.name, member_count: c.member_count },
-        row_count: eids.size,
+        row_count: eids.length,
         holdout: heldOut,
         skipped,
         object_key: objectKey,
@@ -153,7 +180,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const payload = await gzip(Array.from(eids).sort().join("\n") + "\n");
+    const payload = await gzip(activationCsv(eids));
 
     const { data: inserted } = await admin
       .from("sonic_cohort_exports")
@@ -164,7 +191,7 @@ Deno.serve(async (req) => {
         activation_id: body.activation_id ?? null,
         object_key: objectKey,
         dt,
-        row_count: eids.size,
+        row_count: eids.length,
         bytes: payload.byteLength,
         status: "running",
         started_by: actorId,
@@ -185,13 +212,38 @@ Deno.serve(async (req) => {
         .eq("id", exportRowId);
     }
 
-    // Keep the org's activation sync panel in step with the outbound file.
+    // ---- record the run against the org's activation grants -----------------
+    // An explicit organization/activation pair from the caller wins. Otherwise
+    // the grants are resolved from the exported subjects themselves: whichever
+    // Intuizi activations delivered them, limited to grants that are still
+    // active. Nothing identifier-shaped is returned — only a count.
+    const stamp = {
+      last_synced_at: new Date().toISOString(),
+      last_export_at: new Date().toISOString(),
+      last_export_object_key: objectKey,
+      last_export_row_count: eids.length,
+    };
+    let activationsRecorded = 0;
+
     if (body.organization_id && body.activation_id) {
-      await admin
+      const { data: updated } = await admin
         .from("org_intuizi_activations")
-        .update({ last_synced_at: new Date().toISOString() })
+        .update(stamp)
         .eq("organization_id", body.organization_id)
-        .eq("activation_id", body.activation_id);
+        .eq("activation_id", body.activation_id)
+        .select("id");
+      activationsRecorded = (updated ?? []).length;
+    } else {
+      const activationIds = await resolveActivationIds(admin, subjectKeys);
+      if (activationIds.length) {
+        const { data: updated } = await admin
+          .from("org_intuizi_activations")
+          .update(stamp)
+          .in("activation_id", activationIds)
+          .eq("is_active", true)
+          .select("id");
+        activationsRecorded = (updated ?? []).length;
+      }
     }
 
     const out = {
@@ -199,12 +251,14 @@ Deno.serve(async (req) => {
       cohort: { slug: c.slug, name: c.name, member_count: c.member_count },
       object_key: objectKey,
       dt,
-      row_count: eids.size,
+      row_count: eids.length,
       holdout: heldOut,
       bytes: payload.byteLength,
       skipped,
+      activations_recorded: activationsRecorded,
       elapsed_ms: Date.now() - startedAt,
     };
+
     console.log(JSON.stringify({ evt: "activation_export", ...out }));
     return json(out);
   } catch (e) {

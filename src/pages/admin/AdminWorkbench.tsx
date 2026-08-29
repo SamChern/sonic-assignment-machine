@@ -58,7 +58,6 @@ import { fingerprintToScores } from "@/lib/audioscope";
 import { useEC2Api } from "@/hooks/useEC2Api";
 import { calculateSimilarity, type FingerprintMode } from "@/lib/fingerprintMath";
 import { SignalCohortPanel } from "@/components/SignalCohortPanel";
-import { ServerCohortPanel } from "@/components/admin/ServerCohortPanel";
 import { IdentifierFilterBar } from "@/components/IdentifierFilterBar";
 import {
   EMPTY_IDENTIFIER_FILTER,
@@ -883,7 +882,6 @@ const AdminWorkbench = () => {
           <TabsContent value="users" className="space-y-4">
             {entityMode === "signal" ? (
               <div className="space-y-4">
-                <ServerCohortPanel />
                 <SignalCohortPanel
                   points={signalPoints}
                   cohorts={cohorts}

@@ -2,8 +2,9 @@
 //
 // Clusters Intuizi subject embeddings (1536-d profile vectors) with k-means and
 // upserts public.sonic_cohorts + public.sonic_cohort_members. Uses the same
-// single-flight worker-lease pattern as intuizi-score-worker
-// (acquire_intuizi_lease / release_intuizi_lease) so a scheduled tick can never
+// single-flight worker-lease pattern as intuizi-score-worker, but on its own
+// named lease row ("cohort-builder") so a nightly rebuild never contends with
+// an in-flight Intuizi ingest — so a scheduled tick can never
 // overlap a manual run or a live ingest.
 //
 // Subject keys (raw Intuizi identifiers) are written to sonic_cohort_members,
@@ -23,6 +24,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const LEASE_ID = "cohort-builder";
 const LEASE_SECONDS = 240;
 /** Subjects pulled per run; keeps memory and CPU inside the worker limits. */
 const DEFAULT_MAX_SUBJECTS = 4000;
@@ -82,8 +84,9 @@ Deno.serve(async (req) => {
     );
 
     // ---- single-flight lease -------------------------------------------------
-    const leaseOwner = `cohort-builder:${crypto.randomUUID()}`;
-    const { data: acquired, error: leaseErr } = await admin.rpc("acquire_intuizi_lease", {
+    const leaseOwner = `${LEASE_ID}:${crypto.randomUUID()}`;
+    const { data: acquired, error: leaseErr } = await admin.rpc("acquire_named_lease", {
+      p_id: LEASE_ID,
       p_owner: leaseOwner,
       p_seconds: LEASE_SECONDS,
     });
@@ -260,7 +263,7 @@ Deno.serve(async (req) => {
       console.log(JSON.stringify({ evt: "cohort_builder_run", source: body.source ?? "manual", ...out }));
       return json(out);
     } finally {
-      await admin.rpc("release_intuizi_lease", { p_owner: leaseOwner }).catch(() => {});
+      await admin.rpc("release_named_lease", { p_id: LEASE_ID, p_owner: leaseOwner }).catch(() => {});
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";

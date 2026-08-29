@@ -18,6 +18,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Info, Waves, Radar, Tags, Bug, Loader2 } from "lucide-react";
 import Audioscope from "./Audioscope";
+import ScopeTrail from "./ScopeTrail";
+import WaveInspect from "./WaveInspect";
+import { ScopeDebugDrawer, ScopeLegend } from "./ScopeDrawers";
 import {
   AUDIOSCOPE_CATEGORIES,
   CATEGORY_LABELS,
@@ -28,6 +31,7 @@ import {
 import { FeatureWindow, extractFeatures, type ScopeFeatures } from "@/lib/audioscope/features";
 import { ScrollingSpectrogram } from "@/lib/audioscope/spectrogram";
 import type { SilhouetteTag } from "@/lib/audioscope/silhouette";
+import { formatTrailTime, type TrailEntry } from "@/lib/audioscope/trail";
 import { useAudioscopeSignal } from "@/lib/audioscope/useSignal";
 import {
   useScopeWindowScore,

@@ -26,18 +26,30 @@ type RetentionRun = {
   finished_at: string | null;
 };
 
+const KIND_LABELS: Record<string, string> = {
+  custody_scan: "custody scan",
+  suppression_refresh: "suppression refresh",
+  eid_rekey: "key normalization",
+  intuizi_90d: "retention",
+  manual_verify: "retention (manual)",
+};
+
+const NON_PURGE_KINDS = new Set(["custody_scan", "suppression_refresh"]);
+
 const fmt = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
+
 
 export const ComplianceCard = () => {
   const [runs, setRuns] = useState<RetentionRun[]>([]);
   const [suppressedCount, setSuppressedCount] = useState<number | null>(null);
+  const [poiCount, setPoiCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"retention" | "scan" | null>(null);
+  const [busy, setBusy] = useState<"retention" | "scan" | "suppression" | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: runRows, error: runErr }, { count }] = await Promise.all([
+    const [{ data: runRows, error: runErr }, { count }, { count: poi }] = await Promise.all([
       supabase
         .from("retention_runs")
         .select("*")
@@ -47,10 +59,15 @@ export const ComplianceCard = () => {
         .from("taxonomy_nodes")
         .select("id", { count: "exact", head: true })
         .eq("suppressed", true),
+      supabase
+        .from("taxonomy_nodes")
+        .select("id", { count: "exact", head: true })
+        .or("code.ilike.visit.%,code.ilike.poi.%,code.ilike.place.%,code.ilike.geo.%"),
     ]);
     if (runErr) toast.error(`Could not load retention history: ${runErr.message}`);
     setRuns((runRows ?? []) as RetentionRun[]);
     setSuppressedCount(count ?? 0);
+    setPoiCount(poi ?? 0);
     setLoading(false);
   }, []);
 
@@ -58,10 +75,31 @@ export const ComplianceCard = () => {
     void load();
   }, [load]);
 
-  const lastRetention = useMemo(() => runs.find((r) => r.kind !== "custody_scan"), [runs]);
+  const lastRetention = useMemo(
+    () => runs.find((r) => r.kind !== "custody_scan" && r.kind !== "suppression_refresh"),
+    [runs],
+  );
   const lastScan = useMemo(() => runs.find((r) => r.kind === "custody_scan"), [runs]);
-  const scanDetails = (lastScan?.details ?? {}) as Record<string, number | boolean | undefined>;
-  const scanClean = Boolean(scanDetails.clean);
+  const lastSuppression = useMemo(() => runs.find((r) => r.kind === "suppression_refresh"), [runs]);
+  const scanDetails = (lastScan?.details ?? {}) as Record<string, unknown>;
+  const scanClean = Boolean(scanDetails.clean) && lastScan?.status !== "failed";
+
+  // scan_intuizi_custody() reports per-table counts under maid_shaped / ip_shaped.
+  const perTable = (group: string): Array<[string, number]> => {
+    const raw = scanDetails[group];
+    if (!raw || typeof raw !== "object") return [];
+    return Object.entries(raw as Record<string, unknown>)
+      .map(([table, n]) => [table, Number(n) || 0] as [string, number])
+      .filter(([, n]) => n > 0);
+  };
+  const maidHits = perTable("maid_shaped");
+  const ipHits = perTable("ip_shaped");
+  const hitNote = (hits: Array<[string, number]>) => {
+    if (!lastScan) return "not scanned yet";
+    if (hits.length === 0) return "0 found";
+    const total = hits.reduce((s, [, n]) => s + n, 0);
+    return `${total} found in ${hits.map(([t]) => t.replace(/_/g, " ")).join(", ")}`;
+  };
 
   const runRetention = async () => {
     setBusy("retention");
@@ -99,24 +137,46 @@ export const ComplianceCard = () => {
     await load();
   };
 
+  const runSuppression = async () => {
+    setBusy("suppression");
+    const { data, error } = await supabase.rpc("refresh_taxonomy_suppression");
+    setBusy(null);
+    if (error) {
+      toast.error(`Suppression refresh failed: ${error.message}`);
+    } else {
+      const res = (data ?? {}) as Record<string, unknown>;
+      toast.success(
+        `Checked ${Number(res.poi_nodes ?? 0)} place class(es) — ${Number(res.newly_suppressed ?? 0)} newly suppressed`,
+      );
+    }
+    await load();
+  };
+
+  const suppressionNote = () => {
+    if (!lastSuppression) return "never checked";
+    if ((poiCount ?? 0) === 0) return "0 flagged — no visitation data ingested yet";
+    return `${suppressedCount ?? 0} of ${poiCount} place class(es) flagged`;
+  };
+
   const checklist = [
     { label: "No mapping keys or salts stored", ok: true, note: "EIDs are derived one-way at ingest" },
     {
       label: "No raw MAID-format identifiers",
-      ok: scanClean || Number(scanDetails.maid_like ?? 0) === 0,
-      note: lastScan ? `${Number(scanDetails.maid_like ?? 0)} found` : "not scanned yet",
+      ok: scanClean && maidHits.length === 0,
+      note: hitNote(maidHits),
     },
     {
       label: "No IP addresses retained",
-      ok: scanClean || Number(scanDetails.ip_like ?? 0) === 0,
-      note: lastScan ? `${Number(scanDetails.ip_like ?? 0)} found` : "not scanned yet",
+      ok: scanClean && ipHits.length === 0,
+      note: hitNote(ipHits),
     },
     {
       label: "Sensitive place classes suppressed",
-      ok: (suppressedCount ?? 0) >= 0,
-      note: `${suppressedCount ?? 0} node(s) flagged`,
+      ok: Boolean(lastSuppression),
+      note: suppressionNote(),
     },
   ];
+
 
   return (
     <Card className="border-border/60 bg-card/60 backdrop-blur">
@@ -154,7 +214,9 @@ export const ComplianceCard = () => {
               {suppressedCount ?? "—"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Sensitive place classes (health, worship, shelters) are never tagged onto a source.
+              Sensitive place classes (health, worship, shelters) are never tagged onto a source.{" "}
+              {suppressionNote()}.
+
             </p>
           </div>
           <div className="rounded-lg border border-border/50 bg-background/40 p-3">
@@ -198,6 +260,11 @@ export const ComplianceCard = () => {
             {busy === "scan" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />}
             Run custody scan
           </Button>
+          <Button size="sm" variant="outline" onClick={runSuppression} disabled={busy !== null}>
+            {busy === "suppression" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <EyeOff className="mr-1.5 h-3.5 w-3.5" />}
+            Refresh suppression
+          </Button>
+
           <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
             <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -220,16 +287,17 @@ export const ComplianceCard = () => {
                 {runs.map((r) => (
                   <tr key={r.id} className="border-t border-border/40">
                     <td className="px-2 py-1.5 whitespace-nowrap">{fmt(r.finished_at ?? r.started_at)}</td>
-                    <td className="px-2 py-1.5">{r.kind === "custody_scan" ? "custody scan" : "retention"}</td>
+                    <td className="px-2 py-1.5">{KIND_LABELS[r.kind] ?? "retention"}</td>
                     <td className="px-2 py-1.5">
                       <Badge variant={r.status === "failed" ? "destructive" : "secondary"} className="text-[10px]">
                         {r.status}
                       </Badge>
                     </td>
-                    <td className="px-2 py-1.5">{r.kind === "custody_scan" ? "—" : r.subjects_matched}</td>
+                    <td className="px-2 py-1.5">{NON_PURGE_KINDS.has(r.kind) ? "—" : r.subjects_matched}</td>
                     <td className="px-2 py-1.5">
-                      {r.kind === "custody_scan"
+                      {NON_PURGE_KINDS.has(r.kind)
                         ? "—"
+
                         : r.identifiers_deleted +
                           r.sources_deleted +
                           r.tags_deleted +

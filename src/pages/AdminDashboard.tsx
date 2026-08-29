@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { ComplianceAlert } from "@/components/admin/ComplianceAlert";
+
 import {
   Activity,
   ArrowLeft,
@@ -129,7 +131,11 @@ const AdminDashboard = () => {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6 pb-mobile-nav sm:px-6">
+        <div className="mb-4">
+          <ComplianceAlert to="/admin/ec2" />
+        </div>
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+
           {METRICS.map((m) => (
             <Card
               key={m.key}

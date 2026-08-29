@@ -2413,6 +2413,10 @@ export type Database = {
           similarity: number
         }[]
       }
+      normalize_intuizi_subject_keys: {
+        Args: { p_retention_days?: number }
+        Returns: Json
+      }
       normalize_score_to_percentile: {
         Args: { pop_mean: number; pop_stddev: number; raw_score: number }
         Returns: number
@@ -2460,6 +2464,7 @@ export type Database = {
           nodes_updated: number
         }[]
       }
+      refresh_taxonomy_suppression: { Args: never; Returns: Json }
       release_intuizi_lease: { Args: { p_owner: string }; Returns: undefined }
       release_job_worker_lease: {
         Args: { p_owner: string }

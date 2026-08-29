@@ -1,9 +1,12 @@
 // Shared caller authorization for privileged edge functions.
 //
-// Two accepted callers:
+// Three accepted callers:
 //   1. A scheduled/internal invocation presenting the service role key.
-//   2. A signed-in user who holds the 'admin' role in public.user_roles.
+//   2. A scheduled (pg_cron) invocation presenting INTERNAL_JOB_SECRET in the
+//      `x-internal-job-secret` header — cron has no user session to borrow.
+//   3. A signed-in user who holds the 'admin' role in public.user_roles.
 // Everything else is rejected before any privileged work happens.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 export interface AdminCaller {

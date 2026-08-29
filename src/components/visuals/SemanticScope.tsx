@@ -161,6 +161,7 @@ export const SemanticScope = ({
 
   useEffect(() => {
     reset();
+    setFrozen(null);
     windowRef.current.reset();
     gramRef.current?.clear();
   }, [seed, reset]);

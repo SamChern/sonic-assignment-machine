@@ -11,7 +11,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireOrgMember } from "../_shared/org.ts";
 import { toActivationEid } from "../_shared/activationEid.ts";
-import { crossesZero, fitRidgeWithBootstrap } from "../_shared/ridge.ts";
+import { crossesZero } from "../_shared/ridge.ts";
+import { fitRemoteOrLocal } from "../_shared/ridgeRemote.ts";
+
 import { controlNumber } from "../_shared/control.ts";
 
 const corsHeaders = {

@@ -18,6 +18,8 @@ import { AuthzError, requireAdmin } from "../_shared/admin.ts";
 import { cosine, kmeans, suggestK } from "../_shared/kmeans.ts";
 import { controlNumber } from "../_shared/control.ts";
 import { isAggregateKey } from "../_shared/activationEid.ts";
+import { holdoutPct, isHoldout } from "../_shared/holdout.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -241,7 +243,11 @@ Deno.serve(async (req) => {
             cohort_id: cohortId,
             subject_key: clusterable[idx].key,
             similarity: Number(cosine(vectors[idx], centroid).toFixed(4)),
+            // Same deterministic split the Predict-Users save path uses, so
+            // every cohort — nightly or manual — keeps a measurement control.
+            holdout: isHoldout(slug, clusterable[idx].key, pctHoldout),
           }));
+
           const { error: memErr } = await admin
             .from("sonic_cohort_members")
             .upsert(rows, { onConflict: "cohort_id,subject_key" });

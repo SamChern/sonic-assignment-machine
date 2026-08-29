@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { ScopeFeatures } from "@/lib/audioscope/features";
+import { appendTrailEntry, type TrailEntry } from "@/lib/audioscope/trail";
 import type { CategoryScores } from "@/lib/audioscope";
 
 export interface ScopeTag {

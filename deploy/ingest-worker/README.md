@@ -1,11 +1,9 @@
 # Intuizi ingest worker (Step 2.5 control-plane refactor)
 
-This is the EC2 half of the ingest split. The Lovable Cloud edge function
-`intuizi-ingest` is now a **control plane**: it discovers delivery objects,
-writes the `intuizi_ingest_files` ledger row and puts one SQS message per file on
-the queue. This worker does the CPU-heavy part — DuckDB decode of Parquet / CSV
-straight from S3, plus row→ontology-tag normalization — and reports results back
-through the `ingest-worker-callback` edge function.
+This is the EC2 half of the ingest split. In the recommended queue-free mode the
+worker leases discovered files from the Lovable Cloud control plane over HTTPS.
+It performs the CPU-heavy DuckDB decode and row-to-ontology normalization, then
+reports bounded, checkpointed results through `ingest-worker-callback`.
 
 Scoring did not move: the callback upserts into `intuizi_score_queue` and
 `intuizi-score-worker` still runs the six-category ontology exactly as before.
@@ -30,14 +28,18 @@ neither limit is reachable, and total ingest time is unbounded.
 
 | File | Purpose |
 | --- | --- |
-| `worker.py` | SQS consumer: claim → decode slice → batch callbacks → complete |
+| `worker.py` | Pull/SQS worker: claim → decode → checkpointed callbacks → complete |
 | `normalize.py` | Python port of `_shared/intuizi.ts::normalizeRow` (tag codes must stay identical) |
 | `requirements.txt` | boto3, duckdb, requests |
 | `ingest-worker.service` | systemd unit, CPU/memory capped for the 2 vCPU / 7 GB box |
 | `install.sh` | provision / update the service |
-| `smoke-test.sh` | verifies SQS, callback auth and a real S3 read |
+| `smoke-test.sh` | verifies callback auth and an optional real S3 read |
 
 ## 1. AWS prerequisites
+
+Pull mode requires only the S3 read credentials already used by SonicSIM. It
+does not require SQS permissions or IAM changes. The queue setup below is
+optional and only applies when `MODE=sqs` is deliberately selected.
 
 Create the queue and a dead-letter queue in the same region as the bucket:
 
@@ -89,7 +91,7 @@ AWS_ACCESS_KEY_ID=<key>
 AWS_SECRET_ACCESS_KEY=<secret>
 # Tuning: rows per SQS message before checkpoint, identifiers per callback.
 MAX_ROWS_PER_MESSAGE=200000
-BATCH_ROWS=1000
+BATCH_ROWS=250
 EOF
 sudo chmod 600 /etc/sonicsim/ingest-worker.env
 ```

@@ -208,8 +208,8 @@ Deno.serve(async (req) => {
   }
 
   // ---- Rollups (Step 2.5-alt): staged summary rows for one object ----------
-  // The worker sends chunks; `replace: true` on the first chunk clears any prior
-  // rows for that object, which is what makes a re-run idempotent.
+  // Every source chunk carries its starting offset. The RPC uses that offset as
+  // an idempotency key, so a lost HTTP response can safely replay the chunk.
   if (body.phase === "rollups") {
     const key = typeof body.object_key === "string" ? body.object_key.trim() : "";
     if (!key) return json({ success: false, error: "object_key is required" }, 400);
@@ -221,10 +221,7 @@ Deno.serve(async (req) => {
           `too many rollup rows in one call (${raw.length} > ${MAX_ROLLUP_ROWS_PER_CALL}) — send smaller chunks`,
       }, 400);
     }
-    if (body.replace === true) {
-      const { error: delErr } = await admin.from("ingest_rollups").delete().eq("object_key", key);
-      if (delErr) return json({ success: false, error: delErr.message }, 500);
-    }
+    const sourceOffset = Math.max(Number(body.source_offset ?? -1) || 0, 0);
     const reportType = typeof body.report_type === "string" ? body.report_type : null;
     const rows = raw.flatMap((r) => {
       if (!r || typeof r !== "object") return [];
@@ -244,11 +241,21 @@ Deno.serve(async (req) => {
         weight: Number(row.weight ?? 1) || 1,
       }];
     });
+    let staged = 0;
     if (rows.length) {
-      const { error: insErr } = await admin.from("ingest_rollups").insert(rows);
-      if (insErr) return json({ success: false, error: insErr.message }, 500);
+      const { data, error: stageErr } = await admin.rpc("stage_ingest_rollups", {
+        p_object_key: key,
+        p_report_type: reportType,
+        p_source_offset: sourceOffset,
+        p_rows: rows,
+      });
+      if (stageErr) {
+        const transient = /timeout|canceling statement|deadlock|lock/i.test(stageErr.message);
+        return json({ success: false, error: stageErr.message, retryable: transient }, transient ? 503 : 500);
+      }
+      staged = Number(data ?? 0) || 0;
     }
-    return json({ success: true, inserted: rows.length, rejected: raw.length - rows.length });
+    return json({ success: true, staged, rejected: raw.length - rows.length });
   }
 
   // ---- Lease (pull mode): hand the worker the next pending file -------------
@@ -387,12 +394,12 @@ Deno.serve(async (req) => {
         trace_id: traceId,
       },
     });
-    if (promoErr) {
+    if (promoErr || (promo && typeof promo === "object" && "success" in promo && promo.success === false)) {
       console.error(JSON.stringify({
         evt: "promote_invoke_failed",
         trace_id: traceId,
         object_key: file.object_key,
-        error: String(promoErr),
+        error: String(promoErr ?? (promo as { error?: unknown })?.error ?? "promotion failed"),
       }));
       return json({ success: true, file_id: file.id, status: "loaded", promoted: false });
     }

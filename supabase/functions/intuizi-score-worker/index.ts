@@ -34,11 +34,8 @@ const corsHeaders = {
 
 /** Wall-clock ceiling per invocation; well under the 150s gateway idle limit. */
 const RUN_BUDGET_MS = 60_000;
-/** Tasks claimed per batch. Larger than the lane count so lanes stay fed and a
- *  single slow identifier no longer stalls the whole batch at a barrier. */
-const BATCH_DEFAULT = 12;
 /** Max identifiers scored concurrently. Dropped to 1 under rate-limit pressure. */
-const MAX_CONCURRENCY = 4;
+const CONCURRENCY_DEFAULT = 1;
 /** Stop claiming when a single task took longer than this share of the budget. */
 const SAFETY_MS = 12_000;
 
@@ -71,7 +68,10 @@ Deno.serve(async (req) => {
 
     // Control Room knob (60s cached), falls back to the shipped default.
     const batchSize = Math.round(
-      await controlNumber(admin, "ingest.score_batch_size", BATCH_DEFAULT, { min: 1, max: 64 }),
+      await controlNumber(admin, "ingest.score_batch_size", 3, { min: 1, max: 64 }),
+    );
+    const configuredConcurrency = Math.round(
+      await controlNumber(admin, "ingest.score_concurrency", CONCURRENCY_DEFAULT, { min: 1, max: 4 }),
     );
 
 
@@ -85,6 +85,9 @@ Deno.serve(async (req) => {
     };
     /** One id for this invocation; inherited from the caller when chaining. */
     const runTraceId = reqBody.trace_id ?? newTraceId("run");
+
+    // Keep bounded queue cleanup out of the latency-sensitive claim RPC.
+    await admin.rpc("retire_exhausted_intuizi_score_jobs", { p_limit: 50 });
 
     // Operator action: put failed / dead-lettered identifiers back in the queue.
     // Scoring is idempotent per identifier, so already-completed work is skipped
@@ -145,7 +148,7 @@ Deno.serve(async (req) => {
     let failed = 0;
     let paused = false;
     /** Adaptive: starts wide, collapses to 1 as soon as the gateway pushes back. */
-    let concurrency = MAX_CONCURRENCY;
+    let concurrency = configuredConcurrency;
     let rateLimits = state?.consecutive_rate_limits ?? 0;
 
     type QueuedTask = ScoreTask & {

@@ -57,6 +57,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import signal
 import socket
 import sys
@@ -68,7 +69,8 @@ import boto3
 import duckdb
 import requests
 
-from normalize import merge_by_identifier, normalize_row
+from normalize import merge_by_identifier, normalize_row, pick
+
 
 log = logging.getLogger("ingest-worker")
 
@@ -81,11 +83,19 @@ REGION = os.environ.get("AWS_REGION", "us-west-2")
 BUCKET = os.environ["S3_BUCKET"]
 
 MAX_ROWS_PER_MESSAGE = int(os.environ.get("MAX_ROWS_PER_MESSAGE", "200000"))
-BATCH_ROWS = min(int(os.environ.get("BATCH_ROWS", "1000")), 2000)
+# 250 by default: the scoring queue is a large, six-index table, and a 1000-row
+# upsert against it crossed the database statement timeout. The control plane can
+# retune this from the Control Room (`ingest.worker_batch_rows`).
+BATCH_ROWS = min(int(os.environ.get("BATCH_ROWS", "250")), 2000)
+# Above this row count a file is summarised into subject x taxonomy x day rollups
+# instead of queued device by device. Overridden by the control plane's config.
+ROLLUP_ROW_THRESHOLD = int(os.environ.get("ROLLUP_ROW_THRESHOLD", "5000000"))
+ROLLUP_CHUNK = 1_000
 READ_CHUNK = 50_000
 WAIT_SECONDS = 20
 POLL_SECONDS = max(int(os.environ.get("POLL_SECONDS", "20")), 5)
 VISIBILITY_SECONDS = 900
+
 
 
 CALLBACK_URL = f"{SUPABASE_URL}/functions/v1/ingest-worker-callback"
@@ -114,9 +124,12 @@ class Callback:
     def post(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         payload = {**payload, "worker_id": WORKER_ID}
         last: Optional[Exception] = None
-        for attempt in range(1, 5):
+        # A write that timed out on a busy database is not a bad payload: the
+        # ledger cursor is untouched, so re-sending the same slice is safe and
+        # cheaper than losing a 40M-row file. Retry those far longer.
+        for attempt in range(1, 11):
             try:
-                res = self.session.post(CALLBACK_URL, json=payload, timeout=60)
+                res = self.session.post(CALLBACK_URL, json=payload, timeout=120)
             except requests.RequestException as e:  # network blip
                 last = e
             else:
@@ -128,8 +141,42 @@ class Callback:
                         f"callback rejected ({res.status_code}): {res.text[:400]}"
                     )
                 last = RuntimeError(f"callback {res.status_code}: {res.text[:200]}")
-            time.sleep(min(30, 2 ** attempt))
+                if res.status_code == 503:
+                    log.warning(
+                        "callback busy (attempt %d), backend asked us to retry: %s",
+                        attempt, res.text[:200],
+                    )
+            time.sleep(min(120, 2 ** attempt))
         raise RuntimeError(f"callback failed after retries: {last}")
+
+    def post_once(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """One callback attempt for idempotent operations already retried by lease."""
+        res = self.session.post(
+            CALLBACK_URL,
+            json={**payload, "worker_id": WORKER_ID},
+            timeout=120,
+        )
+        if res.status_code >= 300:
+            raise RuntimeError(f"callback {res.status_code}: {res.text[:200]}")
+        return res.json()
+
+    def heartbeat(self, stats: Dict[str, Any]) -> None:
+        """Best-effort liveness ping — one attempt, never blocks the work loop."""
+        try:
+            self.session.post(
+                CALLBACK_URL,
+                json={
+                    "phase": "heartbeat",
+                    "worker_id": WORKER_ID,
+                    "host": socket.gethostname(),
+                    "stats": stats,
+                },
+                timeout=15,
+            )
+        except Exception as e:  # noqa: BLE001
+            log.debug("heartbeat failed: %s", str(e)[:200])
+
+
 
 
 def s3_uri(object_key: str) -> str:
@@ -189,6 +236,110 @@ def batched(items: List[Dict[str, Any]], size: int) -> Iterable[List[Dict[str, A
         yield items[i:i + size]
 
 
+def row_day(row: Dict[str, Any]) -> Optional[str]:
+    """Best-effort event date for a rollup row (YYYY-MM-DD), or None."""
+    raw = pick(row, "date", "event_date", "day", "dt", "timestamp", "event_time")
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", raw)
+    return m.group(0) if m else None
+
+
+def process_rollups(
+    con: duckdb.DuckDBPyConnection,
+    cb: Callback,
+    base: Dict[str, Any],
+    object_key: str,
+    report_type: str,
+    grand_total: int,
+) -> Dict[str, Any]:
+    """Summary path for very large files.
+
+    Queueing one scoring task per device row is what buried the 40M-row files. We
+    aggregate each bounded source chunk and stage it with that chunk's starting
+    offset as its idempotency key. A retried callback replaces the same staged
+    values; it cannot add their weight twice. The ledger cursor advances only
+    after every staged row from the source chunk is durable.
+    """
+    started = time.monotonic()
+    sent = 0
+    read = 0
+    skipped = 0
+    offset = int(base.get("rows_offset") or 0)
+    while offset < grand_total and not _stop:
+        chunk_offset = offset
+        want = min(READ_CHUNK, grand_total - offset)
+        rows = read_slice(con, object_key, offset, want)
+        if not rows:
+            break
+        agg: Dict[tuple, float] = {}
+        for raw in rows:
+            norm = normalize_row(report_type, raw)
+            if not norm or not norm.get("tags"):
+                skipped += 1
+                continue
+            day = row_day(raw)
+            subject = norm["identifier"][:512]
+            for t in norm["tags"]:
+                code = str(t.get("code") or "")[:200]
+                if not code:
+                    continue
+                key = (subject, code, day)
+                agg[key] = agg.get(key, 0.0) + float(t.get("weight") or 1)
+        staged = [
+            {"subject_key": s, "taxonomy_code": c, "day": d, "weight": w}
+            for (s, c, d), w in agg.items()
+        ]
+        for chunk in batched(staged, ROLLUP_CHUNK):
+            cb.post_once({
+                **base,
+                "phase": "rollups",
+                "source_offset": chunk_offset,
+                "rows": chunk,
+            })
+            sent += len(chunk)
+        offset += len(rows)
+        read += len(rows)
+        cb.post({
+            **base,
+            "phase": "progress",
+            "rows_read": len(rows),
+            "rows_offset": offset,
+            "total_rows": grand_total,
+        })
+        log.info(
+            "trace=%s key=%s rollup rows=%d/%d staged=%d pending=%d",
+            base.get("trace_id"), object_key, offset, grand_total, sent, len(agg),
+        )
+
+    complete = offset >= grand_total
+    if complete:
+        # `loaded` tells the backend the rollups are staged; it promotes them into
+        # scoring tasks inline and closes the ledger row out as `done`.
+        cb.post({**base, "phase": "loaded", "rows": sent})
+    else:
+        cb.post({
+            **base,
+            "phase": "complete",
+            "complete": False,
+            "rows_read": 0,
+            "rows_offset": offset,
+            "total_rows": grand_total,
+        })
+
+    return {
+        "object_key": object_key,
+        "mode": "rollups",
+        "trace_id": base.get("trace_id"),
+        "rows_read": read,
+        "rows_offset": offset,
+        "total_rows": grand_total,
+        "rollup_rows_staged": sent,
+        "rows_without_taxonomy": skipped,
+        "complete": complete,
+        "seconds": round(time.monotonic() - started, 1),
+    }
+
+
+
 def process_message(
     con: duckdb.DuckDBPyConnection,
     cb: Callback,
@@ -209,14 +360,25 @@ def process_message(
         "trace_id": trace_id,
         "activation_id": msg.get("activation_id"),
         "owner_id": msg.get("owner_id"),
+        "rows_offset": offset,
     }
     cb.post({**base, "phase": "claim"})
 
     started = time.monotonic()
     grand_total = total_rows(con, object_key)
+
+    # Very large deliveries are impression logs, not people: summarise them.
+    if grand_total >= ROLLUP_ROW_THRESHOLD:
+        log.info(
+            "trace=%s key=%s rows=%d >= rollup threshold %d; using summary mode",
+            trace_id, object_key, grand_total, ROLLUP_ROW_THRESHOLD,
+        )
+        return process_rollups(con, cb, base, object_key, report_type, grand_total)
+
     read = 0
     queued = 0
     skipped = 0
+
 
     while read < slice_cap and offset < grand_total and not _stop:
         want = min(READ_CHUNK, slice_cap - read, grand_total - offset)
@@ -282,23 +444,63 @@ def process_message(
     }
 
 
+def apply_remote_config(cb: Callback) -> None:
+    """Pull the operator's ingest knobs from the Control Room at startup."""
+    global BATCH_ROWS, ROLLUP_ROW_THRESHOLD
+    try:
+        cfg = (cb.post({"phase": "config"}) or {}).get("config") or {}
+    except Exception as e:  # noqa: BLE001 — env defaults are fine
+        log.warning("could not fetch remote config, using env defaults: %s", str(e)[:200])
+        return
+    batch = int(cfg.get("batch_rows") or 0)
+    if batch > 0:
+        BATCH_ROWS = min(batch, 2000)
+    threshold = int(cfg.get("rollup_row_threshold") or 0)
+    if threshold > 0:
+        ROLLUP_ROW_THRESHOLD = threshold
+    log.info(
+        "config: batch_rows=%d rollup_row_threshold=%d",
+        BATCH_ROWS, ROLLUP_ROW_THRESHOLD,
+    )
+
+
 def run_pull(cb: Callback, con: duckdb.DuckDBPyConnection) -> None:
     """Queue-free loop: lease a file from the ledger, process it, repeat."""
     log.info("worker %s pulling leases from %s", WORKER_ID, CALLBACK_URL)
+    apply_remote_config(cb)
     idle = 0
+    lease_fails = 0
+    files_done = 0
+    cb.heartbeat({"state": "starting", "mode": "pull"})
     while not _stop:
         try:
             res = cb.post({"phase": "lease"})
         except Exception as e:  # noqa: BLE001 — transient callback trouble
-            log.exception("lease failed: %s", e)
-            time.sleep(POLL_SECONDS)
+            lease_fails += 1
+            # A 5xx/HTML gateway page means the backend (or its pooler) is
+            # saturated. Hammering it every POLL_SECONDS makes recovery slower,
+            # so back off exponentially up to 10 minutes and keep the process
+            # alive — the ledger cursor is already checkpointed.
+            wait = min(600, POLL_SECONDS * (2 ** min(lease_fails, 6)))
+            log.error(
+                "lease failed (%d in a row); backend looks busy, sleeping %ds: %s",
+                lease_fails, wait, str(e)[:300],
+            )
+            cb.heartbeat({"state": "backend_busy", "lease_failures": lease_fails})
+            time.sleep(wait)
             continue
+        lease_fails = 0
+
 
         lease = res.get("lease")
         if not lease:
             if idle == 0:
                 log.info("no pending files; waiting for the control plane to discover more")
             idle += 1
+            # An idle worker is still a live worker: keep the admin health card
+            # green so "no files" never looks like "worker died".
+            if idle % 3 == 1:
+                cb.heartbeat({"state": "idle", "idle_polls": idle, "files_done": files_done})
             time.sleep(POLL_SECONDS)
             continue
 
@@ -311,8 +513,12 @@ def run_pull(cb: Callback, con: duckdb.DuckDBPyConnection) -> None:
             "rows_offset": lease.get("rows_offset") or 0,
         }
         log.info("claimed %s at row %s", msg["object_key"], msg["rows_offset"])
+        cb.heartbeat({"state": "processing", "object_key": msg["object_key"]})
         try:
-            log.info("done %s", json.dumps(process_message(con, cb, msg)))
+            summary = process_message(con, cb, msg)
+            files_done += 1
+            log.info("done %s", json.dumps(summary))
+
         except Exception as e:  # noqa: BLE001 — park the file, keep the worker up
             log.exception("file failed: %s", e)
             try:

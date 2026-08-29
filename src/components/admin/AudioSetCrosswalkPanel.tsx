@@ -5,6 +5,7 @@ import {
   Gauge,
   Loader2,
   RefreshCw,
+  Sparkles,
   Upload,
   Waves,
 } from "lucide-react";
@@ -36,7 +37,7 @@ const PREFIXES = [
   { value: "all", label: "All vocabularies" },
   { value: "iab.", label: "IAB content (iab.*)" },
   { value: "ctv.genre.", label: "CTV genres (ctv.genre.*)" },
-  { value: "app.cat.", label: "App categories (app.cat.*)" },
+  { value: "app.", label: "App categories (app.*)" },
   { value: "poi.brand.", label: "POI brands (poi.brand.*)" },
 ];
 
@@ -116,6 +117,7 @@ export const AudioSetCrosswalkPanel = () => {
   const [embedding, setEmbedding] = useState(false);
   const [proposing, setProposing] = useState(false);
   const [autoApproving, setAutoApproving] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const [threshold, setThreshold] = useState(0.7);
   const [loadingList, setLoadingList] = useState(false);
   const [deciding, setDeciding] = useState<string | null>(null);
@@ -218,6 +220,34 @@ export const AudioSetCrosswalkPanel = () => {
     }
   };
 
+  /**
+   * Step 5 gate closer: re-labels placeholder nodes, embeds anything missing an
+   * audio-space vector, then proposes mappings for nodes that have none.
+   */
+  const onBackfill = async () => {
+    setBackfilling(true);
+    try {
+      const res = await call("taxonomy-crosswalk", {
+        action: "backfill",
+        prefix: prefix === "all" ? undefined : prefix,
+        top_k: 3,
+        limit: 400,
+      });
+      mergeCoverage(res);
+      setLog(
+        `Backfill: relabeled ${res.relabeled ?? 0} · embedded ${res.embedded ?? 0} · ` +
+          `proposed ${res.proposed ?? 0} of ${res.proposal_candidates ?? 0} · ` +
+          `${res.skipped_no_embedding ?? 0} still unembedded (semantic service ${res.semantic_svc ?? "?"}).`,
+      );
+      await refresh();
+      toast.success(`Backfill proposed ${res.proposed ?? 0} mappings`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Backfill failed");
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   const onAutoApprove = async () => {
     setAutoApproving(true);
     try {
@@ -275,6 +305,10 @@ export const AudioSetCrosswalkPanel = () => {
   }, [nodes]);
 
   const iab = coverage.by_prefix?.["iab."];
+  const iabUnmapped = useMemo(
+    () => nodes.filter((n) => n.code.startsWith("iab.") && !n.approved).length,
+    [nodes],
+  );
   const approvalPct = coverage.eligible_total
     ? Math.round(((coverage.approved_total ?? 0) / coverage.eligible_total) * 100)
     : 0;
@@ -405,18 +439,47 @@ export const AudioSetCrosswalkPanel = () => {
         </Button>
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 p-3">
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="font-medium">Step 5 gate</span>
+          <Badge
+            variant={coverage.iab_fully_approved ? "secondary" : "outline"}
+            className={`text-[10px] ${coverage.iab_fully_approved ? "" : "text-amber-500"}`}
+          >
+            iab.*: {iab?.approved ?? 0}/{iab?.total ?? 0} with an approved mapping
+          </Badge>
+          {iabUnmapped > 0 && (
+            <Badge variant="outline" className="text-[10px] text-muted-foreground">
+              {iabUnmapped} unmapped in view
+            </Badge>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto h-7 text-[11px]"
+            disabled={backfilling}
+            onClick={() => void onBackfill()}
+          >
+            {backfilling
+              ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              : <Sparkles className="mr-1 h-3 w-3" />}
+            Backfill + propose
+          </Button>
+        </div>
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
           <span>
             {coverage.approved_total ?? 0} / {coverage.eligible_total ?? 0} nodes approved
           </span>
           {iab && (
-            <Badge variant="outline" className="text-[10px]">
-              iab.*: {iab.approved}/{iab.total} approved · {iab.proposed} proposed
-            </Badge>
+            <span>· iab.* proposed on {iab.proposed}</span>
           )}
         </div>
         <Progress value={approvalPct} className="h-1.5" />
+        <p className="text-[10px] leading-relaxed text-muted-foreground">
+          Backfill resolves placeholder labels (e.g. “IAB category IAB7”), embeds any node missing a
+          sonic vector, and proposes mappings for nodes that have none. Existing approvals are never
+          overwritten, so running it twice is safe.
+        </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

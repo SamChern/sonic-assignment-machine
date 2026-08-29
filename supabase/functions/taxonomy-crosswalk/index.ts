@@ -8,6 +8,9 @@
 //   decide  : approve / reject / clear specific proposals on one node.
 //   auto_approve : bulk-approve the best proposal per node when its cosine
 //             similarity clears a threshold; weaker nodes stay in manual review.
+//   backfill : embed + propose sweep — re-labels placeholder nodes, CLAP-embeds
+//             anything missing an audio-space vector, then proposes for every
+//             eligible node that has no proposals yet. Idempotent and resumable.
 //   status  : coverage — how many crosswalk-eligible nodes have >=1 approval,
 //             broken out by prefix (the Step 5 verification gate).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -20,8 +23,13 @@ import {
   CROSSWALK_PREFIXES,
   hasApproved,
   readCrosswalk,
+  centroid,
+  familyKey,
+  foldTo512,
   type CrosswalkMatch,
 } from "../_shared/audioset.ts";
+import { crosswalkText, enrichNodeLabel } from "../_shared/iabLabels.ts";
+import { clapEmbedTexts, getSemanticSvcConfig } from "../_shared/semanticSvc.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,6 +43,7 @@ interface NodeRow {
   label: string | null;
   crosswalk: unknown;
   audio_embedding: string | number[] | null;
+  embedding?: string | number[] | null;
 }
 
 function parseVector(v: string | number[] | null): number[] | null {
@@ -77,13 +86,14 @@ Deno.serve(async (req) => {
     if (action === "list") {
       const limit = clamp(Number(body.limit ?? 200), 1, 500);
       const rows = await eligibleNodes(admin, prefixFilter, limit, body.pending_only === true);
+      const embeddedCodes = await codesWithAudioEmbedding(admin, prefixFilter);
       return json({
         success: true,
         nodes: rows.map((n) => ({
           id: n.id,
           code: n.code,
           label: n.label,
-          has_audio_embedding: n.audio_embedding != null,
+          has_audio_embedding: embeddedCodes.has(n.code),
           approved: hasApproved(n.crosswalk),
           matches: readCrosswalk(n.crosswalk)?.matches ?? [],
         })),
@@ -192,70 +202,101 @@ Deno.serve(async (req) => {
         }, 409);
       }
 
-      const rows = await eligibleNodes(admin, prefixFilter, limit, !recompute);
-      let proposed = 0;
-      let skipped_no_embedding = 0;
-      let failed = 0;
-
-      for (const n of rows) {
-        const vec = parseVector(n.audio_embedding);
-        if (!vec) {
-          skipped_no_embedding++;
-          continue;
-        }
-        const { data: matches, error } = await admin.rpc("match_audioset_nodes", {
-          query_embedding: JSON.stringify(vec),
-          match_count: topK,
-        });
-        if (error) {
-          failed++;
-          continue;
-        }
-
-        const existing = readCrosswalk(n.crosswalk);
-        const decided = new Map(
-          (existing?.matches ?? []).map((m) => [m.code, m] as const),
-        );
-        const nextMatches: CrosswalkMatch[] = ((matches ?? []) as Array<
-          { code: string; label: string | null; similarity: number }
-        >)
-          .filter((m) => m.code !== n.code)
-          .map((m) => {
-            const prev = decided.get(m.code);
-            return {
-              code: m.code,
-              label: m.label,
-              similarity: Number(m.similarity.toFixed(4)),
-              approved: prev?.approved === true,
-              rejected: prev?.rejected === true,
-            };
-          });
-
-        const base = (n.crosswalk && typeof n.crosswalk === "object")
-          ? { ...(n.crosswalk as Record<string, unknown>) }
-          : {};
-        base.audioset = {
-          version: AUDIOSET_VERSION,
-          proposed_at: new Date().toISOString(),
-          matches: nextMatches,
-          approved_at: nextMatches.some((m) => m.approved) ? existing?.approved_at ?? null : null,
-          approved_by: nextMatches.some((m) => m.approved) ? existing?.approved_by ?? null : null,
-        };
-
-        const { error: upErr } = await admin
-          .from("taxonomy_nodes")
-          .update({ crosswalk: base, updated_at: new Date().toISOString() })
-          .eq("id", n.id);
-        if (upErr) failed++;
-        else proposed++;
-      }
+      const rows = await eligibleNodes(admin, prefixFilter, limit, !recompute, true);
+      const res = await proposeForNodes(admin, rows, topK);
 
       return json({
-        success: failed === 0,
+        success: res.failed === 0,
         candidates: rows.length,
-        proposed,
-        skipped_no_embedding,
-        failed,
+        ...res,
+        top_k: topK,
+        duration_ms: Date.now() - startedAt,
+        ...(await coverage(admin)),
+      });
+    }
+
+    if (action === "backfill") {
+      const topK = clamp(Number(body.top_k ?? 3), 1, 10);
+      const limit = clamp(Number(body.limit ?? 400), 1, 1000);
+      const recompute = body.recompute === true;
+
+      const rows = await eligibleNodes(admin, prefixFilter, limit, false, true);
+      const cfg = await getSemanticSvcConfig(admin);
+
+      // 1) Re-label placeholders and CLAP-embed anything missing an audio vector.
+      const needsWork = rows.filter((n) =>
+        parseVector(n.audio_embedding ?? null) === null ||
+        enrichNodeLabel(n.code, n.label) !== (n.label ?? "").trim()
+      );
+      const clapVia = new Set<string>();
+      let relabeled = 0;
+      let embedded = 0;
+      let embed_failed = 0;
+
+      for (let i = 0; i < needsWork.length; i += 48) {
+        const slice = needsWork.slice(i, i + 48);
+        const texts = slice.map((n) => crosswalkText(n.code, n.label));
+        const vectors = cfg ? await clapEmbedTexts(cfg, texts, true) : null;
+        for (let k = 0; k < slice.length; k++) {
+          const n = slice[k];
+          const nextLabel = enrichNodeLabel(n.code, n.label);
+          const vec = vectors?.[k] ?? null;
+          const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+          if (nextLabel && nextLabel !== (n.label ?? "").trim()) {
+            patch.label = nextLabel;
+            n.label = nextLabel;
+          }
+          if (vec && parseVector(n.audio_embedding ?? null) === null) {
+            patch.audio_embedding = JSON.stringify(vec);
+            n.audio_embedding = vec;
+            clapVia.add(n.code);
+          } else if (!vec && parseVector(n.audio_embedding ?? null) === null) {
+            embed_failed++;
+          }
+          if (Object.keys(patch).length === 1) continue;
+          const { error } = await admin
+            .from("taxonomy_nodes")
+            .update(patch)
+            .eq("id", n.id);
+          if (error) {
+            embed_failed++;
+            continue;
+          }
+          if (patch.label) relabeled++;
+          if (patch.audio_embedding) embedded++;
+        }
+      }
+
+      // 2) Propose for everything without proposals (or everything on recompute).
+      // `recompute_via` re-runs only nodes whose stored proposals came from a
+      // given evidence type — e.g. replace weak `text_bridge` guesses once a
+      // better vector source (CLAP or a family centroid) is available.
+      const recomputeVia = typeof body.recompute_via === "string" ? body.recompute_via : null;
+      const targets = recompute
+        ? rows
+        : rows.filter((n) => {
+          const matches = readCrosswalk(n.crosswalk)?.matches ?? [];
+          if (matches.length === 0) return true;
+          return recomputeVia ? matches.some((m) => m.via === recomputeVia) : false;
+        });
+      // Nodes still lacking a sonic vector borrow their family centroid (same
+      // IAB tier-1 / parent path). A subtopic sits near its parent topic, so this
+      // beats folding a foreign text space into the AudioSet one.
+      const familyVectors = await buildFamilyVectors(
+        admin,
+        targets.filter((n) => parseVector(n.audio_embedding ?? null) === null),
+      );
+      const res = await proposeForNodes(admin, targets, topK, clapVia, familyVectors);
+
+      return json({
+        success: res.failed === 0 && embed_failed === 0,
+        semantic_svc: cfg ? "configured" : "unavailable",
+        candidates: rows.length,
+        relabeled,
+        embedded,
+        embed_failed,
+        proposal_candidates: targets.length,
+        ...res,
         top_k: topK,
         duration_ms: Date.now() - startedAt,
         ...(await coverage(admin)),
@@ -268,19 +309,121 @@ Deno.serve(async (req) => {
   }
 });
 
+/**
+ * Stores top-K `aset.*` cosine matches on each node. Vector preference:
+ * the node's own 512-d audio-space embedding, else the 1536-d catalog text
+ * embedding folded into 512-d (weaker, tagged `via: "text_bridge"`).
+ * Existing approve/reject decisions are always preserved.
+ */
+async function proposeForNodes(
+  // deno-lint-disable-next-line no-explicit-any
+  admin: any,
+  rows: NodeRow[],
+  topK: number,
+  clapEmbedded = new Set<string>(),
+  /** family key -> borrowed 512-d centroid, used when a node has no vector. */
+  familyVectors = new Map<string, number[]>(),
+): Promise<{
+  proposed: number;
+  skipped_no_embedding: number;
+  failed: number;
+  via_counts: Record<string, number>;
+}> {
+  let proposed = 0;
+  let skipped_no_embedding = 0;
+  let failed = 0;
+  const via_counts: Record<string, number> = {};
+
+  for (const n of rows) {
+    let via: CrosswalkMatch["via"] = clapEmbedded.has(n.code) ? "clap_text" : "audio";
+    let vec = parseVector(n.audio_embedding ?? null);
+    if (!vec) {
+      const fam = familyVectors.get(familyKey(n.code) ?? "");
+      if (fam) {
+        vec = fam;
+        via = "family";
+      }
+    }
+    if (!vec) {
+      vec = foldTo512(parseVector(n.embedding ?? null) ?? []);
+      via = "text_bridge";
+    }
+    if (!vec) {
+      skipped_no_embedding++;
+      continue;
+    }
+
+    const { data: matches, error } = await admin.rpc("match_audioset_nodes", {
+      query_embedding: JSON.stringify(vec),
+      match_count: topK,
+    });
+    if (error) {
+      failed++;
+      continue;
+    }
+
+    const existing = readCrosswalk(n.crosswalk);
+    const decided = new Map((existing?.matches ?? []).map((m) => [m.code, m] as const));
+    const nextMatches: CrosswalkMatch[] = ((matches ?? []) as Array<
+      { code: string; label: string | null; similarity: number }
+    >)
+      .filter((m) => m.code !== n.code)
+      .map((m) => {
+        const prev = decided.get(m.code);
+        return {
+          code: m.code,
+          label: m.label,
+          similarity: Number(Number(m.similarity).toFixed(4)),
+          approved: prev?.approved === true,
+          rejected: prev?.rejected === true,
+          via,
+        };
+      });
+
+    const base = (n.crosswalk && typeof n.crosswalk === "object")
+      ? { ...(n.crosswalk as Record<string, unknown>) }
+      : {};
+    const anyApproved = nextMatches.some((m) => m.approved);
+    base.audioset = {
+      version: AUDIOSET_VERSION,
+      proposed_at: new Date().toISOString(),
+      matches: nextMatches,
+      approved_at: anyApproved ? existing?.approved_at ?? null : null,
+      approved_by: anyApproved ? existing?.approved_by ?? null : null,
+    };
+
+    const { error: upErr } = await admin
+      .from("taxonomy_nodes")
+      .update({ crosswalk: base, updated_at: new Date().toISOString() })
+      .eq("id", n.id);
+    if (upErr) failed++;
+    else {
+      proposed++;
+      via_counts[via ?? "audio"] = (via_counts[via ?? "audio"] ?? 0) + 1;
+    }
+  }
+
+  return { proposed, skipped_no_embedding, failed, via_counts };
+}
+
 async function eligibleNodes(
   // deno-lint-disable-next-line no-explicit-any
   admin: any,
   prefixFilter: string | null,
   limit: number,
   pendingOnly: boolean,
+  /** Vectors are large; only the proposal paths need them. */
+  withVectors = false,
 ): Promise<NodeRow[]> {
   const prefixes = prefixFilter ? [prefixFilter] : [...CROSSWALK_PREFIXES];
   const out: NodeRow[] = [];
+  const columns = withVectors
+    ? "id, code, label, crosswalk, audio_embedding, embedding"
+    : "id, code, label, crosswalk";
   for (const p of prefixes) {
     const { data } = await admin
       .from("taxonomy_nodes")
-      .select("id, code, label, crosswalk, audio_embedding")
+      .select(columns)
       .like("code", `${p}%`)
       .order("code", { ascending: true })
       .limit(limit);
@@ -289,6 +432,59 @@ async function eligibleNodes(
       out.push(r);
       if (out.length >= limit) return out;
     }
+  }
+  return out;
+}
+
+/**
+ * Averages the audio-space vectors of each requested node's family siblings.
+ * Only families that actually have embedded members appear in the result.
+ */
+async function buildFamilyVectors(
+  // deno-lint-disable-next-line no-explicit-any
+  admin: any,
+  nodes: NodeRow[],
+): Promise<Map<string, number[]>> {
+  const keys = new Set<string>();
+  for (const n of nodes) {
+    const k = familyKey(n.code);
+    if (k) keys.add(k);
+  }
+  const out = new Map<string, number[]>();
+  for (const key of keys) {
+    const { data } = await admin
+      .from("taxonomy_nodes")
+      .select("code, audio_embedding")
+      .like("code", `${key}%`)
+      .not("audio_embedding", "is", null)
+      .limit(40);
+    const vectors: number[][] = [];
+    for (const r of (data ?? []) as Array<{ audio_embedding: string | number[] }>) {
+      const v = parseVector(r.audio_embedding);
+      if (v) vectors.push(v);
+    }
+    const c = centroid(vectors);
+    if (c) out.set(key, c);
+  }
+  return out;
+}
+
+/** Codes (cheap projection) that already carry a 512-d audio-space vector. */
+async function codesWithAudioEmbedding(
+  // deno-lint-disable-next-line no-explicit-any
+  admin: any,
+  prefixFilter: string | null,
+): Promise<Set<string>> {
+  const prefixes = prefixFilter ? [prefixFilter] : [...CROSSWALK_PREFIXES];
+  const out = new Set<string>();
+  for (const p of prefixes) {
+    const { data } = await admin
+      .from("taxonomy_nodes")
+      .select("code")
+      .like("code", `${p}%`)
+      .not("audio_embedding", "is", null)
+      .limit(2000);
+    for (const r of (data ?? []) as Array<{ code: string }>) out.add(r.code);
   }
   return out;
 }

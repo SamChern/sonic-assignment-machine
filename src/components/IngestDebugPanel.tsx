@@ -29,6 +29,10 @@ interface FileRow {
   discovered_at: string;
   started_at: string | null;
   finished_at: string | null;
+  /** Which EC2 worker leased the file, and when it last checked in. */
+  worker_id: string | null;
+  heartbeat_at: string | null;
+
 }
 
 interface RunSummary {

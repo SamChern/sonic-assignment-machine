@@ -109,9 +109,7 @@ const ORDER: Status[] = ["fail", "warn", "pass", "skip"];
 /** Replace only the checks/samples belonging to the feeds a scoped run covered. */
 function mergeReport(prev: Report, next: Report): Report {
   const feeds = new Set(next.checks.map((c) => c.feed));
-/** Replace only the checks/samples belonging to the feeds a scoped run covered. */
-function mergeReport(prev: Report, next: Report): Report {
-  const feeds = new Set(next.checks.map((c) => c.feed));
+
   const nextIds = new Set(next.checks.map((c) => c.id));
   // A scoped run can also re-emit shared checks (the object-store config checks
   // belong to both the store and Intuizi scopes), so drop by id as well as by

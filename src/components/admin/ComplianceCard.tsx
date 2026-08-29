@@ -203,7 +203,9 @@ export const ComplianceCard = () => {
               {suppressedCount ?? "—"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Sensitive place classes (health, worship, shelters) are never tagged onto a source.
+              Sensitive place classes (health, worship, shelters) are never tagged onto a source.{" "}
+              {suppressionNote()}.
+
             </p>
           </div>
           <div className="rounded-lg border border-border/50 bg-background/40 p-3">

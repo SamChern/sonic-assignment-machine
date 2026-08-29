@@ -88,7 +88,10 @@ export function activationRefusal(
   memberCount: number,
   exportEligible: boolean | null,
   slug: string,
+  minMembers: number = MIN_ACTIVATION_MEMBERS,
 ): string | null {
-  if (exportEligible && memberCount >= MIN_ACTIVATION_MEMBERS) return null;
-  return `cohort "${slug}" is not export eligible — ${memberCount} members, minimum is ${MIN_ACTIVATION_MEMBERS}`;
+  const floor = Math.max(MIN_ACTIVATION_MEMBERS, minMembers);
+  if (exportEligible && memberCount >= floor) return null;
+  return `cohort "${slug}" is not export eligible — ${memberCount} members, minimum is ${floor}`;
 }
+

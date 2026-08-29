@@ -60,9 +60,19 @@ pending, so the queue is only growing. That gets confirmed and restarted as step
    subject × taxonomy × day in DuckDB and post chunked rollups, then `loaded`
    triggers `promote-rollups`. Smaller files keep the exact per-identifier path
    they use today.
-6. **Fix the S3 403.** The failing object is under the same prefix as the ones
-   that work, so this is an object-level or KMS permission gap rather than a
-   bucket one; I will pin down which and tell you the one IAM statement to add.
+6. **The S3 403 needs no IAM change from you.** You can't edit IAM roles or
+   policies, so the plan does not ask you to. Instead the 403 is treated as a
+   permanent, non-retryable condition on that one object: the file is parked as
+   `blocked` (not `failed`), it stops consuming dispatch attempts, and it appears
+   in an Admin "Objects we can't read" list with the exact key, the S3 error code,
+   and a copyable note to send to Intuizi asking them to re-drop that object.
+   Before parking it, the callback tries the two no-permission fallbacks that
+   sometimes resolve it: re-signing the request without the KMS-specific headers,
+   and the manual-key path already built into `intuizi-ingest` in case the object
+   is reachable under a slightly different key or prefix. Everything else in the
+   pipeline is unaffected — the other 33 objects under the same prefix read fine
+   with your current credentials, so no permission work is on the critical path.
+
 7. **Worker heartbeat.** `worker_heartbeats` is empty, so the Admin "Ingest
    worker health" card cannot show liveness. Add the heartbeat post to the
    worker's idle loop so the card reflects the box.

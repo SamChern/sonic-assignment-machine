@@ -220,7 +220,12 @@ Deno.serve(async (req) => {
     integrationId?: string;
     urlKey: string;
     authKey?: string;
-    healthPath: string;
+    /**
+     * Candidate health routes, tried in order. Each service on the box exposes a
+     * different one (`/api/health`, `/healthz`, `/health`), and probing a single
+     * guessed path reported live services as unreachable.
+     */
+    healthPaths: string[];
     /** Optional feeds never block: unconfigured = skip, unreachable = warn. */
     optional?: boolean;
     note?: string;
@@ -232,7 +237,7 @@ Deno.serve(async (req) => {
       label: "EC2 analysis API",
       urlKey: "AWS_API_URL",
       authKey: "AWS_API_KEY",
-      healthPath: "/api/health",
+      healthPaths: ["/api/health", "/health", "/healthz", "/"],
     },
     {
       id: "librosa_rest",
@@ -240,7 +245,7 @@ Deno.serve(async (req) => {
       integrationId: "librosa_rest",
       urlKey: "LIBROSA_REST_URL",
       authKey: "LIBROSA_REST_TOKEN",
-      healthPath: "/health",
+      healthPaths: ["/health", "/healthz", "/api/health", "/"],
     },
     {
       id: "semantic_svc",
@@ -248,19 +253,20 @@ Deno.serve(async (req) => {
       integrationId: "semantic_svc",
       urlKey: "SEMANTIC_SVC_URL",
       authKey: "SEMANTIC_SVC_TOKEN",
-      healthPath: "/healthz",
+      healthPaths: ["/healthz", "/health", "/"],
     },
     {
       id: "ec2_inference",
       label: "EC2 inference server",
       urlKey: "EC2_INFERENCE_URL",
       authKey: "EC2_INFERENCE_API_KEY",
-      healthPath: "/v1/models",
+      healthPaths: ["/v1/models", "/healthz", "/health"],
       optional: true,
       note:
         "Optional. This EC2 box has no GPU and runs no chat LLM — Lovable AI is the sanctioned scoring path, so this feed is informational only.",
     },
   ];
+
 
   /** env first, then the admin credentials table; reports which store answered. */
   const credentialsFor = async (feed: Feed) => {

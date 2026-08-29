@@ -15,8 +15,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireOrgMember } from "../_shared/org.ts";
 import { controlNumber } from "../_shared/control.ts";
-import { crossesZero, fitRidgeWithBootstrap, type RidgeFit } from "../_shared/ridge.ts";
-import { getSemanticSvcConfig } from "../_shared/semanticSvc.ts";
+import { crossesZero, type RidgeFit } from "../_shared/ridge.ts";
+import { fitRemoteOrLocal, RIDGE_LAMBDA } from "../_shared/ridgeRemote.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +36,7 @@ const CATEGORIES = [
   "artistic",
 ] as const;
 
-const LAMBDA = 1e-2;
+const LAMBDA = RIDGE_LAMBDA;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -150,7 +151,7 @@ Deno.serve(async (req) => {
     ]);
     const y = training.map((r) => targets.get(r.id)!);
 
-    const { fit, engine } = await fitRemoteOrLocal(admin, X, y, iters);
+    const { fit, engine } = await fitOrThrow(admin, X, y, iters);
     const beta = fit.beta;
 
     const predict = (row: number[]) => row.reduce((s, v, i) => s + v * beta[i], 0);

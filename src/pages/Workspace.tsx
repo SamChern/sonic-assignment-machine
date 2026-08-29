@@ -26,6 +26,8 @@ import PredictOutcomesPanel from "@/components/enterprise/PredictOutcomesPanel";
 import PixelSetupPanel from "@/components/enterprise/PixelSetupPanel";
 import CategoryProfileEditor from "@/components/enterprise/CategoryProfileEditor";
 import WorkspaceSonicSim from "@/components/enterprise/WorkspaceSonicSim";
+import OrgComplianceStrip from "@/components/enterprise/OrgComplianceStrip";
+
 import sonicSimLogo from "@/assets/SonicSIM_transp.png";
 import {
   Activity,
@@ -350,7 +352,10 @@ const Workspace = () => {
             canWrite={canWrite}
             onIngested={() => setRefreshKey((k) => k + 1)}
           />
+
+          <OrgComplianceStrip organizationId={active.organization_id} />
         </TabsContent>
+
         <TabsContent value="discover" className="mt-4">
           <DatasetDiscovery key={refreshKey} organizationId={active.organization_id} />
         </TabsContent>

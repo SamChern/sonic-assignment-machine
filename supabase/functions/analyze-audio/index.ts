@@ -326,11 +326,14 @@ Deno.serve(async (req) => {
               .filter(Boolean)
               .join(' ');
 
-            // kNN exemplars from the subject vector when dimensions line up
-            // with the catalog space (`vector(1536)`).
-            if (subject && subject.vector.length === 1536) {
+            // kNN exemplars from the subject vector. Grounded CLAP tags are
+            // 512-d, so bridge (or deterministically pad) into the catalog
+            // space instead of skipping retrieval entirely.
+            const bridged = subject ? await toCatalogVector(supabaseAdmin, subject.vector) : null;
+            if (bridged) {
+              s.taxonomy_context = [s.taxonomy_context, bridged.audit].filter(Boolean).join(' ');
               const { data: knn } = await supabaseAdmin.rpc('match_audio_profiles', {
-                query_embedding: subject.vector,
+                query_embedding: bridged.vector,
                 match_count: knnK,
                 exclude_id: s.audio_source_id,
               });

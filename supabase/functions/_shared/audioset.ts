@@ -32,7 +32,9 @@ export const AUDIOSET_PREFIX = "aset.";
 export const CROSSWALK_PREFIXES = [
   "iab.",
   "ctv.genre.",
-  "app.cat.",
+  // Feeds emit `app.category.*` / `app.taxonomy.*`; the plan's `app.cat.*` is a
+  // prefix of neither, so the broader `app.` root is used to cover both shapes.
+  "app.",
   "poi.brand.",
 ] as const;
 
@@ -144,6 +146,14 @@ export interface CrosswalkMatch {
   similarity: number;
   approved: boolean;
   rejected?: boolean;
+  /**
+   * Evidence the proposal was computed from:
+   *  - `audio`       : the node's own CLAP audio-space vector (strongest)
+   *  - `clap_text`   : a CLAP text embedding of the node's (enriched) label
+   *  - `text_bridge` : the 1536-d catalog text embedding folded into 512-d,
+   *                    used only when the semantic service is unavailable
+   */
+  via?: "audio" | "clap_text" | "family" | "text_bridge";
 }
 
 export interface CrosswalkBlock {
@@ -171,6 +181,9 @@ export function readCrosswalk(crosswalk: unknown): CrosswalkBlock | null {
       similarity: Number(m.similarity ?? 0),
       approved: m.approved === true,
       rejected: m.rejected === true,
+      via: typeof m.via === "string"
+        ? (m.via as CrosswalkMatch["via"])
+        : undefined,
     })),
     approved_at: (block.approved_at as string) ?? null,
     approved_by: (block.approved_by as string) ?? null,
@@ -244,4 +257,58 @@ export function audiosetText(node: { label: string; description?: string | null 
   const desc = (node.description ?? "").trim();
   const body = desc.length > 0 ? `${label} — ${desc.slice(0, 220)}` : label;
   return body.length > 0 ? `the sound of ${body}` : "audio content";
+}
+
+
+/**
+ * Folds a 1536-d catalog text vector down to the 512-d AudioSet space by
+ * summing the three 512-wide blocks and L2-normalizing. For vectors produced by
+ * the identity tiling in `semanticSvc.projectTo1536` this is an exact inverse;
+ * for other text spaces it is a lossy projection, which is why proposals built
+ * this way are tagged `via: "text_bridge"` and treated as weaker evidence.
+ */
+export function foldTo512(vec: number[]): number[] | null {
+  if (!Array.isArray(vec) || vec.length === 0) return null;
+  if (vec.length === 512) return normalize(vec.slice());
+  if (vec.length % 512 !== 0) return null;
+  const out = new Array<number>(512).fill(0);
+  for (let i = 0; i < vec.length; i++) out[i % 512] += Number(vec[i]) || 0;
+  return normalize(out);
+}
+
+/**
+ * Family key for a taxonomy code, used to borrow a sonic vector from siblings
+ * when a node has none of its own: `iab.iab17-2` -> `iab.iab17`, and any other
+ * dotted code -> its parent path (`ctv.genre.sports.nfl` -> `ctv.genre.sports`).
+ * Returns null for codes with no usable family.
+ */
+export function familyKey(code: string): string | null {
+  const c = String(code ?? "");
+  const iab = c.match(/^iab\.(iab\d+)/i);
+  if (iab) return `iab.${iab[1].toLowerCase()}`;
+  const parts = c.split(".");
+  return parts.length > 2 ? parts.slice(0, -1).join(".") : null;
+}
+
+/** Component-wise mean of equal-length vectors, L2-normalized. */
+export function centroid(vectors: number[][]): number[] | null {
+  const usable = vectors.filter((v) => Array.isArray(v) && v.length > 0);
+  if (usable.length === 0) return null;
+  const dim = usable[0].length;
+  const out = new Array<number>(dim).fill(0);
+  let n = 0;
+  for (const v of usable) {
+    if (v.length !== dim) continue;
+    for (let i = 0; i < dim; i++) out[i] += Number(v[i]) || 0;
+    n++;
+  }
+  if (n === 0) return null;
+  return normalize(out.map((x) => x / n));
+}
+
+function normalize(v: number[]): number[] {
+  let n = 0;
+  for (const x of v) n += x * x;
+  n = Math.max(Math.sqrt(n), 1e-9);
+  return v.map((x) => x / n);
 }

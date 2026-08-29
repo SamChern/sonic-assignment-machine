@@ -91,3 +91,62 @@ export function iabLabel(raw: string): string {
 
   return leaf ? `${code} - ${tier1}: ${leaf}` : `${code} - ${tier1}`;
 }
+
+/**
+ * True when a taxonomy label carries no semantic content: the placeholder shape
+ * written by the ingest path ("IAB category IAB7"), a bare code ("IAB7"), or the
+ * dotted node code itself. Such labels embed meaninglessly, so the crosswalk
+ * backfill re-labels them before embedding.
+ */
+export function isPlaceholderLabel(code: string, label: string | null): boolean {
+  const l = (label ?? "").trim();
+  if (l.length === 0) return true;
+  if (/^IAB category /i.test(l)) return true;
+  if (l.toLowerCase() === String(code ?? "").toLowerCase()) return true;
+  // "IAB17-2" with nothing after it, or the code's last dotted segment verbatim.
+  if (/^IAB[\d-]+$/i.test(l)) return true;
+  const leaf = String(code ?? "").split(".").slice(-1)[0];
+  return leaf.length > 0 && l.toLowerCase() === leaf.toLowerCase();
+}
+
+/** Title-cases a dotted code leaf: `video_games` -> `Video Games`. */
+function prettifyLeaf(leaf: string): string {
+  return leaf
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Best available human label for a taxonomy node. `iab.*` codes resolve through
+ * the IAB tier map; anything else falls back to a prettified code leaf. Returns
+ * the existing label untouched when it already reads like real text.
+ */
+export function enrichNodeLabel(code: string, label: string | null): string {
+  if (!isPlaceholderLabel(code, label)) return (label ?? "").trim();
+  const c = String(code ?? "");
+  if (c.startsWith("iab.")) {
+    const resolved = iabLabel(c.slice(4));
+    if (!/^IAB category /i.test(resolved)) return resolved;
+  }
+  const leaf = c.split(".").slice(-1)[0];
+  const pretty = prettifyLeaf(leaf);
+  return pretty.length > 0 ? pretty : (label ?? c);
+}
+
+/**
+ * Text handed to CLAP when embedding a non-AudioSet taxonomy node. Mirrors the
+ * "the sound of …" phrasing used for `aset.*` nodes so both sides of the
+ * crosswalk live in comparable regions of the embedding space.
+ */
+export function crosswalkText(code: string, label: string | null): string {
+  const human = enrichNodeLabel(code, label)
+    // "IAB17-2 - Sports" -> "Sports": the code prefix is noise to CLAP.
+    .replace(/^IAB[\d-]+\s*-\s*/i, "")
+    .replace(/:/g, ",")
+    .trim();
+  return human.length > 0
+    ? `the sound of media about ${human}`
+    : "audio content";
+}

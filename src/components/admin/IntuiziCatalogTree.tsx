@@ -17,6 +17,8 @@ export interface CrosswalkProposal {
   similarity: number;
   approved: boolean;
   rejected?: boolean;
+  /** Evidence the proposal came from: own audio vector, CLAP text, or a folded text vector. */
+  via?: "audio" | "clap_text" | "family" | "text_bridge";
 }
 
 export type CrosswalkDecision = "approve" | "reject" | "clear";
@@ -66,6 +68,24 @@ const CrosswalkRows = ({
         {p.rejected && !p.approved && (
           <Badge variant="outline" className="px-1 py-0 text-[9px] text-muted-foreground">
             rejected
+          </Badge>
+        )}
+        {p.via === "family" && (
+          <Badge
+            variant="outline"
+            className="px-1 py-0 text-[9px] text-primary"
+            title="Proposed from the sonic centroid of this node's family (same IAB tier-1 / parent path)."
+          >
+            family
+          </Badge>
+        )}
+        {p.via === "text_bridge" && (
+          <Badge
+            variant="outline"
+            className="px-1 py-0 text-[9px] text-amber-500"
+            title="Proposed from a folded text embedding — weaker evidence than an audio-space match."
+          >
+            text-bridged
           </Badge>
         )}
         {onDecide && (

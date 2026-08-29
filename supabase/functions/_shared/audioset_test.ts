@@ -5,7 +5,10 @@ import {
   audiosetSlug,
   audiosetText,
   buildAudioSetNodes,
+  centroid,
   coerceOntology,
+  familyKey,
+  foldTo512,
   hasApproved,
   readCrosswalk,
 } from "./audioset.ts";
@@ -132,4 +135,44 @@ Deno.test("autoApproveTargets respects human decisions", () => {
   };
   assertEquals(autoApproveTargets(alreadyApproved, 0.7), []);
   assertEquals(autoApproveTargets(null, 0.7), []);
+});
+
+Deno.test("foldTo512 inverts identity tiling and normalizes", () => {
+  const base = Array.from({ length: 512 }, (_, i) => Math.sin(i) );
+  const tiled = [...base, ...base, ...base];
+  const folded = foldTo512(tiled)!;
+  assertEquals(folded.length, 512);
+  const norm = Math.sqrt(folded.reduce((a, x) => a + x * x, 0));
+  assert(Math.abs(norm - 1) < 1e-6);
+  // Direction preserved: cosine against the normalized base is ~1.
+  const bn = Math.sqrt(base.reduce((a, x) => a + x * x, 0));
+  const cos = base.reduce((a, x, i) => a + (x / bn) * folded[i], 0);
+  assert(cos > 0.999, `cosine ${cos}`);
+});
+
+Deno.test("foldTo512 rejects unusable widths", () => {
+  assertEquals(foldTo512([]), null);
+  assertEquals(foldTo512([1, 2, 3]), null);
+  assertEquals(foldTo512(new Array(512).fill(1))?.length, 512);
+});
+
+Deno.test("readCrosswalk preserves the via evidence tag", () => {
+  const block = readCrosswalk({
+    audioset: { matches: [{ code: "aset.speech", similarity: 0.8, via: "text_bridge" }] },
+  });
+  assertEquals(block?.matches[0].via, "text_bridge");
+});
+
+Deno.test("familyKey resolves IAB tiers and dotted parents", () => {
+  assertEquals(familyKey("iab.iab17-2"), "iab.iab17");
+  assertEquals(familyKey("iab.iab9-30-1"), "iab.iab9");
+  assertEquals(familyKey("ctv.genre.sports.nfl"), "ctv.genre.sports");
+  assertEquals(familyKey("app.category"), null);
+});
+
+Deno.test("centroid averages and normalizes", () => {
+  const c = centroid([[1, 0], [0, 1]])!;
+  assert(Math.abs(c[0] - c[1]) < 1e-9);
+  assert(Math.abs(Math.hypot(c[0], c[1]) - 1) < 1e-9);
+  assertEquals(centroid([]), null);
 });

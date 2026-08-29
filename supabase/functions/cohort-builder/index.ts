@@ -198,6 +198,8 @@ Deno.serve(async (req) => {
       }
 
       // ---- upsert cohorts + members ---------------------------------------
+      const pctHoldout = await holdoutPct(admin);
+
       const cohorts: {
         slug: string;
         name: string;

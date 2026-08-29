@@ -204,7 +204,12 @@ Deno.serve(async (req) => {
         const iters = Math.round(
           await controlNumber(admin, "predict.bootstrap_iters", 200, { min: 50, max: 2000 }),
         );
-        const fit = fitRidgeWithBootstrap(X, yv, { iters });
+        // Step 11c: the per-axis fits run on the EC2 semantic worker when it is
+        // reachable, with the identical in-process estimator as the fallback.
+        const remote = await fitRemoteOrLocal(admin, X, yv, iters);
+        const fit = remote?.fit ?? null;
+        fitEngine = remote?.engine ?? null;
+
         if (fit) {
           CATEGORIES.forEach((cat, i) => {
             const ci = fit.ci[i + 2] ?? [Number.NaN, Number.NaN];

@@ -32,13 +32,25 @@ Safety properties
 Config (environment / systemd EnvironmentFile):
     SUPABASE_URL             https://<ref>.supabase.co
     INGEST_WORKER_SECRET     shared secret, matches the edge function secret
-    SQS_QUEUE_URL            queue the control plane dispatches to
+    MODE                     "pull" (default, queue-free) or "sqs"
+    SQS_QUEUE_URL            sqs mode only: queue the control plane dispatches to
     AWS_REGION               region for SQS + S3
     AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   read on the bucket, consume on the queue
     S3_BUCKET                inbound delivery bucket
     MAX_ROWS_PER_MESSAGE     optional, default 200000
     BATCH_ROWS               optional callback batch size, default 1000
+    POLL_SECONDS             pull mode only: sleep when there is no work, default 20
+
+Pull mode (default)
+-------------------
+No queue, no extra AWS permissions: the worker asks `ingest-worker-callback` for
+a lease (`phase: "lease"`), which atomically claims the oldest pending ledger row
+with FOR UPDATE SKIP LOCKED and returns its resume cursor. Everything after the
+lease — decode, normalize, progress/complete callbacks — is identical to the SQS
+path, and both modes stay idempotent because the ledger cursor is the only source
+of truth.
 """
+
 
 from __future__ import annotations
 

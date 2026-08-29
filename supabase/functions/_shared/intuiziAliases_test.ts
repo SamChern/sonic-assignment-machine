@@ -75,11 +75,12 @@ Deno.test("web delivery is web-shaped and satisfies the web groups, not ctv's", 
 
 Deno.test("demographics gap is reported as unmapped columns, not as a code fix", () => {
   const { missing } = matchAliasGroups(FEATURE_ALIASES.demographics, cols(DEMO_ROW));
-  // Age is an accepted alias; Gender/MaritalStatus/AnnualIncome are not.
+  // Age is an accepted alias; the provider's other labels are not.
   assert(missing.some((g) => g.name === "income band"));
   const unmapped = unrecognizedColumns(FEATURE_ALIASES.demographics, cols(DEMO_ROW));
-  assertEquals(unmapped.sort(), ["AnnualIncome", "Gender"]);
+  assertEquals(unmapped.sort(), ["AnnualIncome", "Gender", "MaritalStatus"]);
 });
+
 
 Deno.test("provenance columns are never reported as gaps", () => {
   const unmapped = unrecognizedColumns(FEATURE_ALIASES.web, cols(WEB_ROW));

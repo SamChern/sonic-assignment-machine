@@ -140,11 +140,32 @@ systemctl status ingest-worker --no-pager | head -8
 ```bash
 systemctl is-active ingest-worker librosa-rest
 journalctl -u ingest-worker -n 20 --no-pager
+sha256sum /opt/sonicsim/ingest-worker/worker.py
 ```
 
 In the app: **Admin → SonicSIM analysis results → ingest ledger** shows each
 file's `worker` and `heartbeat` — a fresh heartbeat is proof the box and the app
 are talking.
+
+## Recovery update — one command block
+
+Use this only after the backend scoring drain is healthy. It preserves the env
+file and ledger checkpoints; it does not change IAM, S3 roles, or bucket policy.
+
+```bash
+set -euo pipefail
+sudo systemctl stop ingest-worker
+cd ~/sonic-assignment-machine
+git pull
+python3 -m py_compile deploy/ingest-worker/worker.py deploy/ingest-worker/normalize.py
+sudo bash deploy/ingest-worker/install.sh
+sudo systemctl is-active ingest-worker
+sha256sum deploy/ingest-worker/worker.py /opt/sonicsim/ingest-worker/worker.py
+sudo journalctl -u ingest-worker --since "2 minutes ago" -f
+```
+
+The two hashes must match. The startup log must report `batch_rows=250` and the
+configured rollup threshold before the first file is allowed to continue.
 
 ## Troubleshooting
 

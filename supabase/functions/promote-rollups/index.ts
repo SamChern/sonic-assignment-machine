@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
 
   const { data: file } = await admin
     .from("intuizi_ingest_files")
-    .select("id,object_key,report_type,status,trace_id")
+    .select("id,object_key,report_type,status,trace_id,promotion_cursor,promoted_subjects")
     .eq("object_key", objectKey)
     .maybeSingle();
 
@@ -107,54 +107,44 @@ Deno.serve(async (req) => {
   const traceId = typeof body.trace_id === "string" ? body.trace_id : file?.trace_id ?? null;
   const now = new Date().toISOString();
 
-  // ---- Fold rollups into one task per subject -------------------------------
-  // Rows are read ordered by subject so a subject's tags never straddle a page
-  // boundary in a way that loses tags: we buffer the current subject and flush
-  // it when the key changes.
-  const bySubject = new Map<string, Tag[]>();
-  let scanned = 0;
-  let from = 0;
-  for (;;) {
-    const { data: page, error } = await admin
-      .from("ingest_rollups")
-      .select("subject_key,taxonomy_code,weight")
-      .eq("object_key", objectKey)
-      .order("subject_key", { ascending: true })
-      .order("taxonomy_code", { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (error) return json({ success: false, error: error.message }, 500);
-    if (!page || page.length === 0) break;
-    scanned += page.length;
-    for (const r of page) {
-      const key = String(r.subject_key ?? "").trim();
-      const code = String(r.taxonomy_code ?? "").trim();
-      if (!key || !code) continue;
-      const list = bySubject.get(key) ?? [];
-      const w = Number(r.weight ?? 1) || 1;
-      const hit = list.find((t) => t.code === code);
-      if (hit) hit.weight += w;
-      else if (list.length < MAX_TAGS_PER_SUBJECT) list.push({ code: code.slice(0, 200), weight: w });
-      bySubject.set(key, list);
-    }
-    if (page.length < PAGE) break;
-    from += PAGE;
-    // Hard safety stop: 400k rollup rows per object is far beyond any real file.
-    if (from > 400_000) break;
-  }
+  // ---- Read one bounded, fully aggregated subject page ----------------------
+  const afterSubject = typeof body.after_subject === "string"
+    ? body.after_subject
+    : file?.promotion_cursor ?? null;
+  const { data: page, error: pageErr } = await admin.rpc("read_ingest_rollup_subject_batch", {
+    p_object_key: objectKey,
+    p_after_subject: afterSubject,
+    p_limit: PAGE,
+  });
+  if (pageErr) return json({ success: false, error: pageErr.message, retryable: true }, 503);
 
-  if (bySubject.size === 0) {
-    return json({
-      success: true,
-      object_key: objectKey,
-      rollup_rows: scanned,
-      subjects: 0,
-      queued: 0,
-      note: "no rollup rows for this object — nothing to promote",
-    });
+  const subjects = ((page ?? []) as Array<{ subject_key: string; tags: unknown }>).flatMap((r) => {
+    const subject = String(r.subject_key ?? "").trim();
+    if (!subject || !Array.isArray(r.tags)) return [];
+    const tags = r.tags.flatMap((raw) => {
+      if (!raw || typeof raw !== "object") return [];
+      const tag = raw as Record<string, unknown>;
+      const code = String(tag.code ?? "").trim();
+      if (!code) return [];
+      return [{ code: code.slice(0, 200), weight: Number(tag.weight ?? 1) || 1 }];
+    }).slice(0, MAX_TAGS_PER_SUBJECT);
+    return tags.length ? [{ subject, tags }] : [];
+  });
+
+  if (subjects.length === 0) {
+    if (file?.status === "loaded") {
+      await admin.from("intuizi_ingest_files").update({
+        status: "done",
+        processed_rows: Number(file.promoted_subjects ?? 0) || 0,
+        error_message: null,
+        finished_at: now,
+      }).eq("id", file.id);
+    }
+    return json({ success: true, object_key: objectKey, subjects: 0, queued: 0, complete: true });
   }
 
   // ---- Enqueue scoring tasks ----------------------------------------------
-  const rows = [...bySubject.entries()].map(([subject, tags]) => ({
+  const rows = subjects.map(({ subject, tags }) => ({
     object_key: objectKey,
     report_type: reportType,
     identifier: subject.slice(0, 512),
@@ -200,14 +190,25 @@ Deno.serve(async (req) => {
   }
 
 
-  // Ledger row moves from `loaded` to `done` once its rollups are promoted.
+  const lastSubject = subjects[subjects.length - 1]?.subject ?? afterSubject;
+  const promotedTotal = (Number(file?.promoted_subjects ?? 0) || 0) + rows.length;
+  const complete = rows.length < PAGE;
+
   if (file && file.status === "loaded") {
     await admin.from("intuizi_ingest_files").update({
-      status: "done",
-      processed_rows: queued,
+      status: complete ? "done" : "loaded",
+      promotion_cursor: lastSubject,
+      promoted_subjects: promotedTotal,
+      processed_rows: promotedTotal,
       error_message: null,
-      finished_at: now,
+      finished_at: complete ? now : null,
     }).eq("id", file.id);
+  }
+
+  if (!complete) {
+    admin.functions.invoke("promote-rollups", {
+      body: { object_key: objectKey, report_type: reportType, trace_id: traceId },
+    }).catch((e: unknown) => console.warn("promote continuation failed", String(e)));
   }
 
   admin.functions.invoke("intuizi-score-worker", { body: { source: "promote_rollups" } })
@@ -219,16 +220,18 @@ Deno.serve(async (req) => {
     report_type: reportType,
     activation_id: activationId,
     trace_id: traceId,
-    rollup_rows: scanned,
-    subjects: bySubject.size,
+    subjects: subjects.length,
     queued,
+    complete,
+    promotion_cursor: lastSubject,
   }));
 
   return json({
     success: true,
     object_key: objectKey,
-    rollup_rows: scanned,
-    subjects: bySubject.size,
+    subjects: subjects.length,
     queued,
+    complete,
+    promotion_cursor: lastSubject,
   });
 });

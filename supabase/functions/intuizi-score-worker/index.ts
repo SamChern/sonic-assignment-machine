@@ -89,6 +89,9 @@ Deno.serve(async (req) => {
     /** One id for this invocation; inherited from the caller when chaining. */
     const runTraceId = reqBody.trace_id ?? newTraceId("run");
 
+    // Keep bounded queue cleanup out of the latency-sensitive claim RPC.
+    await admin.rpc("retire_exhausted_intuizi_score_jobs", { p_limit: 50 });
+
     // Operator action: put failed / dead-lettered identifiers back in the queue.
     // Scoring is idempotent per identifier, so already-completed work is skipped
     // instead of redone (a covered tag set short-circuits as `unchanged`).

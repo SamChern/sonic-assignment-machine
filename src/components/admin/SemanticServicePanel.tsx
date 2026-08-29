@@ -22,6 +22,7 @@ interface Coverage {
   total_nodes: number;
   embedded_nodes: number;
   remaining_nodes: number;
+  grounded_nodes?: number;
   configured?: boolean;
   space?: string | null;
 }
@@ -95,6 +96,7 @@ export const SemanticServicePanel = () => {
     ["Model loaded", pickStr(meta, "model_loaded") ?? "not reported"],
     ["Version", pickStr(meta, "version") ?? "not reported"],
     ["Embedding space", health?.space ?? "not configured"],
+    ["Grounded nodes", String(coverage?.grounded_nodes ?? 0)],
   ];
 
   return (

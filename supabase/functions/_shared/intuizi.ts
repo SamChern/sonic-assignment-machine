@@ -96,7 +96,9 @@ const NON_FEATURE_COLUMNS = new Set([
   "ip", "country", "provider", "day", "date", "date_utc", "dt", "year", "month",
   "useragent", "user_agent", "ctv_taxonomy", "bundle_id", "bundleid", "app_id",
   "platform", "os", "poi_id", "poiid", "location_id", "segment_codes", "segments",
-  "visits", "impressions",
+  "visits", "impressions", "signals", "signal_count", "observation_count",
+  "last_seen", "last_seen_at", "first_seen", "timestamp", "d_utc",
+
 ]);
 
 /** A `ctv`-typed delivery whose columns are actually a web report. */

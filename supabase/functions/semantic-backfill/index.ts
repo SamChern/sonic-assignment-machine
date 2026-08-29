@@ -77,8 +77,10 @@ Deno.serve(async (req) => {
         space: cfg?.space ?? null,
         breaker_open: semanticSvcBreakerOpen(),
         ...coverage,
+        ...(await readGrounding(admin)),
       });
     }
+
 
     const cfg = await getSemanticSvcConfig(admin);
     if (!cfg) {

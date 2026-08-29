@@ -166,21 +166,45 @@ Deno.serve(async (req) => {
 
   try {
     // Deterministic selection: id order, so two runs compare the same rows.
+    let ids: string[] | null = null;
+    if (body.source_ids?.length) {
+      ids = body.source_ids.slice(0, 50);
+    } else if (mode === "calibration") {
+      // Only sources that already have a stored analysis can be diffed.
+      const { data: prior, error: priorErr } = await admin
+        .from("source_analyses")
+        .select("audio_source_id")
+        .not("audio_source_id", "is", null)
+        .order("audio_source_id", { ascending: true })
+        .limit(limit * 8);
+      if (priorErr) throw new Error(`baseline scan failed: ${priorErr.message}`);
+      const seen: string[] = [];
+      for (const r of (prior ?? []) as Any[]) {
+        if (r.audio_source_id && !seen.includes(r.audio_source_id)) seen.push(r.audio_source_id);
+        if (seen.length >= limit) break;
+      }
+      ids = seen;
+      if (ids.length === 0) {
+        return jsonResponse({
+          success: true,
+          mode,
+          tolerance,
+          checked: 0,
+          note: "no stored analyses to compare against",
+        });
+      }
+    }
+
     let query = admin
       .from("audio_sources")
       .select("id, name, file_url, analysis_status")
       .order("id", { ascending: true })
-      .limit(limit);
-    if (body.source_ids?.length) {
-      query = admin
-        .from("audio_sources")
-        .select("id, name, file_url, analysis_status")
-        .in("id", body.source_ids.slice(0, 50))
-        .order("id", { ascending: true });
-    } else if (mode === "tag_only") {
-      query = query.is("file_url", null);
+      .limit(ids ? ids.length : limit);
+    if (ids) {
+      query = query.in("id", ids);
     } else {
-      query = query.not("file_url", "is", null);
+      // tag_only: subjects with taxonomy tags and no audio file.
+      query = query.is("file_url", null);
     }
     const { data: sources, error } = await query;
     if (error) throw new Error(`source read failed: ${error.message}`);

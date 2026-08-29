@@ -34,9 +34,6 @@ const corsHeaders = {
 
 /** Wall-clock ceiling per invocation; well under the 150s gateway idle limit. */
 const RUN_BUDGET_MS = 60_000;
-/** Tasks claimed per batch. Larger than the lane count so lanes stay fed and a
- *  single slow identifier no longer stalls the whole batch at a barrier. */
-const BATCH_DEFAULT = 12;
 /** Max identifiers scored concurrently. Dropped to 1 under rate-limit pressure. */
 const CONCURRENCY_DEFAULT = 1;
 /** Stop claiming when a single task took longer than this share of the budget. */

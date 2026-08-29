@@ -67,11 +67,6 @@ async function authorized(req: Request, admin: ReturnType<typeof createClient>):
   return isAdmin === true;
 }
 
-interface Tag {
-  code: string;
-  weight: number;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 

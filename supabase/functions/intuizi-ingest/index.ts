@@ -1025,6 +1025,9 @@ Deno.serve(async (req) => {
     mode: "dispatch" as const,
     /** Report files handed to the EC2 worker this run. */
     files_dispatched: 0,
+    /** Files left in `discovered` for the EC2 worker to lease (queue-free mode). */
+    files_awaiting_pull: 0,
+
     /** Audio objects analysed inline (that path never left the edge). */
     files_processed: 0,
     files_failed: 0,

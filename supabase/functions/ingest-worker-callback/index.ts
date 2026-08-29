@@ -280,11 +280,13 @@ Deno.serve(async (req) => {
   }
 
   // `progress` = mid-file batch, `complete` = worker finished its slice,
-  // `failed` = worker could not process the file.
+  // `failed` = worker could not process the file. Step 2.5-alt adds `loaded`
+  // (rollups staged, promote them) and `skipped` (summary-only file).
   const phase = typeof body.phase === "string" ? body.phase : "progress";
-  if (!["claim", "progress", "complete", "failed"].includes(phase)) {
+  if (!["claim", "progress", "complete", "failed", "loaded", "skipped"].includes(phase)) {
     return json({ success: false, error: `unknown phase "${phase}"` }, 400);
   }
+
 
 
   const rawRows = Array.isArray(body.identifiers) ? body.identifiers : [];

@@ -35,7 +35,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 /** Rollup rows read per page — bounded so a huge object cannot blow memory. */
 const PAGE = 5_000;
 /** Queue rows written per upsert batch. */
-const QUEUE_BATCH = 500;
+const QUEUE_BATCH = 250;
 /** Tags kept per subject (the queue consumer caps at 64 as well). */
 const MAX_TAGS_PER_SUBJECT = 64;
 
@@ -165,23 +165,23 @@ Deno.serve(async (req) => {
     signals: [],
     // Confidence scales gently with how many distinct tags a subject carries.
     confidence: Math.min(0.4 + tags.length * 0.05, 0.9),
-    status: "pending",
     trace_id: traceId,
-    next_attempt_at: now,
-    last_error: null as string | null,
   }));
 
+  // Same guarded RPC the worker callback uses: one bounded statement per chunk,
+  // and rows already scored are left untouched instead of being rewritten.
   let queued = 0;
   for (let i = 0; i < rows.length; i += QUEUE_BATCH) {
     const slice = rows.slice(i, i + QUEUE_BATCH);
-    const { error } = await admin
-      .from("intuizi_score_queue")
-      .upsert(slice, { onConflict: "object_key,identifier", ignoreDuplicates: false });
+    const { data: n, error } = await admin.rpc("enqueue_score_tasks", { p_rows: slice });
     if (error) {
+      const transient = /timeout|canceling statement|deadlock|lock/i.test(error.message);
       console.error(JSON.stringify({
         evt: "promote_rollups_enqueue_failed",
         object_key: objectKey,
         trace_id: traceId,
+        retryable: transient,
+        queued,
         error: error.message,
       }));
       if (file) {
@@ -189,10 +189,16 @@ Deno.serve(async (req) => {
           .update({ error_message: `promote failed: ${error.message}`.slice(0, 2000) })
           .eq("id", file.id);
       }
-      return json({ success: false, error: error.message, queued }, 500);
+      return json({
+        success: false,
+        error: error.message,
+        retryable: transient,
+        queued,
+      }, transient ? 503 : 500);
     }
-    queued += slice.length;
+    queued += Number(n ?? 0) || 0;
   }
+
 
   // Ledger row moves from `loaded` to `done` once its rollups are promoted.
   if (file && file.status === "loaded") {

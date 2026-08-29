@@ -2415,6 +2415,10 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      block_ingest_file: {
+        Args: { p_id: string; p_reason: string }
+        Returns: undefined
+      }
       claim_analysis_jobs: {
         Args: { p_limit?: number }
         Returns: {
@@ -2488,6 +2492,7 @@ export type Database = {
         Args: { p_id: string; p_rows: number; p_status?: string }
         Returns: undefined
       }
+      enqueue_score_tasks: { Args: { p_rows: Json }; Returns: number }
       fail_ingest_file: {
         Args: { p_error: string; p_id: string }
         Returns: undefined
@@ -2500,6 +2505,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      intuizi_score_queue_depth: {
+        Args: { p_cap?: number }
+        Returns: {
+          capped_at: number
+          dead_letter_capped: number
+          pending_capped: number
+        }[]
       }
       is_org_owner: { Args: { _org: string }; Returns: boolean }
       lease_ingest_file: {
@@ -2619,6 +2632,10 @@ export type Database = {
       release_named_lease: {
         Args: { p_id: string; p_owner: string }
         Returns: undefined
+      }
+      requeue_ingest_file: {
+        Args: { p_id: string; p_max_attempts?: number; p_reason?: string }
+        Returns: string
       }
       requeue_intuizi_score_failures: {
         Args: {

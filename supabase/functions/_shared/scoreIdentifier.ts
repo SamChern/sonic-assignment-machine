@@ -56,6 +56,38 @@ export function signalColumn(reportType: string): string {
 }
 
 
+/** Cached system-owner lookup for provider rows that carry no end user. */
+let systemOwnerCache: { id: string | null; at: number } | null = null;
+
+// deno-lint-ignore no-explicit-any
+export async function systemOwnerId(admin: any): Promise<string | null> {
+  if (systemOwnerCache && Date.now() - systemOwnerCache.at < 60_000) {
+    return systemOwnerCache.id;
+  }
+  let id: string | null = null;
+  const { data: reg } = await admin
+    .from("control_registry")
+    .select("value")
+    .eq("key", "ingest.system_owner_user_id")
+    .maybeSingle();
+  const raw = reg?.value;
+  if (typeof raw === "string" && raw.length > 10) id = raw;
+
+  if (!id) {
+    const { data: adminRole } = await admin
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    id = adminRole?.user_id ?? null;
+  }
+  systemOwnerCache = { id, at: Date.now() };
+  return id;
+}
+
+
 export function statusOf(e: unknown): number | undefined {
   return httpStatusOf(e);
 }
@@ -299,13 +331,25 @@ async function runScore(
   const label = task.label ??
     `Intuizi ${task.report_type}: ${task.identifier.slice(0, 12)}`;
 
+  // Provider feeds carry no end user, so ownership falls back to the system
+  // owner (Control Room `ingest.system_owner_user_id`, else the first admin).
+  // Without it `audio_sources.user_id` is null and every task dies on a schema
+  // error instead of being scored.
+  const ownerId = task.owner_id ?? await systemOwnerId(admin);
+  if (!ownerId) {
+    throw new Error(
+      "no owner for Intuizi source: set ingest.system_owner_user_id in the Control Room",
+    );
+  }
+
   // 1. audio_sources row (reused across runs per identifier)
   let audioSourceId: string | null = existing?.audio_source_id ?? null;
   if (!audioSourceId) {
     const { data: src, error: srcErr } = await admin
       .from("audio_sources")
       .insert({
-        user_id: task.owner_id,
+        user_id: ownerId,
+
         source_type: "intuizi",
         name: label,
         ctv_metadata: {
@@ -395,7 +439,7 @@ async function runScore(
       audio_source_id: audioSourceId,
       taxonomy_context: taxonomyContext,
     }],
-    user_id: task.owner_id,
+    user_id: ownerId,
     save_results: true,
   }, task.report_type, metrics, { traceId, stepScale });
 

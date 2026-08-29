@@ -24,6 +24,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const LEASE_ID = "cohort-builder";
 const LEASE_SECONDS = 240;
 /** Subjects pulled per run; keeps memory and CPU inside the worker limits. */
 const DEFAULT_MAX_SUBJECTS = 4000;

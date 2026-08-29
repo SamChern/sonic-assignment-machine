@@ -249,6 +249,11 @@ export const ComplianceCard = () => {
             {busy === "scan" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />}
             Run custody scan
           </Button>
+          <Button size="sm" variant="outline" onClick={runSuppression} disabled={busy !== null}>
+            {busy === "suppression" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <EyeOff className="mr-1.5 h-3.5 w-3.5" />}
+            Refresh suppression
+          </Button>
+
           <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
             <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh

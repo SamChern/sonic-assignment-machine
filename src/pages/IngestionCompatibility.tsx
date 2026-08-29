@@ -43,15 +43,23 @@ interface Check {
   debug?: Record<string, unknown>;
 }
 
-type Scope = "all" | "object_store" | "intuizi" | "ec2_analysis" | "librosa_rest" | "ec2_inference";
+type Scope =
+  | "all"
+  | "object_store"
+  | "intuizi"
+  | "ec2_analysis"
+  | "librosa_rest"
+  | "semantic_svc"
+  | "ec2_inference";
 
-/** Per-source test targets — feed labels come back from the function verbatim. */
 const SOURCES: { scope: Exclude<Scope, "all">; label: string; feed: string }[] = [
   { scope: "object_store", label: "S3 object store", feed: "object store" },
   { scope: "intuizi", label: "Intuizi deliveries", feed: "intuizi" },
   { scope: "ec2_analysis", label: "EC2 analysis API", feed: "EC2 analysis API" },
+  { scope: "semantic_svc", label: "Semantic service (CLAP)", feed: "Semantic service (CLAP)" },
   { scope: "ec2_inference", label: "EC2 inference server", feed: "EC2 inference server" },
   { scope: "librosa_rest", label: "Librosa REST", feed: "Librosa REST" },
+
 ];
 
 const scopeForFeed = (feed: string): Exclude<Scope, "all"> =>

@@ -263,7 +263,11 @@ Deno.serve(async (req) => {
       console.log(JSON.stringify({ evt: "cohort_builder_run", source: body.source ?? "manual", ...out }));
       return json(out);
     } finally {
-      await admin.rpc("release_named_lease", { p_id: LEASE_ID, p_owner: leaseOwner }).catch(() => {});
+      try {
+        await admin.rpc("release_named_lease", { p_id: LEASE_ID, p_owner: leaseOwner });
+      } catch (_) {
+        // A stale lease expires on its own; never mask the real result.
+      }
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";

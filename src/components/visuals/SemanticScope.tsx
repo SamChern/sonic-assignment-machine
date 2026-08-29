@@ -118,11 +118,42 @@ export const SemanticScope = ({
   const signal = useAudioscopeSignal({ scores, seed, features, mediaEl, tags });
   const isSilhouette = !mediaEl;
 
-  const { tags: litTags, markers, debug, status, score, reset } = useScopeWindowScore({
+  const [frozen, setFrozen] = useState<TrailEntry | null>(null);
+  const [span, setSpan] = useState(0);
+
+  const { tags: litTags, markers, trail, debug, status, score, reset } = useScopeWindowScore({
     enabled: Boolean(playing) && staticFrame == null,
     windowSeconds,
     subjectRef: subjectRef ?? seed,
   });
+
+  // Timeline span: media duration when known, else the latest scored window.
+  useEffect(() => {
+    const d = Number(mediaEl?.duration);
+    if (Number.isFinite(d) && d > 0) setSpan(d);
+    else setSpan(Math.max(windowSeconds, trail.length ? trail[trail.length - 1].t + windowSeconds : windowSeconds));
+  }, [mediaEl, trail, windowSeconds]);
+
+  // Resuming playback releases a frozen snapshot.
+  useEffect(() => {
+    if (playing && frozen) setFrozen(null);
+  }, [playing, frozen]);
+
+  const seekTo = useCallback(
+    (entry: TrailEntry) => {
+      setFrozen(entry);
+      if (mediaEl) {
+        try {
+          mediaEl.pause();
+          mediaEl.currentTime = entry.t;
+        } catch {
+          /* some sources refuse seeking; the snapshot still freezes */
+        }
+      }
+    },
+    [mediaEl],
+  );
+
 
   useEffect(() => {
     reset();

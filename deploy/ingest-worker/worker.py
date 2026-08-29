@@ -282,6 +282,52 @@ def process_message(
     }
 
 
+def run_pull(cb: Callback, con: duckdb.DuckDBPyConnection) -> None:
+    """Queue-free loop: lease a file from the ledger, process it, repeat."""
+    log.info("worker %s pulling leases from %s", WORKER_ID, CALLBACK_URL)
+    idle = 0
+    while not _stop:
+        try:
+            res = cb.post({"phase": "lease"})
+        except Exception as e:  # noqa: BLE001 — transient callback trouble
+            log.exception("lease failed: %s", e)
+            time.sleep(POLL_SECONDS)
+            continue
+
+        lease = res.get("lease")
+        if not lease:
+            if idle == 0:
+                log.info("no pending files; waiting for the control plane to discover more")
+            idle += 1
+            time.sleep(POLL_SECONDS)
+            continue
+
+        idle = 0
+        msg = {
+            "file_id": lease.get("file_id"),
+            "object_key": lease.get("object_key"),
+            "report_type": lease.get("report_type"),
+            "trace_id": lease.get("trace_id"),
+            "rows_offset": lease.get("rows_offset") or 0,
+        }
+        log.info("claimed %s at row %s", msg["object_key"], msg["rows_offset"])
+        try:
+            log.info("done %s", json.dumps(process_message(con, cb, msg)))
+        except Exception as e:  # noqa: BLE001 — park the file, keep the worker up
+            log.exception("file failed: %s", e)
+            try:
+                cb.post({
+                    "file_id": msg["file_id"],
+                    "object_key": msg["object_key"],
+                    "trace_id": msg["trace_id"],
+                    "phase": "failed",
+                    "error": str(e)[:1000],
+                })
+            except Exception:  # noqa: BLE001
+                log.exception("could not report failure to callback")
+            time.sleep(5)
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -290,10 +336,21 @@ def main() -> int:
     signal.signal(signal.SIGTERM, _handle_stop)
     signal.signal(signal.SIGINT, _handle_stop)
 
-    sqs = boto3.client("sqs", region_name=REGION)
     cb = Callback()
     con = connect_duckdb()
+
+    if MODE != "sqs":
+        run_pull(cb, con)
+        log.info("worker stopped")
+        return 0
+
+    if not QUEUE_URL:
+        log.error("MODE=sqs needs SQS_QUEUE_URL; set MODE=pull for the queue-free path")
+        return 2
+
+    sqs = boto3.client("sqs", region_name=REGION)
     log.info("worker %s polling %s", WORKER_ID, QUEUE_URL.rsplit("/", 1)[-1])
+
 
     while not _stop:
         got = sqs.receive_message(

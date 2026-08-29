@@ -264,6 +264,8 @@ Deno.serve(async (req) => {
       lift_ci: [ciLow, ciHigh],
       measurable,
       per_axis: perAxis,
+      fit_engine: fitEngine,
+
       priors_written: written,
       note: measurable
         ? undefined

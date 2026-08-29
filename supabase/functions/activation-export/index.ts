@@ -265,11 +265,14 @@ Deno.serve(async (req) => {
     const msg = e instanceof Error ? e.message : "Unknown error";
     console.error("activation-export failed", msg);
     if (exportRowId) {
-      await admin
-        .from("sonic_cohort_exports")
-        .update({ status: "failed", error: msg, updated_at: new Date().toISOString() })
-        .eq("id", exportRowId)
-        .catch(() => {});
+      try {
+        await admin
+          .from("sonic_cohort_exports")
+          .update({ status: "failed", error: msg, updated_at: new Date().toISOString() })
+          .eq("id", exportRowId);
+      } catch (_) {
+        // Bookkeeping must never swallow the real failure below.
+      }
     }
     return json({ success: false, error: msg }, 500);
   }

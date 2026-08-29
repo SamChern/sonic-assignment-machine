@@ -75,7 +75,7 @@ interface SignalCohortPanelProps {
 
 const MEMBER_PAGE = 24;
 
-export function SignalCohortPanel({
+function IdentifierSignals({
   points,
   cohorts,
   meta,

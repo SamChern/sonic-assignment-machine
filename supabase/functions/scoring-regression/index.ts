@@ -128,7 +128,7 @@ async function rescore(source: Any, ctxText: string | undefined) {
   const text = await res.text();
   if (!res.ok) throw new Error(`analyze-audio ${res.status}: ${text.slice(0, 240)}`);
   const parsed = JSON.parse(text);
-  const result = parsed?.results?.[0] ?? parsed?.analyses?.[0];
+  const result = parsed?.sources?.[0] ?? parsed?.results?.[0];
   if (!result) throw new Error("analyze-audio returned no result");
   const scores: Record<string, number> = {};
   for (const cat of (result.categories ?? []) as Any[]) {

@@ -317,7 +317,7 @@ export const SemanticScope = ({
             Meaning lens · six-axis ontology
           </span>
           <Audioscope
-            scores={scores}
+            scores={shownAxes}
             seed={`${seed}-meaning`}
             features={features}
             mode="radial"
@@ -381,7 +381,7 @@ export const SemanticScope = ({
               The semantic service isn&apos;t configured, so tags can&apos;t be matched right now —
               the time and frequency lenses still run.
             </p>
-          ) : litTags.length === 0 ? (
+          ) : shownTags.length === 0 ? (
             <p className="text-[11px] text-muted-foreground">
               {playing && staticFrame == null
                 ? "Listening — the first window scores in a moment."
@@ -389,7 +389,7 @@ export const SemanticScope = ({
             </p>
           ) : (
             <ul className="space-y-1.5">
-              {litTags.slice(0, 6).map((t: ScopeTag) => (
+              {shownTags.slice(0, 6).map((t: ScopeTag) => (
                 <li key={t.id ?? t.code} className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-[11px] text-foreground">{t.label}</span>
                   <span

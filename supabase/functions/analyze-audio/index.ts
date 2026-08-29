@@ -10,12 +10,18 @@ import {
 import { chatCompletion, GatewayError, stableHash } from '../_shared/inference.ts';
 import {
   buildNeighborExemplars,
+  CATALOG_DIMS,
+  describeBridge,
   describeTagSubject,
   type NeighborExemplar,
+  padToCatalog,
+  pickBridgeRoute,
   type TaxonomyNodeVectors,
   weightedTagVector,
 } from '../_shared/context.ts';
+import { clapBridge, getSemanticSvcConfig } from '../_shared/semanticSvc.ts';
 import { controlNumber } from '../_shared/control.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

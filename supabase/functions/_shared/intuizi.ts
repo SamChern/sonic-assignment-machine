@@ -645,8 +645,12 @@ const TYPE_TOKENS: { type: ReportType; tokens: string[] }[] = [
 
 /**
  * Resolve the report type for an object key.
- * Directory prefixes win; otherwise the filename is tokenized (Intuizi activation
- * names such as `..._ctv_-_sonicsim_activation_id5493_uniquedevices.parquet`).
+ *
+ * Directory prefixes win. Otherwise the filename is tokenized and the type
+ * whose token appears EARLIEST wins — Intuizi names every delivery
+ * `<date>_<report>_sonicsim_ctv_audio_signals_<activation>`, so the trailing
+ * `ctv` in the account slug would otherwise capture demographics, apps and
+ * visitation deliveries and normalize them with the wrong mapper.
  */
 export function reportTypeFromKey(key: string): ReportType | null {
   const lower = key.toLowerCase();
@@ -657,16 +661,29 @@ export function reportTypeFromKey(key: string): ReportType | null {
 
   const name = lower.split("/").pop() ?? lower;
   const parts = name.replace(/\.[a-z0-9]+$/, "").split(/[^a-z0-9]+/).filter(Boolean);
+
+  let best: { type: ReportType; at: number } | null = null;
   for (const { type, tokens } of TYPE_TOKENS) {
-    if (parts.some((p) => tokens.includes(p))) return type;
+    const at = parts.findIndex((p) => tokens.includes(p));
+    if (at === -1) continue;
+    if (!best || at < best.at) best = { type, at };
   }
+  if (best) return best.type;
+
   // Compact names without separators (e.g. `ctvsignals20260821`).
   const squashed = parts.join("");
+  let bestSquashed: { type: ReportType; at: number } | null = null;
   for (const { type, tokens } of TYPE_TOKENS) {
-    if (tokens.some((tok) => tok.length > 3 && squashed.includes(tok))) return type;
+    for (const tok of tokens) {
+      if (tok.length <= 3) continue;
+      const at = squashed.indexOf(tok);
+      if (at === -1) continue;
+      if (!bestSquashed || at < bestSquashed.at) bestSquashed = { type, at };
+    }
   }
-  return null;
+  return bestSquashed?.type ?? null;
 }
+
 
 
 export function partitionDateFromKey(key: string): string | null {

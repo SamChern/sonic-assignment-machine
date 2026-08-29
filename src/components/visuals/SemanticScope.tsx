@@ -266,6 +266,22 @@ export const SemanticScope = ({
         caption={caption}
       />
 
+      {/* Tag-fire trail — scrub back to what the model heard at 0:42. */}
+      <ScopeTrail
+        trail={trail}
+        span={span}
+        selected={frozen}
+        onSeek={mediaEl ? seekTo : undefined}
+        onClear={() => setFrozen(null)}
+      />
+
+      {/* Enterprise scrub-and-inspect: same media element, lazy-loaded. */}
+      {lens === "enterprise" && mediaEl ? (
+        <WaveInspect mediaEl={mediaEl} trail={trail} onSeek={seekTo} />
+      ) : null}
+
+
+
       {/* Lens 2 — frequency. */}
       <div className="rounded-xl border border-border/60 bg-background/60 p-2">
         <div className="mb-1 flex items-center justify-between gap-2 px-1">

@@ -11,16 +11,20 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 import {
   activationIdFromKey,
+  FEATURE_ALIASES,
   fetchObjectRows,
   identifierOf,
   ingestPrefixes,
   isRosterRow,
   isSummaryRow,
+  isWebShaped,
+  matchAliasGroups,
   normalizeRow,
   partitionDateFromKey,
   REPORT_TYPES,
   type ReportType,
   reportTypeFromKey,
+  unrecognizedColumns,
 } from "../_shared/intuizi.ts";
 import {
   clearS3Cache,

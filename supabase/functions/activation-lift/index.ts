@@ -156,6 +156,8 @@ Deno.serve(async (req) => {
       ci_high: number;
       inconclusive: boolean;
     }[] = [];
+    let fitEngine: "ec2" | "edge" | null = null;
+
 
     if (measurable && matchedKeys.length >= 12) {
       const keys = matchedKeys.map((m) => m.key).slice(0, 5000);

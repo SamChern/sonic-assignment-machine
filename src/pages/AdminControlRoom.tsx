@@ -20,6 +20,7 @@ import {
   useControlRegistry,
   type ControlKnob,
 } from "@/hooks/useControlRegistry";
+import { ResolverPanel } from "@/components/admin/ResolverPanel";
 
 const CATEGORY_LABELS: Record<string, string> = {
   scoring: "Scoring core",
@@ -27,6 +28,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   cohorts: "Cohorts",
   compliance: "Retention & compliance",
   scope: "The Scope",
+  resolver: "The Resolver",
   general: "General",
 };
 
@@ -134,6 +136,10 @@ export default function AdminControlRoom() {
           {error}
         </Card>
       )}
+
+      <div className="mb-6">
+        <ResolverPanel />
+      </div>
 
       <div className="space-y-6">
         {grouped.map(([category, rows]) => (

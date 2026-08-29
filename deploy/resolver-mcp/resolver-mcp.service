@@ -1,0 +1,43 @@
+[Unit]
+Description=SonicSIM Resolver MCP tool belt (taxonomy, crosswalk, embed, web metadata)
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/resolver-mcp
+
+Environment=PATH=/home/ubuntu/.local/bin:/opt/resolver-mcp/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+# Secrets come from /etc/resolver-mcp.env (chmod 600):
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SEMANTIC_SVC_URL, SEMANTIC_SVC_TOKEN
+EnvironmentFile=/etc/resolver-mcp.env
+
+# mcp-proxy spawns the stdio server and exposes /sse on :8766 (loopback only);
+# nginx fronts it with TLS + Bearer auth, same as librosa-mcp on :8765.
+ExecStart=/home/ubuntu/.local/bin/mcp-proxy \
+  --sse-host 127.0.0.1 \
+  --sse-port 8766 \
+  -- /opt/resolver-mcp/.venv/bin/python /opt/resolver-mcp/server.py
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=10s
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/opt/resolver-mcp
+
+MemoryMax=512M
+CPUQuota=50%
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=resolver-mcp
+
+[Install]
+WantedBy=multi-user.target

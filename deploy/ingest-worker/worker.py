@@ -286,13 +286,25 @@ def run_pull(cb: Callback, con: duckdb.DuckDBPyConnection) -> None:
     """Queue-free loop: lease a file from the ledger, process it, repeat."""
     log.info("worker %s pulling leases from %s", WORKER_ID, CALLBACK_URL)
     idle = 0
+    lease_fails = 0
     while not _stop:
         try:
             res = cb.post({"phase": "lease"})
         except Exception as e:  # noqa: BLE001 — transient callback trouble
-            log.exception("lease failed: %s", e)
-            time.sleep(POLL_SECONDS)
+            lease_fails += 1
+            # A 5xx/HTML gateway page means the backend (or its pooler) is
+            # saturated. Hammering it every POLL_SECONDS makes recovery slower,
+            # so back off exponentially up to 10 minutes and keep the process
+            # alive — the ledger cursor is already checkpointed.
+            wait = min(600, POLL_SECONDS * (2 ** min(lease_fails, 6)))
+            log.error(
+                "lease failed (%d in a row); backend looks busy, sleeping %ds: %s",
+                lease_fails, wait, str(e)[:300],
+            )
+            time.sleep(wait)
             continue
+        lease_fails = 0
+
 
         lease = res.get("lease")
         if not lease:

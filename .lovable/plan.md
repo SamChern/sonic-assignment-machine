@@ -84,7 +84,84 @@ real harness defects, and nothing about the mapping is touched.
 - Add Deno tests asserting the exported alias groups match `normalizeRow` behaviour for the
   three real column sets above, so this can't regress.
 
+---
+
+# Part 2 — Ground the ontology in real audio (AudioSet / FSD50K / VGGSound / MTG-Jamendo / WavCaps)
+
+You're right, and the database confirms it. What exists today:
+
+- `taxonomy_nodes` holds 632 `aset.*` AudioSet classes, and all 632 have an `audio_embedding`
+  — but **every one of those vectors came from `semantic-backfill`, which sends the node's
+  label path to CLAP's *text* encoder**. Zero of them were produced from a sound file.
+  `aset_with_text_emb = 0`, `aset_with_audio_emb = 632`: the "audio" column is text vectors
+  stored in the audio slot.
+- The semantic service on EC2 *does* expose `POST /embed_audio` (real CLAP audio encoder), and
+  `_shared/inference.ts` calls it — but only for an audio source that already carries a
+  playable URL (uploads, Spotify/Apple previews). Intuizi identifiers have no audio URL, so
+  that path never fires for console signals.
+- There is **no clip corpus in the database at all** — no table holds AudioSet, FSD50K,
+  VGGSound, MTG-Jamendo or WavCaps clips, captions, or their embeddings. Nothing was ever
+  downloaded or paired with taxonomy tags.
+
+So Intuizi taxonomy tags are today compared against *text descriptions of sounds*, not sounds.
+That is exactly the weak link you're pointing at.
+
+## The fix: a clip corpus that anchors every taxonomy node in real sound
+
+```text
+corpus manifests            EC2 corpus worker (CPU, batched)         Postgres
+FSD50K      ──┐             download clip → CLAP /embed_audio ──►  audio_corpus_clips
+VGGSound    ──┤   labels    (16 kHz mono, 10 s window, cached)     audio_corpus_embeddings
+MTG-Jamendo ──┤   +captions                                        taxonomy_node_exemplars
+WavCaps     ──┘                          │                                │
+AudioSet ontology (already imported) ◄───┴── mid/tag crosswalk ────► taxonomy_nodes
+                                                                    .audio_embedding = mean of
+                                                                     grounded clips (real audio)
+```
+
+1. **Corpus tables.** `audio_corpus_clips` (corpus, external id, source URL, license, duration,
+   split, caption, label codes) and `audio_corpus_embeddings` (clip, model, `vector(512)`), plus
+   `taxonomy_node_exemplars` (node → clip, similarity, rank). New `taxonomy_nodes` columns
+   `audio_embedding_source` (`'audio' | 'text'`) and `grounded_clip_count` make the difference
+   auditable per node. All service-role/admin only, with GRANTs written in the same migration.
+2. **Manifest import.** A `corpus-import` edge function ingests each corpus's public label
+   manifest (FSD50K `dev/eval` ground truth, VGGSound csv, MTG-Jamendo autotagging TSV, WavCaps
+   caption json) and maps native labels onto AudioSet mids, then onto our `aset.*` codes via the
+   existing crosswalk. AudioSet's own clips are YouTube-hosted and not redistributable, so
+   AudioSet contributes the ontology (already in place) while FSD50K/VGGSound/Jamendo supply the
+   actual sound for those classes — that is the standard practice and it needs no scraping.
+3. **EC2 corpus worker** (`deploy/corpus-worker/`, same service pattern as `ingest-worker`):
+   claims batches of unembedded clips, streams each file, calls `semantic-svc /embed_audio`,
+   writes the 512-d vector, retries and rate-limits itself. CPU-only and off-peak — no GPU, in
+   line with the box's capacity.
+4. **Re-ground the taxonomy.** `semantic-backfill` gains an `audio` mode: a node's
+   `audio_embedding` becomes the L2-normalized mean of its grounded clip vectors (min clip count
+   from the Control Room), `audio_embedding_source = 'audio'`. CLAP text stays as an explicit
+   fallback for nodes no corpus covers, and is labelled as such instead of masquerading as audio.
+5. **Wire it into Intuizi scoring.** In `intuizi-score-worker` / `analyze-audio`, an identifier's
+   normalized tags resolve to nodes, and each node now yields (a) an audio-grounded anchor vector
+   and (b) its top exemplar clips with WavCaps-style captions. Those captions and the nearest
+   grounded neighbours become the few-shot exemplars in the scorer prompt — so "CTV genre:
+   documentary + web topic: cycling" is scored against how those sounds actually behave, not
+   against their names. The identifier's weighted mean anchor vector is stored as
+   `audio_sources.profile_embedding`, putting cohorts, kNN and Predict in real CLAP audio space.
+6. **Control Room knobs** (no hard-coded values): per-corpus weight, minimum clips per node,
+   whether text fallback is allowed, exemplar count per node, and the audio-window length.
+7. **Admin visibility.** A "Corpus grounding" panel on the SonicSIM Analysis Results page shows
+   clips per corpus, percent of nodes audio-grounded, coverage by ontology branch, and worker
+   throughput — plus a per-analysis badge stating whether its anchors were audio- or text-grounded.
+
+## Verification for Part 2
+
+- Corpus tables populated and `grounded_clip_count > 0` for the AudioSet branches the Intuizi
+  feeds actually hit; report percent of nodes still text-only.
+- Re-score one previously ingested activation and diff the six category scores text-grounded vs
+  audio-grounded, with the exemplar captions shown for review.
+- `/embed_audio` latency and failure rate recorded in `semantic_call_log`.
+
 ## Out of scope
 
 Any change to Intuizi taxonomy expectations or column mappings for POI, demographics,
-marketing audience, CTV, app or web reports.
+marketing audience, CTV, app or web reports. Part 2 adds grounding beneath those tags; it does
+not change which tags a delivery produces.
+

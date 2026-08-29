@@ -1,7 +1,11 @@
 import { assertAlmostEquals, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildNeighborExemplars,
+  CATALOG_DIMS,
+  describeBridge,
   describeTagSubject,
+  padToCatalog,
+  pickBridgeRoute,
   pickNodeVector,
   toVector,
   weightedTagVector,
@@ -114,4 +118,53 @@ Deno.test("describeTagSubject flags the tag-only subject for the prompt", () => 
   assertEquals(text.includes("tag_weights=[ctv.talk:2]"), true);
   assertEquals(text.includes("subject_vector=text:2d"), true);
   assertEquals(describeTagSubject([], null).includes("subject_vector=none"), true);
+});
+
+
+Deno.test("weightedTagVector reports tags dropped from the other space", () => {
+  const out = weightedTagVector([
+    { audio_embedding: [1, 0, 0], grounding_count: 3, weight: 4 },
+    { embedding: [0, 1, 0, 0], grounding_count: 0, weight: 1 },
+  ])!;
+  assertEquals(out.space, "audio");
+  assertEquals(out.used, 1);
+  assertEquals(out.dropped, 1);
+  assertEquals(
+    describeTagSubject(
+      [{ code: "a", audio_embedding: [1, 0, 0], grounding_count: 3, weight: 4 }],
+      out,
+    ).includes("tags_other_space=1"),
+    true,
+  );
+});
+
+Deno.test("pickBridgeRoute picks native, bridge, then pad", () => {
+  assertEquals(pickBridgeRoute(CATALOG_DIMS, null), "native");
+  assertEquals(
+    pickBridgeRoute(512, { from_dim: 512, to_dim: CATALOG_DIMS }),
+    "bridge",
+  );
+  assertEquals(pickBridgeRoute(512, null), "pad");
+  // A bridge for a different width pair must not be used.
+  assertEquals(
+    pickBridgeRoute(512, { from_dim: 768, to_dim: CATALOG_DIMS }),
+    "pad",
+  );
+});
+
+Deno.test("padToCatalog tiles to the catalog width and normalizes", () => {
+  const out = padToCatalog([1, 0, 0], 6);
+  assertEquals(out.length, 6);
+  assertAlmostEquals(Math.sqrt(out.reduce((s, x) => s + x * x, 0)), 1, 1e-9);
+  assertAlmostEquals(out[0], out[3], 1e-9);
+  assertEquals(padToCatalog([], 6), []);
+});
+
+Deno.test("describeBridge records the route taken", () => {
+  assertEquals(describeBridge("native", 1536), "vector_route=native dims=1536");
+  assertEquals(
+    describeBridge("bridge", 512, "clap-1536").includes("bridge=clap-1536"),
+    true,
+  );
+  assertEquals(describeBridge("pad", 512), "vector_route=pad from=512d to=1536d");
 });

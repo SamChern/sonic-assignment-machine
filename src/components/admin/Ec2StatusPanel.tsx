@@ -9,6 +9,7 @@ import { EC2_ENDPOINTS } from "@/config/ec2";
 import { Activity, CheckCircle2, Plug, RefreshCw, Server, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import SemanticServicePanel from "./SemanticServicePanel";
+import ScoringRegressionPanel from "./ScoringRegressionPanel";
 
 
 interface HealthCheck {
@@ -161,6 +162,8 @@ export const Ec2StatusPanel = () => {
       </Card>
 
       <SemanticServicePanel />
+
+      <ScoringRegressionPanel />
 
 
 

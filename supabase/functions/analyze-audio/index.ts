@@ -10,12 +10,72 @@ import {
 import { chatCompletion, GatewayError, stableHash } from '../_shared/inference.ts';
 import {
   buildNeighborExemplars,
+  CATALOG_DIMS,
+  describeBridge,
   describeTagSubject,
   type NeighborExemplar,
+  padToCatalog,
+  pickBridgeRoute,
   type TaxonomyNodeVectors,
   weightedTagVector,
 } from '../_shared/context.ts';
+import { clapBridge, getSemanticSvcConfig } from '../_shared/semanticSvc.ts';
 import { controlNumber } from '../_shared/control.ts';
+
+
+/**
+ * Step 4 — take a subject vector into the catalog space (`vector(1536)`) so
+ * `match_audio_profiles` can be used regardless of which embedding space the
+ * subject's tags came from. Prefers a trained bridge from `embedding_bridges`
+ * (applied by the semantic service), falling back to deterministic tiling.
+ */
+async function toCatalogVector(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  vector: number[],
+): Promise<{ vector: number[]; route: string; audit: string } | null> {
+  if (!Array.isArray(vector) || vector.length === 0) return null;
+  if (vector.length === CATALOG_DIMS) {
+    return { vector, route: 'native', audit: describeBridge('native', vector.length) };
+  }
+
+  let bridge: { id?: string; name?: string; from_dim?: number; to_dim?: number; weights_url?: string | null } | null =
+    null;
+  try {
+    const { data } = await admin
+      .from('embedding_bridges')
+      .select('id, name, from_dim, to_dim, weights_url')
+      .eq('is_active', true)
+      .eq('from_dim', vector.length)
+      .eq('to_dim', CATALOG_DIMS)
+      .limit(1)
+      .maybeSingle();
+    bridge = data ?? null;
+  } catch (e) {
+    console.warn('embedding_bridges lookup failed:', e);
+  }
+
+  const route = pickBridgeRoute(vector.length, bridge);
+  if (route === 'bridge') {
+    const cfg = await getSemanticSvcConfig(admin);
+    if (cfg) {
+      const out = await clapBridge(cfg, [vector], bridge?.id ?? null, bridge?.weights_url ?? null);
+      const projected = out?.vectors?.[0];
+      if (Array.isArray(projected) && projected.length === CATALOG_DIMS) {
+        return {
+          vector: projected,
+          route: 'bridge',
+          audit: describeBridge('bridge', vector.length, bridge?.name ?? null),
+        };
+      }
+    }
+    console.warn('bridge unavailable, falling back to deterministic padding');
+  }
+
+  const padded = padToCatalog(vector);
+  if (padded.length !== CATALOG_DIMS) return null;
+  return { vector: padded, route: 'pad', audit: describeBridge('pad', vector.length) };
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,6 +110,11 @@ interface AnalysisRequest {
   sources: AudioSource[];
   user_id?: string;
   save_results?: boolean;
+  /**
+   * Step 4 verification only: skip both cache tiers so a re-score exercises the
+   * live scoring path. Defaults to false, so existing callers are unaffected.
+   */
+  bypass_cache?: boolean;
 }
 
 
@@ -172,7 +237,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { sources, user_id, save_results = false }: AnalysisRequest = await req.json();
+    const {
+      sources,
+      user_id,
+      save_results = false,
+      bypass_cache = false,
+    }: AnalysisRequest = await req.json();
 
     if (!sources || sources.length === 0) {
       throw new Error('No audio sources provided');
@@ -202,7 +272,7 @@ Deno.serve(async (req) => {
     const uncachedSources: AudioSource[] = [];
     const cacheKeyMap = new Map<string, AudioSource>();
 
-    if (supabaseAdmin) {
+    if (supabaseAdmin && !bypass_cache) {
       // Build cache keys for all sources
       const cacheKeys = sources.map(s => {
         const key = getCacheKey(s);
@@ -320,11 +390,14 @@ Deno.serve(async (req) => {
               .filter(Boolean)
               .join(' ');
 
-            // kNN exemplars from the subject vector when dimensions line up
-            // with the catalog space (`vector(1536)`).
-            if (subject && subject.vector.length === 1536) {
+            // kNN exemplars from the subject vector. Grounded CLAP tags are
+            // 512-d, so bridge (or deterministically pad) into the catalog
+            // space instead of skipping retrieval entirely.
+            const bridged = subject ? await toCatalogVector(supabaseAdmin, subject.vector) : null;
+            if (bridged) {
+              s.taxonomy_context = [s.taxonomy_context, bridged.audit].filter(Boolean).join(' ');
               const { data: knn } = await supabaseAdmin.rpc('match_audio_profiles', {
-                query_embedding: subject.vector,
+                query_embedding: bridged.vector,
                 match_count: knnK,
                 exclude_id: s.audio_source_id,
               });
@@ -405,7 +478,7 @@ Deno.serve(async (req) => {
 
 
       let toAnalyze = uncachedSources;
-      if (supabaseAdmin) {
+      if (supabaseAdmin && !bypass_cache) {
         // Only evidence-backed hashes are trustworthy; a metadata-only source is
         // identified by its name alone and must not borrow another's score.
         const hashable = uncachedSources.filter(
@@ -713,7 +786,9 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
       }
 
       // === OPTIMIZATION 1b: Store fresh results in cache ===
-      if (supabaseAdmin && freshResults.length > 0) {
+      // A bypassed run is a verification re-score and must not write the cache.
+      if (supabaseAdmin && !bypass_cache && freshResults.length > 0) {
+
         const cacheInserts = freshResults.map(result => {
           const originalSource = uncachedSources.find(s => s.name === result.name);
           const cacheKey = originalSource ? getCacheKey(originalSource) : `file:${result.name.toLowerCase().trim()}`;

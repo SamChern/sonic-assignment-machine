@@ -161,6 +161,8 @@ export interface WeightedVector {
   space: VectorSpace;
   /** Number of tags that actually contributed. */
   used: number;
+  /** Tags dropped because they live in the other space or a mismatched width. */
+  dropped: number;
   weight_sum: number;
 }
 
@@ -202,7 +204,13 @@ export function weightedTagVector(
   const norm = Math.sqrt(acc.reduce((s, v) => s + v * v, 0));
   const vector = norm > 0 ? acc.map((v) => v / norm) : acc;
 
-  return { vector, space, used: usable.length, weight_sum: round2(weightSum) };
+  return {
+    vector,
+    space,
+    used: usable.length,
+    dropped: Math.max(0, picked.length - usable.length),
+    weight_sum: round2(weightSum),
+  };
 }
 
 /** Compact human/LLM-readable summary of the tag-only subject. */
@@ -220,7 +228,59 @@ export function describeTagSubject(
   const head = `subject=tags_only tag_count=${(nodes ?? []).length}`;
   const body = tags.length ? ` tag_weights=[${tags.join(",")}]` : "";
   const vecPart = vec
-    ? ` subject_vector=${vec.space}:${vec.vector.length}d from=${vec.used}tags`
+    ? ` subject_vector=${vec.space}:${vec.vector.length}d from=${vec.used}tags` +
+      (vec.dropped > 0 ? ` tags_other_space=${vec.dropped}` : "")
     : " subject_vector=none";
   return `${head}${body}${vecPart}`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 4. bridging a grounded (512-d) subject into the catalog space (1536-d)      */
+/* -------------------------------------------------------------------------- */
+
+/** Width of the catalog vectors used by `match_audio_profiles`. */
+export const CATALOG_DIMS = 1536;
+
+export type BridgeRoute = "native" | "bridge" | "pad";
+
+/**
+ * Which route takes a subject vector into the catalog space:
+ *   native — already the catalog width, nothing to do;
+ *   bridge — a trained bridge is available for this width pair;
+ *   pad    — deterministic tiling fallback so kNN still returns neighbours.
+ */
+export function pickBridgeRoute(
+  dims: number,
+  bridge: { from_dim?: number | null; to_dim?: number | null } | null | undefined,
+  target = CATALOG_DIMS,
+): BridgeRoute {
+  if (dims === target) return "native";
+  if (
+    bridge &&
+    Number(bridge.from_dim) === dims &&
+    Number(bridge.to_dim) === target
+  ) return "bridge";
+  return "pad";
+}
+
+/**
+ * Deterministic width fallback: tile the source vector across the target width
+ * and L2-normalize. Byte-for-byte the same convention the semantic service uses
+ * for its identity bridge, so padded and service-bridged vectors are comparable.
+ */
+export function padToCatalog(v: number[], target = CATALOG_DIMS): number[] {
+  if (!Array.isArray(v) || v.length === 0) return [];
+  const out = new Array<number>(target);
+  for (let i = 0; i < target; i++) out[i] = v[i % v.length];
+  const n = Math.sqrt(out.reduce((s, x) => s + x * x, 0));
+  return n > 0 ? out.map((x) => x / n) : out;
+}
+
+/** Audit fragment appended to the prompt context so routing stays visible. */
+export function describeBridge(route: BridgeRoute, fromDims: number, bridgeName?: string | null): string {
+  if (route === "native") return `vector_route=native dims=${fromDims}`;
+  if (route === "bridge") {
+    return `vector_route=bridge from=${fromDims}d to=${CATALOG_DIMS}d${bridgeName ? ` bridge=${bridgeName}` : ""}`;
+  }
+  return `vector_route=pad from=${fromDims}d to=${CATALOG_DIMS}d`;
 }

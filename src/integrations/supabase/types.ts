@@ -704,6 +704,39 @@ export type Database = {
           },
         ]
       }
+      ingest_rollups: {
+        Row: {
+          created_at: string
+          day: string | null
+          id: number
+          object_key: string
+          report_type: string | null
+          subject_key: string
+          taxonomy_code: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          day?: string | null
+          id?: never
+          object_key: string
+          report_type?: string | null
+          subject_key: string
+          taxonomy_code: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          day?: string | null
+          id?: never
+          object_key?: string
+          report_type?: string | null
+          subject_key?: string
+          taxonomy_code?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       integration_credentials: {
         Row: {
           created_at: string
@@ -2260,6 +2293,33 @@ export type Database = {
         }
         Relationships: []
       }
+      worker_heartbeats: {
+        Row: {
+          created_at: string
+          host: string | null
+          last_seen: string
+          stats: Json
+          updated_at: string
+          worker_id: string
+        }
+        Insert: {
+          created_at?: string
+          host?: string | null
+          last_seen?: string
+          stats?: Json
+          updated_at?: string
+          worker_id: string
+        }
+        Update: {
+          created_at?: string
+          host?: string | null
+          last_seen?: string
+          stats?: Json
+          updated_at?: string
+          worker_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -2349,7 +2409,24 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_next_ingest_file: {
+        Args: { p_worker: string }
+        Returns: {
+          id: string
+          object_key: string
+          report_type: string
+          trace_id: string
+        }[]
+      }
       client_control: { Args: { _key: string }; Returns: Json }
+      complete_ingest_file: {
+        Args: { p_id: string; p_rows: number; p_status?: string }
+        Returns: undefined
+      }
+      fail_ingest_file: {
+        Args: { p_error: string; p_id: string }
+        Returns: undefined
+      }
       has_org_access: { Args: { _org: string }; Returns: boolean }
       has_org_write: { Args: { _org: string }; Returns: boolean }
       has_role: {
@@ -2452,6 +2529,10 @@ export type Database = {
         }
         Returns: Json
       }
+      reap_stale_ingest_claims: {
+        Args: { p_stale_minutes?: number }
+        Returns: number
+      }
       recalculate_all_fingerprints: { Args: never; Returns: number }
       recalculate_user_fingerprint: {
         Args: { p_user_id: string }
@@ -2489,6 +2570,10 @@ export type Database = {
       require_admin: { Args: never; Returns: undefined }
       run_intuizi_retention: { Args: { p_days?: number }; Returns: Json }
       scan_intuizi_custody: { Args: never; Returns: Json }
+      skip_ingest_file: {
+        Args: { p_id: string; p_reason: string }
+        Returns: undefined
+      }
       touch_audio_profile_embedding: {
         Args: { p_cache_key: string; p_model: string }
         Returns: undefined

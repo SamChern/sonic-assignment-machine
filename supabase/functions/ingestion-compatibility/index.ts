@@ -196,63 +196,122 @@ Deno.serve(async (req) => {
     });
   }
 
-  const altFeeds: {
-    id: Exclude<Scope, "all">;
+  // ---------------------------------------------------- 1b. service feed probes
+  //
+  // Credentials live in TWO places in this project: platform secrets (env) and
+  // the admin Integrations UI (public.integration_credentials). Probing only env
+  // reported configured services as "Not applicable", so both are consulted and
+  // the answering store is reported.
+  interface Feed {
+    id: Exclude<Scope, "all" | "object_store" | "intuizi">;
     label: string;
-    env: string[];
-    urlEnv: string;
+    /** integration_credentials.integration_id, when the UI manages this feed. */
+    integrationId?: string;
+    urlKey: string;
+    authKey?: string;
     healthPath: string;
-    authEnv?: string;
-  }[] = [
+    /** Optional feeds never block: unconfigured = skip, unreachable = warn. */
+    optional?: boolean;
+    note?: string;
+  }
+
+  const feeds: Feed[] = [
     {
       id: "ec2_analysis",
       label: "EC2 analysis API",
-      env: ["AWS_API_URL", "AWS_API_KEY"],
-      urlEnv: "AWS_API_URL",
+      urlKey: "AWS_API_URL",
+      authKey: "AWS_API_KEY",
       healthPath: "/api/health",
-      authEnv: "AWS_API_KEY",
-    },
-    {
-      id: "ec2_inference",
-      label: "EC2 inference server",
-      env: ["EC2_INFERENCE_URL", "EC2_INFERENCE_MODEL"],
-      urlEnv: "EC2_INFERENCE_URL",
-      healthPath: "/v1/models",
-      authEnv: "EC2_INFERENCE_API_KEY",
     },
     {
       id: "librosa_rest",
       label: "Librosa REST",
-      env: ["LIBROSA_REST_URL"],
-      urlEnv: "LIBROSA_REST_URL",
+      integrationId: "librosa_rest",
+      urlKey: "LIBROSA_REST_URL",
+      authKey: "LIBROSA_REST_TOKEN",
       healthPath: "/health",
-      authEnv: "LIBROSA_REST_TOKEN",
+    },
+    {
+      id: "semantic_svc",
+      label: "Semantic service (CLAP)",
+      integrationId: "semantic_svc",
+      urlKey: "SEMANTIC_SVC_URL",
+      authKey: "SEMANTIC_SVC_TOKEN",
+      healthPath: "/healthz",
+    },
+    {
+      id: "ec2_inference",
+      label: "EC2 inference server",
+      urlKey: "EC2_INFERENCE_URL",
+      authKey: "EC2_INFERENCE_API_KEY",
+      healthPath: "/v1/models",
+      optional: true,
+      note:
+        "Optional. This EC2 box has no GPU and runs no chat LLM — Lovable AI is the sanctioned scoring path, so this feed is informational only.",
     },
   ];
-  for (const f of altFeeds) {
+
+  /** env first, then the admin credentials table; reports which store answered. */
+  const credentialsFor = async (feed: Feed) => {
+    const keys = [feed.urlKey, ...(feed.authKey ? [feed.authKey] : [])];
+    const resolved: Record<string, { value: string; from: "env" | "credentials" }> = {};
+    for (const k of keys) {
+      const v = (Deno.env.get(k) ?? "").trim();
+      if (v) resolved[k] = { value: v, from: "env" };
+    }
+    if (feed.integrationId && keys.some((k) => !resolved[k])) {
+      const { data, error } = await admin
+        .from("integration_credentials")
+        .select("field_key, field_value")
+        .eq("integration_id", feed.integrationId);
+      if (error) log(`creds.${feed.id}.error`, error.message);
+      for (const row of data ?? []) {
+        const k = String(row.field_key);
+        const v = String(row.field_value ?? "").trim();
+        if (keys.includes(k) && !resolved[k] && v) {
+          resolved[k] = { value: v, from: "credentials" };
+        }
+      }
+    }
+    return resolved;
+  };
+
+  for (const f of feeds) {
     if (!wants(f.id)) continue;
-    const missing = f.env.filter((k) => !Deno.env.get(k));
+    const creds = await credentialsFor(f);
+    const base = creds[f.urlKey]?.value;
+    const token = f.authKey ? creds[f.authKey]?.value : undefined;
+    const stores = [...new Set(Object.values(creds).map((c) => c.from))];
+
     add({
       id: `config.${f.id}`,
       feed: f.label,
       title: `${f.label} credentials`,
-      status: missing.length === 0 ? "pass" : (missing.length === f.env.length ? "skip" : "warn"),
-      detail: missing.length === 0
-        ? "All required settings present."
-        : `Missing: ${missing.join(", ")}.`,
-      remediation: missing.length
-        ? `Add ${missing.join(" and ")} in the backend secrets if this feed should be active.`
-        : undefined,
-      debug: { required: f.env, missing },
+      status: base ? "pass" : (f.optional ? "skip" : "warn"),
+      detail: base
+        ? `${f.urlKey} resolved from ${creds[f.urlKey].from === "env" ? "backend secrets" : "the Integrations page"}${
+          token ? `; auth token present (${creds[f.authKey!].from === "env" ? "secrets" : "Integrations"})` : "; no auth token"
+        }.`
+        : f.optional
+        ? `Not configured. ${f.note ?? ""}`.trim()
+        : `${f.urlKey} is set in neither backend secrets nor the Integrations page.`,
+      remediation: base
+        ? undefined
+        : f.optional
+        ? undefined
+        : `Set ${f.urlKey}${f.authKey ? ` and ${f.authKey}` : ""} on the admin Integrations page (or as backend secrets) if this feed should be active.`,
+      debug: {
+        keys: Object.fromEntries(Object.entries(creds).map(([k, v]) => [k, v.from])),
+        integration_id: f.integrationId ?? null,
+        stores,
+      },
     });
 
-    // Live reachability probe — only when the feed is explicitly in scope.
-    const base = Deno.env.get(f.urlEnv);
     if (!base) continue;
+
     const target = `${base.replace(/\/+$/, "")}${f.healthPath}`;
     const t0 = Date.now();
     try {
-      const token = f.authEnv ? Deno.env.get(f.authEnv) : undefined;
       const res = await fetch(target, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         signal: AbortSignal.timeout(8000),
@@ -263,16 +322,18 @@ Deno.serve(async (req) => {
         id: `reach.${f.id}`,
         feed: f.label,
         title: `${f.label} reachable`,
-        status: res.ok ? "pass" : "fail",
+        status: res.ok ? "pass" : (f.optional ? "warn" : "fail"),
         detail: res.ok
-          ? `Health endpoint answered ${res.status} in ${Date.now() - t0}ms.`
-          : `Health endpoint answered ${res.status}.`,
-        expected: "HTTP 200 from the feed health endpoint",
+          ? `${f.healthPath} answered ${res.status} in ${Date.now() - t0}ms.`
+          : `${f.healthPath} answered ${res.status}.${f.optional ? ` ${f.note ?? ""}` : ""}`,
+        expected: `HTTP 200 from ${f.healthPath}`,
         actual: `HTTP ${res.status}`,
         remediation: res.ok
           ? undefined
           : res.status === 401 || res.status === 403
-          ? `Credentials rejected. Rotate ${f.authEnv ?? "the feed token"} and confirm the service expects a bearer token.`
+          ? `Credentials rejected. Rotate ${f.authKey ?? "the feed token"} on the Integrations page and confirm the service expects a bearer token.`
+          : f.optional
+          ? undefined
           : "Confirm the service is running behind its reverse proxy and the URL points at the health route.",
         debug: { url: target, status: res.status, latency_ms: Date.now() - t0, body: text },
       });
@@ -283,17 +344,20 @@ Deno.serve(async (req) => {
         id: `reach.${f.id}`,
         feed: f.label,
         title: `${f.label} reachable`,
-        status: "fail",
-        detail: msg,
-        expected: "HTTP 200 from the feed health endpoint",
+        status: f.optional ? "warn" : "fail",
+        detail: f.optional ? `${msg}. ${f.note ?? ""}`.trim() : msg,
+        expected: `HTTP 200 from ${f.healthPath}`,
         actual: msg,
-        remediation: /timed out|timeout|abort/i.test(msg)
+        remediation: f.optional
+          ? undefined
+          : /timed out|timeout|abort/i.test(msg)
           ? "The host did not answer within 8s — check the security group, Nginx upstream and the service unit."
           : "Verify the configured URL is publicly resolvable from the backend runtime.",
         debug: { url: target, latency_ms: Date.now() - t0 },
       });
     }
   }
+
 
   if (!wantsStoreReads) return finish({ backend });
 

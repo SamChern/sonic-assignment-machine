@@ -225,19 +225,28 @@ export const SemanticScope = ({
         const summary = windowRef.current.summary();
         windowRef.current.reset();
         lastMarkerRef.current = t;
-        if (summary) void score(summary, scores, t);
+        // Key the trail on media time so scrubbing back lands on the real moment.
+        const mediaT = Number(mediaEl?.currentTime);
+        if (summary) void score(summary, scores, t, Number.isFinite(mediaT) ? mediaT : undefined);
       }
     },
-    [score, scores, windowSeconds],
+    [score, scores, windowSeconds, mediaEl],
   );
+
+  /** Frozen snapshot wins over the live window — that's the point of scrubbing. */
+  const shownTags: ScopeTag[] = frozen
+    ? frozen.tags.map((t) => ({ id: t.code, code: t.code, label: t.label, similarity: t.similarity }))
+    : litTags;
+  const shownAxes = frozen?.axes ?? scores;
 
   const axisRows = useMemo(
     () =>
       AUDIOSCOPE_CATEGORIES.map((c) => ({
         category: c,
-        score: Math.round(Number(scores[c]) || 0),
+        score: Math.round(Number(shownAxes[c]) || 0),
       })),
-    [scores],
+    [shownAxes],
+
   );
 
   return (

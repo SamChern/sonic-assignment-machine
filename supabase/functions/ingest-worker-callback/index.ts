@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
   const traceId = typeof body.trace_id === "string" && body.trace_id
     ? body.trace_id
     : file.trace_id ?? newTraceId("worker");
-  const workerId = typeof body.worker_id === "string" ? body.worker_id.slice(0, 200) : null;
+  const workerId = workerIdRaw;
   const now = new Date().toISOString();
 
   // ---- Claim: the worker took the message off the queue ---------------------

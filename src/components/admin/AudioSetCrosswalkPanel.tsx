@@ -28,6 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   IntuiziCatalogTree,
   type CrosswalkDecision,
+  type CrosswalkProposal,
 } from "@/components/admin/IntuiziCatalogTree";
 import {
   PREFIXES,

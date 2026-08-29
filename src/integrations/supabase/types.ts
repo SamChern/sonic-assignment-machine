@@ -2273,6 +2273,10 @@ export type Database = {
         Args: { p_owner: string; p_seconds?: number }
         Returns: boolean
       }
+      acquire_named_lease: {
+        Args: { p_id: string; p_owner: string; p_seconds?: number }
+        Returns: boolean
+      }
       admin_prune_analysis_telemetry: {
         Args: {
           p_cache_idle_days?: number
@@ -2459,6 +2463,10 @@ export type Database = {
       release_intuizi_lease: { Args: { p_owner: string }; Returns: undefined }
       release_job_worker_lease: {
         Args: { p_owner: string }
+        Returns: undefined
+      }
+      release_named_lease: {
+        Args: { p_id: string; p_owner: string }
         Returns: undefined
       }
       requeue_intuizi_score_failures: {

@@ -42,4 +42,5 @@ systemctl restart ingest-worker
 
 sleep 3
 systemctl --no-pager --lines=20 status ingest-worker || true
+echo "worker sha256: $(sha256sum "$APP_DIR/worker.py" | awk '{print $1}')"
 echo "==> done. follow logs with: journalctl -u ingest-worker -f"

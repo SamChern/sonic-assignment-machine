@@ -90,7 +90,7 @@ BATCH_ROWS = min(int(os.environ.get("BATCH_ROWS", "250")), 2000)
 # Above this row count a file is summarised into subject x taxonomy x day rollups
 # instead of queued device by device. Overridden by the control plane's config.
 ROLLUP_ROW_THRESHOLD = int(os.environ.get("ROLLUP_ROW_THRESHOLD", "5000000"))
-ROLLUP_CHUNK = 5_000
+ROLLUP_CHUNK = 1_000
 READ_CHUNK = 50_000
 WAIT_SECONDS = 20
 POLL_SECONDS = max(int(os.environ.get("POLL_SECONDS", "20")), 5)
@@ -242,47 +242,24 @@ def process_rollups(
 ) -> Dict[str, Any]:
     """Summary path for very large files.
 
-    Queueing one scoring task per device row is what buried the 40M-row files: the
-    work is quadratic in impressions, not in people. Here the worker folds rows
-    into `(subject, taxonomy_code, day)` weights on the box and ships them to
-    `ingest_rollups`, which the backend promotes into one scoring task per
-    subject. Weights are additive on the server, so flushing partial aggregates
-    is safe and keeps memory flat on a 7 GB instance.
+    Queueing one scoring task per device row is what buried the 40M-row files. We
+    aggregate each bounded source chunk and stage it with that chunk's starting
+    offset as its idempotency key. A retried callback replaces the same staged
+    values; it cannot add their weight twice. The ledger cursor advances only
+    after every staged row from the source chunk is durable.
     """
     started = time.monotonic()
-    agg: Dict[tuple, float] = {}
     sent = 0
     read = 0
     skipped = 0
-    first_flush = True
-
-    def flush(force: bool = False) -> None:
-        nonlocal agg, sent, first_flush
-        if not agg or (not force and len(agg) < 200_000):
-            return
-        rows = [
-            {"subject_key": s, "taxonomy_code": c, "day": d, "weight": w}
-            for (s, c, d), w in agg.items()
-        ]
-        for chunk in batched(rows, ROLLUP_CHUNK):
-            cb.post({
-                **base,
-                "phase": "rollups",
-                "rows": chunk,
-                # Clear stale rows for this object exactly once per run so a
-                # re-run cannot double-count.
-                "replace": first_flush,
-            })
-            first_flush = False
-            sent += len(chunk)
-        agg = {}
-
-    offset = 0
+    offset = int(base.get("rows_offset") or 0)
     while offset < grand_total and not _stop:
+        chunk_offset = offset
         want = min(READ_CHUNK, grand_total - offset)
         rows = read_slice(con, object_key, offset, want)
         if not rows:
             break
+        agg: Dict[tuple, float] = {}
         for raw in rows:
             norm = normalize_row(report_type, raw)
             if not norm or not norm.get("tags"):
@@ -296,9 +273,20 @@ def process_rollups(
                     continue
                 key = (subject, code, day)
                 agg[key] = agg.get(key, 0.0) + float(t.get("weight") or 1)
+        staged = [
+            {"subject_key": s, "taxonomy_code": c, "day": d, "weight": w}
+            for (s, c, d), w in agg.items()
+        ]
+        for chunk in batched(staged, ROLLUP_CHUNK):
+            cb.post({
+                **base,
+                "phase": "rollups",
+                "source_offset": chunk_offset,
+                "rows": chunk,
+            })
+            sent += len(chunk)
         offset += len(rows)
         read += len(rows)
-        flush()
         cb.post({
             **base,
             "phase": "progress",
@@ -311,7 +299,6 @@ def process_rollups(
             base.get("trace_id"), object_key, offset, grand_total, sent, len(agg),
         )
 
-    flush(force=True)
     complete = offset >= grand_total
     if complete:
         # `loaded` tells the backend the rollups are staged; it promotes them into
@@ -362,6 +349,7 @@ def process_message(
         "trace_id": trace_id,
         "activation_id": msg.get("activation_id"),
         "owner_id": msg.get("owner_id"),
+        "rows_offset": offset,
     }
     cb.post({**base, "phase": "claim"})
 

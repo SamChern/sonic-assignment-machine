@@ -27,7 +27,6 @@ const LEGACY: Record<string, number> = {
   "src/pages/IngestionCompatibility.tsx": 739,
 
   "src/components/enterprise/CategoryProfileEditor.tsx": 779,
-  "src/components/NetworkVisualization.tsx": 767,
   "src/pages/IntegrationStatus.tsx": 758,
   "src/components/enterprise/PredictUsersPanel.tsx": 708,
   "src/pages/Index.tsx": 660,

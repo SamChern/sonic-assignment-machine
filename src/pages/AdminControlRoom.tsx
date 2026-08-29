@@ -135,6 +135,10 @@ export default function AdminControlRoom() {
         </Card>
       )}
 
+      <div className="mb-6">
+        <ResolverPanel />
+      </div>
+
       <div className="space-y-6">
         {grouped.map(([category, rows]) => (
           <Card key={category} className="border-border/60 bg-card/60 p-4 backdrop-blur">

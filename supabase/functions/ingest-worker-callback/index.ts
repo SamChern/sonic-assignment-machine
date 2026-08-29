@@ -129,6 +129,42 @@ Deno.serve(async (req) => {
     return json({ success: false, error: "invalid JSON body" }, 400);
   }
 
+  const workerIdRaw = typeof body.worker_id === "string" ? body.worker_id.slice(0, 200) : null;
+
+  // ---- Lease (pull mode): hand the worker the next pending file -------------
+  // Queue-free path: instead of an SQS message, the worker asks for work. The
+  // RPC picks one row with FOR UPDATE SKIP LOCKED, so two workers can never
+  // take the same file, and returns the saved resume cursor.
+  if (body.phase === "lease") {
+    const staleAfterMin = Math.min(Math.max(Number(body.stale_after_minutes ?? 15) || 15, 2), 240);
+    const { data, error } = await admin.rpc("lease_ingest_file", {
+      p_worker_id: workerIdRaw ?? "unknown-worker",
+      p_stale_after: `${staleAfterMin} minutes`,
+    });
+    if (error) return json({ success: false, error: error.message }, 500);
+    const lease = Array.isArray(data) ? data[0] : data;
+    if (!lease) return json({ success: true, lease: null });
+    console.log(JSON.stringify({
+      evt: "worker_leased_file",
+      trace_id: lease.trace_id,
+      object_key: lease.object_key,
+      worker_id: workerIdRaw,
+      resume_rows_offset: lease.rows_offset,
+    }));
+    return json({
+      success: true,
+      lease: {
+        file_id: lease.file_id,
+        object_key: lease.object_key,
+        report_type: lease.report_type,
+        trace_id: lease.trace_id,
+        row_group_cursor: Number(lease.row_group_cursor ?? 0) || 0,
+        rows_offset: Number(lease.rows_offset ?? 0) || 0,
+        total_rows: Number(lease.total_rows ?? 0) || 0,
+      },
+    });
+  }
+
   const fileId = typeof body.file_id === "string" ? body.file_id : null;
   const objectKey = typeof body.object_key === "string" ? body.object_key : null;
   if (!fileId && !objectKey) {
@@ -141,6 +177,7 @@ Deno.serve(async (req) => {
   if (!["claim", "progress", "complete", "failed"].includes(phase)) {
     return json({ success: false, error: `unknown phase "${phase}"` }, 400);
   }
+
 
   const rawRows = Array.isArray(body.identifiers) ? body.identifiers : [];
   if (rawRows.length > MAX_ROWS_PER_CALL) {

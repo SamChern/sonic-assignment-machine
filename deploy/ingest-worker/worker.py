@@ -74,7 +74,9 @@ log = logging.getLogger("ingest-worker")
 
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
 WORKER_SECRET = os.environ["INGEST_WORKER_SECRET"]
-QUEUE_URL = os.environ["SQS_QUEUE_URL"]
+MODE = os.environ.get("MODE", "pull").strip().lower()
+# Queue-free by default: pull mode needs no SQS URL and no queue permissions.
+QUEUE_URL = os.environ.get("SQS_QUEUE_URL", "")
 REGION = os.environ.get("AWS_REGION", "us-west-2")
 BUCKET = os.environ["S3_BUCKET"]
 
@@ -82,7 +84,9 @@ MAX_ROWS_PER_MESSAGE = int(os.environ.get("MAX_ROWS_PER_MESSAGE", "200000"))
 BATCH_ROWS = min(int(os.environ.get("BATCH_ROWS", "1000")), 2000)
 READ_CHUNK = 50_000
 WAIT_SECONDS = 20
+POLL_SECONDS = max(int(os.environ.get("POLL_SECONDS", "20")), 5)
 VISIBILITY_SECONDS = 900
+
 
 CALLBACK_URL = f"{SUPABASE_URL}/functions/v1/ingest-worker-callback"
 WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"

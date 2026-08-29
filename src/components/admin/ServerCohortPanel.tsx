@@ -245,7 +245,7 @@ export function ServerCohortPanel() {
             Recent Activation exports
           </h4>
           <ul className="space-y-2">
-            {exports.map((x) => (
+            {exports.slice(0, 10).map((x) => (
               <li key={x.id} className="rounded-md border border-border/60 bg-muted/30 p-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge

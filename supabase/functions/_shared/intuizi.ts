@@ -19,6 +19,117 @@ export const REPORT_TYPES = [
 ] as const;
 export type ReportType = typeof REPORT_TYPES[number];
 
+/* ------------------------------------------------- feature column aliases */
+
+/**
+ * The column aliases `normalizeRow()` actually reads, per report shape.
+ *
+ * This is the ONE place the alias lists live: the compatibility harness
+ * imports these instead of keeping its own copy, so a delivery that
+ * normalizes fine can never be graded as "missing" columns.
+ *
+ * `web` is not a `ReportType` — web/marketing deliveries resolve to `ctv`
+ * via TYPE_TOKENS, but they carry `domain`/`page`/`ref`/`iab_codes` rather
+ * than CTV genre/type, so they are graded against their own group list.
+ */
+export interface AliasGroup {
+  /** Human name of the signal this group provides. */
+  name: string;
+  /** Every column name accepted for it (lowercase compare). */
+  aliases: string[];
+}
+
+export const FEATURE_ALIASES: Record<ReportType | "web", AliasGroup[]> = {
+  ctv: [
+    { name: "content genre", aliases: ["contentgenre", "content_genre", "genre"] },
+    { name: "content type", aliases: ["contenttype", "content_type"] },
+    {
+      name: "channel / domain",
+      aliases: ["channelname", "channel_name", "network", "domain", "site"],
+    },
+    {
+      name: "IAB categories",
+      aliases: ["iab_cats", "iab_categories", "iabcats", "iab_codes", "iabcodes"],
+    },
+  ],
+  web: [
+    {
+      name: "domain / channel",
+      aliases: ["domain", "site", "channelname", "channel_name", "network"],
+    },
+    { name: "page path", aliases: ["page", "path", "url"] },
+    {
+      name: "IAB categories",
+      aliases: ["iab_codes", "iabcodes", "iab_cats", "iab_categories", "iabcats"],
+    },
+    { name: "referrer", aliases: ["ref", "referrer", "referer"] },
+  ],
+  apps: [
+    { name: "category", aliases: ["categoryname", "category_name", "category"] },
+    { name: "taxonomy", aliases: ["taxonomyname", "taxonomy_name", "taxonomy"] },
+    { name: "signal intensity", aliases: ["signals", "signal_count"] },
+  ],
+  visitation: [
+    { name: "brand", aliases: ["brandname", "brand_name", "brand"] },
+    { name: "visit timestamp", aliases: ["d_utc", "timestamp", "visit_time"] },
+    { name: "distance", aliases: ["distance", "dist_m"] },
+  ],
+  demographics: [
+    { name: "age band", aliases: ["age_range", "agerange", "age_band", "age"] },
+    { name: "income band", aliases: ["income_range", "income_band", "income"] },
+    {
+      name: "household",
+      aliases: ["household_composition", "household", "family_status", "marital_status"],
+    },
+  ],
+  origin: [
+    { name: "origin class", aliases: ["origin_type", "location_type", "place_type", "type"] },
+    { name: "region", aliases: ["state", "region", "dma", "metro", "city"] },
+    { name: "travel context", aliases: ["travel_type", "travel", "distance_band"] },
+  ],
+};
+
+/** Columns carried for provenance only — never expected to yield a tag. */
+const NON_FEATURE_COLUMNS = new Set([
+  "primary_identifier", "primaryidentifier", "eid", "maid", "madid", "maid_id", "idfa",
+  "aaid", "gaid", "hem", "device_id", "deviceid", "email1", "hashed_email", "email",
+  "ip", "country", "provider", "day", "date", "date_utc", "dt", "year", "month",
+  "useragent", "user_agent", "ctv_taxonomy", "bundle_id", "bundleid", "app_id",
+  "platform", "os", "poi_id", "poiid", "location_id", "segment_codes", "segments",
+  "visits", "impressions",
+]);
+
+/** A `ctv`-typed delivery whose columns are actually a web report. */
+export function isWebShaped(columns: string[]): boolean {
+  const lower = new Set(columns.map((c) => c.toLowerCase()));
+  const webish = ["domain", "page", "ref", "iab_codes", "iabcodes"].filter((c) => lower.has(c));
+  const ctvish = ["contentgenre", "content_genre", "contenttype", "content_type", "channelname"]
+    .filter((c) => lower.has(c));
+  return webish.length >= 2 && ctvish.length === 0;
+}
+
+/** Which alias groups a delivery satisfies, and which it does not. */
+export function matchAliasGroups(
+  groups: AliasGroup[],
+  columns: string[],
+): { matched: AliasGroup[]; missing: AliasGroup[] } {
+  const lower = new Set(columns.map((c) => c.toLowerCase()));
+  const matched = groups.filter((g) => g.aliases.some((a) => lower.has(a)));
+  return { matched, missing: groups.filter((g) => !matched.includes(g)) };
+}
+
+/**
+ * Columns the delivery carries that no alias group and no provenance list
+ * recognizes — i.e. genuine provider schema gaps, reported as-is.
+ */
+export function unrecognizedColumns(groups: AliasGroup[], columns: string[]): string[] {
+  const known = new Set<string>(NON_FEATURE_COLUMNS);
+  for (const g of groups) for (const a of g.aliases) known.add(a);
+  return columns.filter((c) => !known.has(c.toLowerCase()));
+}
+
+
+
 export interface NormalizedRow {
   primary_identifier: string;
   report_type: ReportType;

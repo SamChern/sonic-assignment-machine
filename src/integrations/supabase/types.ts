@@ -2417,6 +2417,16 @@ export type Database = {
           slug: string
         }[]
       }
+      org_retention_summary: {
+        Args: { _org: string }
+        Returns: {
+          last_run_at: string
+          last_status: string
+          org_sources_recent: number
+          org_sources_total: number
+          retention_days: number
+        }[]
+      }
       prune_analysis_telemetry: {
         Args: {
           p_cache_idle_days?: number

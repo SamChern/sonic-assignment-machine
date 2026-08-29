@@ -3,8 +3,26 @@
 // and object-key layout. No network, no database.
 
 import { isActivationEid, toActivationEid } from "./activationEid.ts";
+import { controlNumber } from "./control.ts";
 
+/** Hard floor: an activation file is never smaller than this, whatever the registry says. */
 export const MIN_ACTIVATION_MEMBERS = 1000;
+
+/**
+ * The effective export floor: `activation.min_members` from the Control Room,
+ * never below the hard 1,000-member minimum.
+ */
+export async function activationMinMembers(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+): Promise<number> {
+  const v = await controlNumber(admin, "activation.min_members", MIN_ACTIVATION_MEMBERS, {
+    min: MIN_ACTIVATION_MEMBERS,
+    max: 1_000_000,
+  });
+  return Math.max(MIN_ACTIVATION_MEMBERS, Math.round(v));
+}
+
 
 export interface CohortMemberRow {
   subject_key: string;

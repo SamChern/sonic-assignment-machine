@@ -72,9 +72,17 @@ export function sqsConfig(): SqsConfig {
 }
 
 export function sqsInfo() {
-  if (!sqsConfigured()) {
-    return { configured: false as const, reason: "SQS_QUEUE_URL not set" };
+  if (!sqsEnabled()) {
+    return {
+      configured: false as const,
+      mode: "http_worker" as const,
+      reason: "queue-free mode — the EC2 worker claims files over HTTP (set USE_SQS=true to re-enable)",
+    };
   }
+  if (!sqsConfigured()) {
+    return { configured: false as const, mode: "sqs" as const, reason: "SQS_QUEUE_URL not set" };
+  }
+
   const cfg = sqsConfig();
   return {
     configured: true as const,

@@ -31,11 +31,23 @@ function regionFromQueueUrl(queueUrl: string): string | null {
   return /sqs\.([a-z0-9-]+)\.amazonaws\.com/.exec(queueUrl)?.[1] ?? null;
 }
 
+/**
+ * Step 2.5-alt: SQS dispatch is off by default. The control plane only
+ * discovers files and writes `discovered` rows; the EC2 worker claims them over
+ * HTTP. Set `USE_SQS=true` to re-enable the queue path without a rebuild.
+ */
+export function sqsEnabled(): boolean {
+  const flag = (Deno.env.get("USE_SQS") ?? "").trim().toLowerCase();
+  return flag === "true" || flag === "1" || flag === "yes";
+}
+
 export function sqsConfigured(): boolean {
-  return !!Deno.env.get("SQS_QUEUE_URL") &&
+  return sqsEnabled() &&
+    !!Deno.env.get("SQS_QUEUE_URL") &&
     !!Deno.env.get("S3_ACCESS_KEY_ID") &&
     !!Deno.env.get("S3_SECRET_ACCESS_KEY");
 }
+
 
 export function sqsConfig(): SqsConfig {
   const queueUrl = Deno.env.get("SQS_QUEUE_URL");

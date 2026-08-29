@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.reap_stale_ingest_claims(integer) FROM authenticated;

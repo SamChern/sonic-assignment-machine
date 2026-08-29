@@ -7,6 +7,7 @@ import {
   isWebShaped,
   matchAliasGroups,
   normalizeRow,
+  reportTypeFromKey,
   unrecognizedColumns,
 } from "./intuizi.ts";
 
@@ -85,4 +86,22 @@ Deno.test("demographics gap is reported as unmapped columns, not as a code fix",
 Deno.test("provenance columns are never reported as gaps", () => {
   const unmapped = unrecognizedColumns(FEATURE_ALIASES.web, cols(WEB_ROW));
   assertEquals(unmapped, []);
+});
+
+Deno.test("report type prefers the leading report token, not the account slug", () => {
+  // Every Intuizi filename ends `_sonicsim_ctv_audio_signals_<activation>`, so a
+  // naive scan captured every delivery as `ctv`.
+  const cases: [string, string][] = [
+    ["20260828_demographics_sonicsim_ctv_audio_signals_5580.parquet", "demographics"],
+    ["20260828_apps_report_sonicsim_ctv_audio_signals_5580.parquet", "apps"],
+    ["20260828_visitation_sonicsim_ctv_audio_signals_5580.parquet", "visitation"],
+    ["20260828_origin_sonicsim_ctv_audio_signals_5580.parquet", "origin"],
+    ["20260828_ctv_report_sonicsim_ctv_audio_signals_5580.parquet", "ctv"],
+    ["20260828_web_report_sonicsim_ctv_audio_signals_5580.parquet", "ctv"],
+  ];
+  for (const [key, want] of cases) {
+    assertEquals(reportTypeFromKey(key), want, key);
+  }
+  // Directory prefixes still win outright.
+  assertEquals(reportTypeFromKey("demographics/20260828_ctv_x.parquet"), "demographics");
 });

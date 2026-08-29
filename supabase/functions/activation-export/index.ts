@@ -189,13 +189,38 @@ Deno.serve(async (req) => {
         .eq("id", exportRowId);
     }
 
-    // Keep the org's activation sync panel in step with the outbound file.
+    // ---- record the run against the org's activation grants -----------------
+    // An explicit organization/activation pair from the caller wins. Otherwise
+    // the grants are resolved from the exported subjects themselves: whichever
+    // Intuizi activations delivered them, limited to grants that are still
+    // active. Nothing identifier-shaped is returned — only a count.
+    const stamp = {
+      last_synced_at: new Date().toISOString(),
+      last_export_at: new Date().toISOString(),
+      last_export_object_key: objectKey,
+      last_export_row_count: eids.size,
+    };
+    let activationsRecorded = 0;
+
     if (body.organization_id && body.activation_id) {
-      await admin
+      const { data: updated } = await admin
         .from("org_intuizi_activations")
-        .update({ last_synced_at: new Date().toISOString() })
+        .update(stamp)
         .eq("organization_id", body.organization_id)
-        .eq("activation_id", body.activation_id);
+        .eq("activation_id", body.activation_id)
+        .select("id");
+      activationsRecorded = (updated ?? []).length;
+    } else {
+      const activationIds = await resolveActivationIds(admin, subjectKeys);
+      if (activationIds.length) {
+        const { data: updated } = await admin
+          .from("org_intuizi_activations")
+          .update(stamp)
+          .in("activation_id", activationIds)
+          .eq("is_active", true)
+          .select("id");
+        activationsRecorded = (updated ?? []).length;
+      }
     }
 
     const out = {
@@ -207,8 +232,10 @@ Deno.serve(async (req) => {
       holdout: heldOut,
       bytes: payload.byteLength,
       skipped,
+      activations_recorded: activationsRecorded,
       elapsed_ms: Date.now() - startedAt,
     };
+
     console.log(JSON.stringify({ evt: "activation_export", ...out }));
     return json(out);
   } catch (e) {

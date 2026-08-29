@@ -2440,6 +2440,13 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      refresh_taxonomy_grounding: {
+        Args: never
+        Returns: {
+          grounded_nodes: number
+          nodes_updated: number
+        }[]
+      }
       release_intuizi_lease: { Args: { p_owner: string }; Returns: undefined }
       release_job_worker_lease: {
         Args: { p_owner: string }

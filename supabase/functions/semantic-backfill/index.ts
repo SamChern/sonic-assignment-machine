@@ -205,3 +205,32 @@ function json(payload: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+
+/** Recount grounded audio per taxonomy node via the security-definer routine. */
+async function refreshGrounding(
+  // deno-lint-disable-next-line no-explicit-any
+  admin: any,
+): Promise<{ grounding_updated: number; grounded_nodes: number }> {
+  const { data, error } = await admin.rpc("refresh_taxonomy_grounding");
+  if (error) {
+    console.warn("refresh_taxonomy_grounding failed:", error.message);
+    return { grounding_updated: 0, grounded_nodes: 0 };
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    grounding_updated: Number(row?.nodes_updated ?? 0),
+    grounded_nodes: Number(row?.grounded_nodes ?? 0),
+  };
+}
+
+/** Read-only grounded-node count for status_only responses. */
+async function readGrounding(
+  // deno-lint-disable-next-line no-explicit-any
+  admin: any,
+): Promise<{ grounded_nodes: number }> {
+  const res = await admin
+    .from("taxonomy_nodes")
+    .select("id", { count: "exact", head: true })
+    .gt("grounding_count", 0);
+  return { grounded_nodes: res?.count ?? 0 };
+}

@@ -28,6 +28,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   cohorts: "Cohorts",
   compliance: "Retention & compliance",
   scope: "The Scope",
+  resolver: "The Resolver",
   general: "General",
 };
 

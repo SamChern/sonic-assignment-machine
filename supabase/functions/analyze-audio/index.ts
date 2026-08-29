@@ -786,7 +786,9 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
       }
 
       // === OPTIMIZATION 1b: Store fresh results in cache ===
-      if (supabaseAdmin && freshResults.length > 0) {
+      // A bypassed run is a verification re-score and must not write the cache.
+      if (supabaseAdmin && !bypass_cache && freshResults.length > 0) {
+
         const cacheInserts = freshResults.map(result => {
           const originalSource = uncachedSources.find(s => s.name === result.name);
           const cacheKey = originalSource ? getCacheKey(originalSource) : `file:${result.name.toLowerCase().trim()}`;

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronRight, Copy, Layers, X } from "lucide-react";
+import { Bot, Check, ChevronRight, Copy, Layers, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,8 @@ interface CrosswalkProps {
 
 interface RowProps extends CrosswalkProps {
   node: CatalogNode;
+  /** Codes the Resolver proposed and nobody has reviewed yet (Step 13). */
+  agentCodes?: Set<string>;
   depth: number;
   expanded: Set<string>;
   toggle: (id: string) => void;
@@ -127,6 +129,7 @@ const NodeRow = ({
   expanded,
   toggle,
   onPick,
+  agentCodes,
   crosswalk,
   onDecide,
   decidingCode,
@@ -135,6 +138,7 @@ const NodeRow = ({
   const hasKids = node.children.length > 0;
   const metaEntries = Object.entries(node.meta).filter(([k]) => k !== "synthesized");
   const proposals = crosswalk?.[node.id];
+  const fromAgent = agentCodes?.has(node.id) ?? false;
   const approvedCount = (proposals ?? []).filter((p) => p.approved).length;
 
 
@@ -160,6 +164,16 @@ const NodeRow = ({
           {hasKids && (
             <Badge variant="outline" className="shrink-0 px-1 py-0 text-[9px]">
               {countNodes(node.children)}
+            </Badge>
+          )}
+          {fromAgent && (
+            <Badge
+              variant="outline"
+              className="shrink-0 gap-1 px-1 py-0 text-[9px] text-primary"
+              title="Proposed by the Resolver from open-web metadata — awaiting your review."
+            >
+              <Bot className="h-2.5 w-2.5" />
+              agent
             </Badge>
           )}
           {!!proposals && (
@@ -208,6 +222,7 @@ const NodeRow = ({
             expanded={expanded}
             toggle={toggle}
             onPick={onPick}
+            agentCodes={agentCodes}
             crosswalk={crosswalk}
             onDecide={onDecide}
             decidingCode={decidingCode}
@@ -222,6 +237,8 @@ interface Props extends CrosswalkProps {
   /** Number of parents inferred from child rows rather than returned directly. */
   synthesizedParents?: number;
   onPick?: (node: CatalogNode) => void;
+  /** Codes the Resolver proposed and nobody has reviewed yet (Step 13). */
+  agentCodes?: Set<string>;
   emptyHint?: string;
 }
 
@@ -230,6 +247,7 @@ export const IntuiziCatalogTree = ({
   roots,
   synthesizedParents = 0,
   onPick,
+  agentCodes,
   crosswalk,
   onDecide,
   decidingCode,
@@ -312,6 +330,7 @@ export const IntuiziCatalogTree = ({
             expanded={expanded}
             toggle={toggle}
             onPick={onPick}
+            agentCodes={agentCodes}
             crosswalk={crosswalk}
             onDecide={onDecide}
             decidingCode={decidingCode}

@@ -134,10 +134,14 @@ export const SemanticScope = ({
     else setSpan(Math.max(windowSeconds, trail.length ? trail[trail.length - 1].t + windowSeconds : windowSeconds));
   }, [mediaEl, trail, windowSeconds]);
 
-  // Resuming playback releases a frozen snapshot.
+  // Playing the media again releases a frozen snapshot.
   useEffect(() => {
-    if (playing && frozen) setFrozen(null);
-  }, [playing, frozen]);
+    if (!mediaEl) return;
+    const onPlay = () => setFrozen(null);
+    mediaEl.addEventListener("play", onPlay);
+    return () => mediaEl.removeEventListener("play", onPlay);
+  }, [mediaEl]);
+
 
   const seekTo = useCallback(
     (entry: TrailEntry) => {

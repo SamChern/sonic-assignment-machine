@@ -379,6 +379,7 @@ Deno.serve(async (req) => {
   clearS3Cache();
   const prefixes = (body.prefixes?.length ? body.prefixes : ingestPrefixes().map((p) => p.prefix));
   const discovered: S3Object[] = [];
+  const prefixFailures: { prefix: string; msg: string; ms: number }[] = [];
   let anyPrefixOk = false;
 
   for (const prefix of prefixes) {

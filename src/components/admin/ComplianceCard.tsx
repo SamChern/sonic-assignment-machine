@@ -26,8 +26,19 @@ type RetentionRun = {
   finished_at: string | null;
 };
 
+const KIND_LABELS: Record<string, string> = {
+  custody_scan: "custody scan",
+  suppression_refresh: "suppression refresh",
+  eid_rekey: "key normalization",
+  intuizi_90d: "retention",
+  manual_verify: "retention (manual)",
+};
+
+const NON_PURGE_KINDS = new Set(["custody_scan", "suppression_refresh"]);
+
 const fmt = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
+
 
 export const ComplianceCard = () => {
   const [runs, setRuns] = useState<RetentionRun[]>([]);

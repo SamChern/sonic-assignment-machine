@@ -1253,6 +1253,9 @@ export type Database = {
           id: string
           is_active: boolean
           label: string | null
+          last_export_at: string | null
+          last_export_object_key: string | null
+          last_export_row_count: number | null
           last_synced_at: string | null
           notes: string | null
           organization_id: string
@@ -1265,6 +1268,9 @@ export type Database = {
           id?: string
           is_active?: boolean
           label?: string | null
+          last_export_at?: string | null
+          last_export_object_key?: string | null
+          last_export_row_count?: number | null
           last_synced_at?: string | null
           notes?: string | null
           organization_id: string
@@ -1277,6 +1283,9 @@ export type Database = {
           id?: string
           is_active?: boolean
           label?: string | null
+          last_export_at?: string | null
+          last_export_object_key?: string | null
+          last_export_row_count?: number | null
           last_synced_at?: string | null
           notes?: string | null
           organization_id?: string

@@ -17,6 +17,7 @@ echo "==> app dir $APP_DIR"
 mkdir -p "$APP_DIR"
 install -m 644 "$SRC_DIR/worker.py" "$APP_DIR/worker.py"
 install -m 644 "$SRC_DIR/normalize.py" "$APP_DIR/normalize.py"
+install -m 644 "$SRC_DIR/iab_labels.py" "$APP_DIR/iab_labels.py"
 install -m 644 "$SRC_DIR/requirements.txt" "$APP_DIR/requirements.txt"
 install -m 755 "$SRC_DIR/smoke-test.sh" "$APP_DIR/smoke-test.sh"
 

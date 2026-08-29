@@ -127,3 +127,33 @@ describe("SemanticScope", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 });
+
+describe("tag-fire trail strip", () => {
+  beforeEach(() => {
+    invoke.mockReset();
+    rpc.mockReset();
+    rpc.mockResolvedValue({ data: 5, error: null });
+  });
+
+  it("renders read-only for a zero-audio silhouette", () => {
+    render(
+      <SemanticScope
+        scores={scores()}
+        seed="trail-1"
+        staticFrame={1.25}
+        playing={false}
+        tags={[{ code: "aset.speech", weight: 0.7 }]}
+      />,
+    );
+    expect(screen.getByText(/silhouette \(read-only\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/No scored windows yet/i)).toBeInTheDocument();
+  });
+
+  it("offers scrubbing when real audio backs the scope", () => {
+    const media = document.createElement("audio");
+    render(
+      <SemanticScope scores={scores()} seed="trail-2" staticFrame={1.25} playing={false} mediaEl={media} />,
+    );
+    expect(screen.getByText(/click a marker to scrub back/i)).toBeInTheDocument();
+  });
+});

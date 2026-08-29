@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { ScopeFeatures } from "@/lib/audioscope/features";
+import { appendTrailEntry, type TrailEntry } from "@/lib/audioscope/trail";
 import type { CategoryScores } from "@/lib/audioscope";
 
 export interface ScopeTag {
@@ -69,14 +70,24 @@ interface Options {
 export function useScopeWindowScore({ enabled, windowSeconds, subjectRef }: Options) {
   const [tags, setTags] = useState<ScopeTag[]>([]);
   const [markers, setMarkers] = useState<TagMarker[]>([]);
+  const [trail, setTrail] = useState<TrailEntry[]>([]);
   const [debug, setDebug] = useState<ScopeDebug | null>(null);
   const [status, setStatus] = useState<"idle" | "scoring" | "error" | "unconfigured">("idle");
   const inFlight = useRef(false);
   const lastAt = useRef(0);
 
-  /** Call at most once per window; extra calls are dropped, not queued. */
+  /**
+   * Call at most once per window; extra calls are dropped, not queued.
+   * `mediaSeconds` is the seekable media position (falls back to the scope
+   * timeline for silhouettes) and is what the trail keys on.
+   */
   const score = useCallback(
-    async (features: ScopeFeatures, axes: CategoryScores, timelineSeconds: number) => {
+    async (
+      features: ScopeFeatures,
+      axes: CategoryScores,
+      timelineSeconds: number,
+      mediaSeconds?: number,
+    ) => {
       if (!enabled || inFlight.current) return;
       const now = Date.now();
       if (now - lastAt.current < windowSeconds * 1000) return;
@@ -101,6 +112,7 @@ export function useScopeWindowScore({ enabled, windowSeconds, subjectRef }: Opti
           throttled?: boolean;
           configured?: boolean;
           tags?: ScopeTag[];
+          axes?: CategoryScores;
           debug?: ScopeDebug;
         };
         if (payload?.configured === false) {
@@ -120,6 +132,15 @@ export function useScopeWindowScore({ enabled, windowSeconds, subjectRef }: Opti
               // Keep the trail bounded; the strip only shows recent history.
               .slice(-40),
           );
+          setTrail((prev) =>
+            appendTrailEntry(prev, {
+              t: Number.isFinite(mediaSeconds as number) ? (mediaSeconds as number) : timelineSeconds,
+              scopeT: timelineSeconds,
+              tags: next.map((t) => ({ code: t.code, label: t.label, similarity: t.similarity })),
+              axes: payload?.axes ?? axes,
+              features: { rms: features.rms, centroidHz: features.centroidHz },
+            }),
+          );
         }
         setDebug(payload?.debug ?? null);
         setStatus("idle");
@@ -135,9 +156,11 @@ export function useScopeWindowScore({ enabled, windowSeconds, subjectRef }: Opti
   const reset = useCallback(() => {
     setTags([]);
     setMarkers([]);
+    setTrail([]);
     setDebug(null);
     lastAt.current = 0;
   }, []);
 
-  return { tags, markers, debug, status, score, reset };
+  return { tags, markers, trail, debug, status, score, reset };
 }
+

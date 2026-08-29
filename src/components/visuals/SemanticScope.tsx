@@ -18,6 +18,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Info, Waves, Radar, Tags, Bug, Loader2 } from "lucide-react";
 import Audioscope from "./Audioscope";
+import ScopeTrail from "./ScopeTrail";
+import WaveInspect from "./WaveInspect";
+import { ScopeDebugDrawer, ScopeLegend } from "./ScopeDrawers";
 import {
   AUDIOSCOPE_CATEGORIES,
   CATEGORY_LABELS,
@@ -28,6 +31,7 @@ import {
 import { FeatureWindow, extractFeatures, type ScopeFeatures } from "@/lib/audioscope/features";
 import { ScrollingSpectrogram } from "@/lib/audioscope/spectrogram";
 import type { SilhouetteTag } from "@/lib/audioscope/silhouette";
+import { formatTrailTime, type TrailEntry } from "@/lib/audioscope/trail";
 import { useAudioscopeSignal } from "@/lib/audioscope/useSignal";
 import {
   useScopeWindowScore,
@@ -114,14 +118,50 @@ export const SemanticScope = ({
   const signal = useAudioscopeSignal({ scores, seed, features, mediaEl, tags });
   const isSilhouette = !mediaEl;
 
-  const { tags: litTags, markers, debug, status, score, reset } = useScopeWindowScore({
+  const [frozen, setFrozen] = useState<TrailEntry | null>(null);
+  const [span, setSpan] = useState(0);
+
+  const { tags: litTags, markers, trail, debug, status, score, reset } = useScopeWindowScore({
     enabled: Boolean(playing) && staticFrame == null,
     windowSeconds,
     subjectRef: subjectRef ?? seed,
   });
 
+  // Timeline span: media duration when known, else the latest scored window.
+  useEffect(() => {
+    const d = Number(mediaEl?.duration);
+    if (Number.isFinite(d) && d > 0) setSpan(d);
+    else setSpan(Math.max(windowSeconds, trail.length ? trail[trail.length - 1].t + windowSeconds : windowSeconds));
+  }, [mediaEl, trail, windowSeconds]);
+
+  // Playing the media again releases a frozen snapshot.
+  useEffect(() => {
+    if (!mediaEl) return;
+    const onPlay = () => setFrozen(null);
+    mediaEl.addEventListener("play", onPlay);
+    return () => mediaEl.removeEventListener("play", onPlay);
+  }, [mediaEl]);
+
+
+  const seekTo = useCallback(
+    (entry: TrailEntry) => {
+      setFrozen(entry);
+      if (mediaEl) {
+        try {
+          mediaEl.pause();
+          mediaEl.currentTime = entry.t;
+        } catch {
+          /* some sources refuse seeking; the snapshot still freezes */
+        }
+      }
+    },
+    [mediaEl],
+  );
+
+
   useEffect(() => {
     reset();
+    setFrozen(null);
     windowRef.current.reset();
     gramRef.current?.clear();
   }, [seed, reset]);
@@ -186,19 +226,28 @@ export const SemanticScope = ({
         const summary = windowRef.current.summary();
         windowRef.current.reset();
         lastMarkerRef.current = t;
-        if (summary) void score(summary, scores, t);
+        // Key the trail on media time so scrubbing back lands on the real moment.
+        const mediaT = Number(mediaEl?.currentTime);
+        if (summary) void score(summary, scores, t, Number.isFinite(mediaT) ? mediaT : undefined);
       }
     },
-    [score, scores, windowSeconds],
+    [score, scores, windowSeconds, mediaEl],
   );
+
+  /** Frozen snapshot wins over the live window — that's the point of scrubbing. */
+  const shownTags: ScopeTag[] = frozen
+    ? frozen.tags.map((t) => ({ id: t.code, code: t.code, label: t.label, similarity: t.similarity }))
+    : litTags;
+  const shownAxes = frozen?.axes ?? scores;
 
   const axisRows = useMemo(
     () =>
       AUDIOSCOPE_CATEGORIES.map((c) => ({
         category: c,
-        score: Math.round(Number(scores[c]) || 0),
+        score: Math.round(Number(shownAxes[c]) || 0),
       })),
-    [scores],
+    [shownAxes],
+
   );
 
   return (
@@ -217,6 +266,22 @@ export const SemanticScope = ({
         height={height}
         caption={caption}
       />
+
+      {/* Tag-fire trail — scrub back to what the model heard at 0:42. */}
+      <ScopeTrail
+        trail={trail}
+        span={span}
+        selected={frozen}
+        onSeek={mediaEl ? seekTo : undefined}
+        onClear={() => setFrozen(null)}
+      />
+
+      {/* Enterprise scrub-and-inspect: same media element, lazy-loaded. */}
+      {lens === "enterprise" && mediaEl ? (
+        <WaveInspect mediaEl={mediaEl} trail={trail} onSeek={seekTo} />
+      ) : null}
+
+
 
       {/* Lens 2 — frequency. */}
       <div className="rounded-xl border border-border/60 bg-background/60 p-2">
@@ -253,7 +318,7 @@ export const SemanticScope = ({
             Meaning lens · six-axis ontology
           </span>
           <Audioscope
-            scores={scores}
+            scores={shownAxes}
             seed={`${seed}-meaning`}
             features={features}
             mode="radial"
@@ -317,7 +382,7 @@ export const SemanticScope = ({
               The semantic service isn&apos;t configured, so tags can&apos;t be matched right now —
               the time and frequency lenses still run.
             </p>
-          ) : litTags.length === 0 ? (
+          ) : shownTags.length === 0 ? (
             <p className="text-[11px] text-muted-foreground">
               {playing && staticFrame == null
                 ? "Listening — the first window scores in a moment."
@@ -325,7 +390,7 @@ export const SemanticScope = ({
             </p>
           ) : (
             <ul className="space-y-1.5">
-              {litTags.slice(0, 6).map((t: ScopeTag) => (
+              {shownTags.slice(0, 6).map((t: ScopeTag) => (
                 <li key={t.id ?? t.code} className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-[11px] text-foreground">{t.label}</span>
                   <span
@@ -354,64 +419,10 @@ export const SemanticScope = ({
         </div>
       </div>
 
-      {showLegend ? (
-        <div className="grid gap-3 rounded-xl border border-border/60 bg-background/60 p-3 text-[11px] leading-relaxed text-muted-foreground sm:grid-cols-3">
-          <div>
-            <p className="mb-1 font-semibold text-foreground">Time lens</p>
-            <p>The waveform: amplitude over time, one harmonic band per ontology category.</p>
-          </div>
-          <div>
-            <p className="mb-1 font-semibold text-foreground">Frequency lens</p>
-            <p>
-              The strip scrolls right to left — low frequencies at the bottom, colored by the
-              category band they feed. The teal trace is <strong>energy</strong> (RMS), the grey one{" "}
-              <strong>brightness</strong> (spectral centroid). Vertical ticks mark windows that
-              produced a tag.
-            </p>
-          </div>
-          <div>
-            <p className="mb-1 font-semibold text-foreground">Meaning lens</p>
-            <p>
-              Every {windowSeconds} seconds the current window is embedded and matched against the
-              taxonomy; the nearest tags light up with their similarity and the radial morphs.
-              {isSilhouette
-                ? " With no audio, the trace is the subject's expected silhouette synthesized from their tag-weighted embedding."
-                : ""}
-            </p>
-          </div>
-        </div>
-      ) : null}
+      {showLegend ? <ScopeLegend windowSeconds={windowSeconds} isSilhouette={isSilhouette} /> : null}
 
-      {lens === "debug" && showDebug ? (
-        <div className="rounded-xl border border-primary/40 bg-primary/5 p-3 text-[11px] text-muted-foreground">
-          <p className="mb-1 font-semibold text-foreground">Debug lens</p>
-          {debug ? (
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div>
-                <p>
-                  kNN k = <span className="text-foreground">{debug.knn_k}</span> · prior blend ={" "}
-                  <span className="text-foreground">{debug.prior_blend_weight}</span> · bridge ={" "}
-                  <span className="text-foreground">{debug.bridge_active_id ?? "none"}</span>
-                </p>
-                <p className="mt-1">
-                  window RMS <span className="text-foreground">{debug.features.rms.toFixed(3)}</span> ·
-                  centroid <span className="text-foreground">{Math.round(debug.features.centroidHz)} Hz</span>
-                </p>
-              </div>
-              <ul className="space-y-0.5">
-                {debug.neighbors.slice(0, 8).map((n) => (
-                  <li key={n.id ?? n.code} className="flex justify-between gap-2">
-                    <span className="truncate font-mono text-[10px]">{n.code}</span>
-                    <span className="tabular-nums text-foreground">{n.similarity.toFixed(3)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p>No scored window yet — press play to retrieve neighbors.</p>
-          )}
-        </div>
-      ) : null}
+      {lens === "debug" && showDebug ? <ScopeDebugDrawer debug={debug} /> : null}
+
     </div>
   );
 };

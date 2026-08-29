@@ -39,6 +39,36 @@ async function gzip(text: string): Promise<Uint8Array> {
   return new Uint8Array(buf);
 }
 
+/**
+ * Which Intuizi activations delivered these subjects? Read from the scoring
+ * queue, which carries the activation each identifier arrived under. Subject
+ * keys stay inside this function — only activation ids come back.
+ */
+async function resolveActivationIds(
+  admin: ReturnType<typeof createClient>,
+  subjectKeys: string[],
+): Promise<string[]> {
+  const found = new Set<string>();
+  const sample = subjectKeys.slice(0, 5000);
+  for (let i = 0; i < sample.length; i += PAGE) {
+    const slice = sample.slice(i, i + PAGE);
+    const { data, error } = await admin
+      .from("intuizi_score_queue")
+      .select("activation_id")
+      .in("identifier", slice)
+      .not("activation_id", "is", null);
+    if (error) {
+      console.error("activation grant resolution failed", error.message);
+      break;
+    }
+    for (const row of (data ?? []) as { activation_id: string | null }[]) {
+      if (row.activation_id) found.add(row.activation_id);
+    }
+  }
+  return Array.from(found);
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 

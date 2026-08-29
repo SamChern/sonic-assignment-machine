@@ -409,24 +409,40 @@ Deno.serve(async (req) => {
     } catch (e) {
       const msg = errMsg(e);
       log(`list.${prefix}.error`, msg);
-      add({
-        id: `list.${prefix}`,
-        feed: "object store",
-        title: `Prefix reachable: ${prefix}`,
-        status: "fail",
-        detail: msg,
-        expected: "HTTP 200 from ListObjectsV2",
-        actual: msg,
-        remediation: /403|AccessDenied/i.test(msg)
-          ? "The IAM key behind the connection lacks s3:ListBucket on this prefix. Grant read access to the bucket/prefix and reconnect."
-          : /404|NoSuchBucket/i.test(msg)
-          ? "Bucket or prefix does not exist. Verify the bucket name and path prefix on the connection."
-          : "Re-check the object store connection, then re-run. If the error persists, the gateway response body above is the provider's own error.",
-        debug: { latency_ms: Date.now() - t0, prefix, raw_error: msg },
-      });
+      // Graded after the loop: a prefix the IAM policy simply does not cover is
+      // only advisory when another prefix in the same bucket does list.
+      prefixFailures.push({ prefix, msg, ms: Date.now() - t0 });
     }
   }
+
+  for (const f of prefixFailures) {
+    const denied = /403|AccessDenied/i.test(f.msg);
+    const scoped = denied && anyPrefixOk;
+    add({
+      id: `list.${f.prefix}`,
+      feed: "object store",
+      title: `Prefix reachable: ${f.prefix || "(bucket root)"}`,
+      // A scoped IAM policy is the normal Intuizi delivery setup — the account
+      // is granted its own hashed prefix only, so the conventional folder names
+      // are expected to be denied. That is not a blocking incompatibility.
+      status: scoped ? "warn" : "fail",
+      detail: scoped
+        ? `Not granted to this IAM key — skipped. Another prefix in the bucket lists fine, so deliveries are still discoverable.`
+        : f.msg,
+      expected: "HTTP 200 from ListObjectsV2",
+      actual: f.msg.slice(0, 300),
+      remediation: scoped
+        ? "No action needed unless this feed is supposed to deliver here; the key is scoped to the prefixes it can list."
+        : denied
+        ? "The IAM key behind the connection lacks s3:ListBucket on this prefix. Grant read access to the bucket/prefix and reconnect."
+        : /404|NoSuchBucket/i.test(f.msg)
+        ? "Bucket or prefix does not exist. Verify the bucket name and path prefix on the connection."
+        : "Re-check the object store connection, then re-run. If the error persists, the gateway response body above is the provider's own error.",
+      debug: { latency_ms: f.ms, prefix: f.prefix, raw_error: f.msg },
+    });
+  }
   if (!anyPrefixOk) return finish({ backend, discovered_objects: 0 });
+
 
   // Object-store-only runs stop after reachability; contract checks belong to intuizi.
   if (!wants("intuizi")) return finish({ backend, discovered_objects: discovered.length });

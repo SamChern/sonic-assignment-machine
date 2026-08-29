@@ -33,7 +33,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 /** Rollup rows read per page — bounded so a huge object cannot blow memory. */
-const PAGE = 5_000;
+const PAGE = 250;
 /** Queue rows written per upsert batch. */
 const QUEUE_BATCH = 250;
 /** Tags kept per subject (the queue consumer caps at 64 as well). */

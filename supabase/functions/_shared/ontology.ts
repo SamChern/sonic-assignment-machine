@@ -14,6 +14,7 @@ export type Category = typeof CATEGORIES[number];
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { embedCached } from "./inference.ts";
+import { enqueueUnknownSymbol } from "./resolverQueue.ts";
 import { isSensitiveTag } from "./sensitiveTaxonomy.ts";
 
 // Dedicated service-role client used only for the embedding cache, so callers

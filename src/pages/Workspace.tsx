@@ -350,7 +350,10 @@ const Workspace = () => {
             canWrite={canWrite}
             onIngested={() => setRefreshKey((k) => k + 1)}
           />
+
+          <OrgComplianceStrip organizationId={active.organization_id} />
         </TabsContent>
+
         <TabsContent value="discover" className="mt-4">
           <DatasetDiscovery key={refreshKey} organizationId={active.organization_id} />
         </TabsContent>

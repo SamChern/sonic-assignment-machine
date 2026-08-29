@@ -883,7 +883,6 @@ const AdminWorkbench = () => {
           <TabsContent value="users" className="space-y-4">
             {entityMode === "signal" ? (
               <div className="space-y-4">
-                <ServerCohortPanel />
                 <SignalCohortPanel
                   points={signalPoints}
                   cohorts={cohorts}

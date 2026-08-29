@@ -1,3 +1,4 @@
+import { ServerCohortPanel } from "@/components/admin/ServerCohortPanel";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -319,6 +320,29 @@ function IdentifierSignals({
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Step 6 surface: identifier-level sub-clustering on top, and the server-side
+ * sonic cohorts with their Activation-file export history underneath. Neither
+ * half ever receives an EID or a raw subject key — the server cohort tables are
+ * aggregate-only by policy.
+ */
+export function SignalCohortPanel(props: SignalCohortPanelProps) {
+  return (
+    <div className="space-y-6">
+      <IdentifierSignals {...props} />
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 border-t border-border/60 pt-5">
+          <Layers className="h-4 w-4 shrink-0 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground sm:text-base">
+            Server-side cohorts &amp; Activation files
+          </h3>
+        </div>
+        <ServerCohortPanel />
+      </section>
     </div>
   );
 }

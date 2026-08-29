@@ -110,6 +110,11 @@ interface AnalysisRequest {
   sources: AudioSource[];
   user_id?: string;
   save_results?: boolean;
+  /**
+   * Step 4 verification only: skip both cache tiers so a re-score exercises the
+   * live scoring path. Defaults to false, so existing callers are unaffected.
+   */
+  bypass_cache?: boolean;
 }
 
 
@@ -232,7 +237,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { sources, user_id, save_results = false }: AnalysisRequest = await req.json();
+    const {
+      sources,
+      user_id,
+      save_results = false,
+      bypass_cache = false,
+    }: AnalysisRequest = await req.json();
 
     if (!sources || sources.length === 0) {
       throw new Error('No audio sources provided');
@@ -262,7 +272,7 @@ Deno.serve(async (req) => {
     const uncachedSources: AudioSource[] = [];
     const cacheKeyMap = new Map<string, AudioSource>();
 
-    if (supabaseAdmin) {
+    if (supabaseAdmin && !bypass_cache) {
       // Build cache keys for all sources
       const cacheKeys = sources.map(s => {
         const key = getCacheKey(s);
@@ -468,7 +478,7 @@ Deno.serve(async (req) => {
 
 
       let toAnalyze = uncachedSources;
-      if (supabaseAdmin) {
+      if (supabaseAdmin && !bypass_cache) {
         // Only evidence-backed hashes are trustworthy; a metadata-only source is
         // identified by its name alone and must not borrow another's score.
         const hashable = uncachedSources.filter(

@@ -23,6 +23,60 @@ import { clapBridge, getSemanticSvcConfig } from '../_shared/semanticSvc.ts';
 import { controlNumber } from '../_shared/control.ts';
 
 
+/**
+ * Step 4 — take a subject vector into the catalog space (`vector(1536)`) so
+ * `match_audio_profiles` can be used regardless of which embedding space the
+ * subject's tags came from. Prefers a trained bridge from `embedding_bridges`
+ * (applied by the semantic service), falling back to deterministic tiling.
+ */
+async function toCatalogVector(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  vector: number[],
+): Promise<{ vector: number[]; route: string; audit: string } | null> {
+  if (!Array.isArray(vector) || vector.length === 0) return null;
+  if (vector.length === CATALOG_DIMS) {
+    return { vector, route: 'native', audit: describeBridge('native', vector.length) };
+  }
+
+  let bridge: { id?: string; name?: string; from_dim?: number; to_dim?: number; weights_url?: string | null } | null =
+    null;
+  try {
+    const { data } = await admin
+      .from('embedding_bridges')
+      .select('id, name, from_dim, to_dim, weights_url')
+      .eq('is_active', true)
+      .eq('from_dim', vector.length)
+      .eq('to_dim', CATALOG_DIMS)
+      .limit(1)
+      .maybeSingle();
+    bridge = data ?? null;
+  } catch (e) {
+    console.warn('embedding_bridges lookup failed:', e);
+  }
+
+  const route = pickBridgeRoute(vector.length, bridge);
+  if (route === 'bridge') {
+    const cfg = await getSemanticSvcConfig(admin);
+    if (cfg) {
+      const out = await clapBridge(cfg, [vector], bridge?.id ?? null, bridge?.weights_url ?? null);
+      const projected = out?.vectors?.[0];
+      if (Array.isArray(projected) && projected.length === CATALOG_DIMS) {
+        return {
+          vector: projected,
+          route: 'bridge',
+          audit: describeBridge('bridge', vector.length, bridge?.name ?? null),
+        };
+      }
+    }
+    console.warn('bridge unavailable, falling back to deterministic padding');
+  }
+
+  const padded = padToCatalog(vector);
+  if (padded.length !== CATALOG_DIMS) return null;
+  return { vector: padded, route: 'pad', audit: describeBridge('pad', vector.length) };
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',

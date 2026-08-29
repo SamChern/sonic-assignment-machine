@@ -33,6 +33,9 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 /** Cap one callback body so a runaway worker cannot push an unbounded batch. */
 const MAX_ROWS_PER_CALL = 2_000;
+/** Cap one staged-rollup chunk (Step 2.5-alt). */
+const MAX_ROLLUP_ROWS_PER_CALL = 5_000;
+
 
 type Json = Record<string, unknown>;
 

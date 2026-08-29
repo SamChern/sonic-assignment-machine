@@ -44,6 +44,11 @@ export async function embed(text: string): Promise<number[] | null> {
  * Find or create a taxonomy node for a tag code; returns its id, or null when
  * the node is suppressed (sensitive POI class — health, worship, shelters …).
  * Suppressed nodes are never tagged onto an audio source.
+ *
+ * Step 13: a symbol the ontology does not know yet (no node, or a node the
+ * agent proposed that nobody has reviewed and that carries no approved
+ * crosswalk) is written to public.resolution_queue for the nightly Resolver.
+ * No model is ever called inline from here.
  */
 export async function resolveTag(
   // deno-lint-ignore no-explicit-any
@@ -51,8 +56,17 @@ export async function resolveTag(
   tag: OntologyTag,
 ): Promise<string | null> {
   const { data: existing } = await supabase
-    .from("taxonomy_nodes").select("id, suppressed").eq("code", tag.code).maybeSingle();
-  if (existing) return existing.suppressed ? null : (existing.id as string);
+    .from("taxonomy_nodes").select("id, suppressed, reviewed, crosswalk").eq("code", tag.code)
+    .maybeSingle();
+  if (existing) {
+    if (needsResolution(existing)) {
+      await enqueueUnknownSymbol(supabase, {
+        symbol: tag.code,
+        context: { label: tag.label ?? null, parent_code: tag.parent_code ?? null },
+      });
+    }
+    return existing.suppressed ? null : (existing.id as string);
+  }
 
   const label = tag.label ?? tag.code;
   // New nodes get their suppression flag at creation time so a sensitive class
@@ -74,8 +88,29 @@ export async function resolveTag(
     if (retry) return retry.suppressed ? null : (retry.id as string);
     throw error;
   }
+  if (!suppressed) {
+    // First sighting of this symbol: queue it so the Resolver can give it
+    // meaning (description, tendencies, crosswalk anchors) overnight.
+    await enqueueUnknownSymbol(supabase, {
+      symbol: tag.code,
+      context: { label, parent_code: tag.parent_code ?? null, first_seen: "ingest" },
+    });
+  }
   return suppressed ? null : (inserted.id as string);
 }
+
+/** A node still needs resolution while it is unreviewed with no approved crosswalk. */
+function needsResolution(node: {
+  suppressed?: boolean;
+  reviewed?: boolean;
+  crosswalk?: unknown;
+}): boolean {
+  if (node.suppressed) return false;
+  if (node.reviewed !== false) return false;
+  const matches = (node.crosswalk as { matches?: { approved?: boolean }[] } | null)?.matches ?? [];
+  return !matches.some((m) => m.approved);
+}
+
 
 
 /** Build the calibration prior block that gets handed to analyze-audio. */

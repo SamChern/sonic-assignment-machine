@@ -33,6 +33,9 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 /** Cap one callback body so a runaway worker cannot push an unbounded batch. */
 const MAX_ROWS_PER_CALL = 2_000;
+/** Cap one staged-rollup chunk (Step 2.5-alt). */
+const MAX_ROLLUP_ROWS_PER_CALL = 5_000;
+
 
 type Json = Record<string, unknown>;
 
@@ -131,6 +134,113 @@ Deno.serve(async (req) => {
 
   const workerIdRaw = typeof body.worker_id === "string" ? body.worker_id.slice(0, 200) : null;
 
+  // ---- Config (Step 2.5-alt): hand the HTTP worker its S3 settings ----------
+  // The worker holds no S3 keys and no database password of its own; it asks for
+  // read credentials at startup, which keeps every secret in the backend.
+  if (body.phase === "config") {
+    const accessKeyId = Deno.env.get("S3_ACCESS_KEY_ID");
+    const secretAccessKey = Deno.env.get("S3_SECRET_ACCESS_KEY");
+    const bucket = Deno.env.get("S3_BUCKET");
+    if (!accessKeyId || !secretAccessKey || !bucket) {
+      return json({
+        success: false,
+        error: "S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_BUCKET must be configured",
+      }, 503);
+    }
+    return json({
+      success: true,
+      config: {
+        bucket,
+        region: Deno.env.get("S3_REGION") ?? "us-west-2",
+        access_key_id: accessKeyId,
+        secret_access_key: secretAccessKey,
+      },
+    });
+  }
+
+  // ---- Heartbeat (Step 2.5-alt): worker liveness for the admin health card --
+  if (body.phase === "heartbeat") {
+    const { error } = await admin.from("worker_heartbeats").upsert({
+      worker_id: workerIdRaw ?? "unknown-worker",
+      host: typeof body.host === "string" ? body.host.slice(0, 200) : null,
+      last_seen: new Date().toISOString(),
+      stats: (body.stats && typeof body.stats === "object" ? body.stats : {}) as Json,
+    }, { onConflict: "worker_id" });
+    if (error) return json({ success: false, error: error.message }, 500);
+    return json({ success: true });
+  }
+
+  // ---- Claim (Step 2.5-alt): hand the worker the next discovered file -------
+  // `claim_next_ingest_file` uses FOR UPDATE SKIP LOCKED, so two workers can
+  // never take the same file.
+  if (body.phase === "claim_next") {
+    const { data, error } = await admin.rpc("claim_next_ingest_file", {
+      p_worker: workerIdRaw ?? "unknown-worker",
+    });
+    if (error) return json({ success: false, error: error.message }, 500);
+    const claim = Array.isArray(data) ? data[0] : data;
+    if (!claim) return json({ success: true, file: null });
+    console.log(JSON.stringify({
+      evt: "worker_claimed_next",
+      trace_id: claim.trace_id,
+      object_key: claim.object_key,
+      worker_id: workerIdRaw,
+    }));
+    return json({
+      success: true,
+      file: {
+        file_id: claim.id,
+        object_key: claim.object_key,
+        report_type: claim.report_type,
+        trace_id: claim.trace_id,
+      },
+    });
+  }
+
+  // ---- Rollups (Step 2.5-alt): staged summary rows for one object ----------
+  // The worker sends chunks; `replace: true` on the first chunk clears any prior
+  // rows for that object, which is what makes a re-run idempotent.
+  if (body.phase === "rollups") {
+    const key = typeof body.object_key === "string" ? body.object_key.trim() : "";
+    if (!key) return json({ success: false, error: "object_key is required" }, 400);
+    const raw = Array.isArray(body.rows) ? body.rows : [];
+    if (raw.length > MAX_ROLLUP_ROWS_PER_CALL) {
+      return json({
+        success: false,
+        error:
+          `too many rollup rows in one call (${raw.length} > ${MAX_ROLLUP_ROWS_PER_CALL}) — send smaller chunks`,
+      }, 400);
+    }
+    if (body.replace === true) {
+      const { error: delErr } = await admin.from("ingest_rollups").delete().eq("object_key", key);
+      if (delErr) return json({ success: false, error: delErr.message }, 500);
+    }
+    const reportType = typeof body.report_type === "string" ? body.report_type : null;
+    const rows = raw.flatMap((r) => {
+      if (!r || typeof r !== "object") return [];
+      const row = r as Record<string, unknown>;
+      const subject = typeof row.subject_key === "string" ? row.subject_key.trim() : "";
+      const code = typeof row.taxonomy_code === "string" ? row.taxonomy_code.trim() : "";
+      if (!subject || !code) return [];
+      const day = typeof row.day === "string" && /^\d{4}-\d{2}-\d{2}/.test(row.day)
+        ? row.day.slice(0, 10)
+        : null;
+      return [{
+        object_key: key,
+        report_type: reportType,
+        subject_key: subject.slice(0, 512),
+        taxonomy_code: code.slice(0, 200),
+        day,
+        weight: Number(row.weight ?? 1) || 1,
+      }];
+    });
+    if (rows.length) {
+      const { error: insErr } = await admin.from("ingest_rollups").insert(rows);
+      if (insErr) return json({ success: false, error: insErr.message }, 500);
+    }
+    return json({ success: true, inserted: rows.length, rejected: raw.length - rows.length });
+  }
+
   // ---- Lease (pull mode): hand the worker the next pending file -------------
   // Queue-free path: instead of an SQS message, the worker asks for work. The
   // RPC picks one row with FOR UPDATE SKIP LOCKED, so two workers can never
@@ -165,6 +275,7 @@ Deno.serve(async (req) => {
     });
   }
 
+
   const fileId = typeof body.file_id === "string" ? body.file_id : null;
   const objectKey = typeof body.object_key === "string" ? body.object_key : null;
   if (!fileId && !objectKey) {
@@ -172,11 +283,13 @@ Deno.serve(async (req) => {
   }
 
   // `progress` = mid-file batch, `complete` = worker finished its slice,
-  // `failed` = worker could not process the file.
+  // `failed` = worker could not process the file. Step 2.5-alt adds `loaded`
+  // (rollups staged, promote them) and `skipped` (summary-only file).
   const phase = typeof body.phase === "string" ? body.phase : "progress";
-  if (!["claim", "progress", "complete", "failed"].includes(phase)) {
+  if (!["claim", "progress", "complete", "failed", "loaded", "skipped"].includes(phase)) {
     return json({ success: false, error: `unknown phase "${phase}"` }, 400);
   }
+
 
 
   const rawRows = Array.isArray(body.identifiers) ? body.identifiers : [];
@@ -239,6 +352,69 @@ Deno.serve(async (req) => {
       },
     });
   }
+
+  // ---- Loaded (Step 2.5-alt): rollups staged, promote them ------------------
+  if (phase === "loaded") {
+    const rollupRows = Math.max(Number(body.rows ?? body.rows_read ?? 0) || 0, 0);
+    const { error: rpcErr } = await admin.rpc("complete_ingest_file", {
+      p_id: file.id,
+      p_rows: rollupRows,
+      p_status: "loaded",
+    });
+    if (rpcErr) return json({ success: false, error: rpcErr.message }, 500);
+    console.log(JSON.stringify({
+      evt: "worker_file_loaded",
+      trace_id: traceId,
+      object_key: file.object_key,
+      worker_id: workerId,
+      rollup_rows: rollupRows,
+    }));
+    // Promote inline so the worker's next claim does not race the mapping.
+    const { data: promo, error: promoErr } = await admin.functions.invoke("promote-rollups", {
+      body: {
+        object_key: file.object_key,
+        report_type: file.report_type,
+        trace_id: traceId,
+      },
+    });
+    if (promoErr) {
+      console.error(JSON.stringify({
+        evt: "promote_invoke_failed",
+        trace_id: traceId,
+        object_key: file.object_key,
+        error: String(promoErr),
+      }));
+      return json({ success: true, file_id: file.id, status: "loaded", promoted: false });
+    }
+    return json({
+      success: true,
+      file_id: file.id,
+      status: "loaded",
+      promoted: true,
+      promote: promo ?? null,
+    });
+  }
+
+  // ---- Skipped (Step 2.5-alt): summary-only file, nothing to learn ---------
+  if (phase === "skipped") {
+    const reason = typeof body.reason === "string"
+      ? body.reason
+      : "no identifier/taxonomy columns";
+    const { error: rpcErr } = await admin.rpc("skip_ingest_file", {
+      p_id: file.id,
+      p_reason: reason.slice(0, 2000),
+    });
+    if (rpcErr) return json({ success: false, error: rpcErr.message }, 500);
+    console.log(JSON.stringify({
+      evt: "worker_file_skipped",
+      trace_id: traceId,
+      object_key: file.object_key,
+      worker_id: workerId,
+      reason: reason.slice(0, 300),
+    }));
+    return json({ success: true, file_id: file.id, status: "skipped" });
+  }
+
 
   // ---- Failed: park the file so the next dispatch retries it ---------------
   if (phase === "failed") {

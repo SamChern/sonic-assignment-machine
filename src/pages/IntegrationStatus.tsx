@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import IngestDebugPanel from "@/components/IngestDebugPanel";
+import WorkerHealthCard from "@/components/admin/WorkerHealthCard";
+
 import IngestByKeyPanel from "@/components/IngestByKeyPanel";
 import EnrichmentReadinessPanel from "@/components/EnrichmentReadinessPanel";
 import AudioSetCrosswalkPanel from "@/components/admin/AudioSetCrosswalkPanel";
@@ -745,7 +747,9 @@ const IntegrationStatus = () => {
           <AudioSetCrosswalkPanel />
           <EnrichmentReadinessPanel />
 
+          <WorkerHealthCard />
           <IngestDebugPanel />
+
         </div>
 
 

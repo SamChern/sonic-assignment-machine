@@ -31,11 +31,23 @@ function regionFromQueueUrl(queueUrl: string): string | null {
   return /sqs\.([a-z0-9-]+)\.amazonaws\.com/.exec(queueUrl)?.[1] ?? null;
 }
 
+/**
+ * Step 2.5-alt: SQS dispatch is off by default. The control plane only
+ * discovers files and writes `discovered` rows; the EC2 worker claims them over
+ * HTTP. Set `USE_SQS=true` to re-enable the queue path without a rebuild.
+ */
+export function sqsEnabled(): boolean {
+  const flag = (Deno.env.get("USE_SQS") ?? "").trim().toLowerCase();
+  return flag === "true" || flag === "1" || flag === "yes";
+}
+
 export function sqsConfigured(): boolean {
-  return !!Deno.env.get("SQS_QUEUE_URL") &&
+  return sqsEnabled() &&
+    !!Deno.env.get("SQS_QUEUE_URL") &&
     !!Deno.env.get("S3_ACCESS_KEY_ID") &&
     !!Deno.env.get("S3_SECRET_ACCESS_KEY");
 }
+
 
 export function sqsConfig(): SqsConfig {
   const queueUrl = Deno.env.get("SQS_QUEUE_URL");
@@ -60,16 +72,26 @@ export function sqsConfig(): SqsConfig {
 }
 
 export function sqsInfo() {
-  if (!sqsConfigured()) {
-    return { configured: false as const, reason: "SQS_QUEUE_URL not set" };
+  if (!sqsEnabled()) {
+    return {
+      configured: false as const,
+      mode: "http_worker" as const,
+      reason: "queue-free mode — the EC2 worker claims files over HTTP (set USE_SQS=true to re-enable)",
+    };
   }
+  if (!sqsConfigured()) {
+    return { configured: false as const, mode: "sqs" as const, reason: "SQS_QUEUE_URL not set" };
+  }
+
   const cfg = sqsConfig();
   return {
     configured: true as const,
+    mode: "sqs" as const,
     region: cfg.region,
     // Queue name only — never echo the account ID back to a client.
     queue: cfg.path.split("/").filter(Boolean).pop() ?? null,
   };
+
 }
 
 /** POST a form-encoded, SigV4-signed SQS action (Query protocol). */

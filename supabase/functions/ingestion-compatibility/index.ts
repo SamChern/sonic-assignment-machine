@@ -43,9 +43,24 @@ const corsHeaders = {
 type Status = "pass" | "warn" | "fail" | "skip";
 
 /** Per-source scopes so a single feed can be retested without a full sweep. */
-type Scope = "all" | "object_store" | "intuizi" | "ec2_analysis" | "librosa_rest" | "ec2_inference";
+type Scope =
+  | "all"
+  | "object_store"
+  | "intuizi"
+  | "ec2_analysis"
+  | "librosa_rest"
+  | "semantic_svc"
+  | "ec2_inference";
 
-const SCOPES: Scope[] = ["all", "object_store", "intuizi", "ec2_analysis", "librosa_rest", "ec2_inference"];
+const SCOPES: Scope[] = [
+  "all",
+  "object_store",
+  "intuizi",
+  "ec2_analysis",
+  "librosa_rest",
+  "semantic_svc",
+  "ec2_inference",
+];
 
 interface Check {
   id: string;
@@ -62,14 +77,6 @@ interface Check {
 
 const SUPPORTED_EXT = [".parquet", ".pq", ".csv", ".csv.gz", ".json", ".json.gz", ".jsonl", ".ndjson"];
 
-/** Columns the normalizer reads per report type (first alias of each group). */
-const EXPECTED_FIELDS: Record<ReportType, string[]> = {
-  ctv: ["contentgenre | content_genre | genre", "contenttype | content_type", "channelname | channel_name | network", "iab_cats | iab_categories"],
-  apps: ["CategoryName | category_name | category", "TaxonomyName | taxonomy_name | taxonomy", "Signals | signal_count"],
-  visitation: ["brandName | brand_name | brand", "d_utc | timestamp | visit_time", "distance | dist_m"],
-  demographics: ["age_range | age_band | age", "income_range | income_band", "household_composition | household"],
-  origin: ["origin_type | location_type | place_type", "state | region | dma | metro | city", "travel_type | distance_band"],
-};
 
 const IDENTIFIER_ALIASES =
   "primary_identifier, eid, maid, madid, idfa, aaid, gaid, hem, hashed_email, device_id, email1";

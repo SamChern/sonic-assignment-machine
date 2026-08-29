@@ -18,6 +18,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireOrgMember } from "../_shared/org.ts";
 import { embedCached } from "../_shared/inference.ts";
 import { controlNumber } from "../_shared/control.ts";
+import { holdoutPct, isHoldout } from "../_shared/holdout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,15 +89,6 @@ function parseVector(v: unknown): number[] | null {
   return null;
 }
 
-/** FNV-1a — deterministic holdout assignment, stable across re-runs. */
-function fnv1a(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h >>> 0;
-}
 
 type Scores = Record<Category, number>;
 
@@ -422,10 +414,7 @@ Deno.serve(async (req) => {
         return json({ success: false, error: "No matches at this threshold to save." }, 400);
       }
 
-      const holdoutPct = await controlNumber(admin, "activation.holdout_pct", 0.1, {
-        min: 0,
-        max: 0.5,
-      });
+      const pctHoldout = await holdoutPct(admin);
 
       const slug = `predict-${organizationId.slice(0, 8)}-${Date.now().toString(36)}`;
       const narrative = `Seeded from ${
@@ -454,9 +443,9 @@ Deno.serve(async (req) => {
       const CHUNK = 500;
       for (let i = 0; i < keys.length; i += CHUNK) {
         const rows = keys.slice(i, i + CHUNK).map((key) => {
-          const isHoldout = holdoutPct > 0 && fnv1a(`${slug}:${key}`) % 1000 < holdoutPct * 1000;
-          if (isHoldout) holdout++;
-          return { cohort_id: cohortId, subject_key: key, similarity: null, holdout: isHoldout };
+          const inHoldout = isHoldout(slug, key, pctHoldout);
+          if (inHoldout) holdout++;
+          return { cohort_id: cohortId, subject_key: key, similarity: null, holdout: inHoldout };
         });
         const { error } = await admin.from("sonic_cohort_members").upsert(rows, {
           onConflict: "cohort_id,subject_key",
@@ -493,7 +482,7 @@ Deno.serve(async (req) => {
         member_count: keys.length,
         holdout,
         exposed: keys.length - holdout,
-        holdout_pct: holdoutPct,
+        holdout_pct: pctHoldout,
         export_eligible: keys.length >= 1000,
       });
     }

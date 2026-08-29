@@ -15,8 +15,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireOrgMember } from "../_shared/org.ts";
 import { controlNumber } from "../_shared/control.ts";
-import { crossesZero, fitRidgeWithBootstrap, type RidgeFit } from "../_shared/ridge.ts";
-import { getSemanticSvcConfig } from "../_shared/semanticSvc.ts";
+import { crossesZero, type RidgeFit } from "../_shared/ridge.ts";
+import { fitRemoteOrLocal, RIDGE_LAMBDA } from "../_shared/ridgeRemote.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +36,7 @@ const CATEGORIES = [
   "artistic",
 ] as const;
 
-const LAMBDA = 1e-2;
+const LAMBDA = RIDGE_LAMBDA;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -45,49 +46,18 @@ function json(body: unknown, status = 200) {
 }
 
 /** Try the EC2 worker first; fall back to the in-process estimator. */
-async function fitRemoteOrLocal(
+async function fitOrThrow(
   // deno-lint-ignore no-explicit-any
   admin: any,
   X: number[][],
   y: number[],
   iters: number,
 ): Promise<{ fit: RidgeFit; engine: "ec2" | "edge" }> {
-  const cfg = await getSemanticSvcConfig(admin);
-  if (cfg) {
-    try {
-      const res = await fetch(`${cfg.url}/fit_ridge`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${cfg.token}`,
-        },
-        body: JSON.stringify({ X, y, lambda: LAMBDA, bootstrap_iters: iters }),
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (res.ok) {
-        const b = await res.json();
-        if (Array.isArray(b?.beta) && Array.isArray(b?.ci)) {
-          return {
-            fit: {
-              beta: b.beta.map(Number),
-              ci: b.ci.map((c: number[]) => [Number(c[0]), Number(c[1])] as [number, number]),
-              r2: Number(b.r2 ?? 0),
-              n: X.length,
-              lambda: LAMBDA,
-              bootstrap_iters: Number(b.bootstrap_iters ?? iters),
-            },
-            engine: "ec2",
-          };
-        }
-      }
-    } catch (e) {
-      console.warn("ridge fit on EC2 unavailable:", e instanceof Error ? e.message : e);
-    }
-  }
-  const fit = fitRidgeWithBootstrap(X, y, { lambda: LAMBDA, iters });
-  if (!fit) throw new Error("Model could not be fitted — the score columns are collinear.");
-  return { fit, engine: "edge" };
+  const out = await fitRemoteOrLocal(admin, X, y, iters, { lambda: LAMBDA });
+  if (!out) throw new Error("Model could not be fitted — the score columns are collinear.");
+  return out;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -181,7 +151,7 @@ Deno.serve(async (req) => {
     ]);
     const y = training.map((r) => targets.get(r.id)!);
 
-    const { fit, engine } = await fitRemoteOrLocal(admin, X, y, iters);
+    const { fit, engine } = await fitOrThrow(admin, X, y, iters);
     const beta = fit.beta;
 
     const predict = (row: number[]) => row.reduce((s, v, i) => s + v * beta[i], 0);

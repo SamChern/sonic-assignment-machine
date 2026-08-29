@@ -11,7 +11,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireOrgMember } from "../_shared/org.ts";
 import { toActivationEid } from "../_shared/activationEid.ts";
-import { crossesZero, fitRidgeWithBootstrap } from "../_shared/ridge.ts";
+import { crossesZero } from "../_shared/ridge.ts";
+import { fitRemoteOrLocal } from "../_shared/ridgeRemote.ts";
+
 import { controlNumber } from "../_shared/control.ts";
 
 const corsHeaders = {
@@ -154,6 +156,8 @@ Deno.serve(async (req) => {
       ci_high: number;
       inconclusive: boolean;
     }[] = [];
+    let fitEngine: "ec2" | "edge" | null = null;
+
 
     if (measurable && matchedKeys.length >= 12) {
       const keys = matchedKeys.map((m) => m.key).slice(0, 5000);
@@ -202,7 +206,12 @@ Deno.serve(async (req) => {
         const iters = Math.round(
           await controlNumber(admin, "predict.bootstrap_iters", 200, { min: 50, max: 2000 }),
         );
-        const fit = fitRidgeWithBootstrap(X, yv, { iters });
+        // Step 11c: the per-axis fits run on the EC2 semantic worker when it is
+        // reachable, with the identical in-process estimator as the fallback.
+        const remote = await fitRemoteOrLocal(admin, X, yv, iters);
+        const fit = remote?.fit ?? null;
+        fitEngine = remote?.engine ?? null;
+
         if (fit) {
           CATEGORIES.forEach((cat, i) => {
             const ci = fit.ci[i + 2] ?? [Number.NaN, Number.NaN];
@@ -255,6 +264,8 @@ Deno.serve(async (req) => {
       lift_ci: [ciLow, ciHigh],
       measurable,
       per_axis: perAxis,
+      fit_engine: fitEngine,
+
       priors_written: written,
       note: measurable
         ? undefined

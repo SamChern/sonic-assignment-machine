@@ -276,16 +276,17 @@ export const ComplianceCard = () => {
                 {runs.map((r) => (
                   <tr key={r.id} className="border-t border-border/40">
                     <td className="px-2 py-1.5 whitespace-nowrap">{fmt(r.finished_at ?? r.started_at)}</td>
-                    <td className="px-2 py-1.5">{r.kind === "custody_scan" ? "custody scan" : "retention"}</td>
+                    <td className="px-2 py-1.5">{KIND_LABELS[r.kind] ?? "retention"}</td>
                     <td className="px-2 py-1.5">
                       <Badge variant={r.status === "failed" ? "destructive" : "secondary"} className="text-[10px]">
                         {r.status}
                       </Badge>
                     </td>
-                    <td className="px-2 py-1.5">{r.kind === "custody_scan" ? "—" : r.subjects_matched}</td>
+                    <td className="px-2 py-1.5">{NON_PURGE_KINDS.has(r.kind) ? "—" : r.subjects_matched}</td>
                     <td className="px-2 py-1.5">
-                      {r.kind === "custody_scan"
+                      {NON_PURGE_KINDS.has(r.kind)
                         ? "—"
+
                         : r.identifiers_deleted +
                           r.sources_deleted +
                           r.tags_deleted +

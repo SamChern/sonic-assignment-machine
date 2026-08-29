@@ -3,7 +3,7 @@
 // Three accepted callers:
 //   1. A scheduled/internal invocation presenting the service role key.
 //   2. A scheduled (pg_cron) invocation presenting INTERNAL_JOB_SECRET in the
-//      `x-internal-job-secret` header — cron has no user session to borrow.
+//      `x-internal-cron-secret` header — cron has no user session to borrow.
 //   3. A signed-in user who holds the 'admin' role in public.user_roles.
 // Everything else is rejected before any privileged work happens.
 
@@ -40,8 +40,8 @@ export async function requireAdmin(
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
 
   // Scheduled runs: constant-time-ish compare on a dedicated job secret.
-  const jobSecret = Deno.env.get("INTERNAL_JOB_SECRET");
-  const presented = req.headers.get("x-internal-job-secret");
+  const jobSecret = Deno.env.get("INTERNAL_CRON_SECRET");
+  const presented = req.headers.get("x-internal-cron-secret");
   if (jobSecret && presented && presented.length === jobSecret.length && presented === jobSecret) {
     return { isInternal: true, userId: null };
   }

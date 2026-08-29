@@ -326,54 +326,66 @@ Deno.serve(async (req) => {
 
     if (!base) continue;
 
-    const target = `${base.replace(/\/+$/, "")}${f.healthPath}`;
-    const t0 = Date.now();
-    try {
-      const res = await fetch(target, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        signal: AbortSignal.timeout(8000),
-      });
-      const text = (await res.text()).slice(0, 400);
-      log(`probe.${f.id}`, { status: res.status, ms: Date.now() - t0 });
-      add({
-        id: `reach.${f.id}`,
-        feed: f.label,
-        title: `${f.label} reachable`,
-        status: res.ok ? "pass" : (f.optional ? "warn" : "fail"),
-        detail: res.ok
-          ? `${f.healthPath} answered ${res.status} in ${Date.now() - t0}ms.`
-          : `${f.healthPath} answered ${res.status}.${f.optional ? ` ${f.note ?? ""}` : ""}`,
-        expected: `HTTP 200 from ${f.healthPath}`,
-        actual: `HTTP ${res.status}`,
-        remediation: res.ok
-          ? undefined
-          : res.status === 401 || res.status === 403
-          ? `Credentials rejected. Rotate ${f.authKey ?? "the feed token"} on the Integrations page and confirm the service expects a bearer token.`
-          : f.optional
-          ? undefined
-          : "Confirm the service is running behind its reverse proxy and the URL points at the health route.",
-        debug: { url: target, status: res.status, latency_ms: Date.now() - t0, body: text },
-      });
-    } catch (e) {
-      const msg = errMsg(e);
-      log(`probe.${f.id}.error`, msg);
-      add({
-        id: `reach.${f.id}`,
-        feed: f.label,
-        title: `${f.label} reachable`,
-        status: f.optional ? "warn" : "fail",
-        detail: f.optional ? `${msg}. ${f.note ?? ""}`.trim() : msg,
-        expected: `HTTP 200 from ${f.healthPath}`,
-        actual: msg,
-        remediation: f.optional
-          ? undefined
-          : /timed out|timeout|abort/i.test(msg)
-          ? "The host did not answer within 8s — check the security group, Nginx upstream and the service unit."
-          : "Verify the configured URL is publicly resolvable from the backend runtime.",
-        debug: { url: target, latency_ms: Date.now() - t0 },
-      });
+    const root = base.replace(/\/+$/, "");
+    const attempts: { path: string; result: string }[] = [];
+    let ok: { path: string; status: number; body: string; ms: number } | null = null;
+    let lastErr = "";
+
+    for (const path of f.healthPaths) {
+      const t0 = Date.now();
+      try {
+        const res = await fetch(`${root}${path}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: AbortSignal.timeout(8000),
+        });
+        const body = (await res.text()).slice(0, 400);
+        attempts.push({ path, result: `HTTP ${res.status}` });
+        if (res.ok) {
+          ok = { path, status: res.status, body, ms: Date.now() - t0 };
+          break;
+        }
+        // 401/403 proves the host is up and the route exists — stop and report it.
+        if (res.status === 401 || res.status === 403) {
+          lastErr = `${path} answered ${res.status}`;
+          break;
+        }
+        lastErr = `${path} answered ${res.status}`;
+      } catch (e) {
+        const msg = errMsg(e);
+        attempts.push({ path, result: msg });
+        lastErr = msg;
+        // A timeout or DNS failure is per-host, not per-route: no point retrying.
+        if (/timed out|timeout|abort|dns|resolve/i.test(msg)) break;
+      }
     }
+
+    log(`probe.${f.id}`, { ok: !!ok, attempts });
+    const authRejected = /answered 40[13]/.test(lastErr);
+    add({
+      id: `reach.${f.id}`,
+      feed: f.label,
+      title: `${f.label} reachable`,
+      status: ok ? "pass" : (f.optional ? "warn" : "fail"),
+      detail: ok
+        ? `${ok.path} answered ${ok.status} in ${ok.ms}ms.`
+        : `No health route answered (tried ${f.healthPaths.join(", ")}): ${lastErr}.${
+          f.optional ? ` ${f.note ?? ""}` : ""
+        }`,
+      expected: `HTTP 200 from one of ${f.healthPaths.join(", ")}`,
+      actual: ok ? `HTTP ${ok.status} @ ${ok.path}` : lastErr,
+      remediation: ok
+        ? undefined
+        : f.optional
+        ? undefined
+        : authRejected
+        ? `Credentials rejected. Rotate ${f.authKey ?? "the feed token"} on the Integrations page and confirm the service expects a bearer token.`
+        : /timed out|timeout|abort/i.test(lastErr)
+        ? "The host did not answer within 8s — check the security group, Nginx upstream and the service unit."
+        : "The host answers but exposes no known health route. Add /healthz to the service (or point the URL at the route it does serve).",
+      debug: { root, attempts, ...(ok ? { body: ok.body } : {}) },
+    });
   }
+
 
 
   if (!wantsStoreReads) return finish({ backend });

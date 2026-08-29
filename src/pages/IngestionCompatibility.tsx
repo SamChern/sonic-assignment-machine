@@ -28,60 +28,18 @@ import {
 
 } from "lucide-react";
 
-type Status = "pass" | "warn" | "fail" | "skip";
-
-interface Check {
-  id: string;
-  feed: string;
-  title: string;
-  status: Status;
-  detail: string;
-  expected?: string;
-  actual?: string;
-  remediation?: string;
-  evidence?: Record<string, unknown>;
-  debug?: Record<string, unknown>;
-}
-
-type Scope = "all" | "object_store" | "intuizi" | "ec2_analysis" | "librosa_rest" | "ec2_inference";
-
-/** Per-source test targets — feed labels come back from the function verbatim. */
-const SOURCES: { scope: Exclude<Scope, "all">; label: string; feed: string }[] = [
-  { scope: "object_store", label: "S3 object store", feed: "object store" },
-  { scope: "intuizi", label: "Intuizi deliveries", feed: "intuizi" },
-  { scope: "ec2_analysis", label: "EC2 analysis API", feed: "EC2 analysis API" },
-  { scope: "ec2_inference", label: "EC2 inference server", feed: "EC2 inference server" },
-  { scope: "librosa_rest", label: "Librosa REST", feed: "Librosa REST" },
-];
-
-const scopeForFeed = (feed: string): Exclude<Scope, "all"> =>
-  SOURCES.find((s) => s.feed === feed)?.scope ?? "intuizi";
-
-interface SampledObject {
-  key: string;
-  report_type: string;
-  size: number;
-  last_modified: string | null;
-  rows_read: number;
-  columns: string[];
-  rows_with_identifier: number;
-  summary_rows: number;
-  roster_rows: number;
-  normalized_rows: number;
-}
-
-interface Report {
-  ran_at: string;
-  duration_ms: number;
-  scope?: Scope;
-  debug?: boolean;
-  trace?: { at: number; step: string; detail?: unknown }[];
-  backend?: { backend: string; configured: boolean; placeholder: boolean };
-  discovered_objects?: number;
-  summary: { pass: number; warn: number; fail: number; skip: number; total: number; verdict: string };
-  checks: Check[];
-  objects_sampled: SampledObject[];
-}
+import {
+  type Check,
+  mergeReport,
+  ORDER,
+  type Report,
+  type SampledObject,
+  type Scope,
+  scopeForFeed,
+  SOURCES,
+  type Status,
+  VERDICT_COPY,
+} from "@/lib/compatibilityReport";
 
 const STATUS_META: Record<Status, { label: string; icon: typeof CheckCircle2; className: string }> = {
   pass: { label: "Pass", icon: CheckCircle2, className: "bg-primary/15 text-primary border-primary/30" },
@@ -90,34 +48,6 @@ const STATUS_META: Record<Status, { label: string; icon: typeof CheckCircle2; cl
   skip: { label: "Not applicable", icon: CircleDashed, className: "bg-muted text-muted-foreground border-border" },
 };
 
-const VERDICT_COPY: Record<string, string> = {
-  compatible: "All standardized checks passed — feeds are ready for semantic analysis.",
-  degraded: "Feeds are ingestible but some schema/metadata contracts drifted.",
-  incompatible: "Blocking mismatches found — these deliveries will not be scored until fixed.",
-};
-
-const ORDER: Status[] = ["fail", "warn", "pass", "skip"];
-
-/** Replace only the checks/samples belonging to the feeds a scoped run covered. */
-function mergeReport(prev: Report, next: Report): Report {
-  const feeds = new Set(next.checks.map((c) => c.feed));
-  const kept = prev.checks.filter((c) => !feeds.has(c.feed));
-  const checks = [...kept, ...next.checks];
-  const summary = checks.reduce(
-    (acc, c) => ({ ...acc, [c.status]: acc[c.status] + 1, total: acc.total + 1 }),
-    { pass: 0, warn: 0, fail: 0, skip: 0, total: 0 } as Report["summary"],
-  );
-  summary.verdict = summary.fail > 0 ? "incompatible" : summary.warn > 0 ? "degraded" : "compatible";
-  const sampled = next.objects_sampled.length ? next.objects_sampled : prev.objects_sampled;
-  return {
-    ...prev,
-    ...next,
-    summary,
-    checks,
-    objects_sampled: sampled,
-    trace: next.trace ?? prev.trace,
-  };
-}
 
 interface ParallelResult {
   scope: Exclude<Scope, "all">;

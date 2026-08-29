@@ -11,16 +11,20 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 import {
   activationIdFromKey,
+  FEATURE_ALIASES,
   fetchObjectRows,
   identifierOf,
   ingestPrefixes,
   isRosterRow,
   isSummaryRow,
+  isWebShaped,
+  matchAliasGroups,
   normalizeRow,
   partitionDateFromKey,
   REPORT_TYPES,
   type ReportType,
   reportTypeFromKey,
+  unrecognizedColumns,
 } from "../_shared/intuizi.ts";
 import {
   clearS3Cache,
@@ -39,9 +43,24 @@ const corsHeaders = {
 type Status = "pass" | "warn" | "fail" | "skip";
 
 /** Per-source scopes so a single feed can be retested without a full sweep. */
-type Scope = "all" | "object_store" | "intuizi" | "ec2_analysis" | "librosa_rest" | "ec2_inference";
+type Scope =
+  | "all"
+  | "object_store"
+  | "intuizi"
+  | "ec2_analysis"
+  | "librosa_rest"
+  | "semantic_svc"
+  | "ec2_inference";
 
-const SCOPES: Scope[] = ["all", "object_store", "intuizi", "ec2_analysis", "librosa_rest", "ec2_inference"];
+const SCOPES: Scope[] = [
+  "all",
+  "object_store",
+  "intuizi",
+  "ec2_analysis",
+  "librosa_rest",
+  "semantic_svc",
+  "ec2_inference",
+];
 
 interface Check {
   id: string;
@@ -58,14 +77,6 @@ interface Check {
 
 const SUPPORTED_EXT = [".parquet", ".pq", ".csv", ".csv.gz", ".json", ".json.gz", ".jsonl", ".ndjson"];
 
-/** Columns the normalizer reads per report type (first alias of each group). */
-const EXPECTED_FIELDS: Record<ReportType, string[]> = {
-  ctv: ["contentgenre | content_genre | genre", "contenttype | content_type", "channelname | channel_name | network", "iab_cats | iab_categories"],
-  apps: ["CategoryName | category_name | category", "TaxonomyName | taxonomy_name | taxonomy", "Signals | signal_count"],
-  visitation: ["brandName | brand_name | brand", "d_utc | timestamp | visit_time", "distance | dist_m"],
-  demographics: ["age_range | age_band | age", "income_range | income_band", "household_composition | household"],
-  origin: ["origin_type | location_type | place_type", "state | region | dma | metro | city", "travel_type | distance_band"],
-};
 
 const IDENTIFIER_ALIASES =
   "primary_identifier, eid, maid, madid, idfa, aaid, gaid, hem, hashed_email, device_id, email1";
@@ -196,104 +207,186 @@ Deno.serve(async (req) => {
     });
   }
 
-  const altFeeds: {
-    id: Exclude<Scope, "all">;
+  // ---------------------------------------------------- 1b. service feed probes
+  //
+  // Credentials live in TWO places in this project: platform secrets (env) and
+  // the admin Integrations UI (public.integration_credentials). Probing only env
+  // reported configured services as "Not applicable", so both are consulted and
+  // the answering store is reported.
+  interface Feed {
+    id: Exclude<Scope, "all" | "object_store" | "intuizi">;
     label: string;
-    env: string[];
-    urlEnv: string;
-    healthPath: string;
-    authEnv?: string;
-  }[] = [
+    /** integration_credentials.integration_id, when the UI manages this feed. */
+    integrationId?: string;
+    urlKey: string;
+    authKey?: string;
+    /**
+     * Candidate health routes, tried in order. Each service on the box exposes a
+     * different one (`/api/health`, `/healthz`, `/health`), and probing a single
+     * guessed path reported live services as unreachable.
+     */
+    healthPaths: string[];
+    /** Optional feeds never block: unconfigured = skip, unreachable = warn. */
+    optional?: boolean;
+    note?: string;
+  }
+
+  const feeds: Feed[] = [
     {
       id: "ec2_analysis",
       label: "EC2 analysis API",
-      env: ["AWS_API_URL", "AWS_API_KEY"],
-      urlEnv: "AWS_API_URL",
-      healthPath: "/api/health",
-      authEnv: "AWS_API_KEY",
-    },
-    {
-      id: "ec2_inference",
-      label: "EC2 inference server",
-      env: ["EC2_INFERENCE_URL", "EC2_INFERENCE_MODEL"],
-      urlEnv: "EC2_INFERENCE_URL",
-      healthPath: "/v1/models",
-      authEnv: "EC2_INFERENCE_API_KEY",
+      urlKey: "AWS_API_URL",
+      authKey: "AWS_API_KEY",
+      healthPaths: ["/api/health", "/health", "/healthz", "/"],
     },
     {
       id: "librosa_rest",
       label: "Librosa REST",
-      env: ["LIBROSA_REST_URL"],
-      urlEnv: "LIBROSA_REST_URL",
-      healthPath: "/health",
-      authEnv: "LIBROSA_REST_TOKEN",
+      integrationId: "librosa_rest",
+      urlKey: "LIBROSA_REST_URL",
+      authKey: "LIBROSA_REST_TOKEN",
+      healthPaths: ["/health", "/healthz", "/api/health", "/"],
+    },
+    {
+      id: "semantic_svc",
+      label: "Semantic service (CLAP)",
+      integrationId: "semantic_svc",
+      urlKey: "SEMANTIC_SVC_URL",
+      authKey: "SEMANTIC_SVC_TOKEN",
+      healthPaths: ["/healthz", "/health", "/"],
+    },
+    {
+      id: "ec2_inference",
+      label: "EC2 inference server",
+      urlKey: "EC2_INFERENCE_URL",
+      authKey: "EC2_INFERENCE_API_KEY",
+      healthPaths: ["/v1/models", "/healthz", "/health"],
+      optional: true,
+      note:
+        "Optional. This EC2 box has no GPU and runs no chat LLM — Lovable AI is the sanctioned scoring path, so this feed is informational only.",
     },
   ];
-  for (const f of altFeeds) {
+
+
+  /** env first, then the admin credentials table; reports which store answered. */
+  const credentialsFor = async (feed: Feed) => {
+    const keys = [feed.urlKey, ...(feed.authKey ? [feed.authKey] : [])];
+    const resolved: Record<string, { value: string; from: "env" | "credentials" }> = {};
+    for (const k of keys) {
+      const v = (Deno.env.get(k) ?? "").trim();
+      if (v) resolved[k] = { value: v, from: "env" };
+    }
+    if (feed.integrationId && keys.some((k) => !resolved[k])) {
+      const { data, error } = await admin
+        .from("integration_credentials")
+        .select("field_key, field_value")
+        .eq("integration_id", feed.integrationId);
+      if (error) log(`creds.${feed.id}.error`, error.message);
+      for (const row of data ?? []) {
+        const k = String(row.field_key);
+        const v = String(row.field_value ?? "").trim();
+        if (keys.includes(k) && !resolved[k] && v) {
+          resolved[k] = { value: v, from: "credentials" };
+        }
+      }
+    }
+    return resolved;
+  };
+
+  for (const f of feeds) {
     if (!wants(f.id)) continue;
-    const missing = f.env.filter((k) => !Deno.env.get(k));
+    const creds = await credentialsFor(f);
+    const base = creds[f.urlKey]?.value;
+    const token = f.authKey ? creds[f.authKey]?.value : undefined;
+    const stores = [...new Set(Object.values(creds).map((c) => c.from))];
+
     add({
       id: `config.${f.id}`,
       feed: f.label,
       title: `${f.label} credentials`,
-      status: missing.length === 0 ? "pass" : (missing.length === f.env.length ? "skip" : "warn"),
-      detail: missing.length === 0
-        ? "All required settings present."
-        : `Missing: ${missing.join(", ")}.`,
-      remediation: missing.length
-        ? `Add ${missing.join(" and ")} in the backend secrets if this feed should be active.`
-        : undefined,
-      debug: { required: f.env, missing },
+      status: base ? "pass" : (f.optional ? "skip" : "warn"),
+      detail: base
+        ? `${f.urlKey} resolved from ${creds[f.urlKey].from === "env" ? "backend secrets" : "the Integrations page"}${
+          token ? `; auth token present (${creds[f.authKey!].from === "env" ? "secrets" : "Integrations"})` : "; no auth token"
+        }.`
+        : f.optional
+        ? `Not configured. ${f.note ?? ""}`.trim()
+        : `${f.urlKey} is set in neither backend secrets nor the Integrations page.`,
+      remediation: base
+        ? undefined
+        : f.optional
+        ? undefined
+        : `Set ${f.urlKey}${f.authKey ? ` and ${f.authKey}` : ""} on the admin Integrations page (or as backend secrets) if this feed should be active.`,
+      debug: {
+        keys: Object.fromEntries(Object.entries(creds).map(([k, v]) => [k, v.from])),
+        integration_id: f.integrationId ?? null,
+        stores,
+      },
     });
 
-    // Live reachability probe — only when the feed is explicitly in scope.
-    const base = Deno.env.get(f.urlEnv);
     if (!base) continue;
-    const target = `${base.replace(/\/+$/, "")}${f.healthPath}`;
-    const t0 = Date.now();
-    try {
-      const token = f.authEnv ? Deno.env.get(f.authEnv) : undefined;
-      const res = await fetch(target, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        signal: AbortSignal.timeout(8000),
-      });
-      const text = (await res.text()).slice(0, 400);
-      log(`probe.${f.id}`, { status: res.status, ms: Date.now() - t0 });
-      add({
-        id: `reach.${f.id}`,
-        feed: f.label,
-        title: `${f.label} reachable`,
-        status: res.ok ? "pass" : "fail",
-        detail: res.ok
-          ? `Health endpoint answered ${res.status} in ${Date.now() - t0}ms.`
-          : `Health endpoint answered ${res.status}.`,
-        expected: "HTTP 200 from the feed health endpoint",
-        actual: `HTTP ${res.status}`,
-        remediation: res.ok
-          ? undefined
-          : res.status === 401 || res.status === 403
-          ? `Credentials rejected. Rotate ${f.authEnv ?? "the feed token"} and confirm the service expects a bearer token.`
-          : "Confirm the service is running behind its reverse proxy and the URL points at the health route.",
-        debug: { url: target, status: res.status, latency_ms: Date.now() - t0, body: text },
-      });
-    } catch (e) {
-      const msg = errMsg(e);
-      log(`probe.${f.id}.error`, msg);
-      add({
-        id: `reach.${f.id}`,
-        feed: f.label,
-        title: `${f.label} reachable`,
-        status: "fail",
-        detail: msg,
-        expected: "HTTP 200 from the feed health endpoint",
-        actual: msg,
-        remediation: /timed out|timeout|abort/i.test(msg)
-          ? "The host did not answer within 8s — check the security group, Nginx upstream and the service unit."
-          : "Verify the configured URL is publicly resolvable from the backend runtime.",
-        debug: { url: target, latency_ms: Date.now() - t0 },
-      });
+
+    const root = base.replace(/\/+$/, "");
+    const attempts: { path: string; result: string }[] = [];
+    let ok: { path: string; status: number; body: string; ms: number } | null = null;
+    let lastErr = "";
+
+    for (const path of f.healthPaths) {
+      const t0 = Date.now();
+      try {
+        const res = await fetch(`${root}${path}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: AbortSignal.timeout(8000),
+        });
+        const body = (await res.text()).slice(0, 400);
+        attempts.push({ path, result: `HTTP ${res.status}` });
+        if (res.ok) {
+          ok = { path, status: res.status, body, ms: Date.now() - t0 };
+          break;
+        }
+        // 401/403 proves the host is up and the route exists — stop and report it.
+        if (res.status === 401 || res.status === 403) {
+          lastErr = `${path} answered ${res.status}`;
+          break;
+        }
+        lastErr = `${path} answered ${res.status}`;
+      } catch (e) {
+        const msg = errMsg(e);
+        attempts.push({ path, result: msg });
+        lastErr = msg;
+        // A timeout or DNS failure is per-host, not per-route: no point retrying.
+        if (/timed out|timeout|abort|dns|resolve/i.test(msg)) break;
+      }
     }
+
+    log(`probe.${f.id}`, { ok: !!ok, attempts });
+    const authRejected = /answered 40[13]/.test(lastErr);
+    add({
+      id: `reach.${f.id}`,
+      feed: f.label,
+      title: `${f.label} reachable`,
+      status: ok ? "pass" : (f.optional ? "warn" : "fail"),
+      detail: ok
+        ? `${ok.path} answered ${ok.status} in ${ok.ms}ms.`
+        : `No health route answered (tried ${f.healthPaths.join(", ")}): ${lastErr}.${
+          f.optional ? ` ${f.note ?? ""}` : ""
+        }`,
+      expected: `HTTP 200 from one of ${f.healthPaths.join(", ")}`,
+      actual: ok ? `HTTP ${ok.status} @ ${ok.path}` : lastErr,
+      remediation: ok
+        ? undefined
+        : f.optional
+        ? undefined
+        : authRejected
+        ? `Credentials rejected. Rotate ${f.authKey ?? "the feed token"} on the Integrations page and confirm the service expects a bearer token.`
+        : /timed out|timeout|abort/i.test(lastErr)
+        ? "The host did not answer within 8s — check the security group, Nginx upstream and the service unit."
+        : "The host answers but exposes no known health route. Add /healthz to the service (or point the URL at the route it does serve).",
+      debug: { root, attempts, ...(ok ? { body: ok.body } : {}) },
+    });
   }
+
+
 
   if (!wantsStoreReads) return finish({ backend });
 
@@ -304,6 +397,7 @@ Deno.serve(async (req) => {
   clearS3Cache();
   const prefixes = (body.prefixes?.length ? body.prefixes : ingestPrefixes().map((p) => p.prefix));
   const discovered: S3Object[] = [];
+  const prefixFailures: { prefix: string; msg: string; ms: number }[] = [];
   let anyPrefixOk = false;
 
   for (const prefix of prefixes) {
@@ -334,24 +428,40 @@ Deno.serve(async (req) => {
     } catch (e) {
       const msg = errMsg(e);
       log(`list.${prefix}.error`, msg);
-      add({
-        id: `list.${prefix}`,
-        feed: "object store",
-        title: `Prefix reachable: ${prefix}`,
-        status: "fail",
-        detail: msg,
-        expected: "HTTP 200 from ListObjectsV2",
-        actual: msg,
-        remediation: /403|AccessDenied/i.test(msg)
-          ? "The IAM key behind the connection lacks s3:ListBucket on this prefix. Grant read access to the bucket/prefix and reconnect."
-          : /404|NoSuchBucket/i.test(msg)
-          ? "Bucket or prefix does not exist. Verify the bucket name and path prefix on the connection."
-          : "Re-check the object store connection, then re-run. If the error persists, the gateway response body above is the provider's own error.",
-        debug: { latency_ms: Date.now() - t0, prefix, raw_error: msg },
-      });
+      // Graded after the loop: a prefix the IAM policy simply does not cover is
+      // only advisory when another prefix in the same bucket does list.
+      prefixFailures.push({ prefix, msg, ms: Date.now() - t0 });
     }
   }
+
+  for (const f of prefixFailures) {
+    const denied = /403|AccessDenied/i.test(f.msg);
+    const scoped = denied && anyPrefixOk;
+    add({
+      id: `list.${f.prefix}`,
+      feed: "object store",
+      title: `Prefix reachable: ${f.prefix || "(bucket root)"}`,
+      // A scoped IAM policy is the normal Intuizi delivery setup — the account
+      // is granted its own hashed prefix only, so the conventional folder names
+      // are expected to be denied. That is not a blocking incompatibility.
+      status: scoped ? "warn" : "fail",
+      detail: scoped
+        ? `Not granted to this IAM key — skipped. Another prefix in the bucket lists fine, so deliveries are still discoverable.`
+        : f.msg,
+      expected: "HTTP 200 from ListObjectsV2",
+      actual: f.msg.slice(0, 300),
+      remediation: scoped
+        ? "No action needed unless this feed is supposed to deliver here; the key is scoped to the prefixes it can list."
+        : denied
+        ? "The IAM key behind the connection lacks s3:ListBucket on this prefix. Grant read access to the bucket/prefix and reconnect."
+        : /404|NoSuchBucket/i.test(f.msg)
+        ? "Bucket or prefix does not exist. Verify the bucket name and path prefix on the connection."
+        : "Re-check the object store connection, then re-run. If the error persists, the gateway response body above is the provider's own error.",
+      debug: { latency_ms: f.ms, prefix: f.prefix, raw_error: f.msg },
+    });
+  }
   if (!anyPrefixOk) return finish({ backend, discovered_objects: 0 });
+
 
   // Object-store-only runs stop after reachability; contract checks belong to intuizi.
   if (!wants("intuizi")) return finish({ backend, discovered_objects: discovered.length });
@@ -548,39 +658,62 @@ Deno.serve(async (req) => {
         debug: probeDebug,
       });
 
-      // taxonomy / feature columns for the resolved report type
-      const expectedFields = EXPECTED_FIELDS[reportType];
-      const lowerCols = cols.map((c) => c.toLowerCase());
-      const matchedGroups = expectedFields.filter((group) =>
-        group.split("|").map((a) => a.trim().toLowerCase()).some((a) => lowerCols.includes(a))
-      );
+      // Feature columns, graded against the SAME alias lists normalizeRow reads.
+      // Web/marketing deliveries resolve to `ctv` but carry web-shaped columns,
+      // so they are graded against the web group list instead of CTV genre/type.
+      const webShaped = reportType === "ctv" && isWebShaped(cols);
+      const shape: ReportType | "web" = webShaped ? "web" : reportType;
+      const groups = FEATURE_ALIASES[shape];
+      const { matched, missing } = matchAliasGroups(groups, cols);
+      const shapeLabel = webShaped ? "web report (mapped via ctv)" : reportType;
       add({
         id: `schema.fields.${obj.key}`,
         feed: "intuizi",
         title: `Ontology feature columns — ${obj.key.split("/").pop()}`,
-        status: matchedGroups.length === expectedFields.length
-          ? "pass"
-          : matchedGroups.length > 0
-          ? "warn"
-          : "fail",
-        detail: `${matchedGroups.length}/${expectedFields.length} ${reportType} feature groups present.`,
-        expected: expectedFields.join("  •  "),
+        // Advisory only: the authoritative signal is the normalization yield
+        // below, computed from real rows. Missing groups never block.
+        status: missing.length === 0 ? "pass" : "warn",
+        detail: `${matched.length}/${groups.length} ${shapeLabel} feature groups present${
+          missing.length ? ` — advisory, see normalization yield for the real outcome.` : "."
+        }`,
+        expected: groups.map((g) => `${g.name} (${g.aliases.join(" | ")})`).join("  •  "),
         actual: cols.join(", ").slice(0, 400),
-        remediation: matchedGroups.length === expectedFields.length
+        remediation: missing.length === 0
           ? undefined
-          : `Missing: ${
-            expectedFields.filter((g) => !matchedGroups.includes(g)).join("  •  ")
-          }. Either request these columns from the feed, or extend normalizeRow() in _shared/intuizi.ts with the provider's actual column aliases.`,
-        evidence: { columns: cols },
-        debug: { ...probeDebug, matched_groups: matchedGroups },
+          : `Absent groups: ${missing.map((g) => g.name).join(", ")}. Harmless when the yield below is healthy.`,
+        evidence: { columns: cols, shape: shapeLabel },
+        debug: { ...probeDebug, matched: matched.map((g) => g.name), missing: missing.map((g) => g.name) },
       });
 
-      // normalization yield
+      // Genuine provider schema gaps: columns nobody maps. Reported, not "fixed".
+      const unmapped = unrecognizedColumns(groups, cols);
+      if (unmapped.length) {
+        add({
+          id: `schema.provider_gap.${obj.key}`,
+          feed: "intuizi",
+          title: `Provider schema gap — ${obj.key.split("/").pop()}`,
+          status: "warn",
+          detail: `${unmapped.length} column(s) in this ${shapeLabel} delivery are not part of the Intuizi taxonomy contract: ${
+            unmapped.join(", ").slice(0, 300)
+          }.`,
+          expected: "columns covered by the agreed report contract",
+          actual: unmapped.join(", ").slice(0, 400),
+          remediation:
+            "Tracked as a provider-side taxonomy gap. No app change is proposed here — resolve the contract with Intuizi, then these columns can be mapped.",
+          evidence: { unmapped_columns: unmapped },
+        });
+      }
+
+      // Normalization yield — the authoritative compatibility verdict.
       add({
         id: `schema.yield.${obj.key}`,
         feed: "intuizi",
         title: `Normalization yield — ${obj.key.split("/").pop()}`,
-        status: tagRate >= 0.5 ? "pass" : tagRate > 0 ? "warn" : (summaryRows > 0 ? "warn" : "fail"),
+        status: tagRate >= 0.5
+          ? "pass"
+          : tagRate > 0
+          ? "warn"
+          : (summaryRows > 0 || rosterRows > 0 ? "warn" : "fail"),
         detail: `${normalized.length}/${rows.length} sampled rows produced ontology tags (${
           Math.round(tagRate * 100)
         }%). Roster-only rows: ${rosterRows}.`,
@@ -590,9 +723,10 @@ Deno.serve(async (req) => {
           ? undefined
           : rosterRows > 0
           ? "This delivery is mostly a device roster (join keys only). Pair it with the matching taxonomy/summary export so the identifiers acquire signal."
-          : "Column values are present but unmapped. Compare the observed columns above with the expected aliases and extend the field mapping.",
+          : "Values are present but the provider's column names are outside the agreed contract — see the provider schema gap finding.",
         debug: probeDebug,
       });
+
     } catch (e) {
       const msg = errMsg(e);
       add({

@@ -131,6 +131,113 @@ Deno.serve(async (req) => {
 
   const workerIdRaw = typeof body.worker_id === "string" ? body.worker_id.slice(0, 200) : null;
 
+  // ---- Config (Step 2.5-alt): hand the HTTP worker its S3 settings ----------
+  // The worker holds no S3 keys and no database password of its own; it asks for
+  // read credentials at startup, which keeps every secret in the backend.
+  if (body.phase === "config") {
+    const accessKeyId = Deno.env.get("S3_ACCESS_KEY_ID");
+    const secretAccessKey = Deno.env.get("S3_SECRET_ACCESS_KEY");
+    const bucket = Deno.env.get("S3_BUCKET");
+    if (!accessKeyId || !secretAccessKey || !bucket) {
+      return json({
+        success: false,
+        error: "S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_BUCKET must be configured",
+      }, 503);
+    }
+    return json({
+      success: true,
+      config: {
+        bucket,
+        region: Deno.env.get("S3_REGION") ?? "us-west-2",
+        access_key_id: accessKeyId,
+        secret_access_key: secretAccessKey,
+      },
+    });
+  }
+
+  // ---- Heartbeat (Step 2.5-alt): worker liveness for the admin health card --
+  if (body.phase === "heartbeat") {
+    const { error } = await admin.from("worker_heartbeats").upsert({
+      worker_id: workerIdRaw ?? "unknown-worker",
+      host: typeof body.host === "string" ? body.host.slice(0, 200) : null,
+      last_seen: new Date().toISOString(),
+      stats: (body.stats && typeof body.stats === "object" ? body.stats : {}) as Json,
+    }, { onConflict: "worker_id" });
+    if (error) return json({ success: false, error: error.message }, 500);
+    return json({ success: true });
+  }
+
+  // ---- Claim (Step 2.5-alt): hand the worker the next discovered file -------
+  // `claim_next_ingest_file` uses FOR UPDATE SKIP LOCKED, so two workers can
+  // never take the same file.
+  if (body.phase === "claim_next") {
+    const { data, error } = await admin.rpc("claim_next_ingest_file", {
+      p_worker: workerIdRaw ?? "unknown-worker",
+    });
+    if (error) return json({ success: false, error: error.message }, 500);
+    const claim = Array.isArray(data) ? data[0] : data;
+    if (!claim) return json({ success: true, file: null });
+    console.log(JSON.stringify({
+      evt: "worker_claimed_next",
+      trace_id: claim.trace_id,
+      object_key: claim.object_key,
+      worker_id: workerIdRaw,
+    }));
+    return json({
+      success: true,
+      file: {
+        file_id: claim.id,
+        object_key: claim.object_key,
+        report_type: claim.report_type,
+        trace_id: claim.trace_id,
+      },
+    });
+  }
+
+  // ---- Rollups (Step 2.5-alt): staged summary rows for one object ----------
+  // The worker sends chunks; `replace: true` on the first chunk clears any prior
+  // rows for that object, which is what makes a re-run idempotent.
+  if (body.phase === "rollups") {
+    const key = typeof body.object_key === "string" ? body.object_key.trim() : "";
+    if (!key) return json({ success: false, error: "object_key is required" }, 400);
+    const raw = Array.isArray(body.rows) ? body.rows : [];
+    if (raw.length > MAX_ROLLUP_ROWS_PER_CALL) {
+      return json({
+        success: false,
+        error:
+          `too many rollup rows in one call (${raw.length} > ${MAX_ROLLUP_ROWS_PER_CALL}) — send smaller chunks`,
+      }, 400);
+    }
+    if (body.replace === true) {
+      const { error: delErr } = await admin.from("ingest_rollups").delete().eq("object_key", key);
+      if (delErr) return json({ success: false, error: delErr.message }, 500);
+    }
+    const reportType = typeof body.report_type === "string" ? body.report_type : null;
+    const rows = raw.flatMap((r) => {
+      if (!r || typeof r !== "object") return [];
+      const row = r as Record<string, unknown>;
+      const subject = typeof row.subject_key === "string" ? row.subject_key.trim() : "";
+      const code = typeof row.taxonomy_code === "string" ? row.taxonomy_code.trim() : "";
+      if (!subject || !code) return [];
+      const day = typeof row.day === "string" && /^\d{4}-\d{2}-\d{2}/.test(row.day)
+        ? row.day.slice(0, 10)
+        : null;
+      return [{
+        object_key: key,
+        report_type: reportType,
+        subject_key: subject.slice(0, 512),
+        taxonomy_code: code.slice(0, 200),
+        day,
+        weight: Number(row.weight ?? 1) || 1,
+      }];
+    });
+    if (rows.length) {
+      const { error: insErr } = await admin.from("ingest_rollups").insert(rows);
+      if (insErr) return json({ success: false, error: insErr.message }, 500);
+    }
+    return json({ success: true, inserted: rows.length, rejected: raw.length - rows.length });
+  }
+
   // ---- Lease (pull mode): hand the worker the next pending file -------------
   // Queue-free path: instead of an SQS message, the worker asks for work. The
   // RPC picks one row with FOR UPDATE SKIP LOCKED, so two workers can never
@@ -164,6 +271,7 @@ Deno.serve(async (req) => {
       },
     });
   }
+
 
   const fileId = typeof body.file_id === "string" ? body.file_id : null;
   const objectKey = typeof body.object_key === "string" ? body.object_key : null;

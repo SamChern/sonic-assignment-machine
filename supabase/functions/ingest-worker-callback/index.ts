@@ -21,6 +21,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { newTraceId } from "../_shared/failure.ts";
+import { controlNumber } from "../_shared/control.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -147,6 +148,12 @@ Deno.serve(async (req) => {
         error: "S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_BUCKET must be configured",
       }, 503);
     }
+    // Ship the ingest knobs alongside the credentials so the operator can retune
+    // rollup mode and batch size from the Control Room without touching EC2.
+    const [rollupThreshold, batchRows] = await Promise.all([
+      controlNumber(admin, "ingest.rollup_row_threshold", 5_000_000, { min: 100_000 }),
+      controlNumber(admin, "ingest.worker_batch_rows", 250, { min: 25, max: MAX_ROWS_PER_CALL }),
+    ]);
     return json({
       success: true,
       config: {
@@ -154,9 +161,12 @@ Deno.serve(async (req) => {
         region: Deno.env.get("S3_REGION") ?? "us-west-2",
         access_key_id: accessKeyId,
         secret_access_key: secretAccessKey,
+        rollup_row_threshold: rollupThreshold,
+        batch_rows: batchRows,
       },
     });
   }
+
 
   // ---- Heartbeat (Step 2.5-alt): worker liveness for the admin health card --
   if (body.phase === "heartbeat") {
@@ -416,9 +426,54 @@ Deno.serve(async (req) => {
   }
 
 
-  // ---- Failed: park the file so the next dispatch retries it ---------------
+  // ---- Failed: classify before parking ------------------------------------
+  // Three very different things arrive on this phase, and treating them all as
+  // `failed` is what stalled the 351M-row batch: a transient DB/HTTP timeout
+  // must resume from its checkpoint, an S3 permission error must stop retrying
+  // and be surfaced to the data provider, and everything else is a real fault.
   if (phase === "failed") {
     const msg = typeof body.error === "string" ? body.error : "worker reported a failure";
+    const blocked = /AccessDenied|403|NoSuchKey|InvalidAccessKeyId|SignatureDoesNotMatch/i
+      .test(msg);
+    const retryable = !blocked &&
+      /statement timeout|canceling statement|lock_timeout|timeout|ETIMEDOUT|ECONNRESET|502|503|504|temporarily/i
+        .test(msg);
+
+    if (blocked) {
+      await admin.rpc("block_ingest_file", { p_id: file.id, p_reason: msg.slice(0, 2000) });
+      console.error(JSON.stringify({
+        evt: "worker_file_blocked",
+        trace_id: traceId,
+        object_key: file.object_key,
+        worker_id: workerId,
+        error: msg.slice(0, 500),
+      }));
+      return json({ success: true, file_id: file.id, status: "blocked", retryable: false });
+    }
+
+    if (retryable) {
+      const maxAttempts = await controlNumber(admin, "ingest.max_dispatch_attempts", 8);
+      const { data: newStatus } = await admin.rpc("requeue_ingest_file", {
+        p_id: file.id,
+        p_reason: msg.slice(0, 2000),
+        p_max_attempts: maxAttempts,
+      });
+      console.warn(JSON.stringify({
+        evt: "worker_file_requeued",
+        trace_id: traceId,
+        object_key: file.object_key,
+        worker_id: workerId,
+        new_status: newStatus ?? "discovered",
+        error: msg.slice(0, 500),
+      }));
+      return json({
+        success: true,
+        file_id: file.id,
+        status: newStatus ?? "discovered",
+        retryable: newStatus !== "failed",
+      });
+    }
+
     await admin.from("intuizi_ingest_files").update({
       status: "failed",
       error_message: msg.slice(0, 2000),
@@ -434,7 +489,7 @@ Deno.serve(async (req) => {
       worker_id: workerId,
       error: msg.slice(0, 500),
     }));
-    return json({ success: true, file_id: file.id, status: "failed" });
+    return json({ success: true, file_id: file.id, status: "failed", retryable: false });
   }
 
   // ---- Progress / complete: enqueue scoring tasks --------------------------
@@ -446,40 +501,51 @@ Deno.serve(async (req) => {
 
   let queued = 0;
   if (rows.length) {
-    // Idempotent progress marking: the unique key on (object_key, identifier)
-    // means a redelivered message or a resumed row group updates the pending
-    // task instead of creating a second one. Rows already scored are left alone.
-    const { error: qErr, count } = await admin
-      .from("intuizi_score_queue")
-      .upsert(
-        rows.map((r) => ({
-          object_key: file.object_key,
-          report_type: reportType,
-          identifier: r.identifier,
-          activation_id: activationId,
-          owner_id: ownerId,
-          label: r.label,
-          tags: r.tags,
-          signals: r.signals,
-          confidence: r.confidence,
-          status: "pending",
-          trace_id: traceId,
-          next_attempt_at: now,
-          last_error: null,
-        })),
-        { onConflict: "object_key,identifier", ignoreDuplicates: false, count: "exact" },
-      );
-    if (qErr) {
-      console.error(JSON.stringify({
-        evt: "worker_enqueue_failed",
-        trace_id: traceId,
+    // `enqueue_score_tasks` writes in one guarded statement per chunk and only
+    // refreshes rows still `pending`, so redelivery is idempotent and already
+    // scored work is never rewritten. Small chunks keep every statement well
+    // inside the timeout even with the queue table at hundreds of MB.
+    const CHUNK = 250;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const payload = rows.slice(i, i + CHUNK).map((r) => ({
         object_key: file.object_key,
-        error: qErr.message,
+        report_type: reportType,
+        identifier: r.identifier,
+        activation_id: activationId,
+        owner_id: ownerId,
+        label: r.label,
+        tags: r.tags,
+        signals: r.signals,
+        confidence: r.confidence,
+        trace_id: traceId,
       }));
-      return json({ success: false, error: qErr.message }, 500);
+      const { data: n, error: qErr } = await admin.rpc("enqueue_score_tasks", {
+        p_rows: payload,
+      });
+      if (qErr) {
+        const transient = /timeout|canceling statement|deadlock|lock/i.test(qErr.message);
+        console.error(JSON.stringify({
+          evt: "worker_enqueue_failed",
+          trace_id: traceId,
+          object_key: file.object_key,
+          chunk_offset: i,
+          queued_before_failure: queued,
+          retryable: transient,
+          error: qErr.message,
+        }));
+        // 503 + retryable tells the worker to re-send this same slice rather
+        // than fail the file: the ledger cursor is untouched, so nothing is lost.
+        return json({
+          success: false,
+          error: qErr.message,
+          retryable: transient,
+          identifiers_queued: queued,
+        }, transient ? 503 : 500);
+      }
+      queued += Number(n ?? 0) || 0;
     }
-    queued = count ?? rows.length;
   }
+
 
   // ---- Advance the ledger --------------------------------------------------
   const rowsRead = Number(body.rows_read ?? 0) || 0;

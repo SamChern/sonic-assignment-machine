@@ -297,16 +297,21 @@ Deno.serve(async (req) => {
 
 
     // How much work is left, and should another invocation pick it up?
-    const { count: pending } = await admin
-      .from("intuizi_score_queue")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["pending", "processing"]);
-    const { count: deadLetter } = await admin
-      .from("intuizi_score_queue")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "dead_letter");
+    // Exact counts over a six-figure backlog blow past the database statement
+    // timeout, so the depth is measured against a cap: all we need to decide is
+    // "is there more work", and the reported number is a capped indicator.
+    const { data: depthRows } = await admin.rpc("intuizi_score_queue_depth", {
+      p_cap: 5000,
+    });
+    const depth = (Array.isArray(depthRows) ? depthRows[0] : depthRows) as
+      | { pending_capped?: number; dead_letter_capped?: number; capped_at?: number }
+      | null;
+    const pending = depth?.pending_capped ?? 0;
+    const deadLetter = depth?.dead_letter_capped ?? 0;
+    const depthCap = depth?.capped_at ?? 5000;
 
     const remaining = pending ?? 0;
+
     const willChain = remaining > 0 && !paused;
     if (willChain) {
       // Self-chaining: fire and forget, so this response returns immediately.
@@ -323,7 +328,9 @@ Deno.serve(async (req) => {
       failed,
       paused,
       pending: remaining,
+      pending_capped_at: depthCap,
       dead_letter: deadLetter ?? 0,
+
       chained: willChain,
       elapsed_ms: Date.now() - startedAt,
       ...metrics.snapshot(),

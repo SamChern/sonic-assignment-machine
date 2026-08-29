@@ -19,13 +19,14 @@ const LEGACY: Record<string, number> = {
   "src/pages/SemanticAnalysis.tsx": 1216,
   "src/components/admin/IntuiziConsolePanel.tsx": 1131,
   "src/components/PostIngestionWizard.tsx": 1098,
-  "src/components/AggregateNetworkVisualization.tsx": 887,
+  // AggregateNetworkVisualization + NetworkVisualization now sit under the
+  // ceiling: shared renderer in graph/engine.ts, math in graph/adapters/*.
+
   "src/components/SpeechNormalizationPanel.tsx": 815,
   // Ratcheted down after the report shapes/merge moved to src/lib/compatibilityReport.ts.
   "src/pages/IngestionCompatibility.tsx": 739,
 
   "src/components/enterprise/CategoryProfileEditor.tsx": 779,
-  "src/components/NetworkVisualization.tsx": 767,
   "src/pages/IntegrationStatus.tsx": 758,
   "src/components/enterprise/PredictUsersPanel.tsx": 708,
   "src/pages/Index.tsx": 660,

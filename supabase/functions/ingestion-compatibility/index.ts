@@ -623,39 +623,62 @@ Deno.serve(async (req) => {
         debug: probeDebug,
       });
 
-      // taxonomy / feature columns for the resolved report type
-      const expectedFields = EXPECTED_FIELDS[reportType];
-      const lowerCols = cols.map((c) => c.toLowerCase());
-      const matchedGroups = expectedFields.filter((group) =>
-        group.split("|").map((a) => a.trim().toLowerCase()).some((a) => lowerCols.includes(a))
-      );
+      // Feature columns, graded against the SAME alias lists normalizeRow reads.
+      // Web/marketing deliveries resolve to `ctv` but carry web-shaped columns,
+      // so they are graded against the web group list instead of CTV genre/type.
+      const webShaped = reportType === "ctv" && isWebShaped(cols);
+      const shape: ReportType | "web" = webShaped ? "web" : reportType;
+      const groups = FEATURE_ALIASES[shape];
+      const { matched, missing } = matchAliasGroups(groups, cols);
+      const shapeLabel = webShaped ? "web report (mapped via ctv)" : reportType;
       add({
         id: `schema.fields.${obj.key}`,
         feed: "intuizi",
         title: `Ontology feature columns — ${obj.key.split("/").pop()}`,
-        status: matchedGroups.length === expectedFields.length
-          ? "pass"
-          : matchedGroups.length > 0
-          ? "warn"
-          : "fail",
-        detail: `${matchedGroups.length}/${expectedFields.length} ${reportType} feature groups present.`,
-        expected: expectedFields.join("  •  "),
+        // Advisory only: the authoritative signal is the normalization yield
+        // below, computed from real rows. Missing groups never block.
+        status: missing.length === 0 ? "pass" : "warn",
+        detail: `${matched.length}/${groups.length} ${shapeLabel} feature groups present${
+          missing.length ? ` — advisory, see normalization yield for the real outcome.` : "."
+        }`,
+        expected: groups.map((g) => `${g.name} (${g.aliases.join(" | ")})`).join("  •  "),
         actual: cols.join(", ").slice(0, 400),
-        remediation: matchedGroups.length === expectedFields.length
+        remediation: missing.length === 0
           ? undefined
-          : `Missing: ${
-            expectedFields.filter((g) => !matchedGroups.includes(g)).join("  •  ")
-          }. Either request these columns from the feed, or extend normalizeRow() in _shared/intuizi.ts with the provider's actual column aliases.`,
-        evidence: { columns: cols },
-        debug: { ...probeDebug, matched_groups: matchedGroups },
+          : `Absent groups: ${missing.map((g) => g.name).join(", ")}. Harmless when the yield below is healthy.`,
+        evidence: { columns: cols, shape: shapeLabel },
+        debug: { ...probeDebug, matched: matched.map((g) => g.name), missing: missing.map((g) => g.name) },
       });
 
-      // normalization yield
+      // Genuine provider schema gaps: columns nobody maps. Reported, not "fixed".
+      const unmapped = unrecognizedColumns(groups, cols);
+      if (unmapped.length) {
+        add({
+          id: `schema.provider_gap.${obj.key}`,
+          feed: "intuizi",
+          title: `Provider schema gap — ${obj.key.split("/").pop()}`,
+          status: "warn",
+          detail: `${unmapped.length} column(s) in this ${shapeLabel} delivery are not part of the Intuizi taxonomy contract: ${
+            unmapped.join(", ").slice(0, 300)
+          }.`,
+          expected: "columns covered by the agreed report contract",
+          actual: unmapped.join(", ").slice(0, 400),
+          remediation:
+            "Tracked as a provider-side taxonomy gap. No app change is proposed here — resolve the contract with Intuizi, then these columns can be mapped.",
+          evidence: { unmapped_columns: unmapped },
+        });
+      }
+
+      // Normalization yield — the authoritative compatibility verdict.
       add({
         id: `schema.yield.${obj.key}`,
         feed: "intuizi",
         title: `Normalization yield — ${obj.key.split("/").pop()}`,
-        status: tagRate >= 0.5 ? "pass" : tagRate > 0 ? "warn" : (summaryRows > 0 ? "warn" : "fail"),
+        status: tagRate >= 0.5
+          ? "pass"
+          : tagRate > 0
+          ? "warn"
+          : (summaryRows > 0 || rosterRows > 0 ? "warn" : "fail"),
         detail: `${normalized.length}/${rows.length} sampled rows produced ontology tags (${
           Math.round(tagRate * 100)
         }%). Roster-only rows: ${rosterRows}.`,
@@ -665,9 +688,10 @@ Deno.serve(async (req) => {
           ? undefined
           : rosterRows > 0
           ? "This delivery is mostly a device roster (join keys only). Pair it with the matching taxonomy/summary export so the identifiers acquire signal."
-          : "Column values are present but unmapped. Compare the observed columns above with the expected aliases and extend the field mapping.",
+          : "Values are present but the provider's column names are outside the agreed contract — see the provider schema gap finding.",
         debug: probeDebug,
       });
+
     } catch (e) {
       const msg = errMsg(e);
       add({

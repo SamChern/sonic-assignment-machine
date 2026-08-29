@@ -84,12 +84,19 @@ async function contextFor(admin: Any, sourceId: string) {
     .limit(24);
   const tags = ((data ?? []) as Any[])
     .map((r) => (r.taxonomy_nodes
-      ? { code: r.taxonomy_nodes.code, label: r.taxonomy_nodes.label, weight: Number(r.weight) || 0 }
+      ? {
+        id: r.taxonomy_nodes.id as string,
+        code: r.taxonomy_nodes.code as string,
+        label: r.taxonomy_nodes.label as string,
+        weight: Number(r.weight) || 0,
+      }
       : null))
-    .filter(Boolean) as { code: string; label: string; weight: number }[];
+    .filter(Boolean) as { id: string; code: string; label: string; weight: number }[];
   let text: string | undefined;
   try {
-    text = tags.length > 0 ? await buildTaxonomyContext(admin, tags as Any) : undefined;
+    text = tags.length > 0
+      ? await buildTaxonomyContext(admin, tags.map((t) => t.id))
+      : undefined;
   } catch {
     text = tags.length > 0
       ? `taxonomy_tags=${tags.map((t) => `${t.code}:${t.weight.toFixed(2)}`).join(",")}`

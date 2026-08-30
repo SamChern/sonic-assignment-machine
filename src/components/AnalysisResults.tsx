@@ -1,20 +1,17 @@
 import { Card } from "@/components/ui/card";
-import { Brain, Users, Heart, MessageSquare, Music, MapPin, Waves } from "lucide-react";
+import { Brain, Users, Heart, MessageSquare, Music, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useState, lazy, Suspense } from "react";
-import { Button } from "@/components/ui/button";
-const LibrosaVisuals = lazy(() =>
-  import("@/components/visuals/LibrosaVisuals").then((m) => ({ default: m.LibrosaVisuals }))
-);
-const ChromaTonnetzPanel = lazy(() =>
-  import("@/components/visuals/LibrosaVisuals").then((m) => ({ default: m.ChromaTonnetzPanel }))
-);
+import { useState, lazy, Suspense } from "react";
 const VisualsFallback = () => (
   <div className="h-24 animate-pulse rounded-md bg-secondary/30" />
 );
-import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 import { FeedbackPopover } from "@/components/FeedbackPopover";
 import { GroundingBadge } from "@/components/GroundingBadge";
+import {
+  AcousticVisualsToggle,
+  HarmonicPreview,
+  NeighborContext,
+} from "@/components/analysis/SourceDetailPanels";
 const SignatureCard = lazy(() =>
   import("@/components/SignatureCard").then((m) => ({ default: m.SignatureCard }))
 );

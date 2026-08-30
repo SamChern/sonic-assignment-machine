@@ -93,12 +93,12 @@ export const AdminCommandPalette = ({
         safe(async () => {
           const { data } = await supabase
             .from("profiles")
-            .select("id,display_name,user_id")
-            .ilike("display_name", `%${q}%`)
+            .select("id,username,user_id")
+            .ilike("username", `%${q}%`)
             .limit(5);
           (data ?? []).forEach((p) =>
             results.push({
-              label: p.display_name ?? p.user_id,
+              label: p.username ?? p.user_id,
               hint: "User",
               to: "/admin/workbench",
             }),

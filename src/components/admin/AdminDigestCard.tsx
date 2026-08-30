@@ -54,7 +54,7 @@ export const AdminDigestCard = () => {
         // deno-lint-ignore no-explicit-any
         count("source_analyses", (q) => (q as any).gte("created_at", cutoff)),
         // deno-lint-ignore no-explicit-any
-        count("analysis_jobs", (q) => (q as any).eq("status", "failed").gte("updated_at", cutoff)),
+        count("analysis_jobs", (q) => (q as any).eq("status", "failed").gte("created_at", cutoff)),
         // deno-lint-ignore no-explicit-any
         count("resolution_queue", (q) => (q as any).eq("status", "pending")),
       ]);

@@ -74,7 +74,7 @@ const ScoreQueueHealthPanel = ({ activationId, objectKey, className }: Props) =>
         "id,identifier,object_key,activation_id,status,attempts,max_attempts,failure_kind,last_stage,last_error,trace_id,step_scale,next_attempt_at",
       )
       .order("updated_at", { ascending: false })
-      .limit(2000);
+      .limit(500);
     if (activationId) q = q.eq("activation_id", activationId);
     if (objectKey) q = q.eq("object_key", objectKey);
     const { data, error } = await q;

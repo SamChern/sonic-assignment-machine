@@ -92,6 +92,9 @@ BATCH_ROWS = min(int(os.environ.get("BATCH_ROWS", "250")), 2000)
 ROLLUP_ROW_THRESHOLD = int(os.environ.get("ROLLUP_ROW_THRESHOLD", "5000000"))
 ROLLUP_CHUNK = 1_000
 READ_CHUNK = 50_000
+# Rows pulled per fetch when fast-forwarding a resumed file to its checkpoint.
+DRAIN_CHUNK = 200_000
+
 WAIT_SECONDS = 20
 POLL_SECONDS = max(int(os.environ.get("POLL_SECONDS", "20")), 5)
 VISIBILITY_SECONDS = 900

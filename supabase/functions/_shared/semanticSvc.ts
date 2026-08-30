@@ -151,12 +151,15 @@ export async function clapEmbedText(
 }
 
 /**
- * 1536-d CLAP embedding of the audio itself, fetched by the service from a
- * public/signed http(s) URL. Null on any failure.
+ * CLAP embedding of the audio itself, fetched by the service from a
+ * public/signed http(s) URL. Projected to 1536-d unless `raw` is set (CLAP's
+ * native 512-d, which is what `taxonomy_nodes.audio_embedding` stores).
+ * Null on any failure.
  */
 export async function clapEmbedAudio(
   cfg: SemanticSvcConfig,
   url: string,
+  raw = false,
 ): Promise<number[] | null> {
   if (semanticSvcBreakerOpen()) return null;
   try {
@@ -168,7 +171,7 @@ export async function clapEmbedAudio(
       throw new Error(`unexpected audio embedding dims ${Array.isArray(v) ? v.length : "none"}`);
     }
     failures = 0;
-    return projectTo1536(v as number[]);
+    return raw ? (v as number[]) : projectTo1536(v as number[]);
   } catch (e) {
     noteFailure(e);
     return null;
@@ -278,6 +281,8 @@ export async function logSemanticCall(
   // deno-lint-disable-next-line no-explicit-any
   supabase: any | null,
   entry: {
+    /** Defaults to the semantic service; other callers name themselves. */
+    service?: string;
     action: string;
     outcome: "ok" | "error" | "skipped";
     cache_hit?: boolean;
@@ -291,6 +296,7 @@ export async function logSemanticCall(
   if (!supabase) return;
   try {
     await supabase.from("semantic_call_log").insert({
+      service: entry.service ?? "semantic_svc",
       action: entry.action,
       outcome: entry.outcome,
       cache_hit: entry.cache_hit ?? false,

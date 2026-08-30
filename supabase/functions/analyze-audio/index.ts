@@ -21,6 +21,12 @@ import {
 } from '../_shared/context.ts';
 import { clapBridge, getSemanticSvcConfig } from '../_shared/semanticSvc.ts';
 import { controlNumber } from '../_shared/control.ts';
+import {
+  type GroundingLevel,
+  nodeIsGrounded,
+  resolveGroundingLevel,
+  strongestGrounding,
+} from '../_shared/grounding.ts';
 
 
 /**
@@ -103,6 +109,8 @@ interface AudioSource {
   context_neighbors?: NeighborExemplar[];
   /** Step 4 — true when scored from tag embeddings, no librosa involved. */
   tag_only?: boolean;
+  /** Step 14b — how this score knew what it knew. */
+  grounding_level?: GroundingLevel;
 }
 
 
@@ -390,10 +398,15 @@ Deno.serve(async (req) => {
               .filter(Boolean)
               .join(' ');
 
+            // Step 14b — a tag whose vector came from listened-to sample audio
+            // makes this a grounded claim, not a label-semantics guess.
+            const groundedTag = nodes.some((n) => nodeIsGrounded(n));
+
             // kNN exemplars from the subject vector. Grounded CLAP tags are
             // 512-d, so bridge (or deterministically pad) into the catalog
             // space instead of skipping retrieval entirely.
             const bridged = subject ? await toCatalogVector(supabaseAdmin, subject.vector) : null;
+            let neighbors = false;
             if (bridged) {
               s.taxonomy_context = [s.taxonomy_context, bridged.audit].filter(Boolean).join(' ');
               const { data: knn } = await supabaseAdmin.rpc('match_audio_profiles', {
@@ -406,8 +419,15 @@ Deno.serve(async (req) => {
                 s.context_neighbors = ctx.exemplars;
                 s.taxonomy_context = [s.taxonomy_context, ctx.text].filter(Boolean).join(' ');
                 s.evidence = 'neighbors';
+                neighbors = true;
               }
             }
+            s.grounding_level = resolveGroundingLevel({
+              evidence: s.evidence,
+              groundedTag,
+              bridged: Boolean(bridged),
+              neighbors,
+            });
           } catch (e) {
             console.error('Tag-only subject vector failed:', e);
           }
@@ -452,6 +472,14 @@ Deno.serve(async (req) => {
 
 
         for (const s of uncachedSources) if (!s.evidence) s.evidence = 'none';
+        // Step 14b — settle the honesty level for every source, keeping the
+        // strongest claim already established on the tag-only path.
+        for (const s of uncachedSources) {
+          const fromEvidence = resolveGroundingLevel({ evidence: s.evidence });
+          s.grounding_level = s.grounding_level
+            ? strongestGrounding(s.grounding_level, fromEvidence)
+            : fromEvidence;
+        }
         console.log(
           'Evidence tiers:',
           uncachedSources.reduce((acc, s) => {
@@ -867,6 +895,8 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
           source_name: sourceResult.name,
           confidence,
           context_neighbors: matched?.context_neighbors ?? null,
+          grounding_level:
+            matched?.grounding_level ?? resolveGroundingLevel({ evidence }),
           ...categories,
         };
 

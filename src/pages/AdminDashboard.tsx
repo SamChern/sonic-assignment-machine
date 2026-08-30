@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Fingerprint,
   Layers,
+  Library,
   Plug,
   Radio,
   ShieldCheck,
@@ -65,6 +66,12 @@ const DESTINATIONS: {
     label: "APIs & MCPs",
     description: "Connected providers and setup that still needs input.",
     icon: Plug,
+  },
+  {
+    to: "/admin/sound-library",
+    label: "Sound Library",
+    description: "Grounding coverage, gap curation and versioned grounding packs.",
+    icon: Library,
   },
   {
     to: "/admin/control-room",

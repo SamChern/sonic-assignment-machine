@@ -1,5 +1,10 @@
 import { ServerCohortPanel } from "@/components/admin/ServerCohortPanel";
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
+
+const SignatureCard = lazy(() =>
+  import("@/components/SignatureCard").then((m) => ({ default: m.SignatureCard })),
+);
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -145,7 +150,7 @@ function IdentifierSignals({
                 </div>
               </div>
             </div>
-            <div className="w-full max-w-sm">
+            <div className="w-full max-w-sm space-y-3">
               <ScoreBars
                 vector={[
                   meta.emotional_avg,
@@ -156,10 +161,28 @@ function IdentifierSignals({
                   meta.artistic_avg,
                 ]}
               />
+              {/* Step 15 — the Ensemble archetype and its anchors for the rolled-up
+                  Intuizi signal, so meta fingerprints read like any other analysis. */}
+              <Suspense fallback={<div className="h-24 animate-pulse rounded-lg bg-muted/40" />}>
+                <SignatureCard
+                  compact
+                  className="w-full"
+                  subjectRef={`intuizi-meta-${meta.identifierCount}-${meta.cohortCount}`}
+                  vector={{
+                    emotional: meta.emotional_avg,
+                    cognitive: meta.cognitive_avg,
+                    social: meta.social_avg,
+                    communication: meta.communication_avg,
+                    contextual: meta.contextual_avg,
+                    artistic: meta.artistic_avg,
+                  }}
+                />
+              </Suspense>
             </div>
           </div>
         </Card>
       )}
+
 
       {/* Cohort controls */}
       <Card className="p-4 bg-card/80">

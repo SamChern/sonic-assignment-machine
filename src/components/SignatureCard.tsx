@@ -198,11 +198,20 @@ export const SignatureCard = ({
                   </Badge>
                 ))}
               </div>
-              {!compact && archetype.anchors?.length > 0 && (
-                <p className="mt-2 text-xs text-muted-foreground/80">
-                  In the lineage of {archetype.anchors.join(" · ")}
+              {archetype.anchors?.length > 0 && (
+                // The anchors are the whole point of the Ensemble — they say what
+                // this signal sounds *like*. Compact only shortens the list.
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground/80">
+                  <span className="text-muted-foreground">In the lineage of </span>
+                  {(compact ? archetype.anchors.slice(0, 3) : archetype.anchors).join(" · ")}
+                  {compact && archetype.anchors.length > 3 && (
+                    <span className="text-muted-foreground/60">
+                      {" "}+{archetype.anchors.length - 3} more
+                    </span>
+                  )}
                 </p>
               )}
+
             </>
           ) : (
             <p className="mt-1 text-sm text-muted-foreground">

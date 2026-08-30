@@ -92,6 +92,9 @@ BATCH_ROWS = min(int(os.environ.get("BATCH_ROWS", "250")), 2000)
 ROLLUP_ROW_THRESHOLD = int(os.environ.get("ROLLUP_ROW_THRESHOLD", "5000000"))
 ROLLUP_CHUNK = 1_000
 READ_CHUNK = 50_000
+# Rows pulled per fetch when fast-forwarding a resumed file to its checkpoint.
+DRAIN_CHUNK = 200_000
+
 WAIT_SECONDS = 20
 POLL_SECONDS = max(int(os.environ.get("POLL_SECONDS", "20")), 5)
 VISIBILITY_SECONDS = 900
@@ -228,27 +231,87 @@ def reader_sql(object_key: str) -> str:
 
 
 def total_rows(con: duckdb.DuckDBPyConnection, object_key: str) -> int:
+    """Row count. For Parquet this reads the footer only — no data scan."""
+    if object_key.lower().endswith(".parquet"):
+        try:
+            row = con.execute(
+                f"SELECT sum(num_rows) FROM parquet_file_metadata('{s3_uri(object_key)}')"
+            ).fetchone()
+            if row and row[0] is not None:
+                return int(row[0])
+        except duckdb.Error as e:  # unreadable footer: fall back to a real count
+            log.warning("parquet footer read failed for %s: %s", object_key, str(e)[:200])
     row = con.execute(f"SELECT count(*) FROM {reader_sql(object_key)}").fetchone()
     return int(row[0]) if row else 0
 
 
-def read_slice(
-    con: duckdb.DuckDBPyConnection,
-    object_key: str,
-    offset: int,
-    limit: int,
-) -> List[Dict[str, Any]]:
-    """One bounded window of rows as dicts. DuckDB pushes LIMIT/OFFSET down."""
-    rel = con.execute(
-        f"SELECT * FROM {reader_sql(object_key)} LIMIT {int(limit)} OFFSET {int(offset)}"
-    )
-    columns = [d[0] for d in rel.description or []]
-    return [dict(zip(columns, row)) for row in rel.fetchall()]
+class RowStream:
+    """One streaming cursor over an object — the reason giant files finish.
+
+    The previous reader issued `LIMIT n OFFSET k` per chunk. DuckDB has to walk
+    the file from row 0 to honour an OFFSET, so chunk *k* re-decoded everything
+    before it: a 108M-row file cost O(n²) work and crawled at ~25k rows/min,
+    slowing further with every chunk. Here the query is executed **once** and
+    chunks are pulled with `fetchmany`, so each row is decoded exactly once and
+    throughput stays flat from the first chunk to the last.
+
+    Resuming a checkpointed file still has to reach `start_offset`, but that is a
+    single forward drain per lease (no callbacks, no normalization) rather than a
+    re-scan per chunk. The ledger cursor semantics are unchanged, so a resume is
+    byte-for-byte equivalent to the old reader's.
+    """
+
+    def __init__(self, object_key: str, start_offset: int = 0) -> None:
+        # Its own connection: a pending result set is per-connection state, and
+        # nothing else may `execute` on it while we are streaming.
+        self.con = connect_duckdb()
+        self.object_key = object_key
+        self.offset = 0
+        self.exhausted = False
+        self.con.execute(f"SELECT * FROM {reader_sql(object_key)}")
+        self.columns = [d[0] for d in self.con.description or []]
+        if start_offset > 0:
+            drained = self._drain(start_offset)
+            log.info(
+                "key=%s resumed: drained %d/%d rows to reach the checkpoint",
+                object_key, drained, start_offset,
+            )
+
+    def _drain(self, count: int) -> int:
+        """Fast-forward to a checkpoint without materializing dicts."""
+        remaining = count
+        while remaining > 0:
+            got = self.con.fetchmany(min(DRAIN_CHUNK, remaining))
+            if not got:
+                self.exhausted = True
+                break
+            remaining -= len(got)
+            self.offset += len(got)
+        return self.offset
+
+    def next_chunk(self, want: int) -> List[Dict[str, Any]]:
+        """The next bounded window of rows as dicts, or [] at end of file."""
+        want = int(want)
+        if self.exhausted or want <= 0:
+            return []
+        rows = self.con.fetchmany(want)
+        if not rows:
+            self.exhausted = True
+            return []
+        self.offset += len(rows)
+        return [dict(zip(self.columns, row)) for row in rows]
+
+    def close(self) -> None:
+        try:
+            self.con.close()
+        except Exception:  # noqa: BLE001 — closing is best effort
+            pass
 
 
 def batched(items: List[Dict[str, Any]], size: int) -> Iterable[List[Dict[str, Any]]]:
     for i in range(0, len(items), size):
         yield items[i:i + size]
+
 
 
 def row_day(row: Dict[str, Any]) -> Optional[str]:
@@ -259,7 +322,7 @@ def row_day(row: Dict[str, Any]) -> Optional[str]:
 
 
 def process_rollups(
-    con: duckdb.DuckDBPyConnection,
+    stream: RowStream,
     cb: Callback,
     base: Dict[str, Any],
     object_key: str,
@@ -273,18 +336,22 @@ def process_rollups(
     offset as its idempotency key. A retried callback replaces the same staged
     values; it cannot add their weight twice. The ledger cursor advances only
     after every staged row from the source chunk is durable.
+
+    Rows arrive from a single streaming cursor (`RowStream`), so the whole file is
+    decoded once end to end instead of being re-scanned per chunk.
     """
     started = time.monotonic()
     sent = 0
     read = 0
     skipped = 0
-    offset = int(base.get("rows_offset") or 0)
+    offset = stream.offset
     while offset < grand_total and not _stop:
         chunk_offset = offset
         want = min(READ_CHUNK, grand_total - offset)
-        rows = read_slice(con, object_key, offset, want)
+        rows = stream.next_chunk(want)
         if not rows:
             break
+
         agg: Dict[tuple, float] = {}
         for raw in rows:
             norm = normalize_row(report_type, raw)
@@ -325,7 +392,10 @@ def process_rollups(
             base.get("trace_id"), object_key, offset, grand_total, sent, len(agg),
         )
 
-    complete = offset >= grand_total
+    # An exhausted cursor is end-of-file even when the footer count disagreed,
+    # so a stale `total_rows` can never park a finished file in a requeue loop.
+    complete = offset >= grand_total or stream.exhausted
+
     if complete:
         # `loaded` tells the backend the rollups are staged; it promotes them into
         # scoring tasks inline and closes the ledger row out as `done`.
@@ -382,69 +452,75 @@ def process_message(
     started = time.monotonic()
     grand_total = total_rows(con, object_key)
 
-    # Very large deliveries are impression logs, not people: summarise them.
-    if grand_total >= ROLLUP_ROW_THRESHOLD:
-        log.info(
-            "trace=%s key=%s rows=%d >= rollup threshold %d; using summary mode",
-            trace_id, object_key, grand_total, ROLLUP_ROW_THRESHOLD,
-        )
-        return process_rollups(con, cb, base, object_key, report_type, grand_total)
+    # One cursor for this file, opened at the checkpoint. Closed in `finally` so
+    # a failure path never leaks the S3 connection or its buffers.
+    stream = RowStream(object_key, offset)
+    try:
+        # Very large deliveries are impression logs, not people: summarise them.
+        if grand_total >= ROLLUP_ROW_THRESHOLD:
+            log.info(
+                "trace=%s key=%s rows=%d >= rollup threshold %d; using summary mode",
+                trace_id, object_key, grand_total, ROLLUP_ROW_THRESHOLD,
+            )
+            return process_rollups(stream, cb, base, object_key, report_type, grand_total)
 
-    read = 0
-    queued = 0
-    skipped = 0
+        read = 0
+        queued = 0
+        skipped = 0
 
+        while read < slice_cap and offset < grand_total and not _stop:
+            want = min(READ_CHUNK, slice_cap - read, grand_total - offset)
+            rows = stream.next_chunk(want)
+            if not rows:
+                break
 
-    while read < slice_cap and offset < grand_total and not _stop:
-        want = min(READ_CHUNK, slice_cap - read, grand_total - offset)
-        rows = read_slice(con, object_key, offset, want)
-        if not rows:
-            break
+            normalized = [n for n in (normalize_row(report_type, r) for r in rows) if n]
+            skipped += len(rows) - len(normalized)
+            tasks = merge_by_identifier(normalized)
 
-        normalized = [n for n in (normalize_row(report_type, r) for r in rows) if n]
-        skipped += len(rows) - len(normalized)
-        tasks = merge_by_identifier(normalized)
+            offset += len(rows)
+            read += len(rows)
 
-        offset += len(rows)
-        read += len(rows)
+            # Cursor travels with the batch that produced it: if the process dies
+            # after this call, the resume starts exactly here.
+            if tasks:
+                for batch in batched(tasks, BATCH_ROWS):
+                    res = cb.post({
+                        **base,
+                        "phase": "progress",
+                        "identifiers": batch,
+                        "rows_read": 0,
+                        "rows_offset": offset,
+                        "total_rows": grand_total,
+                    })
+                    queued += int(res.get("identifiers_queued") or 0)
 
-        # Cursor travels with the batch that produced it: if the process dies
-        # after this call, the resume starts exactly here.
-        if tasks:
-            for batch in batched(tasks, BATCH_ROWS):
-                res = cb.post({
-                    **base,
-                    "phase": "progress",
-                    "identifiers": batch,
-                    "rows_read": 0,
-                    "rows_offset": offset,
-                    "total_rows": grand_total,
-                })
-                queued += int(res.get("identifiers_queued") or 0)
+            # Account the rows once, separately from the identifier batches, so
+            # `processed_rows` can never be inflated by a multi-batch chunk.
+            cb.post({
+                **base,
+                "phase": "progress",
+                "rows_read": len(rows),
+                "rows_offset": offset,
+                "total_rows": grand_total,
+            })
+            log.info(
+                "trace=%s key=%s rows=%d/%d queued=%d",
+                trace_id, object_key, offset, grand_total, queued,
+            )
 
-        # Account the rows once, separately from the identifier batches, so
-        # `processed_rows` can never be inflated by a multi-batch chunk.
+        complete = offset >= grand_total or stream.exhausted
         cb.post({
             **base,
-            "phase": "progress",
-            "rows_read": len(rows),
+            "phase": "complete",
+            "complete": complete,
+            "rows_read": 0,
             "rows_offset": offset,
             "total_rows": grand_total,
         })
-        log.info(
-            "trace=%s key=%s rows=%d/%d queued=%d",
-            trace_id, object_key, offset, grand_total, queued,
-        )
+    finally:
+        stream.close()
 
-    complete = offset >= grand_total
-    cb.post({
-        **base,
-        "phase": "complete",
-        "complete": complete,
-        "rows_read": 0,
-        "rows_offset": offset,
-        "total_rows": grand_total,
-    })
 
     return {
         "object_key": object_key,

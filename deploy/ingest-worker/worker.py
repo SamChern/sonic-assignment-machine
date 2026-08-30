@@ -452,69 +452,75 @@ def process_message(
     started = time.monotonic()
     grand_total = total_rows(con, object_key)
 
-    # Very large deliveries are impression logs, not people: summarise them.
-    if grand_total >= ROLLUP_ROW_THRESHOLD:
-        log.info(
-            "trace=%s key=%s rows=%d >= rollup threshold %d; using summary mode",
-            trace_id, object_key, grand_total, ROLLUP_ROW_THRESHOLD,
-        )
-        return process_rollups(con, cb, base, object_key, report_type, grand_total)
+    # One cursor for this file, opened at the checkpoint. Closed in `finally` so
+    # a failure path never leaks the S3 connection or its buffers.
+    stream = RowStream(object_key, offset)
+    try:
+        # Very large deliveries are impression logs, not people: summarise them.
+        if grand_total >= ROLLUP_ROW_THRESHOLD:
+            log.info(
+                "trace=%s key=%s rows=%d >= rollup threshold %d; using summary mode",
+                trace_id, object_key, grand_total, ROLLUP_ROW_THRESHOLD,
+            )
+            return process_rollups(stream, cb, base, object_key, report_type, grand_total)
 
-    read = 0
-    queued = 0
-    skipped = 0
+        read = 0
+        queued = 0
+        skipped = 0
 
+        while read < slice_cap and offset < grand_total and not _stop:
+            want = min(READ_CHUNK, slice_cap - read, grand_total - offset)
+            rows = stream.next_chunk(want)
+            if not rows:
+                break
 
-    while read < slice_cap and offset < grand_total and not _stop:
-        want = min(READ_CHUNK, slice_cap - read, grand_total - offset)
-        rows = read_slice(con, object_key, offset, want)
-        if not rows:
-            break
+            normalized = [n for n in (normalize_row(report_type, r) for r in rows) if n]
+            skipped += len(rows) - len(normalized)
+            tasks = merge_by_identifier(normalized)
 
-        normalized = [n for n in (normalize_row(report_type, r) for r in rows) if n]
-        skipped += len(rows) - len(normalized)
-        tasks = merge_by_identifier(normalized)
+            offset += len(rows)
+            read += len(rows)
 
-        offset += len(rows)
-        read += len(rows)
+            # Cursor travels with the batch that produced it: if the process dies
+            # after this call, the resume starts exactly here.
+            if tasks:
+                for batch in batched(tasks, BATCH_ROWS):
+                    res = cb.post({
+                        **base,
+                        "phase": "progress",
+                        "identifiers": batch,
+                        "rows_read": 0,
+                        "rows_offset": offset,
+                        "total_rows": grand_total,
+                    })
+                    queued += int(res.get("identifiers_queued") or 0)
 
-        # Cursor travels with the batch that produced it: if the process dies
-        # after this call, the resume starts exactly here.
-        if tasks:
-            for batch in batched(tasks, BATCH_ROWS):
-                res = cb.post({
-                    **base,
-                    "phase": "progress",
-                    "identifiers": batch,
-                    "rows_read": 0,
-                    "rows_offset": offset,
-                    "total_rows": grand_total,
-                })
-                queued += int(res.get("identifiers_queued") or 0)
+            # Account the rows once, separately from the identifier batches, so
+            # `processed_rows` can never be inflated by a multi-batch chunk.
+            cb.post({
+                **base,
+                "phase": "progress",
+                "rows_read": len(rows),
+                "rows_offset": offset,
+                "total_rows": grand_total,
+            })
+            log.info(
+                "trace=%s key=%s rows=%d/%d queued=%d",
+                trace_id, object_key, offset, grand_total, queued,
+            )
 
-        # Account the rows once, separately from the identifier batches, so
-        # `processed_rows` can never be inflated by a multi-batch chunk.
+        complete = offset >= grand_total or stream.exhausted
         cb.post({
             **base,
-            "phase": "progress",
-            "rows_read": len(rows),
+            "phase": "complete",
+            "complete": complete,
+            "rows_read": 0,
             "rows_offset": offset,
             "total_rows": grand_total,
         })
-        log.info(
-            "trace=%s key=%s rows=%d/%d queued=%d",
-            trace_id, object_key, offset, grand_total, queued,
-        )
+    finally:
+        stream.close()
 
-    complete = offset >= grand_total
-    cb.post({
-        **base,
-        "phase": "complete",
-        "complete": complete,
-        "rows_read": 0,
-        "rows_offset": offset,
-        "total_rows": grand_total,
-    })
 
     return {
         "object_key": object_key,

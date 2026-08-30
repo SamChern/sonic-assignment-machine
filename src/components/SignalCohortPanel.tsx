@@ -1,5 +1,10 @@
 import { ServerCohortPanel } from "@/components/admin/ServerCohortPanel";
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
+
+const SignatureCard = lazy(() =>
+  import("@/components/SignatureCard").then((m) => ({ default: m.SignatureCard })),
+);
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

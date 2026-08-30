@@ -14,6 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_guide_entries: {
+        Row: {
+          archived: boolean
+          body: string
+          category: string
+          created_at: string
+          id: string
+          kind: string
+          related_functions: string[]
+          related_routes: string[]
+          slug: string
+          sort_order: number
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          verify_note: string | null
+          version: string | null
+        }
+        Insert: {
+          archived?: boolean
+          body?: string
+          category?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          related_functions?: string[]
+          related_routes?: string[]
+          slug: string
+          sort_order?: number
+          status?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          verify_note?: string | null
+          version?: string | null
+        }
+        Update: {
+          archived?: boolean
+          body?: string
+          category?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          related_functions?: string[]
+          related_routes?: string[]
+          slug?: string
+          sort_order?: number
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          verify_note?: string | null
+          version?: string | null
+        }
+        Relationships: []
+      }
       analysis_jobs: {
         Row: {
           attempts: number

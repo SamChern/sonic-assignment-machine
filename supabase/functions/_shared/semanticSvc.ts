@@ -151,12 +151,15 @@ export async function clapEmbedText(
 }
 
 /**
- * 1536-d CLAP embedding of the audio itself, fetched by the service from a
- * public/signed http(s) URL. Null on any failure.
+ * CLAP embedding of the audio itself, fetched by the service from a
+ * public/signed http(s) URL. Projected to 1536-d unless `raw` is set (CLAP's
+ * native 512-d, which is what `taxonomy_nodes.audio_embedding` stores).
+ * Null on any failure.
  */
 export async function clapEmbedAudio(
   cfg: SemanticSvcConfig,
   url: string,
+  raw = false,
 ): Promise<number[] | null> {
   if (semanticSvcBreakerOpen()) return null;
   try {
@@ -168,7 +171,7 @@ export async function clapEmbedAudio(
       throw new Error(`unexpected audio embedding dims ${Array.isArray(v) ? v.length : "none"}`);
     }
     failures = 0;
-    return projectTo1536(v as number[]);
+    return raw ? (v as number[]) : projectTo1536(v as number[]);
   } catch (e) {
     noteFailure(e);
     return null;

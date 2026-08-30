@@ -359,6 +359,9 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                     );
                   })()}
 
+                  {/* Step 14b — how this score knew what it knew */}
+                  {audioSourceId && <GroundingBadge audioSourceId={audioSourceId} />}
+
                   {/* Radial chart */}
 
                   <RadialScoreChart key={`radial-${refreshKey}`} categories={categories} />

@@ -21,6 +21,12 @@ import {
 } from '../_shared/context.ts';
 import { clapBridge, getSemanticSvcConfig } from '../_shared/semanticSvc.ts';
 import { controlNumber } from '../_shared/control.ts';
+import {
+  type GroundingLevel,
+  nodeIsGrounded,
+  resolveGroundingLevel,
+  strongestGrounding,
+} from '../_shared/grounding.ts';
 
 
 /**

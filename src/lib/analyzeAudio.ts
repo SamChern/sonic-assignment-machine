@@ -8,6 +8,9 @@ export interface AnalyzeAudioCategory {
 export interface AnalyzeAudioSource {
   name: string;
   categories?: AnalyzeAudioCategory[];
+  /** How much real audio backed the scores, when the pipeline reports it. */
+  grounding_level?: "text-only" | "bridged" | "grounded";
+  tags?: string[];
 }
 
 export interface AnalyzeAudioResponse {

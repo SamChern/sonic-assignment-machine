@@ -15,6 +15,9 @@ const VisualsFallback = () => (
 import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 import { FeedbackPopover } from "@/components/FeedbackPopover";
 import { GroundingBadge } from "@/components/GroundingBadge";
+const SignatureCard = lazy(() =>
+  import("@/components/SignatureCard").then((m) => ({ default: m.SignatureCard }))
+);
 import { supabase } from "@/integrations/supabase/client";
 
 interface CategoryScore {
@@ -376,7 +379,20 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                       onSubmitted={() => refreshSource(audioSourceId, categories)}
                     />
                   )}
+
+                  {/* Step 15 — the sound of this fingerprint, plus its Ensemble archetype */}
+                  <Suspense fallback={<VisualsFallback />}>
+                    <SignatureCard
+                      className="w-full"
+                      compact
+                      subjectRef={source.name}
+                      vector={Object.fromEntries(
+                        categories.map(c => [c.name.toLowerCase(), c.score])
+                      ) as never}
+                    />
+                  </Suspense>
                 </div>
+
 
                 {/* Right side: Category cards */}
                 <div className="flex-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

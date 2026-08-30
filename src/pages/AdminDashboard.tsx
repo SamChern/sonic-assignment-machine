@@ -1,10 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ComplianceAlert } from "@/components/admin/ComplianceAlert";
+import { AdminDigestCard } from "@/components/admin/AdminDigestCard";
+import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
 
 import {
   Activity,
   ArrowLeft,
+  BookOpen,
+  Command,
+  Eye,
   Fingerprint,
   Layers,
   Library,
@@ -14,76 +19,112 @@ import {
   SlidersHorizontal,
   Users,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { useUiPreferenceValue } from "@/hooks/useUiPreference";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
  * /admin is a status overview, not a workbench. Every heavy surface it used to
  * host inline now lives on its own route, so this page loads fast, says what the
  * system is doing, and points at the one place to go next.
+ *
+ * Step 16c layers three depths over the same surface — Glance, Operate,
+ * Diagnose — plus a ⌘K palette, a daily digest and preview-as-role.
  */
+
+type Depth = "glance" | "operate" | "diagnose";
+
+const DEPTHS: { value: Depth; label: string; blurb: string }[] = [
+  { value: "glance", label: "Glance", blurb: "Is the system healthy right now?" },
+  { value: "operate", label: "Operate", blurb: "Knobs, approvals, access." },
+  { value: "diagnose", label: "Diagnose", blurb: "Ledgers, failures, drift." },
+];
+
+const PREVIEW_ROLES: { label: string; to: string }[] = [
+  { label: "Consumer", to: "/?preview_role=curious" },
+  { label: "Enterprise viewer", to: "/workspace?preview_role=marketing" },
+  { label: "Creator", to: "/creator?preview_role=creator" },
+];
 
 const DESTINATIONS: {
   to: string;
   label: string;
   description: string;
   icon: typeof Users;
+  depths: Depth[];
 }[] = [
   {
     to: "/admin/workbench",
     label: "Users, cohorts & fingerprints",
     description: "Cross-user analysis, aggregate networks, scope & compare.",
     icon: Users,
+    depths: ["glance", "operate", "diagnose"],
   },
   {
     to: "/admin/semantic",
     label: "SonicSIM analysis results",
     description: "Post-ingestion semantic processing and confidence breakdown.",
     icon: Radio,
+    depths: ["glance", "diagnose"],
   },
   {
     to: "/admin/pipeline",
     label: "Intuizi Console",
     description: "Audiences, activations and taxonomy mapping.",
     icon: Layers,
+    depths: ["operate", "diagnose"],
   },
   {
     to: "/admin/compatibility",
     label: "Ingestion compatibility",
     description: "Per-source test runs and debug reruns.",
     icon: ShieldCheck,
+    depths: ["diagnose"],
   },
   {
     to: "/admin/activations",
     label: "Activation access",
     description: "Grant Intuizi activations to organizations.",
     icon: ShieldCheck,
+    depths: ["operate"],
   },
   {
     to: "/admin/integrations",
     label: "APIs & MCPs",
     description: "Connected providers and setup that still needs input.",
     icon: Plug,
+    depths: ["operate"],
   },
   {
     to: "/admin/sound-library",
     label: "Sound Library",
     description: "Grounding coverage, gap curation and versioned grounding packs.",
     icon: Library,
+    depths: ["operate", "diagnose"],
   },
   {
     to: "/admin/control-room",
     label: "Control Room",
     description: "Pipeline knobs, thresholds and calibration priors.",
     icon: SlidersHorizontal,
+    depths: ["operate"],
+  },
+  {
+    to: "/admin/guide",
+    label: "Guide & Glossary",
+    description: "What every term means, how each subsystem is set up, and what is live.",
+    icon: BookOpen,
+    depths: ["glance", "operate", "diagnose"],
   },
   {
     to: "/admin/ec2",
     label: "EC2 & inference status",
     description: "Worker health, retention compliance, librosa service.",
     icon: Activity,
+    depths: ["glance", "diagnose"],
   },
 ];
 
@@ -93,6 +134,7 @@ const METRICS = [
   { key: "source_analyses", label: "Analyses", gradient: "var(--gradient-social)" },
   { key: "user_fingerprints", label: "Fingerprints", gradient: "var(--gradient-artistic)" },
 ] as const;
+
 
 const AdminDashboard = () => {
   const navigate = useNavigate();

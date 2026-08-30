@@ -115,15 +115,30 @@ export const ConsumerDoor = ({
       setMonthlyUsed(null);
       return;
     }
+    let cancelled = false;
     const start = new Date();
     start.setDate(1);
     start.setHours(0, 0, 0, 0);
-    void supabase
-      .from("source_analyses")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .gte("created_at", start.toISOString())
-      .then(({ count }) => setMonthlyUsed(count ?? 0));
+    void (async () => {
+      const { count, error } = await supabase
+        .from("source_analyses")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gte("created_at", start.toISOString());
+      if (cancelled) return;
+      if (error) {
+        // Unknown usage must not silently look like "quota exhausted".
+        console.error("monthly usage lookup failed", error);
+        setQuotaError("We couldn't check your monthly usage — showing your allowance as unused.");
+        setMonthlyUsed(0);
+        return;
+      }
+      setQuotaError(null);
+      setMonthlyUsed(count ?? 0);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [userId, result]);
 
   const quotaExhausted = isSignedIn

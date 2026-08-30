@@ -303,7 +303,10 @@ Deno.serve(async (req) => {
   // `failed` = worker could not process the file. Step 2.5-alt adds `loaded`
   // (rollups staged, promote them) and `skipped` (summary-only file).
   const phase = typeof body.phase === "string" ? body.phase : "progress";
-  if (!["claim", "progress", "complete", "failed", "loaded", "skipped"].includes(phase)) {
+  if (
+    !["claim", "progress", "complete", "failed", "loaded", "skipped", "retryable_stop"]
+      .includes(phase)
+  ) {
     return json({ success: false, error: `unknown phase "${phase}"` }, 400);
   }
 
@@ -321,7 +324,7 @@ Deno.serve(async (req) => {
   const ledgerQuery = admin
     .from("intuizi_ingest_files")
     .select(
-      "id,object_key,report_type,status,total_rows,processed_rows,failed_rows,row_group_cursor,rows_offset,row_groups_total,trace_id",
+      "id,object_key,report_type,status,total_rows,processed_rows,failed_rows,row_group_cursor,rows_offset,row_groups_total,retryable_stops,trace_id",
     );
   const { data: file, error: fileErr } = fileId
     ? await ledgerQuery.eq("id", fileId).maybeSingle()
@@ -430,6 +433,51 @@ Deno.serve(async (req) => {
       reason: reason.slice(0, 300),
     }));
     return json({ success: true, file_id: file.id, status: "skipped" });
+  }
+
+  // ---- Retryable stop: the worker paused, it did NOT fail -------------------
+  // The database pushed back (statement timeout / lock) for longer than the
+  // worker's own retry budget. Nothing is lost: the ledger cursor still points
+  // at the last durable write, so the file goes back to the pending pool and the
+  // next lease resumes from there. Counted separately so the admin ledger can
+  // show "paused and resumed" instead of "failed".
+  if (phase === "retryable_stop") {
+    const reason = typeof body.error === "string"
+      ? body.error
+      : "backend busy; worker stopped cleanly";
+    const maxAttempts = await controlNumber(admin, "ingest.max_dispatch_attempts", 8);
+    const { data: newStatus } = await admin.rpc("requeue_ingest_file", {
+      p_id: file.id,
+      p_reason: reason.slice(0, 2000),
+      p_max_attempts: maxAttempts,
+    });
+    await admin.from("intuizi_ingest_files").update({
+      retryable_stops: (Number(
+        (file as { retryable_stops?: number }).retryable_stops ?? 0,
+      ) || 0) + 1,
+      heartbeat_at: now,
+      worker_id: workerId,
+      trace_id: traceId,
+    }).eq("id", file.id);
+    console.warn(JSON.stringify({
+      evt: "worker_retryable_stop",
+      trace_id: traceId,
+      object_key: file.object_key,
+      worker_id: workerId,
+      new_status: newStatus ?? "discovered",
+      resume_rows_offset: file.rows_offset ?? 0,
+      reason: reason.slice(0, 400),
+    }));
+    return json({
+      success: true,
+      file_id: file.id,
+      status: newStatus ?? "discovered",
+      retryable: true,
+      resume: {
+        row_group_cursor: Number(file.row_group_cursor ?? 0) || 0,
+        rows_offset: Number(file.rows_offset ?? 0) || 0,
+      },
+    });
   }
 
 

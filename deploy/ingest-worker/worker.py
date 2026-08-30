@@ -111,6 +111,15 @@ def _handle_stop(*_: Any) -> None:
     log.info("shutdown requested; finishing current message")
 
 
+class RetryableStop(RuntimeError):
+    """The backend is busy, not broken: pause this file and resume from the cursor.
+
+    Raised when a callback keeps answering with a transient signal (503 / 429 /
+    network) for longer than our retry budget. The ledger cursor still points at
+    the last durable write, so the file is requeued rather than failed.
+    """
+
+
 class Callback:
     """Thin client for `ingest-worker-callback` with bounded retries."""
 
@@ -124,6 +133,7 @@ class Callback:
     def post(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         payload = {**payload, "worker_id": WORKER_ID}
         last: Optional[Exception] = None
+        transient = False
         # A write that timed out on a busy database is not a bad payload: the
         # ledger cursor is untouched, so re-sending the same slice is safe and
         # cheaper than losing a 40M-row file. Retry those far longer.
@@ -132,6 +142,7 @@ class Callback:
                 res = self.session.post(CALLBACK_URL, json=payload, timeout=120)
             except requests.RequestException as e:  # network blip
                 last = e
+                transient = True
             else:
                 if res.status_code < 300:
                     return res.json()
@@ -141,13 +152,17 @@ class Callback:
                         f"callback rejected ({res.status_code}): {res.text[:400]}"
                     )
                 last = RuntimeError(f"callback {res.status_code}: {res.text[:200]}")
+                transient = True
                 if res.status_code == 503:
                     log.warning(
                         "callback busy (attempt %d), backend asked us to retry: %s",
                         attempt, res.text[:200],
                     )
             time.sleep(min(120, 2 ** attempt))
+        if transient:
+            raise RetryableStop(f"backend busy after retries: {last}")
         raise RuntimeError(f"callback failed after retries: {last}")
+
 
     def post_once(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """One callback attempt for idempotent operations already retried by lease."""
@@ -519,6 +534,22 @@ def run_pull(cb: Callback, con: duckdb.DuckDBPyConnection) -> None:
             files_done += 1
             log.info("done %s", json.dumps(summary))
 
+        except RetryableStop as e:
+            # Clean pause, not a failure: hand the file back and try again later.
+            log.warning("backend busy, pausing %s: %s", msg["object_key"], e)
+            try:
+                cb.post_once({
+                    "file_id": msg["file_id"],
+                    "object_key": msg["object_key"],
+                    "trace_id": msg["trace_id"],
+                    "phase": "retryable_stop",
+                    "error": str(e)[:1000],
+                })
+            except Exception:  # noqa: BLE001
+                log.warning("could not report the pause; lease will expire instead")
+            cb.heartbeat({"state": "backend_busy", "object_key": msg["object_key"]})
+            time.sleep(min(300, 30 * (lease_fails + 1)))
+
         except Exception as e:  # noqa: BLE001 — park the file, keep the worker up
             log.exception("file failed: %s", e)
             try:
@@ -532,6 +563,7 @@ def run_pull(cb: Callback, con: duckdb.DuckDBPyConnection) -> None:
             except Exception:  # noqa: BLE001
                 log.exception("could not report failure to callback")
             time.sleep(5)
+
 
 
 def main() -> int:

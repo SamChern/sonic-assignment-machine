@@ -37,9 +37,22 @@ const statOf = (stats: unknown, key: string): string => {
   return v === undefined || v === null ? "—" : String(v);
 };
 
+/** One ledger row, as shown in the per-file list. */
+interface LedgerRow {
+  id: string;
+  object_key: string;
+  status: string;
+  worker_id: string | null;
+  heartbeat_at: string | null;
+  rows_offset: number | null;
+  total_rows: number | null;
+  retryable_stops: number | null;
+}
+
 const WorkerHealthCard = () => {
   const [beats, setBeats] = useState<Beat[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [files, setFiles] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -52,19 +65,35 @@ const WorkerHealthCard = () => {
         .limit(10),
       supabase
         .from("intuizi_ingest_files")
-        .select("status")
-        .in("status", ["discovered", "processing", "loaded", "failed", "skipped"])
+        .select(
+          "id, object_key, status, worker_id, heartbeat_at, rows_offset, total_rows, retryable_stops",
+        )
+        .in("status", [
+          "discovered",
+          "processing",
+          "partial",
+          "loaded",
+          "failed",
+          "skipped",
+          "blocked",
+        ])
+        .order("updated_at", { ascending: false })
         .limit(1000),
     ]);
     setBeats((beatRes.data as Beat[]) ?? []);
+    const rows = ((fileRes.data ?? []) as LedgerRow[]);
     const tally: Record<string, number> = {};
-    for (const row of fileRes.data ?? []) {
-      const s = String((row as { status: string }).status);
-      tally[s] = (tally[s] ?? 0) + 1;
-    }
+    for (const row of rows) tally[row.status] = (tally[row.status] ?? 0) + 1;
     setCounts(tally);
+    // Only the rows an operator acts on: in flight, waiting, or parked.
+    setFiles(
+      rows
+        .filter((r) => r.status !== "loaded" && r.status !== "skipped")
+        .slice(0, 12),
+    );
     setLoading(false);
   }, []);
+
 
   useEffect(() => {
     void load();
@@ -115,6 +144,51 @@ const WorkerHealthCard = () => {
           </div>
         ))}
       </div>
+
+      {files.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">
+            Files in flight, waiting or parked
+          </p>
+          {files.map((f) => {
+            const stops = Number(f.retryable_stops ?? 0);
+            const pct = f.total_rows
+              ? Math.min(100, Math.round((Number(f.rows_offset ?? 0) / f.total_rows) * 100))
+              : null;
+            return (
+              <div
+                key={f.id}
+                className="rounded-md border border-border bg-muted/20 p-3 space-y-1 text-xs"
+              >
+                <p className="font-mono break-all text-foreground">
+                  {f.object_key.split("/").pop()}
+                </p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
+                  <Badge
+                    variant={
+                      f.status === "failed" || f.status === "blocked" ? "destructive" : "secondary"
+                    }
+                    className="text-[10px]"
+                  >
+                    {f.status}
+                  </Badge>
+                  <span>claim {f.worker_id ?? "unclaimed"}</span>
+                  <span>heartbeat {relative(f.heartbeat_at)}</span>
+                  <span>
+                    resume at row {Number(f.rows_offset ?? 0).toLocaleString()}
+                    {pct !== null ? ` (${pct}%)` : ""}
+                  </span>
+                  <span className={stops > 0 ? "text-primary" : undefined}>
+                    paused &amp; resumed {stops}×
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+
 
       {beats.length === 0 ? (
         <p className="text-xs text-muted-foreground">

@@ -1,12 +1,12 @@
 /**
- * Sonic Signature mapping + deterministic synthesis (Step 15).
+ * Sonic Signature mapping + deterministic synthesis (Step 15) — CLIENT MIRROR.
  *
- * CANONICAL SOURCE. `src/lib/signature/mapping.ts` is a verbatim mirror of the
- * pure mapping half of this file for the client-side WebAudio fallback — keep
- * the two in sync when the mapping changes.
+ * Verbatim mirror of `supabase/functions/_shared/signature.ts`, which is the
+ * canonical source. Keep the two in sync: the WebAudio fallback must produce the
+ * same sound as the server render, so client and server share these constants.
  *
  * Nothing here is random: every choice derives from a seeded PRNG keyed on the
- * subject hash, so the same vector + tags always produce byte-identical audio.
+ * subject hash, so the same vector + tags always produce identical audio.
  */
 
 export const SIGNATURE_AXES = [

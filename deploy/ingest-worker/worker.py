@@ -392,7 +392,10 @@ def process_rollups(
             base.get("trace_id"), object_key, offset, grand_total, sent, len(agg),
         )
 
-    complete = offset >= grand_total
+    # An exhausted cursor is end-of-file even when the footer count disagreed,
+    # so a stale `total_rows` can never park a finished file in a requeue loop.
+    complete = offset >= grand_total or stream.exhausted
+
     if complete:
         # `loaded` tells the backend the rollups are staged; it promotes them into
         # scoring tasks inline and closes the ledger row out as `done`.

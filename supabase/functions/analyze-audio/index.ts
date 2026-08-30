@@ -472,6 +472,14 @@ Deno.serve(async (req) => {
 
 
         for (const s of uncachedSources) if (!s.evidence) s.evidence = 'none';
+        // Step 14b — settle the honesty level for every source, keeping the
+        // strongest claim already established on the tag-only path.
+        for (const s of uncachedSources) {
+          const fromEvidence = resolveGroundingLevel({ evidence: s.evidence });
+          s.grounding_level = s.grounding_level
+            ? strongestGrounding(s.grounding_level, fromEvidence)
+            : fromEvidence;
+        }
         console.log(
           'Evidence tiers:',
           uncachedSources.reduce((acc, s) => {

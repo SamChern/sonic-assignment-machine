@@ -12,13 +12,13 @@
 ## Step 16 — Persona experience layer (four doors, one house)
 - [x] 16.0 `profiles.persona`, first-visit chooser, door switcher, per-persona landing
 - [x] 16a Consumer door: universal input, single result view, share permalink, cohort upsell, quota
-- [ ] 16b Enterprise door: three job cards, brief box, Confidence chip, Playbooks, client workspaces, one-pager export, client narrative
-- [ ] 16c Admin door: Glance/Operate/Diagnose depth toggle, ⌘K palette, daily digest, preview-as-role
+- [x] 16b Enterprise door: three job cards, brief box, Confidence chip, Playbooks, client workspaces, one-pager export, client narrative
+- [x] 16c Admin door: Glance/Operate/Diagnose depth toggle, ⌘K palette, daily digest, preview-as-role
 
 ## Step 17 — Creator door (Originality Ledger + consented corpus)
-- [ ] 17a Creator works: fingerprint, novelty-vs-resonance quadrant, lineage, catalog arc
-- [ ] 17b Originality Ledger: attestation, machine-use terms, pack manifest enforcement, attribution receipts
-- [ ] 17c Corpus opt-in, brief matching, creator dashboard
+- [x] 17a Creator works: fingerprint, novelty-vs-resonance quadrant, lineage, catalog arc
+- [x] 17b Originality Ledger: attestation, machine-use terms, pack manifest enforcement, attribution receipts
+- [x] 17c Corpus opt-in, brief matching, creator dashboard
 
 ## Follow-up (ingest)
 - [ ] Replace worker.py LIMIT/OFFSET reads with a single streaming DuckDB cursor (quadratic re-scan is why giant files crawl)

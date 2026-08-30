@@ -109,6 +109,8 @@ interface AudioSource {
   context_neighbors?: NeighborExemplar[];
   /** Step 4 — true when scored from tag embeddings, no librosa involved. */
   tag_only?: boolean;
+  /** Step 14b — how this score knew what it knew. */
+  grounding_level?: GroundingLevel;
 }
 
 

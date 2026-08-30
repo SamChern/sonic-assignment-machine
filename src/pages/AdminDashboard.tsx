@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Fingerprint,
   Layers,
+  Library,
   Plug,
   Radio,
   ShieldCheck,

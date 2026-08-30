@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/collapsible";
 import { GroundingBadge } from "@/components/GroundingBadge";
 import { SignatureCard } from "@/components/SignatureCard";
+import CohortUpsellCard from "@/components/home/CohortUpsellCard";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";

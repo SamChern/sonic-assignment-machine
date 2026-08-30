@@ -33,6 +33,7 @@ import {
 import { GroundingBadge } from "@/components/GroundingBadge";
 import { SignatureCard } from "@/components/SignatureCard";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { AUDIOSCOPE_CATEGORIES, categoryToken } from "@/lib/audioscope";
 import { calculateSimilarity, type FingerprintLike } from "@/lib/fingerprintMath";
 import type { UserFingerprint } from "@/hooks/useFingerprints";
@@ -106,6 +107,8 @@ export const ConsumerDoor = ({
   const [result, setResult] = useState<DoorResult | null>(null);
   const [monthlyUsed, setMonthlyUsed] = useState<number | null>(null);
   const [guestRuns, setGuestRuns] = useState(() => readGuestRuns());
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const sharedId = searchParams.get("share");
 

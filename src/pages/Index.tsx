@@ -218,12 +218,13 @@ const Index = () => {
     ];
 
     const invokeAnalysis = async () => {
-      const { data, error } = await supabase.functions.invoke('analyze-audio', {
+      // Bounded: a hung edge function must fail loudly rather than spin forever.
+      const { data, error } = await invokeWithTimeout<AnalyzeAudioResponse>('analyze-audio', {
         body: {
           sources,
           user_id: user?.id,
           save_results: !!user,
-        }
+        },
       });
 
       if (error) {

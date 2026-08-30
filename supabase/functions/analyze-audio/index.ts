@@ -925,7 +925,7 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
 
     // === OPTIMIZATION 2: Batch database operations ===
     let fingerprint = null;
-    if (user_id && save_results && supabaseAdmin) {
+    if (user_id && persist && supabaseAdmin) {
       console.log('Saving analysis results for user:', user_id);
 
       // Create a map of source names to their audio_source_ids

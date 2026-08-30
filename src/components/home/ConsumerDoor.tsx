@@ -34,6 +34,7 @@ import { GroundingBadge } from "@/components/GroundingBadge";
 import { SignatureCard } from "@/components/SignatureCard";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
+import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";
 import { AUDIOSCOPE_CATEGORIES, categoryToken } from "@/lib/audioscope";
 import { calculateSimilarity, type FingerprintLike } from "@/lib/fingerprintMath";
 import type { UserFingerprint } from "@/hooks/useFingerprints";
@@ -50,14 +51,6 @@ interface DoorResult {
   tags: string[];
 }
 
-/** Shape of the `analyze-audio` payload this door reads. */
-interface AnalyzeResponse {
-  error?: string;
-  sources?: Array<{
-    name: string;
-    categories?: Array<{ name: string; score: number; description?: string }>;
-  }>;
-}
 
 const GUEST_RUNS_KEY = "sonicsim.guestRuns";
 const GUEST_LIMIT = 1;
@@ -211,7 +204,7 @@ export const ConsumerDoor = ({
       try {
         // Bounded so a stalled edge function surfaces as an error instead of an
         // endless spinner.
-        const { data, error } = await invokeWithTimeout<AnalyzeResponse>("analyze-audio", {
+        const { data, error } = await invokeWithTimeout<AnalyzeAudioResponse>("analyze-audio", {
           body: { sources: [source], user_id: userId ?? undefined, save_results: !!userId },
         });
         if (error) throw error;

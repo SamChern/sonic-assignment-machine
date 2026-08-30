@@ -13,15 +13,7 @@ import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Shield, Building2
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
-
-/** Shape of the `analyze-audio` payload this page reads. */
-interface AnalyzeAudioResponse {
-  error?: string;
-  sources?: Array<{
-    name: string;
-    categories?: Array<{ name: string; score: number; description?: string }>;
-  }>;
-}
+import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";
 import heroBackground from "@/assets/hero-background.jpg";
 import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";

@@ -14,6 +14,7 @@ import Index from "./pages/Index";
 
 const Auth = lazy(() => import("./pages/Auth"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminWorkbench = lazy(() => import("./pages/admin/AdminWorkbench"));
@@ -99,6 +100,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
 
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/workbench" element={<AdminWorkbench />} />

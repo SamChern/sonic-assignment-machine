@@ -16,7 +16,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   isAdmin: boolean;
-  signUp: (email: string, password: string, username?: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, username?: string, nextPath?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -104,9 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAdmin(!error && !!data);
   };
 
-  const signUp = async (email: string, password: string, username?: string) => {
-    const redirectUrl = `${window.location.origin}/`;
-    
+  const signUp = async (email: string, password: string, username?: string, nextPath?: string) => {
+    // Preserve an OAuth consent (or other) return path through email confirmation.
+    const safeNext = nextPath && /^\/[^/]/.test(nextPath) ? nextPath : '/';
+    const redirectUrl = `${window.location.origin}${safeNext}`;
+
     const { error } = await supabase.auth.signUp({
       email,
       password,

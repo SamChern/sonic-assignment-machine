@@ -22,10 +22,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
 import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
 import { WaveformBackground } from "@/components/WaveformBackground";
+import { usePersona } from "@/hooks/usePersona";
+import PersonaChooser from "@/components/persona/PersonaChooser";
+import DoorSwitcher from "@/components/persona/DoorSwitcher";
+import ConsumerDoor from "@/components/home/ConsumerDoor";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useFingerprints } from "@/hooks/useFingerprints";
 import { analysisToScores, fingerprintToScores } from "@/lib/audioscope";
+
 
 
 

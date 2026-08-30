@@ -398,10 +398,15 @@ Deno.serve(async (req) => {
               .filter(Boolean)
               .join(' ');
 
+            // Step 14b — a tag whose vector came from listened-to sample audio
+            // makes this a grounded claim, not a label-semantics guess.
+            const groundedTag = nodes.some((n) => nodeIsGrounded(n));
+
             // kNN exemplars from the subject vector. Grounded CLAP tags are
             // 512-d, so bridge (or deterministically pad) into the catalog
             // space instead of skipping retrieval entirely.
             const bridged = subject ? await toCatalogVector(supabaseAdmin, subject.vector) : null;
+            let neighbors = false;
             if (bridged) {
               s.taxonomy_context = [s.taxonomy_context, bridged.audit].filter(Boolean).join(' ');
               const { data: knn } = await supabaseAdmin.rpc('match_audio_profiles', {
@@ -414,8 +419,15 @@ Deno.serve(async (req) => {
                 s.context_neighbors = ctx.exemplars;
                 s.taxonomy_context = [s.taxonomy_context, ctx.text].filter(Boolean).join(' ');
                 s.evidence = 'neighbors';
+                neighbors = true;
               }
             }
+            s.grounding_level = resolveGroundingLevel({
+              evidence: s.evidence,
+              groundedTag,
+              bridged: Boolean(bridged),
+              neighbors,
+            });
           } catch (e) {
             console.error('Tag-only subject vector failed:', e);
           }

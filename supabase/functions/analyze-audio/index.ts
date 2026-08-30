@@ -895,6 +895,8 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
           source_name: sourceResult.name,
           confidence,
           context_neighbors: matched?.context_neighbors ?? null,
+          grounding_level:
+            matched?.grounding_level ?? resolveGroundingLevel({ evidence }),
           ...categories,
         };
 

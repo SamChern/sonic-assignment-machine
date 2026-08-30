@@ -23,3 +23,4 @@
 ## Follow-up (ingest)
 - [ ] Replace worker.py LIMIT/OFFSET reads with a single streaming DuckDB cursor (quadratic re-scan is why giant files crawl)
 - [ ] Watch the Step 2 replay of the 7 giant CTV/web files and report when they close out
+- [ ] Surface Ensemble archetype anchors ("in the lineage of…") in every fingerprint surface: uploaded/Spotify analyses and Intuizi meta-signal cohorts

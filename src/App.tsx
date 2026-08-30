@@ -113,12 +113,14 @@ const App = () => (
               <Route path="/admin/activations" element={<AdminActivationGrants />} />
               <Route path="/admin/control-room" element={<AdminControlRoom />} />
               <Route path="/admin/sound-library" element={<AdminSoundLibrary />} />
+              <Route path="/admin/guide" element={<AdminGuide />} />
               <Route path="/admin/pipeline" element={<IntegrationStatus />} />
               <Route path="/admin/compatibility" element={<IngestionCompatibility />} />
 
               <Route path="/admin/semantic" element={<SemanticAnalysis />} />
 
               <Route path="/workspace" element={<Workspace />} />
+              <Route path="/creator" element={<CreatorDoor />} />
               <Route path="/demo" element={<Demo />} />
 
 

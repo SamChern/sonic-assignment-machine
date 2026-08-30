@@ -140,6 +140,16 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const { isAdmin, loading } = useAuth();
   const [counts, setCounts] = useState<Record<string, number | null>>({});
+  const [depth, setDepth] = useUiPreferenceValue<Depth>(
+    "admin.depth",
+    "glance",
+    (v) => v === "glance" || v === "operate" || v === "diagnose",
+  );
+
+  const visible = useMemo(
+    () => DESTINATIONS.filter((d) => d.depths.includes(depth)),
+    [depth],
+  );
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -173,16 +183,72 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen">
+      <AdminCommandPalette
+        destinations={DESTINATIONS.map((d) => ({ to: d.to, label: d.label }))}
+        extra={[
+          { to: "/", label: "Home" },
+          { to: "/workspace", label: "Enterprise workspace" },
+          { to: "/creator", label: "Creator door" },
+        ]}
+      />
       <header className="border-b border-border/60 bg-card/50 px-4 py-4 backdrop-blur-sm sm:px-6">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold sm:text-2xl">Admin overview</h1>
-            <p className="text-sm text-muted-foreground">System status and where to go next.</p>
+            <p className="text-sm text-muted-foreground">
+              {DEPTHS.find((d) => d.value === depth)?.blurb}
+            </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Home
-          </Button>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="hidden gap-1 sm:flex">
+              <Command className="h-3 w-3" />
+              K
+            </Badge>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Home
+            </Button>
+          </div>
+        </div>
+        <div className="mx-auto mt-3 flex max-w-6xl flex-wrap items-center gap-2">
+          <div
+            role="tablist"
+            aria-label="Admin depth"
+            className="inline-flex rounded-lg border border-border/60 bg-background/50 p-0.5"
+          >
+            {DEPTHS.map((d) => (
+              <button
+                key={d.value}
+                role="tab"
+                aria-selected={depth === d.value}
+                onClick={() => setDepth(d.value)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-smooth ${
+                  depth === d.value
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Eye className="h-3 w-3" />
+              Preview as
+            </span>
+            {PREVIEW_ROLES.map((r) => (
+              <Button
+                key={r.to}
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => window.open(r.to, "_blank", "noopener")}
+              >
+                {r.label}
+              </Button>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -213,12 +279,18 @@ const AdminDashboard = () => {
           ))}
         </div>
 
+        {depth !== "glance" ? null : (
+          <div className="mb-6">
+            <AdminDigestCard />
+          </div>
+        )}
+
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
           <Fingerprint className="h-4 w-4" />
-          Admin surfaces
+          {depth === "glance" ? "Admin surfaces" : `${depth === "operate" ? "Operate" : "Diagnose"} surfaces`}
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {DESTINATIONS.map(({ to, label, description, icon: Icon }) => (
+          {visible.map(({ to, label, description, icon: Icon }) => (
             <Link key={to} to={to} className="group">
               <Card className="h-full border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth group-hover:shadow-elegant">
                 <div className="flex items-start gap-3">
@@ -234,9 +306,16 @@ const AdminDashboard = () => {
             </Link>
           ))}
         </div>
+
+        {depth === "diagnose" && (
+          <div className="mt-6">
+            <AdminDigestCard />
+          </div>
+        )}
       </main>
     </div>
   );
 };
 
 export default AdminDashboard;
+

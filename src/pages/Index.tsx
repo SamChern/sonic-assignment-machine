@@ -591,7 +591,15 @@ const Index = () => {
         </Tabs>
       </div>
 
+      {/* Step 16.0 — asked once: "What brings you here?" */}
+      <PersonaChooser
+        open={personaReady && !persona && !isAdmin && !personaAsked}
+        onChoose={setPersona}
+        onDismiss={() => setPersonaAsked(true)}
+      />
+
       {/* Get Started Dialog */}
+
       <Dialog open={showGetStartedDialog} onOpenChange={setShowGetStartedDialog}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>

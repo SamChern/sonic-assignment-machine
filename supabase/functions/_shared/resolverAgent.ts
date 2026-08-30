@@ -180,6 +180,8 @@ export async function resolveSymbol(opts: ResolveOptions): Promise<Resolution> {
 
   const res = await fetch(GATEWAY_URL, {
     method: "POST",
+    // A stalled stream would otherwise run past the resolver's lease budget.
+    signal: AbortSignal.timeout(120_000),
     headers: {
       "Content-Type": "application/json",
       "Lovable-API-Key": apiKey,

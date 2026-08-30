@@ -24,6 +24,8 @@ async function getJson(url: string): Promise<unknown | null> {
     if (!ALLOWED_HOSTS.has(host)) return null;
     const res = await fetch(url, {
       headers: { "Accept": "application/json", "User-Agent": "SonicSIM-Resolver/1.0" },
+      // A hung upstream must never hold the resolver's lease open.
+      signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) return null;
     return await res.json();

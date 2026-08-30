@@ -32,7 +32,10 @@ import {
 } from "@/components/ui/collapsible";
 import { GroundingBadge } from "@/components/GroundingBadge";
 import { SignatureCard } from "@/components/SignatureCard";
+import CohortUpsellCard from "@/components/home/CohortUpsellCard";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
+import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";
 import { AUDIOSCOPE_CATEGORIES, categoryToken } from "@/lib/audioscope";
 import { calculateSimilarity, type FingerprintLike } from "@/lib/fingerprintMath";
 import type { UserFingerprint } from "@/hooks/useFingerprints";
@@ -48,6 +51,7 @@ interface DoorResult {
   groundingLevel?: "text-only" | "bridged" | "grounded";
   tags: string[];
 }
+
 
 const GUEST_RUNS_KEY = "sonicsim.guestRuns";
 const GUEST_LIMIT = 1;
@@ -106,6 +110,8 @@ export const ConsumerDoor = ({
   const [result, setResult] = useState<DoorResult | null>(null);
   const [monthlyUsed, setMonthlyUsed] = useState<number | null>(null);
   const [guestRuns, setGuestRuns] = useState(() => readGuestRuns());
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const sharedId = searchParams.get("share");
 
@@ -115,15 +121,30 @@ export const ConsumerDoor = ({
       setMonthlyUsed(null);
       return;
     }
+    let cancelled = false;
     const start = new Date();
     start.setDate(1);
     start.setHours(0, 0, 0, 0);
-    void supabase
-      .from("source_analyses")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .gte("created_at", start.toISOString())
-      .then(({ count }) => setMonthlyUsed(count ?? 0));
+    void (async () => {
+      const { count, error } = await supabase
+        .from("source_analyses")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gte("created_at", start.toISOString());
+      if (cancelled) return;
+      if (error) {
+        // Unknown usage must not silently look like "quota exhausted".
+        console.error("monthly usage lookup failed", error);
+        setQuotaError("We couldn't check your monthly usage — showing your allowance as unused.");
+        setMonthlyUsed(0);
+        return;
+      }
+      setQuotaError(null);
+      setMonthlyUsed(count ?? 0);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [userId, result]);
 
   const quotaExhausted = isSignedIn
@@ -137,13 +158,23 @@ export const ConsumerDoor = ({
   // A shared permalink renders the same result view, read-only.
   useEffect(() => {
     if (!sharedId) return;
+    let cancelled = false;
     void (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("source_analyses")
         .select("*")
         .eq("id", sharedId)
         .maybeSingle();
-      if (!data) return;
+      if (cancelled) return;
+      if (error || !data) {
+        setShareError(
+          error
+            ? "We couldn't open that shared SonicSIM. Try the link again."
+            : "That shared SonicSIM isn't available any more.",
+        );
+        return;
+      }
+      setShareError(null);
       const scores: Scores = {};
       const descriptions: Record<string, string> = {};
       for (const c of AUDIOSCOPE_CATEGORIES) {
@@ -161,6 +192,9 @@ export const ConsumerDoor = ({
         tags: data.category ? [data.category] : [],
       });
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [sharedId]);
 
   const run = useCallback(
@@ -169,10 +203,12 @@ export const ConsumerDoor = ({
       setRunning(true);
       setResult(null);
       try {
-        const { data, error } = await supabase.functions.invoke("analyze-audio", {
+        // Bounded so a stalled edge function surfaces as an error instead of an
+        // endless spinner.
+        const { data, error } = await invokeWithTimeout<AnalyzeAudioResponse>("analyze-audio", {
           body: { sources: [source], user_id: userId ?? undefined, save_results: !!userId },
         });
-        if (error) throw new Error(error.message);
+        if (error) throw error;
         if (data?.error) throw new Error(String(data.error));
         const first = data?.sources?.[0];
         if (!first) throw new Error("No result came back — try again.");
@@ -350,7 +386,18 @@ export const ConsumerDoor = ({
             </>
           )}
         </p>
+        {quotaError && (
+          <p role="status" className="mt-2 text-xs text-muted-foreground">
+            {quotaError}
+          </p>
+        )}
       </Card>
+
+      {shareError && (
+        <Card role="alert" className="border-destructive/40 bg-destructive/5 p-4">
+          <p className="text-sm text-destructive">{shareError}</p>
+        </Card>
+      )}
 
       {/* One result view */}
       {result && (
@@ -441,43 +488,7 @@ export const ConsumerDoor = ({
           />
 
           {/* The ladder: the upsell is the demo, run on their own result */}
-          {cohorts.length > 0 && (
-            <Card className="border-primary/25 bg-primary/5 p-4 sm:p-6">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold text-foreground">
-                  That was one piece of audio
-                </h3>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Businesses run this across 10,000 audience signals. Here are the two sonic
-                cohorts closest to what you just made.
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {cohorts.map(({ fp, similarity }) => (
-                  <div
-                    key={fp.user_id}
-                    className="rounded-lg border border-border bg-card/60 p-3 text-sm"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-medium text-foreground">
-                        {(fp as never as { username?: string }).username || "Cohort"}
-                      </span>
-                      <Badge variant="secondary" className="tabular-nums text-xs">
-                        {Math.round(similarity * 100)}% match
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {fp.total_sources_analyzed} sources in this cohort's fingerprint
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <Button asChild size="sm" className="mt-4 gradient-primary">
-                <Link to="/workspace">See what this does at scale</Link>
-              </Button>
-            </Card>
-          )}
+          <CohortUpsellCard cohorts={cohorts} />
         </div>
       )}
     </section>

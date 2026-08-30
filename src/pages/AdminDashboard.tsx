@@ -103,12 +103,19 @@ const AdminDashboard = () => {
     if (!isAdmin) return;
     let cancelled = false;
     (async () => {
+      // Per-metric isolation: one unreadable table must not blank every count.
       const entries = await Promise.all(
         METRICS.map(async (m) => {
-          const { count } = await supabase
-            .from(m.key as never)
-            .select("*", { count: "exact", head: true });
-          return [m.key, count ?? null] as const;
+          try {
+            const { count, error } = await supabase
+              .from(m.key as never)
+              .select("*", { count: "exact", head: true });
+            if (error) throw error;
+            return [m.key, count ?? null] as const;
+          } catch (err) {
+            console.error(`admin metric ${m.key} failed`, err);
+            return [m.key, null] as const;
+          }
         }),
       );
       if (!cancelled) setCounts(Object.fromEntries(entries));

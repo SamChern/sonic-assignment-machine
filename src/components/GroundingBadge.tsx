@@ -67,6 +67,7 @@ export const GroundingBadge = ({
   return (
     <span
       title={hint}
+      aria-label={`${label} — ${hint}`}
       className={cn(
         "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
         cls,

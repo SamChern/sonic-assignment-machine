@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
@@ -122,20 +123,28 @@ const Workspace = () => {
 
   const loadDatasets = useCallback(async () => {
     if (!activeId) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("enterprise_datasets")
       .select("id, name")
       .eq("organization_id", activeId)
       .order("created_at", { ascending: false });
+    if (error) {
+      toast.error("Couldn't load this organization's datasets.");
+      return;
+    }
     setDatasets((data ?? []) as { id: string; name: string }[]);
   }, [activeId]);
 
   const loadAnalysisCount = useCallback(async () => {
     if (!activeId) return;
-    const { count } = await supabase
+    const { count, error } = await supabase
       .from("source_analyses")
       .select("id", { count: "exact", head: true })
       .eq("organization_id", activeId);
+    if (error) {
+      toast.error("Couldn't load the analysis count.");
+      return;
+    }
     setAnalysisCount(count ?? 0);
   }, [activeId]);
 

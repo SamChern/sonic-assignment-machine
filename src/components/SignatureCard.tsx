@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { SignatureVector } from "@/lib/signature/mapping";
 import { playFallback, playUrl, type SignaturePlayback } from "@/lib/signature/player";
 
@@ -74,8 +75,14 @@ export const SignatureCard = ({
 
     (async () => {
       try {
-        const { data, error: fnError } = await supabase.functions.invoke("signature-render", {
+        // Bounded so a stalled render never leaves Play disabled forever.
+        const { data, error: fnError } = await invokeWithTimeout<{
+          success?: boolean;
+          error?: string;
+          signature?: { audio_url?: string; distance?: number; archetype_slug?: string };
+        }>("signature-render", {
           body: { vector, tags, subject_ref: subjectRef },
+          timeoutMs: 45_000,
         });
         if (!active) return;
         if (fnError) throw fnError;
@@ -220,7 +227,9 @@ export const SignatureCard = ({
           )}
 
           {error && archetype && (
-            <p className="mt-2 text-xs text-destructive">{error}</p>
+            <p role="status" className="mt-2 text-xs text-destructive">
+              {error}
+            </p>
           )}
         </div>
       </div>

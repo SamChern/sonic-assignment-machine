@@ -329,7 +329,8 @@ function isManifestKey(key: string): boolean {
 /** Read a manifest object and pull out the S3 keys it lists. */
 async function readManifestKeys(key: string): Promise<string[]> {
   const url = await signReadUrl(key);
-  const res = await fetch(url);
+  // Bounded: a slow S3 response must not eat the whole dispatch budget.
+  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new Error(`manifest read failed [${res.status}]`);
   const text = await res.text();
   const out: string[] = [];

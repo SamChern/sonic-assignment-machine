@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Shield, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
+import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";
 import heroBackground from "@/assets/hero-background.jpg";
 import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";
@@ -35,23 +37,8 @@ import { analysisToScores, fingerprintToScores } from "@/lib/audioscope";
 
 
 
-/**
- * The consumer surface collapsed from five tabs to three. Old deep links
- * (?tab=select, ?tab=network, ?tab=sonicsim, ?tab=discover) still resolve, so
- * bookmarks and the mobile nav keep working.
- */
-const TAB_ALIASES: Record<string, string> = {
-  select: "listen",
-  sonicsim: "listen",
-  listen: "listen",
-  network: "understand",
-  analysis: "understand",
-  understand: "understand",
-  discover: "library",
-  library: "library",
-};
+import { normalizeTab } from "@/lib/homeTabs";
 
-const normalizeTab = (tab: string | null) => (tab && TAB_ALIASES[tab]) || "listen";
 
 const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
@@ -218,12 +205,13 @@ const Index = () => {
     ];
 
     const invokeAnalysis = async () => {
-      const { data, error } = await supabase.functions.invoke('analyze-audio', {
+      // Bounded: a hung edge function must fail loudly rather than spin forever.
+      const { data, error } = await invokeWithTimeout<AnalyzeAudioResponse>('analyze-audio', {
         body: {
           sources,
           user_id: user?.id,
           save_results: !!user,
-        }
+        },
       });
 
       if (error) {

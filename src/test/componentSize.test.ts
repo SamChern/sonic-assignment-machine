@@ -27,10 +27,10 @@ const LEGACY: Record<string, number> = {
   "src/pages/IngestionCompatibility.tsx": 739,
 
   "src/components/enterprise/CategoryProfileEditor.tsx": 779,
-  "src/pages/IntegrationStatus.tsx": 758,
+  "src/pages/IntegrationStatus.tsx": 718,
   "src/components/enterprise/PredictUsersPanel.tsx": 708,
   "src/pages/Index.tsx": 660,
-  "src/components/AnalysisResults.tsx": 613,
+  "src/components/AnalysisResults.tsx": 500,
   "src/components/FingerprintComparison.tsx": 573,
   "src/components/visuals/SonicSimPanel.tsx": 560,
   "src/pages/AdminIntegrations.tsx": 552,

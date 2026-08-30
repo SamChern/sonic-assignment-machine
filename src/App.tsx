@@ -14,6 +14,7 @@ import Index from "./pages/Index";
 
 const Auth = lazy(() => import("./pages/Auth"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminWorkbench = lazy(() => import("./pages/admin/AdminWorkbench"));

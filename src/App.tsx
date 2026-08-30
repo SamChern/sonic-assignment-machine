@@ -108,6 +108,7 @@ const App = () => (
               <Route path="/admin/ctv" element={<AdminCTV />} />
               <Route path="/admin/activations" element={<AdminActivationGrants />} />
               <Route path="/admin/control-room" element={<AdminControlRoom />} />
+              <Route path="/admin/sound-library" element={<AdminSoundLibrary />} />
               <Route path="/admin/pipeline" element={<IntegrationStatus />} />
               <Route path="/admin/compatibility" element={<IngestionCompatibility />} />
 

@@ -400,6 +400,90 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_works: {
+        Row: {
+          analysis_error: string | null
+          analysis_status: string
+          archetype_slug: string | null
+          audio_source_id: string | null
+          corpus_opt_in: boolean
+          created_at: string
+          divergence: number | null
+          embedding_hash: string | null
+          fingerprint: Json
+          id: string
+          machine_use_terms: string
+          registered_at: string | null
+          resonance: number | null
+          rights_attested: boolean
+          six_axis: Json
+          storage_path: string | null
+          title: string
+          updated_at: string
+          user_id: string
+          withdrawn_at: string | null
+        }
+        Insert: {
+          analysis_error?: string | null
+          analysis_status?: string
+          archetype_slug?: string | null
+          audio_source_id?: string | null
+          corpus_opt_in?: boolean
+          created_at?: string
+          divergence?: number | null
+          embedding_hash?: string | null
+          fingerprint?: Json
+          id?: string
+          machine_use_terms?: string
+          registered_at?: string | null
+          resonance?: number | null
+          rights_attested?: boolean
+          six_axis?: Json
+          storage_path?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+          withdrawn_at?: string | null
+        }
+        Update: {
+          analysis_error?: string | null
+          analysis_status?: string
+          archetype_slug?: string | null
+          audio_source_id?: string | null
+          corpus_opt_in?: boolean
+          created_at?: string
+          divergence?: number | null
+          embedding_hash?: string | null
+          fingerprint?: Json
+          id?: string
+          machine_use_terms?: string
+          registered_at?: string | null
+          resonance?: number | null
+          rights_attested?: boolean
+          six_axis?: Json
+          storage_path?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+          withdrawn_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_works_archetype_slug_fkey"
+            columns: ["archetype_slug"]
+            isOneToOne: false
+            referencedRelation: "sonic_archetypes"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "creator_works_audio_source_id_fkey"
+            columns: ["audio_source_id"]
+            isOneToOne: false
+            referencedRelation: "audio_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ctv_ingest_batches: {
         Row: {
           created_at: string
@@ -1689,6 +1773,70 @@ export type Database = {
         }
         Relationships: []
       }
+      originality_ledger: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json
+          work_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json
+          work_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "originality_ledger_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "creator_works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pack_inclusions: {
+        Row: {
+          analyses_influenced: number
+          included_at: string
+          pack_version: string
+          weight: number
+          work_id: string
+        }
+        Insert: {
+          analyses_influenced?: number
+          included_at?: string
+          pack_version: string
+          weight?: number
+          work_id: string
+        }
+        Update: {
+          analyses_influenced?: number
+          included_at?: string
+          pack_version?: string
+          weight?: number
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pack_inclusions_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "creator_works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pixel_events: {
         Row: {
           consent: Json
@@ -1807,6 +1955,59 @@ export type Database = {
           },
         ]
       }
+      playbooks: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          kind: string
+          last_run_at: string | null
+          last_run_summary: Json
+          name: string
+          organization_id: string
+          run_count: number
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          kind?: string
+          last_run_at?: string | null
+          last_run_summary?: Json
+          name: string
+          organization_id: string
+          run_count?: number
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          kind?: string
+          last_run_at?: string | null
+          last_run_summary?: Json
+          name?: string
+          organization_id?: string
+          run_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playbooks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prediction_runs: {
         Row: {
           created_at: string
@@ -1866,6 +2067,7 @@ export type Database = {
           bio: string | null
           created_at: string
           id: string
+          persona: string | null
           ui_prefs: Json
           updated_at: string
           user_id: string
@@ -1876,6 +2078,7 @@ export type Database = {
           bio?: string | null
           created_at?: string
           id?: string
+          persona?: string | null
           ui_prefs?: Json
           updated_at?: string
           user_id: string
@@ -1886,6 +2089,7 @@ export type Database = {
           bio?: string | null
           created_at?: string
           id?: string
+          persona?: string | null
           ui_prefs?: Json
           updated_at?: string
           user_id?: string
@@ -2095,6 +2299,69 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      share_cards: {
+        Row: {
+          archetype_slug: string | null
+          created_at: string
+          grounding_level: string
+          id: string
+          narration: string | null
+          source_analysis_id: string | null
+          source_name: string
+          tags: Json
+          token: string
+          updated_at: string
+          user_id: string | null
+          vector: Json
+          view_count: number
+        }
+        Insert: {
+          archetype_slug?: string | null
+          created_at?: string
+          grounding_level?: string
+          id?: string
+          narration?: string | null
+          source_analysis_id?: string | null
+          source_name: string
+          tags?: Json
+          token: string
+          updated_at?: string
+          user_id?: string | null
+          vector: Json
+          view_count?: number
+        }
+        Update: {
+          archetype_slug?: string | null
+          created_at?: string
+          grounding_level?: string
+          id?: string
+          narration?: string | null
+          source_analysis_id?: string | null
+          source_name?: string
+          tags?: Json
+          token?: string
+          updated_at?: string
+          user_id?: string | null
+          vector?: Json
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "share_cards_archetype_slug_fkey"
+            columns: ["archetype_slug"]
+            isOneToOne: false
+            referencedRelation: "sonic_archetypes"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "share_cards_source_analysis_id_fkey"
+            columns: ["source_analysis_id"]
+            isOneToOne: false
+            referencedRelation: "source_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sonic_archetypes: {
         Row: {

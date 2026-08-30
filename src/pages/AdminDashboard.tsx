@@ -67,6 +67,12 @@ const DESTINATIONS: {
     icon: Plug,
   },
   {
+    to: "/admin/sound-library",
+    label: "Sound Library",
+    description: "Grounding coverage, gap curation and versioned grounding packs.",
+    icon: Library,
+  },
+  {
     to: "/admin/control-room",
     label: "Control Room",
     description: "Pipeline knobs, thresholds and calibration priors.",

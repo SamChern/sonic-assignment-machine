@@ -511,6 +511,35 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (action === "nudge") {
+      const state = await readState(admin);
+      const report = await buildNudgeReport(admin, state);
+      // `refresh: true` fires the agent right there — the nudge is the trigger,
+      // not just a label. Paused (credits/policy) states are never overridden.
+      const wantRefresh = body.refresh === true && report.triggered && !state.paused;
+      let outcome: RunOutcome | null = null;
+      if (wantRefresh) {
+        const { data: acquired } = await admin.rpc("acquire_named_lease", {
+          p_id: LEASE_ID,
+          p_owner: `nudge-${crypto.randomUUID().slice(0, 8)}`,
+          p_seconds: LEASE_SECONDS,
+        });
+        if (acquired !== false) {
+          const limit = await controlNumber(
+            admin, "resolver.nudge_batch", 10, { min: 1, max: 200 },
+          );
+          outcome = await drain(admin, limit);
+        }
+      }
+      return json({
+        success: true,
+        ...report,
+        state,
+        refreshed: outcome !== null,
+        outcome,
+      });
+    }
+
     if (action === "run") {
       const { data: acquired } = await admin.rpc("acquire_named_lease", {
         p_id: LEASE_ID,
@@ -524,6 +553,7 @@ Deno.serve(async (req) => {
       const outcome = await drain(admin, Number.isFinite(limit!) ? limit : undefined);
       return json({ success: true, ...outcome });
     }
+
 
     return json({ success: false, error: `unknown action: ${action}` }, 400);
   } catch (e) {

@@ -711,6 +711,7 @@ export type Database = {
           id: number
           object_key: string
           report_type: string | null
+          source_offset: number
           subject_key: string
           taxonomy_code: string
           weight: number
@@ -721,6 +722,7 @@ export type Database = {
           id?: never
           object_key: string
           report_type?: string | null
+          source_offset?: number
           subject_key: string
           taxonomy_code: string
           weight?: number
@@ -731,6 +733,7 @@ export type Database = {
           id?: never
           object_key?: string
           report_type?: string | null
+          source_offset?: number
           subject_key?: string
           taxonomy_code?: string
           weight?: number
@@ -872,6 +875,8 @@ export type Database = {
           object_key: string
           partition_date: string | null
           processed_rows: number
+          promoted_subjects: number
+          promotion_cursor: string | null
           queue_message_id: string | null
           report_type: string
           row_group_cursor: number
@@ -900,6 +905,8 @@ export type Database = {
           object_key: string
           partition_date?: string | null
           processed_rows?: number
+          promoted_subjects?: number
+          promotion_cursor?: string | null
           queue_message_id?: string | null
           report_type: string
           row_group_cursor?: number
@@ -928,6 +935,8 @@ export type Database = {
           object_key?: string
           partition_date?: string | null
           processed_rows?: number
+          promoted_subjects?: number
+          promotion_cursor?: string | null
           queue_message_id?: string | null
           report_type?: string
           row_group_cursor?: number
@@ -2607,6 +2616,17 @@ export type Database = {
         }
         Returns: Json
       }
+      read_ingest_rollup_subject_batch: {
+        Args: {
+          p_after_subject?: string
+          p_limit?: number
+          p_object_key: string
+        }
+        Returns: {
+          subject_key: string
+          tags: Json
+        }[]
+      }
       reap_stale_ingest_claims: {
         Args: { p_stale_minutes?: number }
         Returns: number
@@ -2650,11 +2670,24 @@ export type Database = {
         }[]
       }
       require_admin: { Args: never; Returns: undefined }
+      retire_exhausted_intuizi_score_jobs: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
       run_intuizi_retention: { Args: { p_days?: number }; Returns: Json }
       scan_intuizi_custody: { Args: never; Returns: Json }
       skip_ingest_file: {
         Args: { p_id: string; p_reason: string }
         Returns: undefined
+      }
+      stage_ingest_rollups: {
+        Args: {
+          p_object_key: string
+          p_report_type: string
+          p_rows: Json
+          p_source_offset: number
+        }
+        Returns: number
       }
       touch_audio_profile_embedding: {
         Args: { p_cache_key: string; p_model: string }

@@ -50,7 +50,7 @@ export async function playFallback(
   const samples = renderSignature(params, hash, SIGNATURE_SAMPLE_RATE, SIGNATURE_DURATION);
 
   const buffer = context.createBuffer(1, samples.length, SIGNATURE_SAMPLE_RATE);
-  buffer.copyToChannel(samples, 0);
+  buffer.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
   return startBuffer(context, buffer);
 }
 

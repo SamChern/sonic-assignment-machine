@@ -22,10 +22,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
 import { useAudioSources, AudioSource } from "@/hooks/useAudioSources";
 import { WaveformBackground } from "@/components/WaveformBackground";
+import { usePersona } from "@/hooks/usePersona";
+import PersonaChooser from "@/components/persona/PersonaChooser";
+import DoorSwitcher from "@/components/persona/DoorSwitcher";
+import ConsumerDoor from "@/components/home/ConsumerDoor";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useFingerprints } from "@/hooks/useFingerprints";
 import { analysisToScores, fingerprintToScores } from "@/lib/audioscope";
+
 
 
 
@@ -52,6 +57,9 @@ const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
   const { orgs: enterpriseOrgs } = useOrganization();
   const hasEnterprise = enterpriseOrgs.length > 0;
+  const { persona, setPersona, ready: personaReady } = usePersona();
+  const [personaAsked, setPersonaAsked] = useState(false);
+
 
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
   
@@ -387,45 +395,19 @@ const Index = () => {
           
           {authLoading ? (
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          ) : user ? (
-            <div className="flex items-center gap-1.5 sm:gap-3">
-              {hasEnterprise && (
-                <Link to="/workspace" aria-label="Enterprise workspace">
-                  <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
-                    <Building2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Enterprise</span>
-                  </Button>
-                </Link>
-              )}
-              {isAdmin && (
-                <Link to="/admin" aria-label="Admin dashboard">
-                  <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
-                    <Shield className="h-4 w-4" />
-                    <span className="hidden sm:inline">Admin</span>
-                  </Button>
-                </Link>
-              )}
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={profile?.avatar_url || undefined} />
-                <AvatarFallback>
-                  <User className="h-4 w-4" />
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-sm text-foreground font-medium hidden sm:inline">
-                {profile?.username || user.email?.split('@')[0]}
-              </span>
-              <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out" className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
           ) : (
-            <Link to="/auth">
-              <Button variant="ghost" size="sm" className="gap-2 text-foreground/80 hover:text-foreground">
-                <User className="h-4 w-4" />
-                Sign In
-              </Button>
-            </Link>
+            <DoorSwitcher
+              persona={persona}
+              onSelect={setPersona}
+              isSignedIn={!!user}
+              isAdmin={isAdmin}
+              hasEnterprise={hasEnterprise}
+              avatarUrl={profile?.avatar_url}
+              displayName={profile?.username || user?.email?.split("@")[0]}
+              onSignOut={signOut}
+            />
           )}
+
         </div>
       </header>
 
@@ -530,9 +512,19 @@ const Index = () => {
         />
       </section>
 
-
+      {/* Step 16a — the Consumer door: one input, one result, one ladder. */}
+      {persona !== "marketing" && (
+        <div className="mx-auto max-w-4xl px-4 pb-2 pt-6 sm:px-6">
+          <ConsumerDoor
+            isSignedIn={!!user}
+            userId={user?.id ?? null}
+            allFingerprints={allFingerprints || []}
+          />
+        </div>
+      )}
 
       {/* Main content — three consumer moments: Listen, Understand, Library */}
+
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
           <TabsList className="mb-6 grid h-auto min-h-12 w-full max-w-full grid-cols-3 items-stretch gap-1 sm:mb-8">
@@ -599,7 +591,15 @@ const Index = () => {
         </Tabs>
       </div>
 
+      {/* Step 16.0 — asked once: "What brings you here?" */}
+      <PersonaChooser
+        open={personaReady && !persona && !isAdmin && !personaAsked}
+        onChoose={setPersona}
+        onDismiss={() => setPersonaAsked(true)}
+      />
+
       {/* Get Started Dialog */}
+
       <Dialog open={showGetStartedDialog} onOpenChange={setShowGetStartedDialog}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>

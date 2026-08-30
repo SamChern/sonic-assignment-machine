@@ -10,8 +10,8 @@
   - [ ] Consent route + OAuth server activation (if OAuth)
 
 ## Step 16 — Persona experience layer (four doors, one house)
-- [ ] 16.0 `profiles.persona`, first-visit chooser, door switcher, per-persona landing
-- [ ] 16a Consumer door: universal input, single result view, share permalink, cohort upsell, quota
+- [x] 16.0 `profiles.persona`, first-visit chooser, door switcher, per-persona landing
+- [x] 16a Consumer door: universal input, single result view, share permalink, cohort upsell, quota
 - [ ] 16b Enterprise door: three job cards, brief box, Confidence chip, Playbooks, client workspaces, one-pager export, client narrative
 - [ ] 16c Admin door: Glance/Operate/Diagnose depth toggle, ⌘K palette, daily digest, preview-as-role
 

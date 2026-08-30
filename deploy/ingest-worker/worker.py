@@ -322,7 +322,7 @@ def row_day(row: Dict[str, Any]) -> Optional[str]:
 
 
 def process_rollups(
-    con: duckdb.DuckDBPyConnection,
+    stream: RowStream,
     cb: Callback,
     base: Dict[str, Any],
     object_key: str,
@@ -336,18 +336,22 @@ def process_rollups(
     offset as its idempotency key. A retried callback replaces the same staged
     values; it cannot add their weight twice. The ledger cursor advances only
     after every staged row from the source chunk is durable.
+
+    Rows arrive from a single streaming cursor (`RowStream`), so the whole file is
+    decoded once end to end instead of being re-scanned per chunk.
     """
     started = time.monotonic()
     sent = 0
     read = 0
     skipped = 0
-    offset = int(base.get("rows_offset") or 0)
+    offset = stream.offset
     while offset < grand_total and not _stop:
         chunk_offset = offset
         want = min(READ_CHUNK, grand_total - offset)
-        rows = read_slice(con, object_key, offset, want)
+        rows = stream.next_chunk(want)
         if not rows:
             break
+
         agg: Dict[tuple, float] = {}
         for raw in rows:
             norm = normalize_row(report_type, raw)

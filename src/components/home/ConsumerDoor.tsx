@@ -383,7 +383,18 @@ export const ConsumerDoor = ({
             </>
           )}
         </p>
+        {quotaError && (
+          <p role="status" className="mt-2 text-xs text-muted-foreground">
+            {quotaError}
+          </p>
+        )}
       </Card>
+
+      {shareError && (
+        <Card role="alert" className="border-destructive/40 bg-destructive/5 p-4">
+          <p className="text-sm text-destructive">{shareError}</p>
+        </Card>
+      )}
 
       {/* One result view */}
       {result && (

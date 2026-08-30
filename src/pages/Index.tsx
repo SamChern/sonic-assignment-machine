@@ -512,9 +512,19 @@ const Index = () => {
         />
       </section>
 
-
+      {/* Step 16a — the Consumer door: one input, one result, one ladder. */}
+      {persona !== "marketing" && (
+        <div className="mx-auto max-w-4xl px-4 pb-2 pt-6 sm:px-6">
+          <ConsumerDoor
+            isSignedIn={!!user}
+            userId={user?.id ?? null}
+            allFingerprints={allFingerprints || []}
+          />
+        </div>
+      )}
 
       {/* Main content — three consumer moments: Listen, Understand, Library */}
+
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-w-0">
           <TabsList className="mb-6 grid h-auto min-h-12 w-full max-w-full grid-cols-3 items-stretch gap-1 sm:mb-8">

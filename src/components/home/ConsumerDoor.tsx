@@ -152,13 +152,23 @@ export const ConsumerDoor = ({
   // A shared permalink renders the same result view, read-only.
   useEffect(() => {
     if (!sharedId) return;
+    let cancelled = false;
     void (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("source_analyses")
         .select("*")
         .eq("id", sharedId)
         .maybeSingle();
-      if (!data) return;
+      if (cancelled) return;
+      if (error || !data) {
+        setShareError(
+          error
+            ? "We couldn't open that shared SonicSIM. Try the link again."
+            : "That shared SonicSIM isn't available any more.",
+        );
+        return;
+      }
+      setShareError(null);
       const scores: Scores = {};
       const descriptions: Record<string, string> = {};
       for (const c of AUDIOSCOPE_CATEGORIES) {
@@ -176,6 +186,9 @@ export const ConsumerDoor = ({
         tags: data.category ? [data.category] : [],
       });
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [sharedId]);
 
   const run = useCallback(
@@ -184,10 +197,12 @@ export const ConsumerDoor = ({
       setRunning(true);
       setResult(null);
       try {
-        const { data, error } = await supabase.functions.invoke("analyze-audio", {
+        // Bounded so a stalled edge function surfaces as an error instead of an
+        // endless spinner.
+        const { data, error } = await invokeWithTimeout<AnalyzeResponse>("analyze-audio", {
           body: { sources: [source], user_id: userId ?? undefined, save_results: !!userId },
         });
-        if (error) throw new Error(error.message);
+        if (error) throw error;
         if (data?.error) throw new Error(String(data.error));
         const first = data?.sources?.[0];
         if (!first) throw new Error("No result came back — try again.");

@@ -111,7 +111,7 @@ export default function Auth() {
     }
     
     setIsSubmitting(true);
-    const { error } = await signUp(signupEmail, signupPassword, signupUsername);
+    const { error } = await signUp(signupEmail, signupPassword, signupUsername, nextPath);
     setIsSubmitting(false);
     
     if (error) {
@@ -122,7 +122,7 @@ export default function Auth() {
       }
     } else {
       toast.success('Account created! You can now sign in.');
-      navigate('/');
+      navigate(nextPath, { replace: true });
     }
   };
 

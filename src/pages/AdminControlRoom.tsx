@@ -21,6 +21,7 @@ import {
   type ControlKnob,
 } from "@/hooks/useControlRegistry";
 import { ResolverPanel } from "@/components/admin/ResolverPanel";
+import { ResolverNudge } from "@/components/admin/ResolverNudge";
 
 const CATEGORY_LABELS: Record<string, string> = {
   scoring: "Scoring core",
@@ -138,6 +139,7 @@ export default function AdminControlRoom() {
       )}
 
       <div className="mb-6">
+        <ResolverNudge />
         <ResolverPanel />
       </div>
 

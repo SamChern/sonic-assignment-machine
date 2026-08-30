@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ComplianceAlert } from "@/components/admin/ComplianceAlert";
 import { AdminDigestCard } from "@/components/admin/AdminDigestCard";
+import { ResolverNudge } from "@/components/admin/ResolverNudge";
 import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
 
 import {

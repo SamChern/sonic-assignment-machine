@@ -36,6 +36,19 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const MAX_ROWS_PER_CALL = 2_000;
 /** Cap one staged-rollup chunk (Step 2.5-alt). */
 const MAX_ROLLUP_ROWS_PER_CALL = 5_000;
+/** Rows per staging statement — small enough that one upsert never times out. */
+const STAGE_SUB_BATCH = 400;
+
+/**
+ * Stable fingerprint for one staging piece. Same rows in the same order always
+ * produce the same key, which is what makes a replayed callback a no-op.
+ */
+async function fingerprint(offset: number, rows: unknown[]): Promise<string> {
+  const payload = `${offset}|${JSON.stringify(rows)}`;
+  const digest = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(payload));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 
 
 type Json = Record<string, unknown>;

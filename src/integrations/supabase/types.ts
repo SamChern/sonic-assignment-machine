@@ -2075,6 +2075,42 @@ export type Database = {
         }
         Relationships: []
       }
+      sonic_archetypes: {
+        Row: {
+          anchors: string[]
+          centroid: Json
+          created_at: string
+          dominant_axes: string[]
+          meaning: string
+          name: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          anchors?: string[]
+          centroid: Json
+          created_at?: string
+          dominant_axes: string[]
+          meaning: string
+          name: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          anchors?: string[]
+          centroid?: Json
+          created_at?: string
+          dominant_axes?: string[]
+          meaning?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sonic_cohort_exports: {
         Row: {
           activation_id: string | null
@@ -2211,6 +2247,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      sonic_signatures: {
+        Row: {
+          archetype_slug: string | null
+          audio_bytes: number | null
+          audio_path: string | null
+          created_at: string
+          distance: number | null
+          params: Json
+          subject_hash: string
+          subject_ref: string | null
+          tags: string[]
+          updated_at: string
+          vector: Json
+        }
+        Insert: {
+          archetype_slug?: string | null
+          audio_bytes?: number | null
+          audio_path?: string | null
+          created_at?: string
+          distance?: number | null
+          params?: Json
+          subject_hash: string
+          subject_ref?: string | null
+          tags?: string[]
+          updated_at?: string
+          vector: Json
+        }
+        Update: {
+          archetype_slug?: string | null
+          audio_bytes?: number | null
+          audio_path?: string | null
+          created_at?: string
+          distance?: number | null
+          params?: Json
+          subject_hash?: string
+          subject_ref?: string | null
+          tags?: string[]
+          updated_at?: string
+          vector?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sonic_signatures_archetype_slug_fkey"
+            columns: ["archetype_slug"]
+            isOneToOne: false
+            referencedRelation: "sonic_archetypes"
+            referencedColumns: ["slug"]
+          },
+        ]
       }
       source_analyses: {
         Row: {

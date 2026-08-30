@@ -57,6 +57,9 @@ const Index = () => {
   const { user, profile, signOut, loading: authLoading, isAdmin } = useAuth();
   const { orgs: enterpriseOrgs } = useOrganization();
   const hasEnterprise = enterpriseOrgs.length > 0;
+  const { persona, setPersona, ready: personaReady } = usePersona();
+  const [personaAsked, setPersonaAsked] = useState(false);
+
 
   const { saveSpotifyTrack, saveFileSource } = useAudioSources();
   

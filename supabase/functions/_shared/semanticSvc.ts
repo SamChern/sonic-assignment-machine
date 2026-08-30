@@ -281,6 +281,8 @@ export async function logSemanticCall(
   // deno-lint-disable-next-line no-explicit-any
   supabase: any | null,
   entry: {
+    /** Defaults to the semantic service; other callers name themselves. */
+    service?: string;
     action: string;
     outcome: "ok" | "error" | "skipped";
     cache_hit?: boolean;
@@ -294,6 +296,7 @@ export async function logSemanticCall(
   if (!supabase) return;
   try {
     await supabase.from("semantic_call_log").insert({
+      service: entry.service ?? "semantic_svc",
       action: entry.action,
       outcome: entry.outcome,
       cache_hit: entry.cache_hit ?? false,

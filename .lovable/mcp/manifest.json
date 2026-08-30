@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "sdk_version": "0.28.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://bskltmvfxolwhnfpsmno.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "sonicsimai",
+      "version": "0.1.0",
+      "title": "SonicSIMai"
+    },
+    "tools": [
+      {
+        "name": "list_analyses",
+        "title": "List my analyses",
+        "description": "List the signed-in user's most recent SonicSIM semantic analyses with their six category scores (emotional, cognitive, social, communication, contextual, artistic), confidence and grounding level.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "description": "How many analyses to return (1-50, default 10)"
+            },
+            "search": {
+              "type": "string",
+              "description": "Optional case-insensitive filter on the source name."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_fingerprint",
+        "title": "Get my sonic fingerprint",
+        "description": "Return the signed-in user's aggregate sonic fingerprint: all-time and last-30-day averages across the six SonicSIM categories, how many sources it is based on, and its confidence.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_audio_sources",
+        "title": "List my audio sources",
+        "description": "List the signed-in user's audio sources (Spotify/Apple tracks, uploads and ingested signals) with their analysis status, so the caller can see what is analyzed, pending or failed.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "description": "How many sources to return (1-50, default 15)"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "processing",
+                "complete",
+                "failed"
+              ],
+              "description": "Optional analysis-status filter."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_taxonomy",
+        "title": "Search the ontology taxonomy",
+        "description": "Search SonicSIM's semantic taxonomy (CTV, IAB, web and AudioSet branches) by label or dotted code, and report how well each node is grounded in real audio.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Text to match against the node label or code, e.g. 'news' or 'ctv.genre'."
+            },
+            "limit": {
+              "type": "integer",
+              "description": "How many nodes to return (1-50, default 15)"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

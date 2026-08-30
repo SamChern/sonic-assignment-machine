@@ -25,6 +25,8 @@ const AdminCTV = lazy(() => import("./pages/AdminCTV"));
 const AdminActivationGrants = lazy(() => import("./pages/AdminActivationGrants"));
 const AdminControlRoom = lazy(() => import("./pages/AdminControlRoom"));
 const AdminSoundLibrary = lazy(() => import("./pages/admin/AdminSoundLibrary"));
+const AdminGuide = lazy(() => import("./pages/admin/AdminGuide"));
+const CreatorDoor = lazy(() => import("./pages/CreatorDoor"));
 const IntegrationStatus = lazy(() => import("./pages/IntegrationStatus"));
 const IngestionCompatibility = lazy(() => import("./pages/IngestionCompatibility"));
 const SemanticAnalysis = lazy(() => import("./pages/SemanticAnalysis"));
@@ -111,12 +113,14 @@ const App = () => (
               <Route path="/admin/activations" element={<AdminActivationGrants />} />
               <Route path="/admin/control-room" element={<AdminControlRoom />} />
               <Route path="/admin/sound-library" element={<AdminSoundLibrary />} />
+              <Route path="/admin/guide" element={<AdminGuide />} />
               <Route path="/admin/pipeline" element={<IntegrationStatus />} />
               <Route path="/admin/compatibility" element={<IngestionCompatibility />} />
 
               <Route path="/admin/semantic" element={<SemanticAnalysis />} />
 
               <Route path="/workspace" element={<Workspace />} />
+              <Route path="/creator" element={<CreatorDoor />} />
               <Route path="/demo" element={<Demo />} />
 
 

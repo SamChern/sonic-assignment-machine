@@ -15,6 +15,9 @@ const VisualsFallback = () => (
 import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 import { FeedbackPopover } from "@/components/FeedbackPopover";
 import { GroundingBadge } from "@/components/GroundingBadge";
+const SignatureCard = lazy(() =>
+  import("@/components/SignatureCard").then((m) => ({ default: m.SignatureCard }))
+);
 import { supabase } from "@/integrations/supabase/client";
 
 interface CategoryScore {

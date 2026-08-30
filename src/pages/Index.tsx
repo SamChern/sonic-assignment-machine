@@ -387,45 +387,19 @@ const Index = () => {
           
           {authLoading ? (
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          ) : user ? (
-            <div className="flex items-center gap-1.5 sm:gap-3">
-              {hasEnterprise && (
-                <Link to="/workspace" aria-label="Enterprise workspace">
-                  <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
-                    <Building2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Enterprise</span>
-                  </Button>
-                </Link>
-              )}
-              {isAdmin && (
-                <Link to="/admin" aria-label="Admin dashboard">
-                  <Button variant="outline" size="sm" className="gap-2 border-primary/50 text-primary min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
-                    <Shield className="h-4 w-4" />
-                    <span className="hidden sm:inline">Admin</span>
-                  </Button>
-                </Link>
-              )}
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={profile?.avatar_url || undefined} />
-                <AvatarFallback>
-                  <User className="h-4 w-4" />
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-sm text-foreground font-medium hidden sm:inline">
-                {profile?.username || user.email?.split('@')[0]}
-              </span>
-              <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out" className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-0">
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
           ) : (
-            <Link to="/auth">
-              <Button variant="ghost" size="sm" className="gap-2 text-foreground/80 hover:text-foreground">
-                <User className="h-4 w-4" />
-                Sign In
-              </Button>
-            </Link>
+            <DoorSwitcher
+              persona={persona}
+              onSelect={setPersona}
+              isSignedIn={!!user}
+              isAdmin={isAdmin}
+              hasEnterprise={hasEnterprise}
+              avatarUrl={profile?.avatar_url}
+              displayName={profile?.username || user?.email?.split("@")[0]}
+              onSignOut={signOut}
+            />
           )}
+
         </div>
       </header>
 

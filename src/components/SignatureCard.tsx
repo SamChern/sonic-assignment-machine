@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { SignatureVector } from "@/lib/signature/mapping";
 import { playFallback, playUrl, type SignaturePlayback } from "@/lib/signature/player";
 

@@ -879,6 +879,7 @@ export type Database = {
           promotion_cursor: string | null
           queue_message_id: string | null
           report_type: string
+          retryable_stops: number
           row_group_cursor: number
           row_groups_total: number | null
           rows_offset: number
@@ -909,6 +910,7 @@ export type Database = {
           promotion_cursor?: string | null
           queue_message_id?: string | null
           report_type: string
+          retryable_stops?: number
           row_group_cursor?: number
           row_groups_total?: number | null
           rows_offset?: number
@@ -939,6 +941,7 @@ export type Database = {
           promotion_cursor?: string | null
           queue_message_id?: string | null
           report_type?: string
+          retryable_stops?: number
           row_group_cursor?: number
           row_groups_total?: number | null
           rows_offset?: number

@@ -37,9 +37,22 @@ const statOf = (stats: unknown, key: string): string => {
   return v === undefined || v === null ? "—" : String(v);
 };
 
+/** One ledger row, as shown in the per-file list. */
+interface LedgerRow {
+  id: string;
+  object_key: string;
+  status: string;
+  worker_id: string | null;
+  heartbeat_at: string | null;
+  rows_offset: number | null;
+  total_rows: number | null;
+  retryable_stops: number | null;
+}
+
 const WorkerHealthCard = () => {
   const [beats, setBeats] = useState<Beat[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [files, setFiles] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -52,19 +65,35 @@ const WorkerHealthCard = () => {
         .limit(10),
       supabase
         .from("intuizi_ingest_files")
-        .select("status")
-        .in("status", ["discovered", "processing", "loaded", "failed", "skipped"])
+        .select(
+          "id, object_key, status, worker_id, heartbeat_at, rows_offset, total_rows, retryable_stops",
+        )
+        .in("status", [
+          "discovered",
+          "processing",
+          "partial",
+          "loaded",
+          "failed",
+          "skipped",
+          "blocked",
+        ])
+        .order("updated_at", { ascending: false })
         .limit(1000),
     ]);
     setBeats((beatRes.data as Beat[]) ?? []);
+    const rows = ((fileRes.data ?? []) as LedgerRow[]);
     const tally: Record<string, number> = {};
-    for (const row of fileRes.data ?? []) {
-      const s = String((row as { status: string }).status);
-      tally[s] = (tally[s] ?? 0) + 1;
-    }
+    for (const row of rows) tally[row.status] = (tally[row.status] ?? 0) + 1;
     setCounts(tally);
+    // Only the rows an operator acts on: in flight, waiting, or parked.
+    setFiles(
+      rows
+        .filter((r) => r.status !== "loaded" && r.status !== "skipped")
+        .slice(0, 12),
+    );
     setLoading(false);
   }, []);
+
 
   useEffect(() => {
     void load();

@@ -68,29 +68,37 @@ export function usePersona() {
         }
         return;
       }
-      const { data } = await supabase
-        .from("profiles")
-        .select("persona")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (cancelled) return;
-      const remote = isPersona(data?.persona) ? (data!.persona as Persona) : null;
-      const local = readLocal();
-      if (remote) {
-        setPersonaState(remote);
-        try {
-          localStorage.setItem(LS_KEY, remote);
-        } catch {
-          /* ignore */
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("persona")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        const remote = isPersona(data?.persona) ? (data!.persona as Persona) : null;
+        const local = readLocal();
+        if (remote) {
+          setPersonaState(remote);
+          try {
+            localStorage.setItem(LS_KEY, remote);
+          } catch {
+            /* ignore */
+          }
+        } else if (local) {
+          // Carry a guest choice into the account on first sign-in.
+          setPersonaState(local);
+          await supabase.from("profiles").update({ persona: local }).eq("user_id", user.id);
+        } else {
+          setPersonaState(null);
         }
-      } else if (local) {
-        // Carry a guest choice into the account on first sign-in.
-        setPersonaState(local);
-        await supabase.from("profiles").update({ persona: local }).eq("user_id", user.id);
-      } else {
-        setPersonaState(null);
+      } catch (err) {
+        // A failed profile read must never wedge the app behind `ready === false`:
+        // fall back to whatever the guest choice was.
+        console.error("persona load failed", err);
+        if (!cancelled) setPersonaState(readLocal());
+      } finally {
+        if (!cancelled) setReady(true);
       }
-      setReady(true);
     })();
 
     return () => {
@@ -107,7 +115,13 @@ export function usePersona() {
         /* ignore */
       }
       if (user) {
-        await supabase.from("profiles").update({ persona: next }).eq("user_id", user.id);
+        // The local choice already applied; a failed write just means it is not
+        // yet durable, so it must not throw into the caller's click handler.
+        const { error } = await supabase
+          .from("profiles")
+          .update({ persona: next })
+          .eq("user_id", user.id);
+        if (error) console.error("persona save failed", error);
       }
     },
     [user],

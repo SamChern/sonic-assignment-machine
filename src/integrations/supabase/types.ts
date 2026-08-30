@@ -500,33 +500,48 @@ export type Database = {
       }
       embedding_bridges: {
         Row: {
+          activated_at: string | null
           created_at: string
           eval_agreement: number | null
           from_dim: number
           id: string
           is_active: boolean
+          kind: string
+          license_ledger: Json
+          manifest: Json
           name: string
           to_dim: number
+          version: string
           weights_url: string | null
         }
         Insert: {
+          activated_at?: string | null
           created_at?: string
           eval_agreement?: number | null
           from_dim: number
           id?: string
           is_active?: boolean
+          kind?: string
+          license_ledger?: Json
+          manifest?: Json
           name: string
           to_dim: number
+          version?: string
           weights_url?: string | null
         }
         Update: {
+          activated_at?: string | null
           created_at?: string
           eval_agreement?: number | null
           from_dim?: number
           id?: string
           is_active?: boolean
+          kind?: string
+          license_ledger?: Json
+          manifest?: Json
           name?: string
           to_dim?: number
+          version?: string
           weights_url?: string | null
         }
         Relationships: []
@@ -700,6 +715,130 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grounding_assets: {
+        Row: {
+          attribution: string
+          created_at: string
+          created_by: string | null
+          duration_seconds: number | null
+          embedded_at: string | null
+          id: string
+          license: string
+          source_url: string | null
+          status: string
+          storage_path: string | null
+          taxonomy_code: string
+          taxonomy_node_id: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          attribution: string
+          created_at?: string
+          created_by?: string | null
+          duration_seconds?: number | null
+          embedded_at?: string | null
+          id?: string
+          license: string
+          source_url?: string | null
+          status?: string
+          storage_path?: string | null
+          taxonomy_code: string
+          taxonomy_node_id?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attribution?: string
+          created_at?: string
+          created_by?: string | null
+          duration_seconds?: number | null
+          embedded_at?: string | null
+          id?: string
+          license?: string
+          source_url?: string | null
+          status?: string
+          storage_path?: string | null
+          taxonomy_code?: string
+          taxonomy_node_id?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grounding_assets_taxonomy_node_id_fkey"
+            columns: ["taxonomy_node_id"]
+            isOneToOne: false
+            referencedRelation: "taxonomy_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grounding_queue: {
+        Row: {
+          asset_id: string | null
+          attribution: string
+          created_at: string
+          id: string
+          license: string
+          notes: string | null
+          origin: string
+          proposed_by: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_url: string | null
+          status: string
+          storage_path: string | null
+          taxonomy_code: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          asset_id?: string | null
+          attribution: string
+          created_at?: string
+          id?: string
+          license: string
+          notes?: string | null
+          origin?: string
+          proposed_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_url?: string | null
+          status?: string
+          storage_path?: string | null
+          taxonomy_code: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string | null
+          attribution?: string
+          created_at?: string
+          id?: string
+          license?: string
+          notes?: string | null
+          origin?: string
+          proposed_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_url?: string | null
+          status?: string
+          storage_path?: string | null
+          taxonomy_code?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grounding_queue_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "grounding_assets"
             referencedColumns: ["id"]
           },
         ]
@@ -2090,6 +2229,7 @@ export type Database = {
           created_at: string
           emotional_desc: string | null
           emotional_score: number
+          grounding_level: string
           id: string
           normalization: Json | null
           organization_id: string | null
@@ -2115,6 +2255,7 @@ export type Database = {
           created_at?: string
           emotional_desc?: string | null
           emotional_score: number
+          grounding_level?: string
           id?: string
           normalization?: Json | null
           organization_id?: string | null
@@ -2140,6 +2281,7 @@ export type Database = {
           created_at?: string
           emotional_desc?: string | null
           emotional_score?: number
+          grounding_level?: string
           id?: string
           normalization?: Json | null
           organization_id?: string | null
@@ -2508,6 +2650,29 @@ export type Database = {
       fail_ingest_file: {
         Args: { p_error: string; p_id: string }
         Returns: undefined
+      }
+      grounding_coverage: {
+        Args: never
+        Returns: {
+          branch: string
+          coverage_pct: number
+          grounded_tags: number
+          grounded_weight: number
+          observed_tags: number
+          observed_weight: number
+        }[]
+      }
+      grounding_gaps: {
+        Args: { p_branch?: string; p_limit?: number }
+        Returns: {
+          branch: string
+          code: string
+          label: string
+          node_id: string
+          observed_sources: number
+          observed_weight: number
+          queued: boolean
+        }[]
       }
       has_org_access: { Args: { _org: string }; Returns: boolean }
       has_org_write: { Args: { _org: string }; Returns: boolean }

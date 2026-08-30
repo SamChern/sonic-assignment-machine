@@ -228,27 +228,87 @@ def reader_sql(object_key: str) -> str:
 
 
 def total_rows(con: duckdb.DuckDBPyConnection, object_key: str) -> int:
+    """Row count. For Parquet this reads the footer only — no data scan."""
+    if object_key.lower().endswith(".parquet"):
+        try:
+            row = con.execute(
+                f"SELECT sum(num_rows) FROM parquet_file_metadata('{s3_uri(object_key)}')"
+            ).fetchone()
+            if row and row[0] is not None:
+                return int(row[0])
+        except duckdb.Error as e:  # unreadable footer: fall back to a real count
+            log.warning("parquet footer read failed for %s: %s", object_key, str(e)[:200])
     row = con.execute(f"SELECT count(*) FROM {reader_sql(object_key)}").fetchone()
     return int(row[0]) if row else 0
 
 
-def read_slice(
-    con: duckdb.DuckDBPyConnection,
-    object_key: str,
-    offset: int,
-    limit: int,
-) -> List[Dict[str, Any]]:
-    """One bounded window of rows as dicts. DuckDB pushes LIMIT/OFFSET down."""
-    rel = con.execute(
-        f"SELECT * FROM {reader_sql(object_key)} LIMIT {int(limit)} OFFSET {int(offset)}"
-    )
-    columns = [d[0] for d in rel.description or []]
-    return [dict(zip(columns, row)) for row in rel.fetchall()]
+class RowStream:
+    """One streaming cursor over an object — the reason giant files finish.
+
+    The previous reader issued `LIMIT n OFFSET k` per chunk. DuckDB has to walk
+    the file from row 0 to honour an OFFSET, so chunk *k* re-decoded everything
+    before it: a 108M-row file cost O(n²) work and crawled at ~25k rows/min,
+    slowing further with every chunk. Here the query is executed **once** and
+    chunks are pulled with `fetchmany`, so each row is decoded exactly once and
+    throughput stays flat from the first chunk to the last.
+
+    Resuming a checkpointed file still has to reach `start_offset`, but that is a
+    single forward drain per lease (no callbacks, no normalization) rather than a
+    re-scan per chunk. The ledger cursor semantics are unchanged, so a resume is
+    byte-for-byte equivalent to the old reader's.
+    """
+
+    def __init__(self, object_key: str, start_offset: int = 0) -> None:
+        # Its own connection: a pending result set is per-connection state, and
+        # nothing else may `execute` on it while we are streaming.
+        self.con = connect_duckdb()
+        self.object_key = object_key
+        self.offset = 0
+        self.exhausted = False
+        self.con.execute(f"SELECT * FROM {reader_sql(object_key)}")
+        self.columns = [d[0] for d in self.con.description or []]
+        if start_offset > 0:
+            drained = self._drain(start_offset)
+            log.info(
+                "key=%s resumed: drained %d/%d rows to reach the checkpoint",
+                object_key, drained, start_offset,
+            )
+
+    def _drain(self, count: int) -> int:
+        """Fast-forward to a checkpoint without materializing dicts."""
+        remaining = count
+        while remaining > 0:
+            got = self.con.fetchmany(min(DRAIN_CHUNK, remaining))
+            if not got:
+                self.exhausted = True
+                break
+            remaining -= len(got)
+            self.offset += len(got)
+        return self.offset
+
+    def next_chunk(self, want: int) -> List[Dict[str, Any]]:
+        """The next bounded window of rows as dicts, or [] at end of file."""
+        want = int(want)
+        if self.exhausted or want <= 0:
+            return []
+        rows = self.con.fetchmany(want)
+        if not rows:
+            self.exhausted = True
+            return []
+        self.offset += len(rows)
+        return [dict(zip(self.columns, row)) for row in rows]
+
+    def close(self) -> None:
+        try:
+            self.con.close()
+        except Exception:  # noqa: BLE001 — closing is best effort
+            pass
 
 
 def batched(items: List[Dict[str, Any]], size: int) -> Iterable[List[Dict[str, Any]]]:
     for i in range(0, len(items), size):
         yield items[i:i + size]
+
 
 
 def row_day(row: Dict[str, Any]) -> Optional[str]:

@@ -241,21 +241,53 @@ Deno.serve(async (req) => {
         weight: Number(row.weight ?? 1) || 1,
       }];
     });
+    // Split into small pieces so a single INSERT ... ON CONFLICT statement always
+    // stays far inside the 25s budget inside stage_ingest_rollups. Each piece
+    // carries a content fingerprint, which is the idempotency key: a replayed
+    // HTTP call re-sends identical bytes, the claim row conflicts, and the piece
+    // is skipped instead of adding its weight twice.
     let staged = 0;
-    if (rows.length) {
+    let applied = 0;
+    for (let i = 0; i < rows.length; i += STAGE_SUB_BATCH) {
+      const part = rows.slice(i, i + STAGE_SUB_BATCH);
+      const partKey = await fingerprint(sourceOffset, part);
       const { data, error: stageErr } = await admin.rpc("stage_ingest_rollups", {
         p_object_key: key,
         p_report_type: reportType,
         p_source_offset: sourceOffset,
-        p_rows: rows,
+        p_rows: part,
+        p_part_key: partKey,
       });
       if (stageErr) {
         const transient = /timeout|canceling statement|deadlock|lock/i.test(stageErr.message);
-        return json({ success: false, error: stageErr.message, retryable: transient }, transient ? 503 : 500);
+        console.error(JSON.stringify({
+          evt: "stage_rollups_failed",
+          object_key: key,
+          source_offset: sourceOffset,
+          part_key: partKey,
+          staged_before_failure: staged,
+          retryable: transient,
+          error: stageErr.message.slice(0, 400),
+        }));
+        return json({
+          success: false,
+          error: stageErr.message,
+          retryable: transient,
+          staged,
+        }, transient ? 503 : 500);
       }
-      staged = Number(data ?? 0) || 0;
+      const wrote = Number(data ?? 0) || 0;
+      staged += wrote;
+      if (wrote > 0) applied += part.length;
     }
-    return json({ success: true, staged, rejected: raw.length - rows.length });
+    return json({
+      success: true,
+      staged,
+      applied,
+      skipped_duplicate: rows.length - applied,
+      rejected: raw.length - rows.length,
+    });
+
   }
 
   // ---- Lease (pull mode): hand the worker the next pending file -------------

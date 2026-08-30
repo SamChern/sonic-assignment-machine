@@ -27,12 +27,15 @@ import PredictOutcomesPanel from "@/components/enterprise/PredictOutcomesPanel";
 import PixelSetupPanel from "@/components/enterprise/PixelSetupPanel";
 import CategoryProfileEditor from "@/components/enterprise/CategoryProfileEditor";
 import WorkspaceSonicSim from "@/components/enterprise/WorkspaceSonicSim";
+import JobCards from "@/components/enterprise/JobCards";
+import PlaybooksPanel from "@/components/enterprise/PlaybooksPanel";
 import OrgComplianceStrip from "@/components/enterprise/OrgComplianceStrip";
 
 import sonicSimLogo from "@/assets/SonicSIM_transp.png";
 import {
   Activity,
   ArrowLeft,
+  BookMarked,
   Building2,
   Compass,
   LineChart,
@@ -78,6 +81,7 @@ const GROUPS = [
     tabs: [
       { key: "users", label: "Predict users", icon: Target },
       { key: "outcomes", label: "Predict outcomes", icon: LineChart },
+      { key: "playbooks", label: "Playbooks", icon: BookMarked },
     ],
   },
   {
@@ -301,6 +305,10 @@ const Workspace = () => {
           ))}
         </div>
 
+        <div className="mt-6">
+          <JobCards onPick={setTab} />
+        </div>
+
         <Tabs value={group} onValueChange={setGroup} className="mt-6">
           <TabsList className="grid h-auto w-full grid-cols-4 gap-1 border border-border/60 bg-card/70 p-1 backdrop-blur-sm">
             {GROUPS.map((g) => (
@@ -390,6 +398,9 @@ const Workspace = () => {
             canWrite={canWrite}
             datasets={datasets}
           />
+        </TabsContent>
+        <TabsContent value="playbooks" className="mt-4">
+          <PlaybooksPanel organizationId={active.organization_id} canWrite={canWrite} />
         </TabsContent>
         <TabsContent value="tags" className="mt-4">
           <PixelSetupPanel organizationId={active.organization_id} canWrite={canWrite} />

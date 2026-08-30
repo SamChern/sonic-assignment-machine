@@ -14,6 +14,7 @@ const VisualsFallback = () => (
 );
 import { useStoredLibrosaFeatures } from "@/hooks/useLibrosaFeatures";
 import { FeedbackPopover } from "@/components/FeedbackPopover";
+import { GroundingBadge } from "@/components/GroundingBadge";
 import { supabase } from "@/integrations/supabase/client";
 
 interface CategoryScore {

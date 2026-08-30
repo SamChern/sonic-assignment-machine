@@ -23,6 +23,7 @@ const AdminConnected = lazy(() => import("./pages/AdminConnected"));
 const AdminCTV = lazy(() => import("./pages/AdminCTV"));
 const AdminActivationGrants = lazy(() => import("./pages/AdminActivationGrants"));
 const AdminControlRoom = lazy(() => import("./pages/AdminControlRoom"));
+const AdminSoundLibrary = lazy(() => import("./pages/admin/AdminSoundLibrary"));
 const IntegrationStatus = lazy(() => import("./pages/IntegrationStatus"));
 const IngestionCompatibility = lazy(() => import("./pages/IngestionCompatibility"));
 const SemanticAnalysis = lazy(() => import("./pages/SemanticAnalysis"));

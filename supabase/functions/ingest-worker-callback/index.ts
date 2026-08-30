@@ -36,6 +36,19 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const MAX_ROWS_PER_CALL = 2_000;
 /** Cap one staged-rollup chunk (Step 2.5-alt). */
 const MAX_ROLLUP_ROWS_PER_CALL = 5_000;
+/** Rows per staging statement — small enough that one upsert never times out. */
+const STAGE_SUB_BATCH = 400;
+
+/**
+ * Stable fingerprint for one staging piece. Same rows in the same order always
+ * produce the same key, which is what makes a replayed callback a no-op.
+ */
+async function fingerprint(offset: number, rows: unknown[]): Promise<string> {
+  const payload = `${offset}|${JSON.stringify(rows)}`;
+  const digest = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(payload));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 
 
 type Json = Record<string, unknown>;
@@ -241,21 +254,53 @@ Deno.serve(async (req) => {
         weight: Number(row.weight ?? 1) || 1,
       }];
     });
+    // Split into small pieces so a single INSERT ... ON CONFLICT statement always
+    // stays far inside the 25s budget inside stage_ingest_rollups. Each piece
+    // carries a content fingerprint, which is the idempotency key: a replayed
+    // HTTP call re-sends identical bytes, the claim row conflicts, and the piece
+    // is skipped instead of adding its weight twice.
     let staged = 0;
-    if (rows.length) {
+    let applied = 0;
+    for (let i = 0; i < rows.length; i += STAGE_SUB_BATCH) {
+      const part = rows.slice(i, i + STAGE_SUB_BATCH);
+      const partKey = await fingerprint(sourceOffset, part);
       const { data, error: stageErr } = await admin.rpc("stage_ingest_rollups", {
         p_object_key: key,
         p_report_type: reportType,
         p_source_offset: sourceOffset,
-        p_rows: rows,
+        p_rows: part,
+        p_part_key: partKey,
       });
       if (stageErr) {
         const transient = /timeout|canceling statement|deadlock|lock/i.test(stageErr.message);
-        return json({ success: false, error: stageErr.message, retryable: transient }, transient ? 503 : 500);
+        console.error(JSON.stringify({
+          evt: "stage_rollups_failed",
+          object_key: key,
+          source_offset: sourceOffset,
+          part_key: partKey,
+          staged_before_failure: staged,
+          retryable: transient,
+          error: stageErr.message.slice(0, 400),
+        }));
+        return json({
+          success: false,
+          error: stageErr.message,
+          retryable: transient,
+          staged,
+        }, transient ? 503 : 500);
       }
-      staged = Number(data ?? 0) || 0;
+      const wrote = Number(data ?? 0) || 0;
+      staged += wrote;
+      if (wrote > 0) applied += part.length;
     }
-    return json({ success: true, staged, rejected: raw.length - rows.length });
+    return json({
+      success: true,
+      staged,
+      applied,
+      skipped_duplicate: rows.length - applied,
+      rejected: raw.length - rows.length,
+    });
+
   }
 
   // ---- Lease (pull mode): hand the worker the next pending file -------------

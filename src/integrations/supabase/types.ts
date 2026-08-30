@@ -843,38 +843,59 @@ export type Database = {
           },
         ]
       }
+      ingest_rollup_chunks: {
+        Row: {
+          created_at: string
+          object_key: string
+          part_key: string
+          rows: number
+          source_offset: number
+        }
+        Insert: {
+          created_at?: string
+          object_key: string
+          part_key?: string
+          rows?: number
+          source_offset: number
+        }
+        Update: {
+          created_at?: string
+          object_key?: string
+          part_key?: string
+          rows?: number
+          source_offset?: number
+        }
+        Relationships: []
+      }
       ingest_rollups: {
         Row: {
           created_at: string
           day: string | null
-          id: number
           object_key: string
           report_type: string | null
-          source_offset: number
           subject_key: string
           taxonomy_code: string
+          updated_at: string
           weight: number
         }
         Insert: {
           created_at?: string
           day?: string | null
-          id?: never
           object_key: string
           report_type?: string | null
-          source_offset?: number
           subject_key: string
           taxonomy_code: string
+          updated_at?: string
           weight?: number
         }
         Update: {
           created_at?: string
           day?: string | null
-          id?: never
           object_key?: string
           report_type?: string | null
-          source_offset?: number
           subject_key?: string
           taxonomy_code?: string
+          updated_at?: string
           weight?: number
         }
         Relationships: []
@@ -2937,6 +2958,7 @@ export type Database = {
       stage_ingest_rollups: {
         Args: {
           p_object_key: string
+          p_part_key?: string
           p_report_type: string
           p_rows: Json
           p_source_offset: number

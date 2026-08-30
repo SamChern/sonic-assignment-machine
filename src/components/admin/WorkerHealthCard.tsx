@@ -145,6 +145,51 @@ const WorkerHealthCard = () => {
         ))}
       </div>
 
+      {files.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">
+            Files in flight, waiting or parked
+          </p>
+          {files.map((f) => {
+            const stops = Number(f.retryable_stops ?? 0);
+            const pct = f.total_rows
+              ? Math.min(100, Math.round((Number(f.rows_offset ?? 0) / f.total_rows) * 100))
+              : null;
+            return (
+              <div
+                key={f.id}
+                className="rounded-md border border-border bg-muted/20 p-3 space-y-1 text-xs"
+              >
+                <p className="font-mono break-all text-foreground">
+                  {f.object_key.split("/").pop()}
+                </p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
+                  <Badge
+                    variant={
+                      f.status === "failed" || f.status === "blocked" ? "destructive" : "secondary"
+                    }
+                    className="text-[10px]"
+                  >
+                    {f.status}
+                  </Badge>
+                  <span>claim {f.worker_id ?? "unclaimed"}</span>
+                  <span>heartbeat {relative(f.heartbeat_at)}</span>
+                  <span>
+                    resume at row {Number(f.rows_offset ?? 0).toLocaleString()}
+                    {pct !== null ? ` (${pct}%)` : ""}
+                  </span>
+                  <span className={stops > 0 ? "text-primary" : undefined}>
+                    paused &amp; resumed {stops}×
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+
+
       {beats.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           No worker has ever checked in. Install the ingest worker on the EC2 box — until then

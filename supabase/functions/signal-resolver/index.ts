@@ -12,6 +12,7 @@
 //   { action: "resolve_one", symbol, symbol_type?, context? }
 //   { action: "status" }                  — queue depth, today's spend, pause state
 //   { action: "review", node_id, decision: "approve" | "reject" }
+//   { action: "nudge", refresh? }         — signal-health thresholds; refresh fires the agent
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireAdmin } from "../_shared/admin.ts";
 import { controlBoolean, controlNumber, controlString } from "../_shared/control.ts";
@@ -23,6 +24,7 @@ import {
   type Resolution,
 } from "../_shared/resolverAgent.ts";
 import { symbolTypeFromCode } from "../_shared/resolverQueue.ts";
+import { buildNudgeReport } from "../_shared/resolverNudge.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

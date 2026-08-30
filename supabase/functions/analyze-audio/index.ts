@@ -239,22 +239,91 @@ function escapeUnescapedQuotesInJsonStrings(text: string): string {
   return out;
 }
 
+/**
+ * Resolves who is really calling. The scoring path itself stays open so the
+ * guest "one free SonicSIM" ladder keeps working, but *persistence* is only
+ * ever done for an identity proven by a token — never one named in the body.
+ *
+ * - service role bearer  -> internal caller, may write for any user_id
+ * - valid user token     -> writes are pinned to that user's own id
+ * - anything else        -> anonymous: score only, never save
+ */
+async function resolveCaller(
+  req: Request,
+  bodyUserId: string | undefined,
+): Promise<{ userId: string | null; mayPersist: boolean }> {
+  const bearer = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
+  if (!bearer) return { userId: null, mayPersist: false };
+
+  if (SUPABASE_SERVICE_ROLE_KEY && bearer === SUPABASE_SERVICE_ROLE_KEY) {
+    return { userId: bodyUserId ?? null, mayPersist: Boolean(bodyUserId) };
+  }
+
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!SUPABASE_URL || !anonKey) return { userId: null, mayPersist: false };
+
+  try {
+    const userClient = createClient(SUPABASE_URL, anonKey, {
+      global: { headers: { Authorization: `Bearer ${bearer}` } },
+    });
+    const { data, error } = await userClient.auth.getUser();
+    if (error || !data.user) return { userId: null, mayPersist: false };
+    // Body-supplied ids are ignored: a caller may only ever write as themselves.
+    return { userId: data.user.id, mayPersist: true };
+  } catch (_err) {
+    return { userId: null, mayPersist: false };
+  }
+}
+
+/** Rejects malformed bodies before any AI call or DB write happens. */
+function validateSources(sources: unknown): { ok: true; sources: AudioSource[] } | { ok: false; error: string } {
+  if (!Array.isArray(sources) || sources.length === 0) {
+    return { ok: false, error: 'No audio sources provided' };
+  }
+  if (sources.length > 25) {
+    return { ok: false, error: 'Too many sources in one request (max 25)' };
+  }
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') return { ok: false, error: 'Each source must be an object' };
+    const s = source as Record<string, unknown>;
+    if (typeof s.name !== 'string' || !s.name.trim() || s.name.length > 500) {
+      return { ok: false, error: 'Each source needs a name of 1–500 characters' };
+    }
+    if (s.type !== 'file' && s.type !== 'track') {
+      return { ok: false, error: "Each source needs a type of 'file' or 'track'" };
+    }
+    for (const key of ['audio_source_id', 'spotify_id', 'file_url', 'feature_hash'] as const) {
+      const value = s[key];
+      if (value != null && (typeof value !== 'string' || value.length > 2000)) {
+        return { ok: false, error: `Invalid ${key}` };
+      }
+    }
+  }
+  return { ok: true, sources: sources as AudioSource[] };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const {
-      sources,
-      user_id,
-      save_results = false,
-      bypass_cache = false,
-    }: AnalysisRequest = await req.json();
+    const body = (await req.json()) as Partial<AnalysisRequest>;
+    const { save_results = false, bypass_cache = false } = body;
 
-    if (!sources || sources.length === 0) {
-      throw new Error('No audio sources provided');
+    const validated = validateSources(body.sources);
+    if (!validated.ok) {
+      return new Response(
+        JSON.stringify({ success: false, error: validated.error }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
+    const sources = validated.sources;
+
+    // Identity is derived from the token, never from the request body.
+    const caller = await resolveCaller(req, body.user_id);
+    const user_id = caller.userId;
+    const persist = save_results && caller.mayPersist;
 
     // Not fatal on its own: when an EC2 inference server is configured the
     // gateway key is only used as a fallback.
@@ -262,8 +331,8 @@ Deno.serve(async (req) => {
       console.warn('LOVABLE_API_KEY is not set — relying on the EC2 inference server');
     }
 
-    console.log(`Analyzing ${sources.length} audio source(s):`, sources);
-    console.log(`User ID: ${user_id}, Save results: ${save_results}`);
+    console.log(`Analyzing ${sources.length} audio source(s)`);
+    console.log(`Caller: ${user_id ?? 'anonymous'}, persisting: ${persist}`);
 
     // Initialize Supabase client for cache operations
     const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY 

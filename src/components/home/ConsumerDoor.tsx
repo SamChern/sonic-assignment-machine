@@ -50,6 +50,15 @@ interface DoorResult {
   tags: string[];
 }
 
+/** Shape of the `analyze-audio` payload this door reads. */
+interface AnalyzeResponse {
+  error?: string;
+  sources?: Array<{
+    name: string;
+    categories?: Array<{ name: string; score: number; description?: string }>;
+  }>;
+}
+
 const GUEST_RUNS_KEY = "sonicsim.guestRuns";
 const GUEST_LIMIT = 1;
 const FREE_MONTHLY_LIMIT = 3;

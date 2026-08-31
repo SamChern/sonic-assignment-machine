@@ -6,6 +6,7 @@ const VisualsFallback = () => (
   <div className="h-24 animate-pulse rounded-md bg-secondary/30" />
 );
 import { FeedbackPopover } from "@/components/FeedbackPopover";
+import { AudioSignalRefresh } from "@/components/admin/AudioSignalRefresh";
 import { GroundingBadge } from "@/components/GroundingBadge";
 import {
   AcousticVisualsToggle,
@@ -362,6 +363,15 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
 
                   {/* Step 14b — how this score knew what it knew */}
                   {audioSourceId && <GroundingBadge audioSourceId={audioSourceId} />}
+
+                  {/* Audio Signal Refresh — admin-only open-web enrichment */}
+                  {audioSourceId && (
+                    <AudioSignalRefresh
+                      audioSourceId={audioSourceId}
+                      sourceName={result.source}
+                      onRefreshed={() => setRefreshKey((k) => k + 1)}
+                    />
+                  )}
 
                   {/* Radial chart */}
 

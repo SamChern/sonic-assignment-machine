@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ComplianceAlert } from "@/components/admin/ComplianceAlert";
 import { AdminDigestCard } from "@/components/admin/AdminDigestCard";
 import { ResolverNudge } from "@/components/admin/ResolverNudge";
+import { AudioSignalRefreshCard } from "@/components/admin/AudioSignalRefreshCard";
 import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
 
 import {
@@ -271,6 +272,7 @@ const AdminDashboard = () => {
         <div className="mb-4 space-y-3">
           <ComplianceAlert to="/admin/ec2" />
           <ResolverNudge compact={depth === "glance"} />
+          <AudioSignalRefreshCard />
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

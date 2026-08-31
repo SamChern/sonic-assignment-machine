@@ -243,12 +243,19 @@ const CreatorDoor = () => {
               Understand your work, register its provenance, choose how machines may use it.
             </p>
           </div>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/creator/profile">
+              <UserRound className="mr-1 h-4 w-4" />
+              My profile
+            </Link>
+          </Button>
           <Button asChild variant="ghost" size="sm">
             <Link to="/">
               <ArrowLeft className="mr-1 h-4 w-4" />
               Home
             </Link>
           </Button>
+
         </div>
       </header>
 

@@ -200,12 +200,13 @@ export async function applyNormalizationToAnalysis(
       const { error: updErr } = await supabase
         .from("source_analyses")
         .update({
-          emotional_score: scores.emotional,
-          cognitive_score: scores.cognitive,
-          social_score: scores.social,
-          communication_score: scores.communication,
-          contextual_score: scores.contextual,
-          artistic_score: scores.artistic,
+          // The score columns are integers; the audit keeps the 0.1 precision.
+          emotional_score: Math.round(scores.emotional),
+          cognitive_score: Math.round(scores.cognitive),
+          social_score: Math.round(scores.social),
+          communication_score: Math.round(scores.communication),
+          contextual_score: Math.round(scores.contextual),
+          artistic_score: Math.round(scores.artistic),
           // `category` is a generated column (derived from the six scores) —
           // writing it is rejected by Postgres.
           raw_scores: raw,

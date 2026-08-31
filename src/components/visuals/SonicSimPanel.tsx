@@ -67,7 +67,7 @@ const MODES: { key: PanelMode; label: string; icon: typeof Activity }[] = [
   { key: "nodes", label: "Node pulse", icon: Network },
 ];
 
-const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3] as const;
+
 
 const MOTION_PREF_KEY = "sonicsim.audioscope.motion";
 

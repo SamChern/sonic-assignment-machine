@@ -265,7 +265,16 @@ const MusicCatalog = () => {
             Back to My Library
           </Link>
         </Button>
-        <h1 className="text-2xl font-semibold tracking-tight">Music catalog</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight">Music catalog</h1>
+          <Button asChild size="sm" variant="outline" className="ml-auto text-xs">
+            <Link to="/market">
+              <Store className="mr-1 h-3.5 w-3.5" />
+              Symbol market ({listedCount} listed)
+            </Link>
+          </Button>
+        </div>
+
         <p className="max-w-2xl text-sm text-muted-foreground">
           Labels hold albums, albums hold tracks. Link an entry to an analyzed audio source and to
           the symbols it should resolve to, so the ontology reads your catalog the same way it reads

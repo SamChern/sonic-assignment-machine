@@ -7,6 +7,8 @@
 - [x] Musical read: pitch / rhythm / timbre + musicality derived from librosa + CLAP tag affinity, stored on source_analyses.musical_scores and shown in analysis.
 
 ## In progress
+- [ ] Catalog score module: rank labels by originality, grounding confidence and catalog completeness, surfaced in admin.
+- [ ] Verify the musical read on a real user-uploaded music file (pitch / rhythm / timbre) and compare it against Intuizi CTV samples.
 - [ ] Feed user-uploaded music files through librosa + CLAP so pitch/rhythm/timbre reflect the real audio (not just Intuizi samples).
 - [ ] Originality Score (grounding confidence + taxonomy match + pitch/rhythm/timbre) surfaced in My Library.
 - [ ] Dedicated music catalog page in My Library: upload albums / tracks / labels and link them to symbols.

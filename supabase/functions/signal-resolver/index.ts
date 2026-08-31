@@ -234,8 +234,22 @@ async function resolveOne(
   model: string,
   escalateModel: string,
   minConfidence: number,
-): Promise<{ nodeId: string | null; usd: number; escalated: boolean; confidence: number }> {
+  trace?: StepLogger,
+): Promise<{
+  nodeId: string | null;
+  usd: number;
+  escalated: boolean;
+  confidence: number;
+  runId?: string;
+}> {
+  const t0 = performance.now();
   const candidates = await candidatesFor(admin, row.symbol);
+  await trace?.log("candidates", "ok", {
+    count: candidates.length,
+    codes: candidates.slice(0, 8).map((c) => c.code),
+  }, t0);
+
+  const t1 = performance.now();
   let res = await resolveSymbol({
     model,
     symbol: row.symbol,
@@ -245,9 +259,19 @@ async function resolveOne(
   });
   let usd = res.usd;
   let escalated = false;
+  await trace?.log("model", "ok", {
+    model,
+    confidence: res.confidence,
+    usd: res.usd,
+    description: res.description,
+    tendencies: res.tendencies,
+    anchors: res.anchors,
+    sources: res.snippets.map((s) => ({ source: s.source, title: s.title, url: s.url })),
+  }, t1);
 
   if (res.confidence < minConfidence && escalateModel && escalateModel !== model) {
     escalated = true;
+    const t2 = performance.now();
     const retry = await resolveSymbol({
       model: escalateModel,
       symbol: row.symbol,
@@ -256,14 +280,31 @@ async function resolveOne(
       candidates,
     });
     usd += retry.usd;
-    if (retry.confidence >= res.confidence) res = retry;
+    const kept = retry.confidence >= res.confidence;
+    if (kept) res = retry;
+    await trace?.log("escalate", "ok", {
+      model: escalateModel,
+      confidence: retry.confidence,
+      kept,
+      usd: retry.usd,
+    }, t2);
   }
 
   if (res.confidence < minConfidence) {
-    return { nodeId: null, usd, escalated, confidence: res.confidence };
+    await trace?.log("threshold", "failed", {
+      confidence: res.confidence,
+      min_confidence: minConfidence,
+    });
+    return { nodeId: null, usd, escalated, confidence: res.confidence, runId: trace?.runId };
   }
+  const t3 = performance.now();
   const nodeId = await writeNode(admin, row.symbol, row.symbol_type, { ...res, usd });
-  return { nodeId, usd, escalated, confidence: res.confidence };
+  await trace?.log("write_node", nodeId ? "ok" : "failed", {
+    node_id: nodeId,
+    confidence: res.confidence,
+    usd,
+  }, t3);
+  return { nodeId, usd, escalated, confidence: res.confidence, runId: trace?.runId };
 }
 
 async function drain(admin: Client, limitOverride?: number): Promise<RunOutcome> {

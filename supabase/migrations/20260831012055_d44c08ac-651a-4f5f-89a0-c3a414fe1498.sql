@@ -1,0 +1,1 @@
+update public.semantic_normalization set speech_bias = 0.35, redistribute = true, enabled = true where scope = 'global' and speech_bias = 0;

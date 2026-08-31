@@ -187,21 +187,26 @@ Deno.serve(async (req) => {
       // Latest analysis per source.
       const sourceIds = sources.map((s) => String(s.id));
       const latest = new Map<string, Record<string, unknown>>();
-      for (let i = 0; i < sourceIds.length; i += CHUNK) {
-        const { data, error } = await admin
-          .from("source_analyses")
-          .select(
-            "audio_source_id,source_name,confidence,created_at," +
-              CATEGORIES.map((c) => `${c}_score`).join(","),
-          )
-          .in("audio_source_id", sourceIds.slice(i, i + CHUNK))
-          .order("created_at", { ascending: false });
-        if (error) throw new Error(error.message);
-        for (const a of data ?? []) {
+      for (let i = 0; i < sourceIds.length; i += READ_CHUNK) {
+        const slice = sourceIds.slice(i, i + READ_CHUNK);
+        const data = await withRetry("read source_analyses", async () => {
+          const { data, error } = await admin
+            .from("source_analyses")
+            .select(
+              "audio_source_id,source_name,confidence,created_at," +
+                CATEGORIES.map((c) => `${c}_score`).join(","),
+            )
+            .in("audio_source_id", slice)
+            .order("created_at", { ascending: false });
+          if (error) throw new Error(error.message);
+          return data ?? [];
+        });
+        for (const a of data) {
           const sid = String(a.audio_source_id);
           if (!latest.has(sid)) latest.set(sid, a);
         }
       }
+
 
       const datasetName = grant.label?.trim()
         ? grant.label.trim()

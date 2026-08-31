@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, ReactNode } from 'react';
+import { useState, useEffect, useMemo, useRef, ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +6,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAudioSources, AudioSource } from '@/hooks/useAudioSources';
 import { useAuth } from '@/hooks/useAuth';
-import { Music, FileAudio, Trash2, User, Globe, Library, Plus, ExternalLink } from 'lucide-react';
+import { Music, FileAudio, Trash2, User, Globe, Library, Plus, ExternalLink, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { LibraryFacetBar } from '@/components/library/LibraryFacetBar';
+import { EMPTY_FILTER, groupLibrary, type FacetFilter } from '@/lib/libraryFacets';
 
 interface UserLibraryProps {
   onSelectSource?: (source: AudioSource) => void;
@@ -61,6 +64,9 @@ export function UserLibrary({ onSelectSource, onSelectMultiple }: UserLibraryPro
   const { user } = useAuth();
   const { mySources, allSources, loading, deleteSource } = useAudioSources();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<FacetFilter>(EMPTY_FILTER);
+  // Consolidate the library by data source + meta tags so it stays scannable.
+  const mine = useMemo(() => groupLibrary(mySources, filter), [mySources, filter]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -212,13 +218,38 @@ export function UserLibrary({ onSelectSource, onSelectMultiple }: UserLibraryPro
                 </p>
               </Card>
             ) : (
-              <LazySourceGrid
-                sources={mySources}
-                renderItem={(source) => (
-                  <SourceCard key={source.id} source={source} showDelete />
+              <>
+                <LibraryFacetBar filter={filter} counts={mine.counts} onChange={setFilter} />
+                {mine.total === 0 ? (
+                  <Card className="p-6 text-center text-sm text-muted-foreground">
+                    No sources match these filters.
+                  </Card>
+                ) : (
+                  mine.groups.map((group) => (
+                    <Collapsible key={group.provider} defaultOpen={mine.groups.length <= 2}>
+                      <Card className="p-3">
+                        <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 text-left">
+                          <span className="flex items-center gap-2 text-sm font-medium">
+                            {group.label}
+                            <Badge variant="secondary" className="text-xs">
+                              {group.sources.length}
+                            </Badge>
+                          </span>
+                          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform data-[state=open]:rotate-180" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pt-3">
+                          <LazySourceGrid
+                            sources={group.sources}
+                            renderItem={(source) => (
+                              <SourceCard key={source.id} source={source} showDelete />
+                            )}
+                          />
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
+                  ))
                 )}
-              />
-
+              </>
             )}
           </TabsContent>
         )}

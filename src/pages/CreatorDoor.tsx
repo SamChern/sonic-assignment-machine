@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, BadgeCheck, FileAudio, Plus, ShieldOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -57,7 +57,6 @@ interface Inclusion {
 
 const CreatorDoor = () => {
   const { user, loading } = useAuth();
-  const navigate = useNavigate();
   const [works, setWorks] = useState<Work[]>([]);
   const [inclusions, setInclusions] = useState<Inclusion[]>([]);
   const [title, setTitle] = useState("");
@@ -66,9 +65,6 @@ const CreatorDoor = () => {
   const [optIn, setOptIn] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!loading && !user) navigate("/auth?next=%2Fcreator", { replace: true });
-  }, [loading, user, navigate]);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -195,6 +191,47 @@ const CreatorDoor = () => {
     });
     return byWork;
   }, [inclusions]);
+
+  // The Originality Ledger is an account-bound record: registration requires a
+  // real signed-in creator, never a guest session.
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center gradient-app">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center gradient-app px-4">
+        <Card className="w-full max-w-md space-y-4 border-border/60 bg-card/80 p-6 backdrop-blur">
+          <div className="flex items-center gap-2">
+            <BadgeCheck className="h-5 w-5 text-primary" />
+            <h1 className="text-base font-semibold">Creator door</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            The Originality Ledger records who registered a work and when, so it needs a real
+            creator account. Sign in, or create one in a few seconds — your works, terms and
+            attribution receipts all stay attached to it.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm">
+              <Link to="/auth?next=%2Fcreator&mode=signup">Create a creator account</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/auth?next=%2Fcreator">Sign in</Link>
+            </Button>
+            <Button asChild size="sm" variant="ghost">
+              <Link to="/">
+                <ArrowLeft className="mr-1 h-4 w-4" /> Home
+              </Link>
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen gradient-app">

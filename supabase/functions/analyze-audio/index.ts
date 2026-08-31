@@ -26,7 +26,13 @@ import {
   formatMusicalProfile,
   type MusicalScores,
 } from '../_shared/musicalScores.ts';
+import {
+  ensureLibrosaFeatures,
+  MAX_INLINE_MEASUREMENTS,
+} from '../_shared/librosaMeasure.ts';
+import { computeOriginality } from '../_shared/originality.ts';
 import { applyNormalizationToAnalysis, loadNormalization } from '../_shared/normalization.ts';
+
 import { CATEGORIES as ONTOLOGY_CATEGORIES, type Category } from '../_shared/ontology.ts';
 import { controlNumber } from '../_shared/control.ts';
 import {

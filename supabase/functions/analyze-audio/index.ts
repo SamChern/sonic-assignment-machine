@@ -507,7 +507,41 @@ Deno.serve(async (req) => {
           console.warn('Semantic service not configured — CLAP grounding skipped');
         }
 
+        // === Measure the listener's OWN audio ===
+        // Anything we hold a URL for but have no librosa blob for (a file the
+        // user just uploaded, a fresh preview) is measured inline through the
+        // same content-addressed cache the worker uses, so pitch/rhythm/timbre
+        // come from the real waveform instead of staying empty for everything
+        // that wasn't pre-measured. Capped per request; failures are silent.
+        {
+          const needMeasure = uncachedSources.filter(
+            s => !s.tag_only && !s.librosa_features && !!s.file_url,
+          );
+          let budget = MAX_INLINE_MEASUREMENTS;
+          for (const s of needMeasure) {
+            const res = await ensureLibrosaFeatures(supabaseAdmin, {
+              url: s.file_url!,
+              audioSourceId: s.audio_source_id ?? null,
+              userId: user_id ?? null,
+              identity: s.spotify_id ?? null,
+              allowUpstream: budget > 0,
+            });
+            if (!res) continue;
+            if (res.origin === 'measured') budget -= 1;
+            s.librosa_features = res.features;
+            const profile = formatLibrosaProfile(res.features);
+            if (profile) {
+              s.acoustic_profile = [s.acoustic_profile, profile].filter(Boolean).join(' ');
+              if (s.evidence !== 'clap') s.evidence = 'librosa';
+            }
+          }
+          console.log(
+            `Inline librosa: ${needMeasure.length} candidates, ${MAX_INLINE_MEASUREMENTS - budget} measured fresh`,
+          );
+        }
+
         // === Musical read — pitch / rhythm / timbre ===
+
         // Free: derived from the librosa scalars already measured plus how
         // music-like CLAP found the audio. Music-driven sources get a musical
         // craft profile; spoken-word CTV signals score near-zero musicality and

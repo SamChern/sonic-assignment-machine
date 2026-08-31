@@ -21,6 +21,11 @@ import {
 } from '../_shared/context.ts';
 import { clapBridge, getSemanticSvcConfig } from '../_shared/semanticSvc.ts';
 import { groundSourceWithClap } from '../_shared/clapAudio.ts';
+import {
+  deriveMusicalScores,
+  formatMusicalProfile,
+  type MusicalScores,
+} from '../_shared/musicalScores.ts';
 import { applyNormalizationToAnalysis, loadNormalization } from '../_shared/normalization.ts';
 import { CATEGORIES as ONTOLOGY_CATEGORIES, type Category } from '../_shared/ontology.ts';
 import { controlNumber } from '../_shared/control.ts';
@@ -116,6 +121,10 @@ interface AudioSource {
   grounding_level?: GroundingLevel;
   /** CLAP heard these AudioSet nodes in the audio itself. */
   clap_tags?: { code: string; label: string; similarity: number }[];
+  /** Musical read (pitch/rhythm/timbre) for music-driven audio. */
+  musical?: MusicalScores | null;
+  /** Raw librosa blob, kept in memory so the musical read can be derived. */
+  librosa_features?: unknown;
 }
 
 
@@ -432,6 +441,7 @@ Deno.serve(async (req) => {
           }
           for (const s of uncachedSources) {
             if (!s.audio_source_id || s.tag_only) continue;
+            s.librosa_features = byId.get(s.audio_source_id) ?? null;
             const profile = formatLibrosaProfile(byId.get(s.audio_source_id));
             if (profile) {
               s.acoustic_profile = profile;
@@ -489,6 +499,25 @@ Deno.serve(async (req) => {
           );
         } else {
           console.warn('Semantic service not configured — CLAP grounding skipped');
+        }
+
+        // === Musical read — pitch / rhythm / timbre ===
+        // Free: derived from the librosa scalars already measured plus how
+        // music-like CLAP found the audio. Music-driven sources get a musical
+        // craft profile; spoken-word CTV signals score near-zero musicality and
+        // the UI hides the block rather than inventing a key for a voiceover.
+        for (const s of uncachedSources) {
+          if (!s.librosa_features) continue;
+          try {
+            const musical = deriveMusicalScores(s.librosa_features, s.clap_tags ?? []);
+            if (!musical) continue;
+            s.musical = musical;
+            s.acoustic_profile = [s.acoustic_profile, formatMusicalProfile(musical)]
+              .filter(Boolean)
+              .join(' ');
+          } catch (e) {
+            console.warn('musical scores failed for', s.name, e);
+          }
         }
 
         // Tier 2 — provider-supplied audio features (never touches EC2).
@@ -1029,6 +1058,7 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
           context_neighbors: matched?.context_neighbors ?? null,
           grounding_level:
             matched?.grounding_level ?? resolveGroundingLevel({ evidence }),
+          musical_scores: matched?.musical ?? null,
           ...categories,
         };
 

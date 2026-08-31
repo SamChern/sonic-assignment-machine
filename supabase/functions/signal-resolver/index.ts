@@ -514,8 +514,8 @@ Deno.serve(async (req) => {
     }
 
     if (action === "nudge") {
-      const state = await readState(admin);
-      const report = await buildNudgeReport(admin, state);
+      let state = await readState(admin);
+      let report = await buildNudgeReport(admin, state);
       // `refresh: true` fires the agent right there — the nudge is the trigger,
       // not just a label. Paused (credits/policy) states are never overridden.
       const wantRefresh = body.refresh === true && report.triggered && !state.paused;
@@ -531,6 +531,9 @@ Deno.serve(async (req) => {
             admin, "resolver.nudge_batch", 10, { min: 1, max: 200 },
           );
           outcome = await drain(admin, limit);
+          // Report the state the refresh left behind, not the one that caused it.
+          state = await readState(admin);
+          report = await buildNudgeReport(admin, state);
         }
       }
       return json({
@@ -539,6 +542,7 @@ Deno.serve(async (req) => {
         state,
         refreshed: outcome !== null,
         outcome,
+
       });
     }
 

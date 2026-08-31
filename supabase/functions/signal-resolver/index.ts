@@ -840,7 +840,7 @@ Deno.serve(async (req) => {
 
       const { data: beforeRows } = await admin
         .from("source_analyses")
-        .select("id, confidence, grounding_level, evidence")
+        .select("id, confidence, grounding_level")
         .eq("audio_source_id", audioSourceId)
         .order("created_at", { ascending: false })
         .limit(1);
@@ -970,7 +970,6 @@ Deno.serve(async (req) => {
             ? {
               confidence: Number(before.confidence ?? 0),
               grounding_level: before.grounding_level ?? null,
-              evidence: before.evidence ?? null,
             }
             : null,
           // The caller re-scores the source (analyze-audio, bypass_cache) so the

@@ -838,13 +838,13 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!src) return json({ success: false, error: "audio source not found" }, 404);
 
-      const { data: before } = await admin
+      const { data: beforeRows } = await admin
         .from("source_analyses")
         .select("id, confidence, grounding_level, evidence")
         .eq("audio_source_id", audioSourceId)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+      const before = (beforeRows ?? [])[0] ?? null;
 
       // Existing tags become context so the agent refines rather than guesses.
       const { data: tagRows } = await admin

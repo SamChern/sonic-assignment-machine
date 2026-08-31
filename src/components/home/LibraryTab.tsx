@@ -114,6 +114,20 @@ export const LibraryTab = ({
         )}
       </Card>
 
+      <Card className="flex flex-wrap items-center gap-3 border-border/60 bg-card/70 p-4 backdrop-blur-sm">
+        <Disc3 className="h-4 w-4 text-primary" />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold">Music catalog</h3>
+          <p className="text-xs text-muted-foreground">
+            Upload albums, tracks and labels, and link them to the symbols they resolve to.
+          </p>
+        </div>
+        <Button asChild size="sm" variant="outline" className="text-xs">
+          <Link to="/library/catalog">Open catalog</Link>
+        </Button>
+      </Card>
+
+
       {compareIds.length === 2 && (
         <AnalysisCompare
           ids={[compareIds[0], compareIds[1]]}

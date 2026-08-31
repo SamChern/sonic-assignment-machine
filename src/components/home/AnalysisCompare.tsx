@@ -24,7 +24,7 @@ interface CompareRow {
   source_name: string;
   confidence: number | null;
   grounding_level: string | null;
-  ontology_category: string | null;
+  category: string | null;
   emotional_score: number | null;
   cognitive_score: number | null;
   social_score: number | null;
@@ -34,7 +34,7 @@ interface CompareRow {
 }
 
 const SELECT =
-  "id, source_name, confidence, grounding_level, ontology_category, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score";
+  "id, source_name, confidence, grounding_level, category, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score";
 
 export const AnalysisCompare = ({
   ids,
@@ -103,9 +103,9 @@ export const AnalysisCompare = ({
           <div key={r.id} className="min-w-0 space-y-1">
             <p className="truncate font-medium">{r.source_name}</p>
             <div className="flex flex-wrap gap-1">
-              {r.ontology_category && (
+              {r.category && (
                 <Badge variant="secondary" className="px-1.5 py-0 text-[9px]">
-                  {r.ontology_category}
+                  {r.category}
                 </Badge>
               )}
               <Badge variant="outline" className="px-1.5 py-0 text-[9px]">

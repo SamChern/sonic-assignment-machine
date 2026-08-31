@@ -244,7 +244,10 @@ export const SignatureCard = ({
             </>
           ) : (
             <p className="mt-1.5 text-sm text-muted-foreground">
-              {loading ? "Rendering signature…" : "Press play to hear this signal."}
+              {loading
+                ? "Rendering signature…"
+                : (error ?? "Press play to hear this signal.")}
+
             </p>
           )}
         </div>

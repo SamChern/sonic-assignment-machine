@@ -354,7 +354,14 @@ async function drain(admin: Client, limitOverride?: number): Promise<RunOutcome>
       .eq("id", row.id);
 
     try {
-      const r = await resolveOne(admin, row, model, escalateModel, minConfidence);
+      const r = await resolveOne(
+        admin,
+        row,
+        model,
+        escalateModel,
+        minConfidence,
+        stepLogger(admin, row.id, row.symbol),
+      );
       out.usd += r.usd;
       if (r.escalated) out.escalated++;
       if (r.nodeId) {

@@ -42,7 +42,10 @@ export interface GroundingInputs {
  */
 export function resolveGroundingLevel(input: GroundingInputs): GroundingLevel {
   const evidence = (input.evidence ?? "").toLowerCase();
-  if (evidence === "librosa" || evidence === "provider" || input.groundedTag) {
+  if (
+    evidence === "clap" || evidence === "librosa" || evidence === "provider" ||
+    input.groundedTag
+  ) {
     return "grounded";
   }
   if (input.bridged || input.neighbors || evidence === "neighbors") {

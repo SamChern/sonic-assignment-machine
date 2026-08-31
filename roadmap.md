@@ -15,3 +15,5 @@
 - [ ] Ungrounded symbols: flag panel — pick an ungrounded symbol, run a manual grounding, show the agent's reasoning in admin.
 - [ ] Catalog originality: track originality from its linked analysis; a label's originality is a weighted average of its linked symbols.
 - [ ] Symbol market page: list catalog tracks for sale with their originality and category scores.
+- [ ] Real-market baselines: analyze real Apple/Spotify releases and write their measured centre/spread into market_baselines.
+- [ ] Sonic Signature card: make it visually prominent in the teal palette and hide raw edge-function error text.

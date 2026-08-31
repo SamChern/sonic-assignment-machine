@@ -102,8 +102,11 @@ export const SignatureCard = ({
             .maybeSingle();
           if (active && arch) setArchetype(arch as Archetype);
         }
-      } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : "Signature unavailable");
+      } catch {
+        // Never surface raw transport text ("Edge Function returned a non-2xx
+        // status code" etc.) — the local synth fallback still plays.
+        if (active) setError("Playing the local signature synth.");
+
       } finally {
         if (active) setLoading(false);
       }
@@ -145,48 +148,64 @@ export const SignatureCard = ({
   return (
     <Card
       className={cn(
-        "relative overflow-hidden border-primary/20 p-4 shadow-elegant",
+        "relative overflow-hidden border-primary/40 bg-card/80 p-5 shadow-glow ring-1 ring-primary/20 backdrop-blur-sm",
         className,
       )}
     >
-      {/* Level bloom behind the content while playing */}
+      {/* Teal brand wash + level bloom behind the content while playing */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-primary/20 via-transparent to-transparent transition-opacity duration-150"
-        style={{ opacity: playing ? 0.35 + level * 0.65 : 0 }}
+        className="pointer-events-none absolute inset-0 opacity-[0.14]"
+        style={{ background: "var(--gradient-teal)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 transition-opacity duration-150"
+        style={{
+          background: "var(--gradient-primary)",
+          opacity: playing ? 0.18 + level * 0.5 : 0,
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{ background: "var(--gradient-teal)" }}
       />
 
       <div className="relative flex items-start gap-4">
         <Button
           type="button"
           size="icon"
-          variant="secondary"
-          className="h-12 w-12 shrink-0 rounded-full border border-primary/30"
+          className="h-14 w-14 shrink-0 rounded-full border border-primary/40 text-primary-foreground shadow-glow"
           onClick={togglePlay}
           disabled={loading}
           aria-label={playing ? "Stop sonic signature" : "Play sonic signature"}
           style={{
-            transform: playing ? `scale(${1 + level * 0.08})` : undefined,
+            background: "var(--gradient-primary)",
+            transform: playing ? `scale(${1 + level * 0.1})` : undefined,
             transition: "transform 100ms linear",
           }}
         >
           {loading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
+            <Loader2 className="h-6 w-6 animate-spin" />
           ) : playing ? (
-            <Pause className="h-5 w-5" />
+            <Pause className="h-6 w-6" />
           ) : (
-            <Play className="h-5 w-5" />
+            <Play className="h-6 w-6" />
           )}
         </Button>
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <span className="text-xs font-medium uppercase tracking-wide text-primary/80">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
               Sonic Signature
             </span>
             {distance !== null && (
-              <Badge variant="outline" className="text-[10px] tabular-nums">
+              <Badge
+                variant="outline"
+                className="border-primary/40 bg-primary/10 text-[10px] font-semibold tabular-nums text-primary"
+              >
                 fit {Math.max(0, Math.round((1 - distance / 100) * 100))}%
               </Badge>
             )}
@@ -194,13 +213,17 @@ export const SignatureCard = ({
 
           {archetype ? (
             <>
-              <h4 className="mt-1 truncate text-base font-bold text-foreground">
+              <h4 className="mt-1.5 truncate text-xl font-extrabold tracking-tight text-foreground sm:text-2xl">
                 {archetype.name}
               </h4>
-              <p className="text-sm text-muted-foreground">{archetype.meaning}</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <p className="mt-0.5 text-sm text-muted-foreground">{archetype.meaning}</p>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {archetype.dominant_axes?.map((axis) => (
-                  <Badge key={axis} variant="secondary" className="text-[10px] capitalize">
+                  <Badge
+                    key={axis}
+                    variant="secondary"
+                    className="border border-primary/25 bg-primary/10 text-[10px] capitalize text-primary"
+                  >
                     {axis}
                   </Badge>
                 ))}
@@ -208,7 +231,7 @@ export const SignatureCard = ({
               {archetype.anchors?.length > 0 && (
                 // The anchors are the whole point of the Ensemble — they say what
                 // this signal sounds *like*. Compact only shortens the list.
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground/80">
+                <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground/80">
                   <span className="text-muted-foreground">In the lineage of </span>
                   {(compact ? archetype.anchors.slice(0, 3) : archetype.anchors).join(" · ")}
                   {compact && archetype.anchors.length > 3 && (
@@ -218,17 +241,13 @@ export const SignatureCard = ({
                   )}
                 </p>
               )}
-
             </>
           ) : (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {error ?? (loading ? "Rendering signature…" : "No archetype assigned yet.")}
-            </p>
-          )}
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {loading
+                ? "Rendering signature…"
+                : (error ?? "Press play to hear this signal.")}
 
-          {error && archetype && (
-            <p role="status" className="mt-2 text-xs text-destructive">
-              {error}
             </p>
           )}
         </div>
@@ -236,3 +255,4 @@ export const SignatureCard = ({
     </Card>
   );
 };
+

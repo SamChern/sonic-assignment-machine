@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TasteNeighbors } from "@/components/TasteNeighbors";
 import { AnalysisCompare } from "@/components/home/AnalysisCompare";
-import { Columns2, Library, Users } from "lucide-react";
+import { OriginalityBadge, type OriginalityDetail } from "@/components/OriginalityBadge";
+import { Columns2, Disc3, Library, Users } from "lucide-react";
 
 
 /**
@@ -20,8 +23,15 @@ export const LibraryTab = ({
   userId: string | null;
   myFingerprint: any;
   allFingerprints: any[];
-  myAnalyses: { id: string; source_name: string; created_at?: string }[];
+  myAnalyses: {
+    id: string;
+    source_name: string;
+    created_at?: string;
+    originality_score?: number | null;
+    originality_detail?: OriginalityDetail | null;
+  }[];
 }) => {
+
   // Compare picks up to two saved analyses; a third pick replaces the oldest.
   const [compareIds, setCompareIds] = useState<string[]>([]);
 

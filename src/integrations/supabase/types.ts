@@ -2210,6 +2210,50 @@ export type Database = {
           },
         ]
       }
+      resolver_steps: {
+        Row: {
+          created_at: string
+          detail: Json
+          duration_ms: number | null
+          id: string
+          queue_id: string | null
+          run_id: string
+          status: string
+          step: string
+          symbol: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          id?: string
+          queue_id?: string | null
+          run_id: string
+          status?: string
+          step: string
+          symbol: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          id?: string
+          queue_id?: string | null
+          run_id?: string
+          status?: string
+          step?: string
+          symbol?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resolver_steps_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "resolution_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       retention_runs: {
         Row: {
           analyses_deleted: number
@@ -2801,6 +2845,63 @@ export type Database = {
           source_type?: string
         }
         Relationships: []
+      }
+      symbol_score_flags: {
+        Row: {
+          created_at: string
+          flagged_by: string | null
+          id: string
+          node_id: string | null
+          note: string | null
+          observed_confidence: number | null
+          queue_id: string | null
+          reason: string
+          status: string
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          flagged_by?: string | null
+          id?: string
+          node_id?: string | null
+          note?: string | null
+          observed_confidence?: number | null
+          queue_id?: string | null
+          reason: string
+          status?: string
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          flagged_by?: string | null
+          id?: string
+          node_id?: string | null
+          note?: string | null
+          observed_confidence?: number | null
+          queue_id?: string | null
+          reason?: string
+          status?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "symbol_score_flags_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "taxonomy_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "symbol_score_flags_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "resolution_queue"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       taxonomy_nodes: {
         Row: {

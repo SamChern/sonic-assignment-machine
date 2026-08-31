@@ -519,7 +519,20 @@ Deno.serve(async (req) => {
           .in("id", nodeIds);
         nodes = data ?? [];
       }
-      return json({ success: true, rows: rows ?? [], total: count ?? null, nodes });
+
+      // Score-quality context for the admin panel: open flags on these symbols.
+      const symbols = (rows ?? []).map((r: { symbol: string }) => r.symbol);
+      let flags: Record<string, unknown>[] = [];
+      if (symbols.length) {
+        const { data } = await admin
+          .from("symbol_score_flags")
+          .select("id, symbol, reason, note, status, observed_confidence, created_at")
+          .in("symbol", symbols)
+          .order("created_at", { ascending: false })
+          .limit(500);
+        flags = data ?? [];
+      }
+      return json({ success: true, rows: rows ?? [], total: count ?? null, nodes, flags });
     }
 
     // Manual enqueue from the admin Tools panel: one or many symbols, idempotent.
@@ -540,6 +553,73 @@ Deno.serve(async (req) => {
       }
       return json({ success: true, queued, symbols });
     }
+
+    // Step trace for one symbol: every recorded resolver run, newest first.
+    if (action === "steps") {
+      const symbol = String(body.symbol ?? "").trim();
+      if (!symbol) return json({ success: false, error: "symbol is required" }, 400);
+      const { data, error } = await admin
+        .from("resolver_steps")
+        .select("id, run_id, step, status, detail, duration_ms, created_at")
+        .eq("symbol", symbol)
+        .order("created_at", { ascending: false })
+        .limit(120);
+      if (error) return json({ success: false, error: error.message }, 500);
+      return json({ success: true, steps: data ?? [] });
+    }
+
+    // Flag a score as bad (or resolve/dismiss an existing flag).
+    if (action === "flag") {
+      const flagId = body.flag_id ? String(body.flag_id) : null;
+      if (flagId) {
+        const status = String(body.status ?? "closed");
+        const { error } = await admin
+          .from("symbol_score_flags")
+          .update({ status })
+          .eq("id", flagId);
+        if (error) return json({ success: false, error: error.message }, 500);
+        return json({ success: true, flag_id: flagId, status });
+      }
+      const symbol = String(body.symbol ?? "").trim();
+      const reason = String(body.reason ?? "").trim();
+      if (!symbol || !reason) {
+        return json({ success: false, error: "symbol and reason are required" }, 400);
+      }
+      const { data, error } = await admin
+        .from("symbol_score_flags")
+        .insert({
+          symbol,
+          reason,
+          note: body.note ? String(body.note).slice(0, 1000) : null,
+          queue_id: body.queue_id ? String(body.queue_id) : null,
+          node_id: body.node_id ? String(body.node_id) : null,
+          observed_confidence:
+            body.confidence === undefined || body.confidence === null
+              ? null
+              : Number(body.confidence),
+          flagged_by: authz.userId ?? null,
+        })
+        .select("id, symbol, reason, note, status, observed_confidence, created_at")
+        .single();
+      if (error) return json({ success: false, error: error.message }, 500);
+      return json({ success: true, flag: data });
+    }
+
+    // Open flags across the ontology, for the flag review list.
+    if (action === "flags") {
+      const status = String(body.status ?? "open");
+      let q = admin
+        .from("symbol_score_flags")
+        .select("id, symbol, reason, note, status, observed_confidence, created_at")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (status !== "all") q = q.eq("status", status);
+      const { data, error } = await q;
+      if (error) return json({ success: false, error: error.message }, 500);
+      return json({ success: true, flags: data ?? [] });
+    }
+
+
 
 
 

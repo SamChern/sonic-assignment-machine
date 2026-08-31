@@ -172,6 +172,8 @@ export default function AdminResolver() {
 
         <AdminToolsPanel />
 
+        <GroundingFlagPanel />
+
         <SymbolScorePanel
           rows={rows}
           nodes={nodes}
@@ -179,6 +181,7 @@ export default function AdminResolver() {
           loading={loading}
           onRefresh={load}
         />
+
 
 
 

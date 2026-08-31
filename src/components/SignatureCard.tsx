@@ -102,8 +102,11 @@ export const SignatureCard = ({
             .maybeSingle();
           if (active && arch) setArchetype(arch as Archetype);
         }
-      } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : "Signature unavailable");
+      } catch {
+        // Never surface raw transport text ("Edge Function returned a non-2xx
+        // status code" etc.) — the local synth fallback still plays.
+        if (active) setError("Playing the local signature synth.");
+
       } finally {
         if (active) setLoading(false);
       }

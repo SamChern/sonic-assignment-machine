@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Disc3,
+  Globe2,
   Loader2,
   Music4,
   Plus,
@@ -29,6 +30,11 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OriginalityBadge } from "@/components/OriginalityBadge";
+import {
+  MarketOriginalityBadge,
+  MarketOriginalityPanel,
+} from "@/components/catalog/MarketOriginalityPanel";
+import { useMarketOriginality } from "@/hooks/useMarketOriginality";
 import { formatCents, rollupCatalogOriginality } from "@/lib/catalogOriginality";
 
 type Kind = "label" | "album" | "track";
@@ -148,7 +154,16 @@ const MusicCatalog = () => {
     [items, scores],
   );
 
+  // Real-world comparison: every linked track measured against released music.
+  const linkedSourceIds = useMemo(
+    () => [...new Set(items.map((i) => i.audio_source_id).filter(Boolean))] as string[],
+    [items],
+  );
+  const { bySource: marketBySource, liveCohortSize } = useMarketOriginality(linkedSourceIds);
+  const [marketOpen, setMarketOpen] = useState<string | null>(null);
+
   const listedCount = useMemo(() => items.filter((i) => i.for_sale).length, [items]);
+
 
   const toggleListing = async (item: CatalogItem) => {
     setListBusy(item.id);
@@ -441,6 +456,16 @@ const MusicCatalog = () => {
           </TabsList>
         </Tabs>
 
+        <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <Globe2 className="h-3 w-3" />
+          Market originality compares each linked track to real released music —
+          {liveCohortSize >= 30
+            ? ` a live cohort of ${liveCohortSize.toLocaleString()} released tracks analysed here.`
+            : " the published commercial-release reference, until enough released tracks are analysed here."}
+        </p>
+
+
+
         {loading ? (
           <Card className="flex items-center gap-2 p-6 text-xs text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading catalog…
@@ -455,6 +480,9 @@ const MusicCatalog = () => {
               const Icon = KIND_META[item.kind].icon;
               const parent = item.parent_id ? byId.get(item.parent_id) : null;
               const roll = originality.get(item.id);
+              const market = item.audio_source_id
+                ? marketBySource.get(item.audio_source_id)
+                : undefined;
               return (
                 <li key={item.id}>
                   <Card className="flex h-full flex-col gap-2 border-border/60 bg-card/70 p-3">
@@ -504,6 +532,7 @@ const MusicCatalog = () => {
                           }}
                         />
                       )}
+                      {market && <MarketOriginalityBadge market={market} />}
                       {item.kind !== "track" && roll?.score === null && (
                         <span className="text-[10px] text-muted-foreground">
                           no scored tracks yet
@@ -582,8 +611,30 @@ const MusicCatalog = () => {
                         )}
                       </div>
                     )}
+
+                    {market && (
+                      <div className="border-t border-border/50 pt-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-1 text-[10px]"
+                          onClick={() =>
+                            setMarketOpen((prev) => (prev === item.id ? null : item.id))
+                          }
+                          aria-expanded={marketOpen === item.id}
+                        >
+                          <Globe2 className="mr-1 h-3 w-3" />
+                          {marketOpen === item.id ? "Hide" : "Compare to"} the real market
+                        </Button>
+                      </div>
+                    )}
                   </Card>
 
+                  {market && marketOpen === item.id && (
+                    <div className="mt-2">
+                      <MarketOriginalityPanel title={item.title} market={market} />
+                    </div>
+                  )}
                 </li>
               );
             })}

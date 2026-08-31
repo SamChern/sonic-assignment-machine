@@ -526,7 +526,7 @@ const Index = () => {
         </h2>
         <SonicSimPanel
           title="SonicSIM 's MultiModal Semantics"
-          description="A live audioscope of the six-category semantic layer."
+          description="\n"
           defaultMode="scope"
           height={200}
           subjects={[

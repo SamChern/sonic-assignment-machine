@@ -11,12 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Columns2, Loader2, X } from "lucide-react";
 
 const CATEGORIES = [
-  { key: "emotional_score", name: "Emotional", tone: "bg-[hsl(var(--category-emotional,var(--primary)))]" },
-  { key: "cognitive_score", name: "Cognitive", tone: "bg-[hsl(var(--category-cognitive,var(--primary)))]" },
-  { key: "social_score", name: "Social", tone: "bg-[hsl(var(--category-social,var(--primary)))]" },
-  { key: "communication_score", name: "Communication", tone: "bg-[hsl(var(--category-communication,var(--primary)))]" },
-  { key: "contextual_score", name: "Contextual", tone: "bg-[hsl(var(--category-contextual,var(--primary)))]" },
-  { key: "artistic_score", name: "Artistic", tone: "bg-[hsl(var(--category-artistic,var(--primary)))]" },
+  { key: "emotional_score", name: "Emotional", tone: "bg-[hsl(var(--category-emotional))]" },
+  { key: "cognitive_score", name: "Cognitive", tone: "bg-[hsl(var(--category-cognitive))]" },
+  { key: "social_score", name: "Social", tone: "bg-[hsl(var(--category-social))]" },
+  { key: "communication_score", name: "Communication", tone: "bg-[hsl(var(--category-communication))]" },
+  { key: "contextual_score", name: "Contextual", tone: "bg-[hsl(var(--category-contextual))]" },
+  { key: "artistic_score", name: "Artistic", tone: "bg-[hsl(var(--category-artistic))]" },
 ] as const;
 
 interface CompareRow {

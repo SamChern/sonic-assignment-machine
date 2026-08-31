@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { TasteNeighbors } from "@/components/TasteNeighbors";
-import { Library, Users } from "lucide-react";
+import { AnalysisCompare } from "@/components/home/AnalysisCompare";
+import { Columns2, Library, Users } from "lucide-react";
+
 
 /**
  * Library — everything already analyzed: this listener's saved analyses plus the

@@ -153,7 +153,16 @@ const MusicCatalog = () => {
     [items, scores],
   );
 
+  // Real-world comparison: every linked track measured against released music.
+  const linkedSourceIds = useMemo(
+    () => [...new Set(items.map((i) => i.audio_source_id).filter(Boolean))] as string[],
+    [items],
+  );
+  const { bySource: marketBySource, liveCohortSize } = useMarketOriginality(linkedSourceIds);
+  const [marketOpen, setMarketOpen] = useState<string | null>(null);
+
   const listedCount = useMemo(() => items.filter((i) => i.for_sale).length, [items]);
+
 
   const toggleListing = async (item: CatalogItem) => {
     setListBusy(item.id);

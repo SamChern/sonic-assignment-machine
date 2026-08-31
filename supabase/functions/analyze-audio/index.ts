@@ -1089,6 +1089,14 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         const evidence = matched?.evidence ?? 'librosa'; // cached analyses kept their own evidence
         const confidence = blendConfidence(spread, evidence);
 
+        // === Originality — grounding × taxonomy match × musical craft ===
+        const groundingLevel = matched?.grounding_level ?? resolveGroundingLevel({ evidence });
+        const originality = computeOriginality({
+          confidence,
+          grounding_level: groundingLevel,
+          tags: matched?.clap_tags ?? [],
+          musical: matched?.musical ?? null,
+        });
 
         return {
           user_id,
@@ -1096,8 +1104,10 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
           source_name: sourceResult.name,
           confidence,
           context_neighbors: matched?.context_neighbors ?? null,
-          grounding_level:
-            matched?.grounding_level ?? resolveGroundingLevel({ evidence }),
+          grounding_level: groundingLevel,
+          originality_score: originality.score,
+          originality_detail: originality,
+
           musical_scores: matched?.musical ?? null,
           ...categories,
         };

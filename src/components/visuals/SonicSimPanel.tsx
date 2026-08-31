@@ -232,7 +232,9 @@ export const SonicSimPanel = ({
             <Activity className="h-4 w-4 text-primary" />
             {title}
           </h3>
-          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{description}</p>
+          {description ? (
+            <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{description}</p>
+          ) : null}
         </div>
         <div
           role="group"

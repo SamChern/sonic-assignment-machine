@@ -29,6 +29,11 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OriginalityBadge } from "@/components/OriginalityBadge";
+import {
+  MarketOriginalityBadge,
+  MarketOriginalityPanel,
+} from "@/components/catalog/MarketOriginalityPanel";
+import { useMarketOriginality } from "@/hooks/useMarketOriginality";
 import { formatCents, rollupCatalogOriginality } from "@/lib/catalogOriginality";
 
 type Kind = "label" | "album" | "track";

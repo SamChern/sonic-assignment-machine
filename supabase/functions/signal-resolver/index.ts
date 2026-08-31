@@ -12,6 +12,7 @@
 //   { action: "resolve_one", symbol, symbol_type?, context? }
 //   { action: "status" }                  — queue depth, today's spend, pause state
 //   { action: "review", node_id, decision: "approve" | "reject" }
+//   { action: "refresh_source", audio_source_id } — Audio Signal Refresh (one source)
 //   { action: "nudge", refresh? }         — signal-health thresholds; refresh fires the agent
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { AuthzError, requireAdmin } from "../_shared/admin.ts";
@@ -810,6 +811,183 @@ Deno.serve(async (req) => {
       return json({ success: true, results });
     }
 
+
+    // Audio Signal Refresh (admin): enrich ONE analysed source with open-web
+    // meaning. The agent reads open-web metadata about the source, writes what
+    // it means in sonic-semantic terms, embeds that description and attaches
+    // the resulting node to the source as a tag — so the next scoring pass has
+    // more grounded evidence and a higher confidence floor. Audio is never
+    // fetched or streamed: only metadata is referenced.
+    if (action === "refresh_source") {
+      const audioSourceId = String(body.audio_source_id ?? "").trim();
+      if (!audioSourceId) {
+        return json({ success: false, error: "audio_source_id is required" }, 400);
+      }
+      const state = await readState(admin);
+      if (state.paused) {
+        return json({
+          success: false,
+          error: `Resolver is paused — ${state.pause_reason ?? "check credits or policy"}`,
+        }, 409);
+      }
+
+      const { data: src } = await admin
+        .from("audio_sources")
+        .select("id, name, source_type, artist, metadata")
+        .eq("id", audioSourceId)
+        .maybeSingle();
+      if (!src) return json({ success: false, error: "audio source not found" }, 404);
+
+      const { data: before } = await admin
+        .from("source_analyses")
+        .select("id, confidence, grounding_level, evidence")
+        .eq("audio_source_id", audioSourceId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // Existing tags become context so the agent refines rather than guesses.
+      const { data: tagRows } = await admin
+        .from("audio_source_tags")
+        .select("weight, taxonomy_nodes(code, label)")
+        .eq("audio_source_id", audioSourceId)
+        .order("weight", { ascending: false })
+        .limit(12);
+      // deno-lint-ignore no-explicit-any
+      const knownTags = (tagRows ?? []).map((r: any) => ({
+        code: r.taxonomy_nodes?.code,
+        label: r.taxonomy_nodes?.label,
+        weight: r.weight,
+      })).filter((t: { code?: string }) => !!t.code);
+
+      const slug = String(src.name)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "")
+        .slice(0, 60);
+      const symbol = `open_web.source.${slug || audioSourceId.slice(0, 8)}`;
+
+      const model = await controlString(admin, "resolver.model", "openai/gpt-5.6-sol");
+      const escalateModel = await controlString(
+        admin, "resolver.escalate_model", "openai/gpt-5.6-sol",
+      );
+      const minConfidence = await controlNumber(
+        admin, "resolver.min_confidence", 0.45, { min: 0, max: 1 },
+      );
+
+      const context = {
+        source: "audio_signal_refresh",
+        audio_source_id: audioSourceId,
+        name: src.name,
+        artist: src.artist ?? null,
+        source_type: src.source_type ?? null,
+        known_tags: knownTags,
+        requested_by: authz.userId ?? "internal",
+      };
+
+      const queued = await enqueueUnknownSymbol(admin, {
+        symbol,
+        symbol_type: "other",
+        context,
+      });
+      const { data: queueRow } = await admin
+        .from("resolution_queue")
+        .select("id, symbol, symbol_type, context, attempts")
+        .eq("symbol", symbol)
+        .maybeSingle();
+      const row = (queueRow ?? {
+        id: queued ?? null,
+        symbol,
+        symbol_type: "other",
+        context,
+        attempts: 0,
+      }) as QueueRow;
+      row.context = context;
+
+      const trace = stepLogger(admin, row.id ?? null, symbol);
+      try {
+        const r = await resolveOne(admin, row, model, escalateModel, minConfidence, trace);
+        if (row.id) {
+          await admin
+            .from("resolution_queue")
+            .update({
+              status: r.nodeId ? "resolved" : "pending",
+              resolved_node_id: r.nodeId,
+              attempts: (row.attempts ?? 0) + 1,
+              last_error: r.nodeId ? null : `low confidence (${r.confidence.toFixed(2)})`,
+            })
+            .eq("id", row.id);
+        }
+
+        // Attach the open-web meaning to the source so the next scoring pass
+        // consumes it as evidence.
+        let attached = false;
+        if (r.nodeId) {
+          const { error: tagErr } = await admin
+            .from("audio_source_tags")
+            .upsert(
+              {
+                audio_source_id: audioSourceId,
+                node_id: r.nodeId,
+                weight: Math.round(r.confidence * 1000) / 1000,
+              },
+              { onConflict: "audio_source_id,node_id" },
+            );
+          if (tagErr) console.warn("refresh_source tag write failed", tagErr.message);
+          else attached = true;
+          await trace.log("attach_tag", attached ? "ok" : "failed", {
+            audio_source_id: audioSourceId,
+            node_id: r.nodeId,
+          });
+        }
+
+        const { data: node } = r.nodeId
+          ? await admin
+            .from("taxonomy_nodes")
+            .select("id, code, label, proposal, crosswalk, reviewed")
+            .eq("id", r.nodeId)
+            .maybeSingle()
+          : { data: null };
+        const { data: steps } = await admin
+          .from("resolver_steps")
+          .select("id, step, status, detail, duration_ms, created_at")
+          .eq("run_id", trace.runId)
+          .order("created_at", { ascending: true });
+
+        return json({
+          success: true,
+          symbol,
+          node_id: r.nodeId,
+          attached,
+          confidence: r.confidence,
+          escalated: r.escalated,
+          usd: r.usd,
+          run_id: trace.runId,
+          node: node ?? null,
+          steps: steps ?? [],
+          before: before
+            ? {
+              confidence: Number(before.confidence ?? 0),
+              grounding_level: before.grounding_level ?? null,
+              evidence: before.evidence ?? null,
+            }
+            : null,
+          // The caller re-scores the source (analyze-audio, bypass_cache) so the
+          // new evidence lands in a fresh analysis row.
+          rescore: !!r.nodeId,
+        });
+      } catch (e) {
+        const err = e as ResolverGatewayError;
+        if (err.status === 402 || err.status === 403) {
+          await pause(admin, `gateway ${err.status}: ${String(err.message).slice(0, 200)}`);
+        }
+        await trace.log("error", "failed", { message: String(err.message).slice(0, 300) });
+        return json(
+          { success: false, error: err.message },
+          err.status && err.status >= 400 ? err.status : 500,
+        );
+      }
+    }
 
     if (action === "nudge") {
       let state = await readState(admin);

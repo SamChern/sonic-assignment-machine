@@ -833,7 +833,7 @@ Deno.serve(async (req) => {
 
       const { data: src } = await admin
         .from("audio_sources")
-        .select("id, name, source_type, artist, metadata")
+        .select("id, name, source_type, artists, album_name, ctv_metadata")
         .eq("id", audioSourceId)
         .maybeSingle();
       if (!src) return json({ success: false, error: "audio source not found" }, 404);
@@ -879,7 +879,8 @@ Deno.serve(async (req) => {
         source: "audio_signal_refresh",
         audio_source_id: audioSourceId,
         name: src.name,
-        artist: src.artist ?? null,
+        artists: src.artists ?? null,
+        album: src.album_name ?? null,
         source_type: src.source_type ?? null,
         known_tags: knownTags,
         requested_by: authz.userId ?? "internal",

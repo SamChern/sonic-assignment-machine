@@ -31,4 +31,4 @@
 - [x] `/admin/resolver`: queue view, symbol detail, refresh that lands on the nudge card
 - [x] Admin Tools panel: resolver refresh + manual symbol queueing
 - [x] Creator door registration behind real sign-in / account creation (no guests)
-- [ ] Consolidate "My library" by data source and meta tags (file type, audio vs user data, source, music vs spoken word)
+- [x] Consolidate "My library" by data source and meta tags (file type, audio vs user data, source, music vs spoken word)

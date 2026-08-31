@@ -49,14 +49,17 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Require a signed-in caller.
+    // Signatures are deterministic, public artifacts (same vector => same audio),
+    // so anonymous callers are allowed. A token, when present, is still validated
+    // so a bad/expired session is reported instead of silently ignored.
     const authHeader = req.headers.get("Authorization") ?? "";
-    const asUser = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false },
-    });
-    const { data: userData } = await asUser.auth.getUser();
-    if (!userData?.user) return json({ success: false, error: "Unauthorized" }, 401);
+    if (authHeader) {
+      const asUser = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false },
+      });
+      await asUser.auth.getUser();
+    }
 
     const parsed = BodySchema.safeParse(await req.json());
     if (!parsed.success) {

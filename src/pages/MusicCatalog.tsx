@@ -68,9 +68,12 @@ const MusicCatalog = () => {
   const { user } = useAuth();
   const { mySources } = useAudioSources();
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const [scores, setScores] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [view, setView] = useState<"all" | Kind>("all");
+  const [priceDraft, setPriceDraft] = useState<Record<string, string>>({});
+  const [listBusy, setListBusy] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     kind: "track" as Kind,
@@ -93,7 +96,30 @@ const MusicCatalog = () => {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     if (error) toast.error("Could not load your catalog");
-    setItems((data ?? []) as unknown as CatalogItem[]);
+    const rows = (data ?? []) as unknown as CatalogItem[];
+    setItems(rows);
+
+    // Originality comes from the analysis behind each linked audio source.
+    const sourceIds = [...new Set(rows.map((r) => r.audio_source_id).filter(Boolean))] as string[];
+    if (sourceIds.length) {
+      const { data: analyses } = await supabase
+        .from("source_analyses")
+        .select("audio_source_id, originality_score, created_at")
+        .in("audio_source_id", sourceIds)
+        .order("created_at", { ascending: false });
+      const map = new Map<string, number>();
+      for (const row of (analyses ?? []) as {
+        audio_source_id: string | null;
+        originality_score: number | null;
+      }[]) {
+        if (!row.audio_source_id || map.has(row.audio_source_id)) continue;
+        if (row.originality_score === null || row.originality_score === undefined) continue;
+        map.set(row.audio_source_id, Number(row.originality_score));
+      }
+      setScores(map);
+    } else {
+      setScores(new Map());
+    }
     setLoading(false);
   }, [user]);
 
@@ -115,6 +141,52 @@ const MusicCatalog = () => {
   );
 
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+
+  /** Track scores measured, album / label scores weighted by their symbols. */
+  const { byItem: originality, bySymbol } = useMemo(
+    () => rollupCatalogOriginality(items, scores),
+    [items, scores],
+  );
+
+  const listedCount = useMemo(() => items.filter((i) => i.for_sale).length, [items]);
+
+  const toggleListing = async (item: CatalogItem) => {
+    setListBusy(item.id);
+    try {
+      if (item.for_sale) {
+        const { error } = await supabase
+          .from("catalog_items")
+          .update({ for_sale: false, listed_at: null })
+          .eq("id", item.id);
+        if (error) throw error;
+        toast.success(`${item.title} unlisted`);
+      } else {
+        const raw = (priceDraft[item.id] ?? "").trim();
+        const dollars = raw ? Number(raw) : NaN;
+        if (!raw || !Number.isFinite(dollars) || dollars < 0 || dollars > 1_000_000) {
+          toast.error("Set a price between 0 and 1,000,000 to list");
+          return;
+        }
+        const { error } = await supabase
+          .from("catalog_items")
+          .update({
+            for_sale: true,
+            price_cents: Math.round(dollars * 100),
+            currency: "USD",
+            listed_at: new Date().toISOString(),
+          })
+          .eq("id", item.id);
+        if (error) throw error;
+        toast.success(`${item.title} listed on the symbol market`);
+      }
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setListBusy(null);
+    }
+  };
+
 
   const submit = async () => {
     if (!user) return;

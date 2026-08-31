@@ -13,6 +13,8 @@ import { ResolverPanel } from "@/components/admin/ResolverPanel";
 import { AdminToolsPanel } from "@/components/admin/AdminToolsPanel";
 import { SymbolScorePanel, type ScoreFlag } from "@/components/admin/SymbolScorePanel";
 import { GroundingFlagPanel } from "@/components/admin/GroundingFlagPanel";
+import { CatalogScorePanel } from "@/components/admin/CatalogScorePanel";
+
 
 
 

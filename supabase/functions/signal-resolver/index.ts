@@ -885,7 +885,7 @@ Deno.serve(async (req) => {
         requested_by: authz.userId ?? "internal",
       };
 
-      const queued = await enqueueUnknownSymbol(admin, {
+      await enqueueUnknownSymbol(admin, {
         symbol,
         symbol_type: "other",
         context,
@@ -896,7 +896,7 @@ Deno.serve(async (req) => {
         .eq("symbol", symbol)
         .maybeSingle();
       const row = (queueRow ?? {
-        id: queued ?? null,
+        id: null,
         symbol,
         symbol_type: "other",
         context,

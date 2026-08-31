@@ -282,12 +282,10 @@ export const SonicSimPanel = ({
         </Badge>
       </div>
 
-      <p
-        id="audioscope-shortcut-hint"
-        className="px-4 pb-2 text-[11px] text-muted-foreground"
-      >
-        {SHORTCUT_HINT}
+      <p id="audioscope-shortcut-hint" className="sr-only">
+        Use the visualization buttons to switch between scope views.
       </p>
+
 
       {/* Announces mode changes to screen readers without moving focus. */}
       <p id="audioscope-status" aria-live="polite" className="sr-only">

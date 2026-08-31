@@ -740,6 +740,77 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Run the agent over a hand-picked set of queue rows and return every step
+    // it took for each symbol — the admin's "select, run, watch" surface.
+    if (action === "resolve_many") {
+      const ids = Array.isArray(body.queue_ids) ? body.queue_ids.map((v) => String(v)) : [];
+      if (!ids.length) return json({ success: false, error: "queue_ids are required" }, 400);
+      const model = await controlString(admin, "resolver.model", "openai/gpt-5.6-sol");
+      const escalateModel = await controlString(
+        admin, "resolver.escalate_model", "openai/gpt-5.6-sol",
+      );
+      const minConfidence = await controlNumber(
+        admin, "resolver.min_confidence", 0.45, { min: 0, max: 1 },
+      );
+      const { data: rows } = await admin
+        .from("resolution_queue")
+        .select("id, symbol, symbol_type, context, attempts")
+        .in("id", ids.slice(0, 20));
+
+      const results: Record<string, unknown>[] = [];
+      for (const row of (rows ?? []) as QueueRow[]) {
+        const trace = stepLogger(admin, row.id, row.symbol);
+        try {
+          const r = await resolveOne(admin, row, model, escalateModel, minConfidence, trace);
+          await admin
+            .from("resolution_queue")
+            .update({
+              status: r.nodeId ? "resolved" : "pending",
+              resolved_node_id: r.nodeId,
+              attempts: (row.attempts ?? 0) + 1,
+              last_error: r.nodeId ? null : `low confidence (${r.confidence.toFixed(2)})`,
+            })
+            .eq("id", row.id);
+          const { data: steps } = await admin
+            .from("resolver_steps")
+            .select("id, step, status, detail, duration_ms, created_at")
+            .eq("run_id", trace.runId)
+            .order("created_at", { ascending: true });
+          results.push({
+            queue_id: row.id,
+            symbol: row.symbol,
+            ok: !!r.nodeId,
+            node_id: r.nodeId,
+            confidence: r.confidence,
+            escalated: r.escalated,
+            usd: r.usd,
+            run_id: trace.runId,
+            steps: steps ?? [],
+          });
+        } catch (e) {
+          const err = e as ResolverGatewayError;
+          if (err.status === 402 || err.status === 403) {
+            await pause(admin, `gateway ${err.status}: ${String(err.message).slice(0, 200)}`);
+          }
+          await trace.log("error", "failed", { message: String(err.message).slice(0, 500) });
+          await admin
+            .from("resolution_queue")
+            .update({ status: "pending", last_error: String(err.message).slice(0, 500) })
+            .eq("id", row.id);
+          results.push({
+            queue_id: row.id,
+            symbol: row.symbol,
+            ok: false,
+            error: String(err.message).slice(0, 300),
+            run_id: trace.runId,
+            steps: [],
+          });
+        }
+      }
+      return json({ success: true, results });
+    }
+
+
     if (action === "nudge") {
       let state = await readState(admin);
       let report = await buildNudgeReport(admin, state);

@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TasteNeighbors } from "@/components/TasteNeighbors";
 import { AnalysisCompare } from "@/components/home/AnalysisCompare";
-import { Columns2, Library, Users } from "lucide-react";
+import { OriginalityBadge, type OriginalityDetail } from "@/components/OriginalityBadge";
+import { Columns2, Disc3, Library, Users } from "lucide-react";
 
 
 /**
@@ -20,8 +23,15 @@ export const LibraryTab = ({
   userId: string | null;
   myFingerprint: any;
   allFingerprints: any[];
-  myAnalyses: { id: string; source_name: string; created_at?: string }[];
+  myAnalyses: {
+    id: string;
+    source_name: string;
+    created_at?: string;
+    originality_score?: number | null;
+    originality_detail?: OriginalityDetail | null;
+  }[];
 }) => {
+
   // Compare picks up to two saved analyses; a third pick replaces the oldest.
   const [compareIds, setCompareIds] = useState<string[]>([]);
 
@@ -85,18 +95,38 @@ export const LibraryTab = ({
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate">{a.source_name}</span>
+                    <OriginalityBadge
+                      score={a.originality_score}
+                      detail={a.originality_detail}
+                      compact
+                    />
                     {a.created_at && (
                       <span className="shrink-0 text-muted-foreground">
                         {new Date(a.created_at).toLocaleDateString()}
                       </span>
                     )}
                   </button>
+
                 </li>
               );
             })}
           </ul>
         )}
       </Card>
+
+      <Card className="flex flex-wrap items-center gap-3 border-border/60 bg-card/70 p-4 backdrop-blur-sm">
+        <Disc3 className="h-4 w-4 text-primary" />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold">Music catalog</h3>
+          <p className="text-xs text-muted-foreground">
+            Upload albums, tracks and labels, and link them to the symbols they resolve to.
+          </p>
+        </div>
+        <Button asChild size="sm" variant="outline" className="text-xs">
+          <Link to="/library/catalog">Open catalog</Link>
+        </Button>
+      </Card>
+
 
       {compareIds.length === 2 && (
         <AnalysisCompare

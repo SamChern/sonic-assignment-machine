@@ -30,6 +30,8 @@ const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminResolver = lazy(() => import("./pages/admin/AdminResolver"));
 const CreatorDoor = lazy(() => import("./pages/CreatorDoor"));
 const CreatorProfile = lazy(() => import("./pages/CreatorProfile"));
+const MusicCatalog = lazy(() => import("./pages/MusicCatalog"));
+
 const IntegrationStatus = lazy(() => import("./pages/IntegrationStatus"));
 const IngestionCompatibility = lazy(() => import("./pages/IngestionCompatibility"));
 const SemanticAnalysis = lazy(() => import("./pages/SemanticAnalysis"));
@@ -127,6 +129,8 @@ const App = () => (
               <Route path="/workspace" element={<Workspace />} />
               <Route path="/creator" element={<CreatorDoor />} />
               <Route path="/creator/profile" element={<CreatorProfile />} />
+              <Route path="/library/catalog" element={<MusicCatalog />} />
+
               <Route path="/demo" element={<Demo />} />
 
 

@@ -26,7 +26,13 @@ import {
   formatMusicalProfile,
   type MusicalScores,
 } from '../_shared/musicalScores.ts';
+import {
+  ensureLibrosaFeatures,
+  MAX_INLINE_MEASUREMENTS,
+} from '../_shared/librosaMeasure.ts';
+import { computeOriginality } from '../_shared/originality.ts';
 import { applyNormalizationToAnalysis, loadNormalization } from '../_shared/normalization.ts';
+
 import { CATEGORIES as ONTOLOGY_CATEGORIES, type Category } from '../_shared/ontology.ts';
 import { controlNumber } from '../_shared/control.ts';
 import {
@@ -501,7 +507,41 @@ Deno.serve(async (req) => {
           console.warn('Semantic service not configured — CLAP grounding skipped');
         }
 
+        // === Measure the listener's OWN audio ===
+        // Anything we hold a URL for but have no librosa blob for (a file the
+        // user just uploaded, a fresh preview) is measured inline through the
+        // same content-addressed cache the worker uses, so pitch/rhythm/timbre
+        // come from the real waveform instead of staying empty for everything
+        // that wasn't pre-measured. Capped per request; failures are silent.
+        {
+          const needMeasure = uncachedSources.filter(
+            s => !s.tag_only && !s.librosa_features && !!s.file_url,
+          );
+          let budget = MAX_INLINE_MEASUREMENTS;
+          for (const s of needMeasure) {
+            const res = await ensureLibrosaFeatures(supabaseAdmin, {
+              url: s.file_url!,
+              audioSourceId: s.audio_source_id ?? null,
+              userId: user_id ?? null,
+              identity: s.spotify_id ?? null,
+              allowUpstream: budget > 0,
+            });
+            if (!res) continue;
+            if (res.origin === 'measured') budget -= 1;
+            s.librosa_features = res.features;
+            const profile = formatLibrosaProfile(res.features);
+            if (profile) {
+              s.acoustic_profile = [s.acoustic_profile, profile].filter(Boolean).join(' ');
+              if (s.evidence !== 'clap') s.evidence = 'librosa';
+            }
+          }
+          console.log(
+            `Inline librosa: ${needMeasure.length} candidates, ${MAX_INLINE_MEASUREMENTS - budget} measured fresh`,
+          );
+        }
+
         // === Musical read — pitch / rhythm / timbre ===
+
         // Free: derived from the librosa scalars already measured plus how
         // music-like CLAP found the audio. Music-driven sources get a musical
         // craft profile; spoken-word CTV signals score near-zero musicality and
@@ -1049,6 +1089,14 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         const evidence = matched?.evidence ?? 'librosa'; // cached analyses kept their own evidence
         const confidence = blendConfidence(spread, evidence);
 
+        // === Originality — grounding × taxonomy match × musical craft ===
+        const groundingLevel = matched?.grounding_level ?? resolveGroundingLevel({ evidence });
+        const originality = computeOriginality({
+          confidence,
+          grounding_level: groundingLevel,
+          tags: matched?.clap_tags ?? [],
+          musical: matched?.musical ?? null,
+        });
 
         return {
           user_id,
@@ -1056,8 +1104,10 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
           source_name: sourceResult.name,
           confidence,
           context_neighbors: matched?.context_neighbors ?? null,
-          grounding_level:
-            matched?.grounding_level ?? resolveGroundingLevel({ evidence }),
+          grounding_level: groundingLevel,
+          originality_score: originality.score,
+          originality_detail: originality,
+
           musical_scores: matched?.musical ?? null,
           ...categories,
         };
@@ -1138,6 +1188,17 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
       musical: uncachedSources
         .filter(s => s.musical)
         .map(s => ({ name: s.name, ...s.musical! })),
+      // Originality per source: grounding × taxonomy match × musical craft.
+      originality: uncachedSources.map(s => ({
+        name: s.name,
+        ...computeOriginality({
+          confidence: null,
+          grounding_level: s.grounding_level ?? resolveGroundingLevel({ evidence: s.evidence ?? 'none' }),
+          tags: s.clap_tags ?? [],
+          musical: s.musical ?? null,
+        }),
+      })),
+
       clap_stats: {
         tagged: uncachedSources.filter(s => (s.clap_tags?.length ?? 0) > 0).length,
         tags: uncachedSources

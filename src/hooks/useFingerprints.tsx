@@ -48,8 +48,11 @@ export interface SourceAnalysis {
   contextual_desc: string | null;
   artistic_desc: string | null;
   confidence: number;
+  originality_score?: number | null;
+  originality_detail?: Record<string, unknown> | null;
   created_at: string;
 }
+
 
 // Fetch functions extracted for React Query
 async function fetchMyFingerprintData(userId: string): Promise<UserFingerprint | null> {

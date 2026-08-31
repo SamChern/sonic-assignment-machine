@@ -259,6 +259,69 @@ export type Database = {
           },
         ]
       }
+      catalog_items: {
+        Row: {
+          artist: string | null
+          audio_source_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          label_name: string | null
+          notes: string | null
+          parent_id: string | null
+          release_year: number | null
+          symbols: string[]
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          artist?: string | null
+          audio_source_id?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          label_name?: string | null
+          notes?: string | null
+          parent_id?: string | null
+          release_year?: number | null
+          symbols?: string[]
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          artist?: string | null
+          audio_source_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          label_name?: string | null
+          notes?: string | null
+          parent_id?: string | null
+          release_year?: number | null
+          symbols?: string[]
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_items_audio_source_id_fkey"
+            columns: ["audio_source_id"]
+            isOneToOne: false
+            referencedRelation: "audio_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_items_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       category_calibration: {
         Row: {
           bias: number
@@ -2709,6 +2772,8 @@ export type Database = {
           musical_scores: Json | null
           normalization: Json | null
           organization_id: string | null
+          originality_detail: Json | null
+          originality_score: number | null
           raw_scores: Json | null
           social_desc: string | null
           social_score: number
@@ -2736,6 +2801,8 @@ export type Database = {
           musical_scores?: Json | null
           normalization?: Json | null
           organization_id?: string | null
+          originality_detail?: Json | null
+          originality_score?: number | null
           raw_scores?: Json | null
           social_desc?: string | null
           social_score: number
@@ -2763,6 +2830,8 @@ export type Database = {
           musical_scores?: Json | null
           normalization?: Json | null
           organization_id?: string | null
+          originality_detail?: Json | null
+          originality_score?: number | null
           raw_scores?: Json | null
           social_desc?: string | null
           social_score?: number

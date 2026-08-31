@@ -26,7 +26,28 @@ const CATEGORIES = [
 ] as const;
 
 const CHUNK = 500;
+// A GET filter of 500 UUIDs builds a ~22 KB query string, which the upstream
+// rejects at the transport layer ("error sending request"). Keep read filters
+// small enough that the URL stays well under the limit.
+const READ_CHUNK = 80;
 const MAX_ROWS_PER_ACTIVATION = 5000;
+
+/** Retry a transient transport/timeout failure a couple of times. */
+async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const msg = String((e as Error)?.message ?? e);
+      if (!/error sending request|timeout|network|fetch failed|connection/i.test(msg)) throw e;
+      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+    }
+  }
+  throw new Error(`${label} failed: ${String((lastErr as Error)?.message ?? lastErr)}`);
+}
+
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -166,21 +187,26 @@ Deno.serve(async (req) => {
       // Latest analysis per source.
       const sourceIds = sources.map((s) => String(s.id));
       const latest = new Map<string, Record<string, unknown>>();
-      for (let i = 0; i < sourceIds.length; i += CHUNK) {
-        const { data, error } = await admin
-          .from("source_analyses")
-          .select(
-            "audio_source_id,source_name,confidence,created_at," +
-              CATEGORIES.map((c) => `${c}_score`).join(","),
-          )
-          .in("audio_source_id", sourceIds.slice(i, i + CHUNK))
-          .order("created_at", { ascending: false });
-        if (error) throw new Error(error.message);
-        for (const a of data ?? []) {
+      for (let i = 0; i < sourceIds.length; i += READ_CHUNK) {
+        const slice = sourceIds.slice(i, i + READ_CHUNK);
+        const data = await withRetry("read source_analyses", async () => {
+          const { data, error } = await admin
+            .from("source_analyses")
+            .select(
+              "audio_source_id,source_name,confidence,created_at," +
+                CATEGORIES.map((c) => `${c}_score`).join(","),
+            )
+            .in("audio_source_id", slice)
+            .order("created_at", { ascending: false });
+          if (error) throw new Error(error.message);
+          return data ?? [];
+        });
+        for (const a of data) {
           const sid = String(a.audio_source_id);
           if (!latest.has(sid)) latest.set(sid, a);
         }
       }
+
 
       const datasetName = grant.label?.trim()
         ? grant.label.trim()

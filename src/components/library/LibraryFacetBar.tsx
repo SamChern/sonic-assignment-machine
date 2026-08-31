@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Search, X } from "lucide-react";
 import {
   CONTENT_LABELS,
   EMPTY_FILTER,
@@ -63,7 +64,8 @@ export function LibraryFacetBar({ filter, counts, onChange }: Props) {
     filter.kind !== "all" ||
     filter.content !== "all" ||
     filter.provider !== "all" ||
-    filter.fileType !== "all";
+    filter.fileType !== "all" ||
+    filter.query.trim() !== "";
 
   const toggle = <K extends keyof FacetFilter>(key: K, value: FacetFilter[K]) =>
     onChange({ ...filter, [key]: filter[key] === value ? "all" : value });
@@ -79,6 +81,16 @@ export function LibraryFacetBar({ filter, counts, onChange }: Props) {
             <X className="mr-1 h-3 w-3" /> Clear
           </Button>
         )}
+      </div>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={filter.query}
+          onChange={(e) => onChange({ ...filter, query: e.target.value })}
+          placeholder="Search name, artist, album or tag"
+          aria-label="Search library"
+          className="h-9 pl-8 text-sm"
+        />
       </div>
       <div className="flex flex-wrap gap-1.5">
         {kinds.map((k) => (

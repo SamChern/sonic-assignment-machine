@@ -1188,6 +1188,17 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
       musical: uncachedSources
         .filter(s => s.musical)
         .map(s => ({ name: s.name, ...s.musical! })),
+      // Originality per source: grounding × taxonomy match × musical craft.
+      originality: uncachedSources.map(s => ({
+        name: s.name,
+        ...computeOriginality({
+          confidence: null,
+          grounding_level: s.grounding_level ?? resolveGroundingLevel({ evidence: s.evidence ?? 'none' }),
+          tags: s.clap_tags ?? [],
+          musical: s.musical ?? null,
+        }),
+      })),
+
       clap_stats: {
         tagged: uncachedSources.filter(s => (s.clap_tags?.length ?? 0) > 0).length,
         tags: uncachedSources

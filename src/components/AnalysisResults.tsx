@@ -368,8 +368,13 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                   {audioSourceId && (
                     <AudioSignalRefresh
                       audioSourceId={audioSourceId}
-                      sourceName={result.source}
-                      onRefreshed={() => setRefreshKey((k) => k + 1)}
+                      sourceName={source.name}
+                      onRefreshed={() =>
+                        setRefreshKeys((s) => ({
+                          ...s,
+                          [audioSourceId]: (s[audioSourceId] ?? 0) + 1,
+                        }))
+                      }
                     />
                   )}
 

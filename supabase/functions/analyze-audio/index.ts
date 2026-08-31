@@ -1133,6 +1133,11 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         cached: cachedResults.length,
         fresh: freshResults.length,
       },
+      // Musical read per source so the UI can show pitch/rhythm/timbre without
+      // a second round trip.
+      musical: uncachedSources
+        .filter(s => s.musical)
+        .map(s => ({ name: s.name, ...s.musical! })),
       clap_stats: {
         tagged: uncachedSources.filter(s => (s.clap_tags?.length ?? 0) > 0).length,
         tags: uncachedSources

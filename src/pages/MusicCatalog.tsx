@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Disc3, Loader2, Music4, Plus, Tag, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Disc3,
+  Loader2,
+  Music4,
+  Plus,
+  Store,
+  Tag,
+  Trash2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAudioSources } from "@/hooks/useAudioSources";
@@ -19,6 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { OriginalityBadge } from "@/components/OriginalityBadge";
+import { formatCents, rollupCatalogOriginality } from "@/lib/catalogOriginality";
 
 type Kind = "label" | "album" | "track";
 
@@ -34,6 +45,10 @@ interface CatalogItem {
   symbols: string[];
   notes: string | null;
   created_at: string;
+  for_sale: boolean;
+  price_cents: number | null;
+  currency: string | null;
+  listing_note: string | null;
 }
 
 const KIND_META: Record<Kind, { label: string; icon: typeof Music4 }> = {
@@ -41,6 +56,7 @@ const KIND_META: Record<Kind, { label: string; icon: typeof Music4 }> = {
   album: { label: "Album", icon: Disc3 },
   track: { label: "Track", icon: Music4 },
 };
+
 
 /**
  * Music catalog — the listener's own releases, structured the way music actually

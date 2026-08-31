@@ -584,7 +584,9 @@ Deno.serve(async (req) => {
               if (ctx.exemplars.length > 0) {
                 s.context_neighbors = ctx.exemplars;
                 s.taxonomy_context = [s.taxonomy_context, ctx.text].filter(Boolean).join(' ');
-                s.evidence = 'neighbors';
+                // Exemplars enrich, they never downgrade a stronger tier (CLAP
+                // listened to this audio; neighbours only listened to others').
+                if (!s.evidence || s.evidence === 'none') s.evidence = 'neighbors';
                 continue;
               }
             }
@@ -595,7 +597,7 @@ Deno.serve(async (req) => {
           const prior = await neighborPrior(supabaseAdmin, s.audio_source_id!);
           if (prior) {
             s.taxonomy_context = [s.taxonomy_context, prior.text].filter(Boolean).join(' ');
-            s.evidence = 'neighbors';
+            if (!s.evidence || s.evidence === 'none') s.evidence = 'neighbors';
           }
         }
 

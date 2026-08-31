@@ -7,6 +7,7 @@ const VisualsFallback = () => (
 );
 import { FeedbackPopover } from "@/components/FeedbackPopover";
 import { AudioSignalRefresh } from "@/components/admin/AudioSignalRefresh";
+import { MusicalProfile, type MusicalRead } from "@/components/MusicalProfile";
 import { GroundingBadge } from "@/components/GroundingBadge";
 import {
   AcousticVisualsToggle,
@@ -42,6 +43,8 @@ interface AnalysisResultsProps {
   isAnalyzing: boolean;
   sourceImages?: Array<{ name: string; imageUrl: string }>;
   sourceIds?: Array<{ name: string; id: string }>;
+  /** Musical read (pitch/rhythm/timbre) per source, when audio was measured. */
+  musical?: MusicalRead[];
 }
 
 // Category color mapping
@@ -212,7 +215,7 @@ const AnimatedScoreBar = ({ score, categoryName, delay }: { score: number; categ
   );
 };
 
-export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourceIds = [] }: AnalysisResultsProps) => {
+export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourceIds = [], musical = [] }: AnalysisResultsProps) => {
   // Locally refreshed scores per audio source (after admin feedback submissions)
   const [overrides, setOverrides] = useState<Record<string, CategoryScore[]>>({});
   const [refreshKeys, setRefreshKeys] = useState<Record<string, number>>({});
@@ -377,6 +380,12 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                       }
                     />
                   )}
+
+                  {/* Musical read — only for sources with measured audio */}
+                  {(() => {
+                    const read = musical.find((m) => m.name === source.name);
+                    return read ? <MusicalProfile read={read} /> : null;
+                  })()}
 
                   {/* Radial chart */}
 

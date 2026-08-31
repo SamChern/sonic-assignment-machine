@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, BadgeCheck, FileAudio, Plus, ShieldOff } from "lucide-react";
+import { ArrowLeft, BadgeCheck, FileAudio, Plus, ShieldOff, UserRound } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";

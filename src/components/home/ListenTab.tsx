@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, FileAudio, Save, Sparkles, X } from "lucide-react";
+import { ChevronDown, ChevronUp, FileAudio, Library, Save, Sparkles, X } from "lucide-react";
 import { useUiPreference } from "@/hooks/useUiPreference";
 import type { AudioSource } from "@/hooks/useAudioSources";
 import type { UploadProgressStatus } from "@/components/UploadProgressPanel";
@@ -20,6 +20,7 @@ export const ListenTab = ({
   isSignedIn,
   selectedFiles,
   spotifyTracks,
+  librarySources,
   totalItems,
   isAnalyzing,
   analysisProgress,
@@ -29,6 +30,7 @@ export const ListenTab = ({
   onLibrarySelect,
   onRemoveFile,
   onRemoveTrack,
+  onRemoveLibrarySource,
   onClearAll,
   onAnalyze,
   onScopeSubjectChange,
@@ -36,6 +38,7 @@ export const ListenTab = ({
   isSignedIn: boolean;
   selectedFiles: File[];
   spotifyTracks: any[];
+  librarySources: AudioSource[];
   totalItems: number;
   isAnalyzing: boolean;
   analysisProgress: { total: number; status: UploadProgressStatus } | null;
@@ -45,6 +48,7 @@ export const ListenTab = ({
   onLibrarySelect: (sources: AudioSource[]) => void;
   onRemoveFile: (index: number) => void;
   onRemoveTrack: (id: string) => void;
+  onRemoveLibrarySource: (id: string) => void;
   onClearAll: () => void;
   onAnalyze: () => void;
   onScopeSubjectChange: (subject: SonicSimSubject | null) => void;
@@ -132,6 +136,33 @@ export const ListenTab = ({
                     <button
                       onClick={() => onRemoveFile(index)}
                       aria-label={`Remove ${file.name}`}
+                      className="ml-1 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+
+                {librarySources.map((source) => (
+                  <Badge
+                    key={`lib-${source.id}`}
+                    variant="outline"
+                    className="gap-1.5 bg-secondary/20 px-2 py-1"
+                  >
+                    {source.album_image ? (
+                      <img
+                        src={source.album_image}
+                        alt=""
+                        className="h-4 w-4 rounded"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <Library className="h-3 w-3 text-primary" />
+                    )}
+                    <span className="max-w-[140px] truncate text-xs">{source.name}</span>
+                    <button
+                      onClick={() => onRemoveLibrarySource(source.id)}
+                      aria-label={`Remove ${source.name}`}
                       className="ml-1 hover:text-destructive"
                     >
                       <X className="h-3 w-3" />

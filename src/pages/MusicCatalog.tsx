@@ -456,6 +456,16 @@ const MusicCatalog = () => {
           </TabsList>
         </Tabs>
 
+        <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <Globe2 className="h-3 w-3" />
+          Market originality compares each linked track to real released music —
+          {liveCohortSize >= 30
+            ? ` a live cohort of ${liveCohortSize.toLocaleString()} released tracks analysed here.`
+            : " the published commercial-release reference, until enough released tracks are analysed here."}
+        </p>
+
+
+
         {loading ? (
           <Card className="flex items-center gap-2 p-6 text-xs text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading catalog…

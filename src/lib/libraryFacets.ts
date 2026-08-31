@@ -77,6 +77,8 @@ export interface FacetFilter {
   content: Content | "all";
   provider: Provider | "all";
   fileType: string | "all";
+  /** Free-text search across name, album, artists and meta tags. */
+  query: string;
 }
 
 export const EMPTY_FILTER: FacetFilter = {
@@ -84,6 +86,31 @@ export const EMPTY_FILTER: FacetFilter = {
   content: "all",
   provider: "all",
   fileType: "all",
+  query: "",
+};
+
+/** Every word a search box should be able to reach for one source. */
+export const searchHaystack = (s: AudioSource, f: SourceFacets) =>
+  [
+    s.name,
+    s.album_name,
+    ...(s.artists ?? []),
+    f.providerLabel,
+    KIND_LABELS[f.kind],
+    CONTENT_LABELS[f.content],
+    f.fileType,
+    s.source_type,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+/** All terms must appear somewhere in the haystack. */
+export const matchesQuery = (s: AudioSource, f: SourceFacets, query: string) => {
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return true;
+  const hay = searchHaystack(s, f);
+  return terms.every((t) => hay.includes(t));
 };
 
 export const matchesFilter = (f: SourceFacets, filter: FacetFilter) =>
@@ -128,6 +155,7 @@ export function groupLibrary(
     bump(`content:${f.content}`);
     bump(`fileType:${f.fileType}`);
     if (!matchesFilter(f, filter)) continue;
+    if (!matchesQuery(s, f, filter.query)) continue;
     const list = byProvider.get(f.provider) ?? [];
     list.push(s);
     byProvider.set(f.provider, list);

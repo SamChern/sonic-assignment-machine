@@ -3178,6 +3178,19 @@ export type Database = {
         Args: { p_id: string; p_rows: number; p_status?: string }
         Returns: undefined
       }
+      creator_queued_symbols: {
+        Args: never
+        Returns: {
+          attempts: number
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          sightings: number
+          status: string
+          symbol: string
+          symbol_type: string
+        }[]
+      }
       enqueue_score_tasks: { Args: { p_rows: Json }; Returns: number }
       fail_ingest_file: {
         Args: { p_error: string; p_id: string }

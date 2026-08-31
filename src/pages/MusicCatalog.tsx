@@ -467,7 +467,7 @@ const MusicCatalog = () => {
           <ul className="grid gap-2 sm:grid-cols-2">
             {visible.map((item) => {
               const Icon = KIND_META[item.kind].icon;
-                  const parent = item.parent_id ? byId.get(item.parent_id) : null;
+              const parent = item.parent_id ? byId.get(item.parent_id) : null;
               const roll = originality.get(item.id);
               const market = item.audio_source_id
                 ? marketBySource.get(item.audio_source_id)

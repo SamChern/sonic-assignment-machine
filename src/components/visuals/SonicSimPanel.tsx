@@ -3,24 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Activity,
-  Gauge,
   Info,
-  Maximize2,
-  Minimize2,
-  Pause,
-  Play,
-  RotateCcw,
   Radar,
   Network,
-  Image as ImageIcon,
   Accessibility,
   Waves,
 } from "lucide-react";
@@ -29,7 +15,6 @@ import SemanticScope, { type ScopeLens } from "./SemanticScope";
 import type { SilhouetteTag } from "@/lib/audioscope/silhouette";
 import {
   PANE_ANCHOR_ATTR,
-  SHORTCUT_HINT,
   focusMotionControls,
   useAudioscopeShortcuts,
 } from "@/lib/audioscope/shortcuts";
@@ -40,10 +25,10 @@ import {
   categoryToken,
   type AudioscopeFeatureHints,
   type CategoryScores,
-  initialStatic,
   prefersReducedMotion,
   writeMotionPref,
 } from "@/lib/audioscope";
+
 
 export interface SonicSimSubject {
   id: string;
@@ -82,7 +67,7 @@ const MODES: { key: PanelMode; label: string; icon: typeof Activity }[] = [
   { key: "nodes", label: "Node pulse", icon: Network },
 ];
 
-const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3] as const;
+
 
 const MOTION_PREF_KEY = "sonicsim.audioscope.motion";
 
@@ -110,10 +95,11 @@ export const SonicSimPanel = ({
 }: SonicSimPanelProps) => {
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id ?? "");
   const [mode, setMode] = useState<PanelMode>(defaultMode);
-  const [playing, setPlaying] = useState(() => !initialStatic(MOTION_PREF_KEY));
-  const [speed, setSpeed] = useState(0.25);
-  // Stored choice wins; otherwise reduced-motion users get the still frame by default.
-  const [isStatic, setIsStatic] = useState(() => initialStatic(MOTION_PREF_KEY));
+  const [playing, setPlaying] = useState(true);
+  const [speed, setSpeed] = useState(1);
+  // Reduced-motion users still get a still frame; there is no manual toggle in this view.
+  const [isStatic, setIsStatic] = useState(() => prefersReducedMotion());
+
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const [replayKey, setReplayKey] = useState(0);
@@ -250,81 +236,9 @@ export const SonicSimPanel = ({
         </div>
         <div
           role="group"
-          aria-label="Audioscope playback controls"
+          aria-label="Audioscope controls"
           className="flex shrink-0 flex-wrap items-center gap-1.5"
         >
-          <Button
-            size="sm"
-            variant="ghost"
-            className={TRANSPORT_CLS}
-            onClick={togglePlay}
-            aria-pressed={playing && !isStatic}
-            aria-keyshortcuts="K"
-            aria-describedby="audioscope-shortcut-hint audioscope-status"
-          >
-            {playing ? <Pause className="h-3 w-3" aria-hidden /> : <Play className="h-3 w-3" aria-hidden />}
-            {playing ? "Pause" : "Play"}
-            <span className="sr-only">
-              {playing
-                ? ` — on. The audioscope is animating at ${speed}x speed. Activate to pause it. Shortcut: K.`
-                : " — off. Activate to animate the audioscope. Shortcut: K."}
-            </span>
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className={TRANSPORT_CLS}
-            onClick={() => setReplayKey((k) => k + 1)}
-          >
-            <RotateCcw className="h-3 w-3" aria-hidden />
-            Replay
-            <span className="sr-only"> — restart the audioscope from the beginning</span>
-          </Button>
-          <Button
-            ref={staticBtnRef}
-            id="audioscope-static-toggle"
-            {...{ [PANE_ANCHOR_ATTR]: "sonicsim" }}
-            size="sm"
-            variant="ghost"
-            className={isStatic ? TRANSPORT_CLS_ACTIVE : TRANSPORT_CLS}
-            onClick={toggleStatic}
-            aria-pressed={isStatic}
-            aria-keyshortcuts="S"
-            aria-describedby={
-              reducedMotion
-                ? "audioscope-motion-notice audioscope-shortcut-hint audioscope-status"
-                : "audioscope-shortcut-hint audioscope-status"
-            }
-          >
-            <ImageIcon className="h-3 w-3" aria-hidden />
-            Static
-            <span className="sr-only">
-              {isStatic
-                ? ` — on. Showing one still frame at ${STATIC_FRAME_T.toFixed(2)} seconds. Activate to resume motion. Shortcut: S.`
-                : " — off. Activate to freeze the audioscope on a single still frame. Shortcut: S."}
-            </span>
-          </Button>
-
-
-          <div className="flex h-7 items-center gap-1.5 rounded-md border border-border/40 bg-background/30 px-2 backdrop-blur-sm">
-            <Gauge className="h-3 w-3 text-muted-foreground/70" aria-hidden />
-            <label className="sr-only" htmlFor="audioscope-speed">
-              Animation speed
-            </label>
-            <select
-              id="audioscope-speed"
-              value={String(speed)}
-              disabled={isStatic}
-              onChange={(e) => setSpeed(Number(e.target.value))}
-              className="bg-transparent text-[11px] text-muted-foreground outline-none disabled:opacity-50"
-            >
-              {SPEEDS.map((v) => (
-                <option key={v} value={v}>
-                  {v}x
-                </option>
-              ))}
-            </select>
-          </div>
           <Button
             size="sm"
             variant="ghost"
@@ -335,31 +249,12 @@ export const SonicSimPanel = ({
             <Info className="h-3 w-3" aria-hidden />
             <span className="hidden sm:inline">How to read this</span>
           </Button>
-          <Button size="sm" variant="ghost" className={TRANSPORT_CLS} onClick={toggleFullscreen}>
-            {fullscreen ? (
-              <Minimize2 className="h-3 w-3" aria-hidden />
-            ) : (
-              <Maximize2 className="h-3 w-3" aria-hidden />
-            )}
-            <span className="hidden sm:inline">{fullscreen ? "Exit" : "Present"}</span>
-          </Button>
         </div>
 
       </div>
 
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-        <Select value={subjectId} onValueChange={setSubjectId}>
-          <SelectTrigger className="w-full sm:w-72">
-            <SelectValue placeholder="What to visualize" />
-          </SelectTrigger>
-          <SelectContent>
-            {subjects.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+
 
         <div className="inline-flex flex-wrap gap-1 rounded-md border border-border bg-muted p-0.5">
           {MODES.map((m) => (
@@ -387,12 +282,10 @@ export const SonicSimPanel = ({
         </Badge>
       </div>
 
-      <p
-        id="audioscope-shortcut-hint"
-        className="px-4 pb-2 text-[11px] text-muted-foreground"
-      >
-        {SHORTCUT_HINT}
+      <p id="audioscope-shortcut-hint" className="sr-only">
+        Use the visualization buttons to switch between scope views.
       </p>
+
 
       {/* Announces mode changes to screen readers without moving focus. */}
       <p id="audioscope-status" aria-live="polite" className="sr-only">

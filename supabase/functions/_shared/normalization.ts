@@ -206,7 +206,8 @@ export async function applyNormalizationToAnalysis(
           communication_score: scores.communication,
           contextual_score: scores.contextual,
           artistic_score: scores.artistic,
-          category: dominantCategory(scores),
+          // `category` is a generated column (derived from the six scores) —
+          // writing it is rejected by Postgres.
           raw_scores: raw,
           normalization: audit,
         })

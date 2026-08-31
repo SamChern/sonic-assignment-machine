@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Disc3,
+  Globe2,
   Loader2,
   Music4,
   Plus,

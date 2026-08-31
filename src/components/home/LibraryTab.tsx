@@ -95,12 +95,18 @@ export const LibraryTab = ({
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate">{a.source_name}</span>
+                    <OriginalityBadge
+                      score={a.originality_score}
+                      detail={a.originality_detail}
+                      compact
+                    />
                     {a.created_at && (
                       <span className="shrink-0 text-muted-foreground">
                         {new Date(a.created_at).toLocaleDateString()}
                       </span>
                     )}
                   </button>
+
                 </li>
               );
             })}

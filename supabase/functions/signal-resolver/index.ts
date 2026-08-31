@@ -621,7 +621,8 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const r = await resolveOne(admin, row!, model, escalateModel, minConfidence);
+        const trace = stepLogger(admin, row!.id, row!.symbol);
+        const r = await resolveOne(admin, row!, model, escalateModel, minConfidence, trace);
         await admin
           .from("resolution_queue")
           .update({
@@ -631,12 +632,20 @@ Deno.serve(async (req) => {
             last_error: r.nodeId ? null : `low confidence (${r.confidence.toFixed(2)})`,
           })
           .eq("id", row!.id);
+        const { data: steps } = await admin
+          .from("resolver_steps")
+          .select("id, step, status, detail, duration_ms, created_at")
+          .eq("run_id", trace.runId)
+          .order("created_at", { ascending: true });
         return json({
           success: true,
           node_id: r.nodeId,
           confidence: r.confidence,
           escalated: r.escalated,
           usd: r.usd,
+          run_id: trace.runId,
+          symbol: row!.symbol,
+          steps: steps ?? [],
         });
       } catch (e) {
         const err = e as ResolverGatewayError;

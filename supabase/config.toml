@@ -42,3 +42,8 @@ verify_jwt = false
 # the service-role key from tests.
 [functions.scope-window-score]
 verify_jwt = false
+
+# Deterministic public artifact: same vector always yields the same audio, so
+# anonymous callers are allowed. Any token supplied is still validated in code.
+[functions.signature-render]
+verify_jwt = false

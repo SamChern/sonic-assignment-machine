@@ -77,7 +77,7 @@ const MusicCatalog = () => {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     if (error) toast.error("Could not load your catalog");
-    setItems(((data ?? []) as unknown as CatalogItem[]) ?? []);
+    setItems((data ?? []) as unknown as CatalogItem[]);
     setLoading(false);
   }, [user]);
 

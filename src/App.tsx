@@ -31,6 +31,8 @@ const AdminResolver = lazy(() => import("./pages/admin/AdminResolver"));
 const CreatorDoor = lazy(() => import("./pages/CreatorDoor"));
 const CreatorProfile = lazy(() => import("./pages/CreatorProfile"));
 const MusicCatalog = lazy(() => import("./pages/MusicCatalog"));
+const SymbolMarket = lazy(() => import("./pages/SymbolMarket"));
+
 
 const IntegrationStatus = lazy(() => import("./pages/IntegrationStatus"));
 const IngestionCompatibility = lazy(() => import("./pages/IngestionCompatibility"));

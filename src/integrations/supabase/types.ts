@@ -1622,6 +1622,48 @@ export type Database = {
         }
         Relationships: []
       }
+      market_baselines: {
+        Row: {
+          created_at: string
+          id: string
+          market: string
+          market_label: string
+          mean: number
+          metric: string
+          sample_size: number
+          source_note: string
+          stddev: number
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          market: string
+          market_label: string
+          mean: number
+          metric: string
+          sample_size?: number
+          source_note: string
+          stddev: number
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          market?: string
+          market_label?: string
+          mean?: number
+          metric?: string
+          sample_size?: number
+          source_note?: string
+          stddev?: number
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       org_category_profiles: {
         Row: {
           config: Json

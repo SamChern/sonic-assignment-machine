@@ -25,6 +25,8 @@ export default function Auth() {
 
   /** Same-origin relative path to return to after auth (e.g. /workspace). */
   const nextParam = searchParams.get('next');
+  // ?mode=signup lands straight on account creation (used by the Creator door).
+  const initialTab = searchParams.get('mode') === 'signup' ? 'signup' : 'signin';
   const nextPath = nextParam && /^\/[^/]/.test(nextParam) ? nextParam : '/';
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -161,7 +163,7 @@ export default function Auth() {
           <CardDescription>Sign in to save and browse audio collections</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
+          <Tabs defaultValue={initialTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>

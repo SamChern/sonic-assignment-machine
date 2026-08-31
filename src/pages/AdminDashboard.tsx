@@ -107,6 +107,20 @@ const DESTINATIONS: {
     depths: ["operate", "diagnose"],
   },
   {
+    to: "/admin/setup",
+    label: "Team setup",
+    description: "Create an organization, invite teammates and confirm they can sign in.",
+    icon: ShieldCheck,
+    depths: ["operate"],
+  },
+  {
+    to: "/admin/resolver",
+    label: "Resolver",
+    description: "Queue of unknown symbols, symbol details, tools and the signal nudge.",
+    icon: Activity,
+    depths: ["operate", "diagnose"],
+  },
+  {
     to: "/admin/control-room",
     label: "Control Room",
     description: "Pipeline knobs, thresholds and calibration priors.",

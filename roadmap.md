@@ -25,3 +25,10 @@
 - [ ] Watch the Step 2 replay of the 7 giant CTV/web files and report when they close out
 - [ ] Surface Ensemble archetype anchors ("in the lineage of…") in every fingerprint surface: uploaded/Spotify analyses and Intuizi meta-signal cohorts
 - [x] Fix preview typecheck build errors (ConsumerDoor analyze-audio response shape)
+
+## Admin setup, resolver UI, creator sign-in (Aug 31)
+- [x] `/admin/setup` wizard: create org, invite teammates, assign org roles, confirm sign-in
+- [x] `/admin/resolver`: queue view, symbol detail, refresh that lands on the nudge card
+- [x] Admin Tools panel: resolver refresh + manual symbol queueing
+- [x] Creator door registration behind real sign-in / account creation (no guests)
+- [ ] Consolidate "My library" by data source and meta tags (file type, audio vs user data, source, music vs spoken word)

@@ -23,7 +23,7 @@ import {
   resolveSymbol,
   type Resolution,
 } from "../_shared/resolverAgent.ts";
-import { symbolTypeFromCode } from "../_shared/resolverQueue.ts";
+import { enqueueUnknownSymbol, symbolTypeFromCode } from "../_shared/resolverQueue.ts";
 import { buildNudgeReport } from "../_shared/resolverNudge.ts";
 
 const corsHeaders = {
@@ -404,6 +404,62 @@ Deno.serve(async (req) => {
         proposals: proposals ?? [],
       });
     }
+
+    // Queue view for the admin Resolver page: paged rows with optional status
+    // filter and symbol search, plus the resolved node for the detail view.
+    if (action === "queue") {
+      const status = String(body.status ?? "").trim();
+      const search = String(body.search ?? "").trim();
+      const limit = Math.min(200, Math.max(1, Number(body.limit ?? 50)));
+      const offset = Math.max(0, Number(body.offset ?? 0));
+      let q = admin
+        .from("resolution_queue")
+        .select(
+          "id, symbol, symbol_type, status, attempts, sightings, last_error, resolved_node_id, first_seen_at, last_seen_at, context",
+          { count: "estimated" },
+        )
+        .order("sightings", { ascending: false })
+        .order("last_seen_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (status && status !== "all") q = q.eq("status", status);
+      if (search) q = q.ilike("symbol", `%${search}%`);
+      const { data: rows, count, error } = await q;
+      if (error) return json({ success: false, error: error.message }, 500);
+
+      const nodeIds = (rows ?? [])
+        .map((r: { resolved_node_id: string | null }) => r.resolved_node_id)
+        .filter((v: string | null): v is string => !!v);
+      let nodes: Record<string, unknown>[] = [];
+      if (nodeIds.length) {
+        const { data } = await admin
+          .from("taxonomy_nodes")
+          .select("id, code, label, reviewed, proposal, crosswalk")
+          .in("id", nodeIds);
+        nodes = data ?? [];
+      }
+      return json({ success: true, rows: rows ?? [], total: count ?? null, nodes });
+    }
+
+    // Manual enqueue from the admin Tools panel: one or many symbols, idempotent.
+    if (action === "enqueue") {
+      const raw = Array.isArray(body.symbols)
+        ? body.symbols.map((s) => String(s))
+        : String(body.symbols ?? body.symbol ?? "").split(/[\n,]/);
+      const symbols = [...new Set(raw.map((s) => s.trim()).filter(Boolean))].slice(0, 200);
+      if (!symbols.length) return json({ success: false, error: "symbols are required" }, 400);
+      let queued = 0;
+      for (const symbol of symbols) {
+        await enqueueUnknownSymbol(admin, {
+          symbol,
+          symbol_type: symbolTypeFromCode(symbol),
+          context: { queued_by: authz.userId ?? "internal", source: "admin_tools" },
+        });
+        queued += 1;
+      }
+      return json({ success: true, queued, symbols });
+    }
+
+
 
     if (action === "review") {
       const nodeId = String(body.node_id ?? "");

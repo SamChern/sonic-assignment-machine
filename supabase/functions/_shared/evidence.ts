@@ -19,10 +19,13 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0
  */
 export const FEATURE_SCHEMA_VERSION = "acoustic.v1";
 
-export type EvidenceKind = "librosa" | "provider" | "neighbors" | "none";
+export type EvidenceKind = "clap" | "librosa" | "provider" | "neighbors" | "none";
 
 /** Confidence multiplier per evidence tier. */
 export const EVIDENCE_WEIGHT: Record<EvidenceKind, number> = {
+  // CLAP listened to the audio itself in the semantic space the ontology
+  // lives in, so it is the strongest evidence tier we have.
+  clap: 1.0,
   librosa: 1.0,
   provider: 0.8,
   neighbors: 0.6,

@@ -170,6 +170,16 @@ export default function AdminResolver() {
 
         <AdminToolsPanel />
 
+        <SymbolScorePanel
+          rows={rows}
+          nodes={nodes}
+          flags={flags}
+          loading={loading}
+          onRefresh={load}
+        />
+
+
+
         <Card className="space-y-3 border-primary/20 bg-card/70 p-4 backdrop-blur">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-semibold">Queue</h2>

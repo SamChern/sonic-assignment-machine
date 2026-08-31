@@ -312,6 +312,61 @@ export interface UpstreamResult {
   status?: number;
   error?: string;
   durationMs: number;
+  /** True when the upstream rejected our credentials (or has none configured). */
+  authFailed?: boolean;
+}
+
+/**
+ * Human-readable repair instruction for a credential mismatch. Retrying an auth
+ * failure is pointless, so every surface that can hit one says the same thing.
+ */
+export const UPSTREAM_AUTH_HINT =
+  "The audio analysis server rejected the stored access key. Rotate it on the box " +
+  "(bash <(curl -fsSL <app>/librosa-mcp/rotate-token.sh)) and paste the new token " +
+  "into Admin → APIs & MCPs → Librosa REST.";
+
+/** Auth failures are configuration problems, not load problems. */
+export function isAuthFailure(status?: number, body = ""): boolean {
+  if (status === 401 || status === 403) return true;
+  // server_rest.py fails closed with a 500 when its own token env is missing.
+  return status === 500 && /token.*not set|not set.*token/i.test(body);
+}
+
+/** GET /health on the configured upstream. Cheap reachability + auth probe. */
+export async function probeUpstream(
+  creds: { baseUrl: string; token: string },
+  timeoutMs = 10_000,
+): Promise<UpstreamResult> {
+  const t0 = Date.now();
+  try {
+    const resp = await fetch(`${creds.baseUrl}/health`, {
+      headers: { Authorization: `Bearer ${creds.token}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const text = await resp.text();
+    const durationMs = Date.now() - t0;
+    if (!resp.ok) {
+      const authFailed = isAuthFailure(resp.status, text);
+      return {
+        ok: false,
+        status: resp.status,
+        authFailed,
+        error: authFailed ? UPSTREAM_AUTH_HINT : `Upstream HTTP ${resp.status}: ${text.slice(0, 300)}`,
+        durationMs,
+      };
+    }
+    let parsed: Record<string, unknown> | undefined;
+    try {
+      parsed = JSON.parse(text);
+    } catch { /* health body is informational only */ }
+    return { ok: true, parsed, status: resp.status, durationMs };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Network error",
+      durationMs: Date.now() - t0,
+    };
+  }
 }
 
 /** Calls the UNCHANGED upstream endpoint. No port/endpoint changes required. */
@@ -337,10 +392,14 @@ export async function callUpstream(
     const durationMs = Date.now() - t0;
 
     if (!resp.ok) {
+      const authFailed = isAuthFailure(resp.status, text);
       return {
         ok: false,
         status: resp.status,
-        error: `Upstream HTTP ${resp.status}: ${text.slice(0, 500)}`,
+        authFailed,
+        error: authFailed
+          ? UPSTREAM_AUTH_HINT
+          : `Upstream HTTP ${resp.status}: ${text.slice(0, 500)}`,
         durationMs,
       };
     }
@@ -362,6 +421,7 @@ export async function callUpstream(
     };
   }
 }
+
 
 /**
  * Content-addressed profile embedding.

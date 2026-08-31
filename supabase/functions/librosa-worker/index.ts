@@ -146,7 +146,9 @@ Deno.serve(async (req) => {
           error_message: msg,
         });
         const attempts = Number(job.attempts ?? 1);
-        if (attempts >= MAX_ATTEMPTS) {
+        // A rejected credential never fixes itself: fail fast and say why
+        // instead of spending the retry budget on the same 401.
+        if (res.authFailed || attempts >= MAX_ATTEMPTS) {
           await hardFailJob(admin, job, audioSourceId, userId, msg);
         } else {
           await releaseJob(admin, job, msg);
@@ -155,6 +157,7 @@ Deno.serve(async (req) => {
         // Stop the batch after an upstream failure — don't hammer the service.
         break;
       }
+
     }
 
     return json({ success: true, processed: ok + failed, ok, failed });

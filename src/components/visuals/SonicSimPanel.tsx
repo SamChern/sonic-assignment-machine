@@ -3,24 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Activity,
-  Gauge,
   Info,
-  Maximize2,
-  Minimize2,
-  Pause,
-  Play,
-  RotateCcw,
   Radar,
   Network,
-  Image as ImageIcon,
   Accessibility,
   Waves,
 } from "lucide-react";
@@ -29,7 +15,6 @@ import SemanticScope, { type ScopeLens } from "./SemanticScope";
 import type { SilhouetteTag } from "@/lib/audioscope/silhouette";
 import {
   PANE_ANCHOR_ATTR,
-  SHORTCUT_HINT,
   focusMotionControls,
   useAudioscopeShortcuts,
 } from "@/lib/audioscope/shortcuts";
@@ -40,10 +25,10 @@ import {
   categoryToken,
   type AudioscopeFeatureHints,
   type CategoryScores,
-  initialStatic,
   prefersReducedMotion,
   writeMotionPref,
 } from "@/lib/audioscope";
+
 
 export interface SonicSimSubject {
   id: string;

@@ -53,7 +53,9 @@ export default function AdminResolver() {
 
   const [rows, setRows] = useState<QueueRow[]>([]);
   const [nodes, setNodes] = useState<Record<string, NodeRow>>({});
+  const [flags, setFlags] = useState<ScoreFlag[]>([]);
   const [total, setTotal] = useState<number | null>(null);
+
   const [status, setStatus] = useState<string>("pending");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);

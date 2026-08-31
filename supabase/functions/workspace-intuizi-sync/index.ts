@@ -26,7 +26,28 @@ const CATEGORIES = [
 ] as const;
 
 const CHUNK = 500;
+// A GET filter of 500 UUIDs builds a ~22 KB query string, which the upstream
+// rejects at the transport layer ("error sending request"). Keep read filters
+// small enough that the URL stays well under the limit.
+const READ_CHUNK = 80;
 const MAX_ROWS_PER_ACTIVATION = 5000;
+
+/** Retry a transient transport/timeout failure a couple of times. */
+async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const msg = String((e as Error)?.message ?? e);
+      if (!/error sending request|timeout|network|fetch failed|connection/i.test(msg)) throw e;
+      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+    }
+  }
+  throw new Error(`${label} failed: ${String((lastErr as Error)?.message ?? lastErr)}`);
+}
+
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {

@@ -135,10 +135,6 @@ export async function groundSourceWithClap(
             weight: Math.round(t.similarity * 1000) / 1000,
           })),
         );
-        // A tag that came from listened-to audio is a grounded claim.
-        for (const t of tags) {
-          await admin.rpc("bump_node_grounding", { p_node_id: t.id }).catch?.(() => {});
-        }
       } catch (e) {
         console.warn("audio_source_tags write failed:", e instanceof Error ? e.message : e);
       }

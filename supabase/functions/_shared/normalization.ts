@@ -187,28 +187,34 @@ export async function applyNormalizationToAnalysis(
   if (!cfg.enabled) return scores;
 
   try {
-    const { data: row } = await supabase
+    const { data: row, error: selErr } = await supabase
       .from("source_analyses")
       .select("id")
       .eq("audio_source_id", audioSourceId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (selErr) console.warn("normalization row lookup failed", selErr.message);
+    if (!row?.id) console.warn("normalization: no analysis row for", audioSourceId);
     if (row?.id) {
-      await supabase
+      const { error: updErr } = await supabase
         .from("source_analyses")
         .update({
-          emotional_score: scores.emotional,
-          cognitive_score: scores.cognitive,
-          social_score: scores.social,
-          communication_score: scores.communication,
-          contextual_score: scores.contextual,
-          artistic_score: scores.artistic,
-          category: dominantCategory(scores),
+          // The score columns are integers; the audit keeps the 0.1 precision.
+          emotional_score: Math.round(scores.emotional),
+          cognitive_score: Math.round(scores.cognitive),
+          social_score: Math.round(scores.social),
+          communication_score: Math.round(scores.communication),
+          contextual_score: Math.round(scores.contextual),
+          artistic_score: Math.round(scores.artistic),
+          // `category` is a generated column (derived from the six scores) —
+          // writing it is rejected by Postgres.
           raw_scores: raw,
           normalization: audit,
         })
         .eq("id", row.id);
+      if (updErr) console.warn("normalization update failed", updErr.message);
+      else console.log("normalization applied to analysis", row.id);
     }
   } catch (e) {
     console.warn("normalization persist failed", e);

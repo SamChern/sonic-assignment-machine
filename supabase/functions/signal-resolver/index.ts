@@ -115,6 +115,40 @@ async function candidatesFor(admin: Client, symbol: string) {
 }
 
 /**
+ * Step trace: every resolver run records what it did, in order, so the admin
+ * can read a symbol's score back to the steps that produced it.
+ */
+interface StepLogger {
+  runId: string;
+  log: (
+    step: string,
+    status: string,
+    detail?: Record<string, unknown>,
+    startedAt?: number,
+  ) => Promise<void>;
+}
+
+function stepLogger(admin: Client, queueId: string | null, symbol: string): StepLogger {
+  const runId = crypto.randomUUID();
+  return {
+    runId,
+    log: async (step, status, detail = {}, startedAt) => {
+      const { error } = await admin.from("resolver_steps").insert({
+        run_id: runId,
+        queue_id: queueId,
+        symbol,
+        step,
+        status,
+        detail,
+        duration_ms: startedAt ? Math.round(performance.now() - startedAt) : null,
+      });
+      if (error) console.error("step log failed", step, error.message);
+    },
+  };
+}
+
+
+/**
  * Persist one resolution as an unreviewed agent node with crosswalk proposals
  * in the shape the Step 5 review flow already reads.
  */

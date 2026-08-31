@@ -1,9 +1,7 @@
 # Roadmap
 
-## In progress
-- [x] Consumer "Listen" → Browse library: selecting library sources didn't add them for semantic analysis (only Spotify rows were kept). Fix so file/CTV/upload sources are added, counted, chip-listed and analysed.
-
-## Queued
-- [ ] Admin "Audio signals to refresh" queue: table of sources with status, confidence, grounding and a per-row refresh action, so admins can plan which sources to enhance.
-- [ ] My Library side-by-side compare: pick two signals and compare grounding, taxonomy tags and the 6 category scores.
-- [ ] Musical CLAP scores: derive pitch, rhythm and timbre scores for music audio and surface them in SonicSIM analysis.
+## Done
+- [x] Consumer "Listen" → Browse library: non-Spotify library sources are now added, counted, chip-listed and analysed.
+- [x] Admin "Audio signals to refresh" queue: table with status, confidence, grounding, lenses (low / ungrounded / stale) and a per-row refresh action.
+- [x] My Library side-by-side compare: pick two saved analyses to compare category scores, grounding and confidence.
+- [x] Musical read: pitch / rhythm / timbre + musicality derived from librosa + CLAP tag affinity, stored on source_analyses.musical_scores and shown in analysis.

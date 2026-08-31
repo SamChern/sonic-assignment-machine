@@ -110,10 +110,11 @@ export const SonicSimPanel = ({
 }: SonicSimPanelProps) => {
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id ?? "");
   const [mode, setMode] = useState<PanelMode>(defaultMode);
-  const [playing, setPlaying] = useState(() => !initialStatic(MOTION_PREF_KEY));
-  const [speed, setSpeed] = useState(0.25);
-  // Stored choice wins; otherwise reduced-motion users get the still frame by default.
-  const [isStatic, setIsStatic] = useState(() => initialStatic(MOTION_PREF_KEY));
+  const [playing, setPlaying] = useState(true);
+  const [speed, setSpeed] = useState(1);
+  // Reduced-motion users still get a still frame; there is no manual toggle in this view.
+  const [isStatic, setIsStatic] = useState(() => prefersReducedMotion());
+
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [showLegend, setShowLegend] = useState(false);
   const [replayKey, setReplayKey] = useState(0);

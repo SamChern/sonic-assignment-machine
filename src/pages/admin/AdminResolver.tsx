@@ -174,7 +174,10 @@ export default function AdminResolver() {
 
         <AdminToolsPanel />
 
+        <CatalogScorePanel />
+
         <GroundingFlagPanel />
+
 
         <SymbolScorePanel
           rows={rows}

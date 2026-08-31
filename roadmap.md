@@ -32,3 +32,9 @@
 - [x] Admin Tools panel: resolver refresh + manual symbol queueing
 - [x] Creator door registration behind real sign-in / account creation (no guests)
 - [x] Consolidate "My library" by data source and meta tags (file type, audio vs user data, source, music vs spoken word)
+
+## Symbol scores, resolver runs, library search, creator profile (Aug 31)
+- [ ] Admin symbol score panel: score, confidence, resolver steps, flag bad scores
+- [ ] Resolver UI: multi-select symbols, run agent, per-step results
+- [ ] My Library: text search + tag filters (source, file type, tags)
+- [ ] Creator profile page: library, registration history, queued symbols dashboard

@@ -2210,6 +2210,50 @@ export type Database = {
           },
         ]
       }
+      resolver_steps: {
+        Row: {
+          created_at: string
+          detail: Json
+          duration_ms: number | null
+          id: string
+          queue_id: string | null
+          run_id: string
+          status: string
+          step: string
+          symbol: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          id?: string
+          queue_id?: string | null
+          run_id: string
+          status?: string
+          step: string
+          symbol: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          id?: string
+          queue_id?: string | null
+          run_id?: string
+          status?: string
+          step?: string
+          symbol?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resolver_steps_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "resolution_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       retention_runs: {
         Row: {
           analyses_deleted: number
@@ -2802,6 +2846,63 @@ export type Database = {
         }
         Relationships: []
       }
+      symbol_score_flags: {
+        Row: {
+          created_at: string
+          flagged_by: string | null
+          id: string
+          node_id: string | null
+          note: string | null
+          observed_confidence: number | null
+          queue_id: string | null
+          reason: string
+          status: string
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          flagged_by?: string | null
+          id?: string
+          node_id?: string | null
+          note?: string | null
+          observed_confidence?: number | null
+          queue_id?: string | null
+          reason: string
+          status?: string
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          flagged_by?: string | null
+          id?: string
+          node_id?: string | null
+          note?: string | null
+          observed_confidence?: number | null
+          queue_id?: string | null
+          reason?: string
+          status?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "symbol_score_flags_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "taxonomy_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "symbol_score_flags_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "resolution_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       taxonomy_nodes: {
         Row: {
           audio_embedding: string | null
@@ -3076,6 +3177,19 @@ export type Database = {
       complete_ingest_file: {
         Args: { p_id: string; p_rows: number; p_status?: string }
         Returns: undefined
+      }
+      creator_queued_symbols: {
+        Args: never
+        Returns: {
+          attempts: number
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          sightings: number
+          status: string
+          symbol: string
+          symbol_type: string
+        }[]
       }
       enqueue_score_tasks: { Args: { p_rows: Json }; Returns: number }
       fail_ingest_file: {

@@ -115,6 +115,40 @@ async function candidatesFor(admin: Client, symbol: string) {
 }
 
 /**
+ * Step trace: every resolver run records what it did, in order, so the admin
+ * can read a symbol's score back to the steps that produced it.
+ */
+interface StepLogger {
+  runId: string;
+  log: (
+    step: string,
+    status: string,
+    detail?: Record<string, unknown>,
+    startedAt?: number,
+  ) => Promise<void>;
+}
+
+function stepLogger(admin: Client, queueId: string | null, symbol: string): StepLogger {
+  const runId = crypto.randomUUID();
+  return {
+    runId,
+    log: async (step, status, detail = {}, startedAt) => {
+      const { error } = await admin.from("resolver_steps").insert({
+        run_id: runId,
+        queue_id: queueId,
+        symbol,
+        step,
+        status,
+        detail,
+        duration_ms: startedAt ? Math.round(performance.now() - startedAt) : null,
+      });
+      if (error) console.error("step log failed", step, error.message);
+    },
+  };
+}
+
+
+/**
  * Persist one resolution as an unreviewed agent node with crosswalk proposals
  * in the shape the Step 5 review flow already reads.
  */
@@ -200,8 +234,22 @@ async function resolveOne(
   model: string,
   escalateModel: string,
   minConfidence: number,
-): Promise<{ nodeId: string | null; usd: number; escalated: boolean; confidence: number }> {
+  trace?: StepLogger,
+): Promise<{
+  nodeId: string | null;
+  usd: number;
+  escalated: boolean;
+  confidence: number;
+  runId?: string;
+}> {
+  const t0 = performance.now();
   const candidates = await candidatesFor(admin, row.symbol);
+  await trace?.log("candidates", "ok", {
+    count: candidates.length,
+    codes: candidates.slice(0, 8).map((c) => c.code),
+  }, t0);
+
+  const t1 = performance.now();
   let res = await resolveSymbol({
     model,
     symbol: row.symbol,
@@ -211,9 +259,19 @@ async function resolveOne(
   });
   let usd = res.usd;
   let escalated = false;
+  await trace?.log("model", "ok", {
+    model,
+    confidence: res.confidence,
+    usd: res.usd,
+    description: res.description,
+    tendencies: res.tendencies,
+    anchors: res.anchors,
+    sources: res.snippets.map((s) => ({ source: s.source, title: s.title, url: s.url })),
+  }, t1);
 
   if (res.confidence < minConfidence && escalateModel && escalateModel !== model) {
     escalated = true;
+    const t2 = performance.now();
     const retry = await resolveSymbol({
       model: escalateModel,
       symbol: row.symbol,
@@ -222,14 +280,31 @@ async function resolveOne(
       candidates,
     });
     usd += retry.usd;
-    if (retry.confidence >= res.confidence) res = retry;
+    const kept = retry.confidence >= res.confidence;
+    if (kept) res = retry;
+    await trace?.log("escalate", "ok", {
+      model: escalateModel,
+      confidence: retry.confidence,
+      kept,
+      usd: retry.usd,
+    }, t2);
   }
 
   if (res.confidence < minConfidence) {
-    return { nodeId: null, usd, escalated, confidence: res.confidence };
+    await trace?.log("threshold", "failed", {
+      confidence: res.confidence,
+      min_confidence: minConfidence,
+    });
+    return { nodeId: null, usd, escalated, confidence: res.confidence, runId: trace?.runId };
   }
+  const t3 = performance.now();
   const nodeId = await writeNode(admin, row.symbol, row.symbol_type, { ...res, usd });
-  return { nodeId, usd, escalated, confidence: res.confidence };
+  await trace?.log("write_node", nodeId ? "ok" : "failed", {
+    node_id: nodeId,
+    confidence: res.confidence,
+    usd,
+  }, t3);
+  return { nodeId, usd, escalated, confidence: res.confidence, runId: trace?.runId };
 }
 
 async function drain(admin: Client, limitOverride?: number): Promise<RunOutcome> {
@@ -279,7 +354,14 @@ async function drain(admin: Client, limitOverride?: number): Promise<RunOutcome>
       .eq("id", row.id);
 
     try {
-      const r = await resolveOne(admin, row, model, escalateModel, minConfidence);
+      const r = await resolveOne(
+        admin,
+        row,
+        model,
+        escalateModel,
+        minConfidence,
+        stepLogger(admin, row.id, row.symbol),
+      );
       out.usd += r.usd;
       if (r.escalated) out.escalated++;
       if (r.nodeId) {
@@ -437,7 +519,20 @@ Deno.serve(async (req) => {
           .in("id", nodeIds);
         nodes = data ?? [];
       }
-      return json({ success: true, rows: rows ?? [], total: count ?? null, nodes });
+
+      // Score-quality context for the admin panel: open flags on these symbols.
+      const symbols = (rows ?? []).map((r: { symbol: string }) => r.symbol);
+      let flags: Record<string, unknown>[] = [];
+      if (symbols.length) {
+        const { data } = await admin
+          .from("symbol_score_flags")
+          .select("id, symbol, reason, note, status, observed_confidence, created_at")
+          .in("symbol", symbols)
+          .order("created_at", { ascending: false })
+          .limit(500);
+        flags = data ?? [];
+      }
+      return json({ success: true, rows: rows ?? [], total: count ?? null, nodes, flags });
     }
 
     // Manual enqueue from the admin Tools panel: one or many symbols, idempotent.
@@ -458,6 +553,73 @@ Deno.serve(async (req) => {
       }
       return json({ success: true, queued, symbols });
     }
+
+    // Step trace for one symbol: every recorded resolver run, newest first.
+    if (action === "steps") {
+      const symbol = String(body.symbol ?? "").trim();
+      if (!symbol) return json({ success: false, error: "symbol is required" }, 400);
+      const { data, error } = await admin
+        .from("resolver_steps")
+        .select("id, run_id, step, status, detail, duration_ms, created_at")
+        .eq("symbol", symbol)
+        .order("created_at", { ascending: false })
+        .limit(120);
+      if (error) return json({ success: false, error: error.message }, 500);
+      return json({ success: true, steps: data ?? [] });
+    }
+
+    // Flag a score as bad (or resolve/dismiss an existing flag).
+    if (action === "flag") {
+      const flagId = body.flag_id ? String(body.flag_id) : null;
+      if (flagId) {
+        const status = String(body.status ?? "closed");
+        const { error } = await admin
+          .from("symbol_score_flags")
+          .update({ status })
+          .eq("id", flagId);
+        if (error) return json({ success: false, error: error.message }, 500);
+        return json({ success: true, flag_id: flagId, status });
+      }
+      const symbol = String(body.symbol ?? "").trim();
+      const reason = String(body.reason ?? "").trim();
+      if (!symbol || !reason) {
+        return json({ success: false, error: "symbol and reason are required" }, 400);
+      }
+      const { data, error } = await admin
+        .from("symbol_score_flags")
+        .insert({
+          symbol,
+          reason,
+          note: body.note ? String(body.note).slice(0, 1000) : null,
+          queue_id: body.queue_id ? String(body.queue_id) : null,
+          node_id: body.node_id ? String(body.node_id) : null,
+          observed_confidence:
+            body.confidence === undefined || body.confidence === null
+              ? null
+              : Number(body.confidence),
+          flagged_by: authz.userId ?? null,
+        })
+        .select("id, symbol, reason, note, status, observed_confidence, created_at")
+        .single();
+      if (error) return json({ success: false, error: error.message }, 500);
+      return json({ success: true, flag: data });
+    }
+
+    // Open flags across the ontology, for the flag review list.
+    if (action === "flags") {
+      const status = String(body.status ?? "open");
+      let q = admin
+        .from("symbol_score_flags")
+        .select("id, symbol, reason, note, status, observed_confidence, created_at")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (status !== "all") q = q.eq("status", status);
+      const { data, error } = await q;
+      if (error) return json({ success: false, error: error.message }, 500);
+      return json({ success: true, flags: data ?? [] });
+    }
+
+
 
 
 
@@ -539,7 +701,8 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const r = await resolveOne(admin, row!, model, escalateModel, minConfidence);
+        const trace = stepLogger(admin, row!.id, row!.symbol);
+        const r = await resolveOne(admin, row!, model, escalateModel, minConfidence, trace);
         await admin
           .from("resolution_queue")
           .update({
@@ -549,12 +712,20 @@ Deno.serve(async (req) => {
             last_error: r.nodeId ? null : `low confidence (${r.confidence.toFixed(2)})`,
           })
           .eq("id", row!.id);
+        const { data: steps } = await admin
+          .from("resolver_steps")
+          .select("id, step, status, detail, duration_ms, created_at")
+          .eq("run_id", trace.runId)
+          .order("created_at", { ascending: true });
         return json({
           success: true,
           node_id: r.nodeId,
           confidence: r.confidence,
           escalated: r.escalated,
           usd: r.usd,
+          run_id: trace.runId,
+          symbol: row!.symbol,
+          steps: steps ?? [],
         });
       } catch (e) {
         const err = e as ResolverGatewayError;
@@ -568,6 +739,77 @@ Deno.serve(async (req) => {
         return json({ success: false, error: err.message }, err.status >= 400 ? err.status : 500);
       }
     }
+
+    // Run the agent over a hand-picked set of queue rows and return every step
+    // it took for each symbol — the admin's "select, run, watch" surface.
+    if (action === "resolve_many") {
+      const ids = Array.isArray(body.queue_ids) ? body.queue_ids.map((v) => String(v)) : [];
+      if (!ids.length) return json({ success: false, error: "queue_ids are required" }, 400);
+      const model = await controlString(admin, "resolver.model", "openai/gpt-5.6-sol");
+      const escalateModel = await controlString(
+        admin, "resolver.escalate_model", "openai/gpt-5.6-sol",
+      );
+      const minConfidence = await controlNumber(
+        admin, "resolver.min_confidence", 0.45, { min: 0, max: 1 },
+      );
+      const { data: rows } = await admin
+        .from("resolution_queue")
+        .select("id, symbol, symbol_type, context, attempts")
+        .in("id", ids.slice(0, 20));
+
+      const results: Record<string, unknown>[] = [];
+      for (const row of (rows ?? []) as QueueRow[]) {
+        const trace = stepLogger(admin, row.id, row.symbol);
+        try {
+          const r = await resolveOne(admin, row, model, escalateModel, minConfidence, trace);
+          await admin
+            .from("resolution_queue")
+            .update({
+              status: r.nodeId ? "resolved" : "pending",
+              resolved_node_id: r.nodeId,
+              attempts: (row.attempts ?? 0) + 1,
+              last_error: r.nodeId ? null : `low confidence (${r.confidence.toFixed(2)})`,
+            })
+            .eq("id", row.id);
+          const { data: steps } = await admin
+            .from("resolver_steps")
+            .select("id, step, status, detail, duration_ms, created_at")
+            .eq("run_id", trace.runId)
+            .order("created_at", { ascending: true });
+          results.push({
+            queue_id: row.id,
+            symbol: row.symbol,
+            ok: !!r.nodeId,
+            node_id: r.nodeId,
+            confidence: r.confidence,
+            escalated: r.escalated,
+            usd: r.usd,
+            run_id: trace.runId,
+            steps: steps ?? [],
+          });
+        } catch (e) {
+          const err = e as ResolverGatewayError;
+          if (err.status === 402 || err.status === 403) {
+            await pause(admin, `gateway ${err.status}: ${String(err.message).slice(0, 200)}`);
+          }
+          await trace.log("error", "failed", { message: String(err.message).slice(0, 500) });
+          await admin
+            .from("resolution_queue")
+            .update({ status: "pending", last_error: String(err.message).slice(0, 500) })
+            .eq("id", row.id);
+          results.push({
+            queue_id: row.id,
+            symbol: row.symbol,
+            ok: false,
+            error: String(err.message).slice(0, 300),
+            run_id: trace.runId,
+            steps: [],
+          });
+        }
+      }
+      return json({ success: true, results });
+    }
+
 
     if (action === "nudge") {
       let state = await readState(admin);

@@ -11,6 +11,8 @@ import { ArrowLeft, Bot, Loader2, RefreshCw, Search } from "lucide-react";
 import { ResolverNudge } from "@/components/admin/ResolverNudge";
 import { ResolverPanel } from "@/components/admin/ResolverPanel";
 import { AdminToolsPanel } from "@/components/admin/AdminToolsPanel";
+import { SymbolScorePanel, type ScoreFlag } from "@/components/admin/SymbolScorePanel";
+
 
 interface QueueRow {
   id: string;
@@ -51,7 +53,9 @@ export default function AdminResolver() {
 
   const [rows, setRows] = useState<QueueRow[]>([]);
   const [nodes, setNodes] = useState<Record<string, NodeRow>>({});
+  const [flags, setFlags] = useState<ScoreFlag[]>([]);
   const [total, setTotal] = useState<number | null>(null);
+
   const [status, setStatus] = useState<string>("pending");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -76,11 +80,14 @@ export default function AdminResolver() {
         rows?: QueueRow[];
         total?: number | null;
         nodes?: NodeRow[];
+        flags?: ScoreFlag[];
       };
       if (res?.success === false) throw new Error(res.error ?? "queue read failed");
       setRows(res.rows ?? []);
       setTotal(res.total ?? null);
       setNodes(Object.fromEntries((res.nodes ?? []).map((n) => [n.id, n])));
+      setFlags(res.flags ?? []);
+
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -162,6 +169,16 @@ export default function AdminResolver() {
         </div>
 
         <AdminToolsPanel />
+
+        <SymbolScorePanel
+          rows={rows}
+          nodes={nodes}
+          flags={flags}
+          loading={loading}
+          onRefresh={load}
+        />
+
+
 
         <Card className="space-y-3 border-primary/20 bg-card/70 p-4 backdrop-blur">
           <div className="flex flex-wrap items-center gap-2">

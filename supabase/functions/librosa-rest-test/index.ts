@@ -3,6 +3,8 @@
 // outcome in integration_test_history, and returns latency.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
+import { isAuthFailure, UPSTREAM_AUTH_HINT } from "../_shared/librosa.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

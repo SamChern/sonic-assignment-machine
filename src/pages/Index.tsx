@@ -65,7 +65,7 @@ const Index = () => {
     fresh: number;
     status: 'idle' | 'checking-cache' | 'analyzing' | 'complete';
   } | null>(null);
-  const [results, setResults] = useState<{ sources: any[]; images: any[] } | null>(null);
+  const [results, setResults] = useState<{ sources: any[]; images: any[]; musical?: any[] } | null>(null);
   /** Source name currently playing in "See my SonicSIM" — pulses its ontology nodes. */
   const [sonicSimSubject, setSonicSimSubject] = useState<string | null>(null);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
@@ -322,7 +322,7 @@ const Index = () => {
           imageUrl: track.album.images[0].url
         }));
 
-      setResults({ sources: resultsWithIcons, images: imageData });
+      setResults({ sources: resultsWithIcons, images: imageData, musical: data.musical ?? [] });
       setIsAnalyzing(false);
       setActiveTab("understand"); // Switch to network tab after analysis
       

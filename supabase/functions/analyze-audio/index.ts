@@ -584,7 +584,9 @@ Deno.serve(async (req) => {
               if (ctx.exemplars.length > 0) {
                 s.context_neighbors = ctx.exemplars;
                 s.taxonomy_context = [s.taxonomy_context, ctx.text].filter(Boolean).join(' ');
-                s.evidence = 'neighbors';
+                // Exemplars enrich, they never downgrade a stronger tier (CLAP
+                // listened to this audio; neighbours only listened to others').
+                if (!s.evidence || s.evidence === 'none') s.evidence = 'neighbors';
                 continue;
               }
             }
@@ -595,7 +597,7 @@ Deno.serve(async (req) => {
           const prior = await neighborPrior(supabaseAdmin, s.audio_source_id!);
           if (prior) {
             s.taxonomy_context = [s.taxonomy_context, prior.text].filter(Boolean).join(' ');
-            s.evidence = 'neighbors';
+            if (!s.evidence || s.evidence === 'none') s.evidence = 'neighbors';
           }
         }
 
@@ -1041,6 +1043,37 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         console.error('Error batch inserting source analyses:', insertError);
       } else {
         console.log(`Batch inserted ${insertData.length} analyses`);
+
+        // === Speech-skew normalization ===
+        // Intuizi/CTV-heavy corpora inflate Communication (and Cognitive).
+        // The config is data (public.semantic_normalization, scope `global` or
+        // per-org); when it is off this is a no-op. Raw scores are preserved on
+        // the row for audit.
+        try {
+          const normCfg = await loadNormalization(supabaseAdmin, 'global');
+          if (normCfg.enabled) {
+            let normalized = 0;
+            for (const row of insertData) {
+              if (!row.audio_source_id) continue;
+              const raw = {} as Record<Category, number>;
+              for (const c of ONTOLOGY_CATEGORIES) {
+                raw[c] = Number((row as Record<string, unknown>)[`${c}_score`]) || 0;
+              }
+              await applyNormalizationToAnalysis(
+                supabaseAdmin,
+                row.audio_source_id as string,
+                raw,
+                normCfg,
+              );
+              normalized++;
+            }
+            console.log(`Normalized ${normalized} analyses (speech_bias ${normCfg.speech_bias})`);
+          } else {
+            console.log('Speech-skew normalization is disabled for scope global');
+          }
+        } catch (e) {
+          console.error('Normalization pass failed:', e);
+        }
       }
 
       // Only recalculate fingerprint if we inserted data
@@ -1069,6 +1102,12 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
       cache_stats: {
         cached: cachedResults.length,
         fresh: freshResults.length,
+      },
+      clap_stats: {
+        tagged: uncachedSources.filter(s => (s.clap_tags?.length ?? 0) > 0).length,
+        tags: uncachedSources
+          .filter(s => (s.clap_tags?.length ?? 0) > 0)
+          .map(s => ({ name: s.name, tags: s.clap_tags })),
       },
       evidence_stats: uncachedSources.reduce((acc, s) => {
         const k = s.evidence ?? 'none';

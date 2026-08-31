@@ -20,6 +20,9 @@ import {
   weightedTagVector,
 } from '../_shared/context.ts';
 import { clapBridge, getSemanticSvcConfig } from '../_shared/semanticSvc.ts';
+import { groundSourceWithClap } from '../_shared/clapAudio.ts';
+import { applyNormalizationToAnalysis, loadNormalization } from '../_shared/normalization.ts';
+import { CATEGORIES as ONTOLOGY_CATEGORIES, type Category } from '../_shared/ontology.ts';
 import { controlNumber } from '../_shared/control.ts';
 import {
   type GroundingLevel,
@@ -111,6 +114,8 @@ interface AudioSource {
   tag_only?: boolean;
   /** Step 14b — how this score knew what it knew. */
   grounding_level?: GroundingLevel;
+  /** CLAP heard these AudioSet nodes in the audio itself. */
+  clap_tags?: { code: string; label: string; similarity: number }[];
 }
 
 
@@ -415,12 +420,16 @@ Deno.serve(async (req) => {
           .filter(s => !s.tag_only)
           .map(s => s.audio_source_id)
           .filter(Boolean) as string[];
+        const rowById = new Map<string, { file_url?: string | null; preview_url?: string | null }>();
         if (ids.length > 0) {
           const { data: featRows } = await supabaseAdmin
             .from('audio_sources')
-            .select('id, librosa_features')
+            .select('id, librosa_features, file_url, preview_url')
             .in('id', ids);
           const byId = new Map((featRows ?? []).map(r => [r.id, r.librosa_features]));
+          for (const r of featRows ?? []) {
+            rowById.set(r.id, { file_url: r.file_url, preview_url: r.preview_url });
+          }
           for (const s of uncachedSources) {
             if (!s.audio_source_id || s.tag_only) continue;
             const profile = formatLibrosaProfile(byId.get(s.audio_source_id));
@@ -429,6 +438,57 @@ Deno.serve(async (req) => {
               s.evidence = 'librosa';
             }
           }
+        }
+
+        // === Tier 0 — CLAP: actually listen to the audio ===
+        // The semantic service embeds the audio in CLAP space and we read the
+        // nearest AudioSet nodes straight out of the ontology. This is what
+        // turns an upload/preview into taxonomy tags + a grounded claim, and it
+        // is written back to audio_sources/audio_source_tags so it is paid for
+        // once per file.
+        const clapCfg = await getSemanticSvcConfig(supabaseAdmin);
+        if (clapCfg) {
+          const clapTopK = Math.round(
+            await controlNumber(supabaseAdmin, 'clap.top_k', 5, { min: 1, max: 12 }),
+          );
+          const clapMinSim = await controlNumber(
+            supabaseAdmin, 'clap.min_similarity', 0.05, { min: 0, max: 1 },
+          );
+          const listenable = uncachedSources.filter((s) => {
+            if (s.tag_only) return false;
+            const row = s.audio_source_id ? rowById.get(s.audio_source_id) : undefined;
+            const url = s.file_url ?? row?.file_url ?? row?.preview_url ?? null;
+            if (url) s.file_url = url;
+            return !!url;
+          });
+          for (const s of listenable) {
+            try {
+              const g = await groundSourceWithClap(supabaseAdmin, {
+                url: s.file_url!,
+                name: s.name,
+                audioSourceId: s.audio_source_id ?? null,
+                topK: clapTopK,
+                minSimilarity: clapMinSim,
+                cfg: clapCfg,
+              });
+              if (!g) continue;
+              if (g.text) {
+                s.taxonomy_context = [s.taxonomy_context, g.text].filter(Boolean).join(' ');
+                s.clap_tags = g.tags.map(t => ({
+                  code: t.code, label: t.label, similarity: t.similarity,
+                }));
+                s.evidence = 'clap';
+                s.grounding_level = 'grounded';
+              }
+            } catch (e) {
+              console.error('CLAP grounding failed for', s.name, e);
+            }
+          }
+          console.log(
+            `CLAP grounding: ${listenable.filter(s => s.clap_tags?.length).length}/${listenable.length} sources tagged`,
+          );
+        } else {
+          console.warn('Semantic service not configured — CLAP grounding skipped');
         }
 
         // Tier 2 — provider-supplied audio features (never touches EC2).
@@ -565,11 +625,12 @@ Deno.serve(async (req) => {
       // stops re-analysis from re-prompting the LLM.
       for (const s of uncachedSources) {
         s.feature_hash = await stableHash({
-          v: 2,
+          v: 3,
           evidence: s.evidence ?? 'none',
           acoustic: s.acoustic_profile ?? null,
           taxonomy: s.taxonomy_context ?? null,
           exemplars: (s.context_neighbors ?? []).map(n => `${n.id}:${n.similarity}`),
+          clap: (s.clap_tags ?? []).map(t => `${t.code}:${t.similarity.toFixed(3)}`),
         });
       }
 

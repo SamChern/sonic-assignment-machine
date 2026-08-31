@@ -129,6 +129,8 @@ const App = () => (
               <Route path="/workspace" element={<Workspace />} />
               <Route path="/creator" element={<CreatorDoor />} />
               <Route path="/creator/profile" element={<CreatorProfile />} />
+              <Route path="/library/catalog" element={<MusicCatalog />} />
+
               <Route path="/demo" element={<Demo />} />
 
 

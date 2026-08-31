@@ -600,8 +600,30 @@ const MusicCatalog = () => {
                         )}
                       </div>
                     )}
+
+                    {market && (
+                      <div className="border-t border-border/50 pt-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-1 text-[10px]"
+                          onClick={() =>
+                            setMarketOpen((prev) => (prev === item.id ? null : item.id))
+                          }
+                          aria-expanded={marketOpen === item.id}
+                        >
+                          <Globe2 className="mr-1 h-3 w-3" />
+                          {marketOpen === item.id ? "Hide" : "Compare to"} the real market
+                        </Button>
+                      </div>
+                    )}
                   </Card>
 
+                  {market && marketOpen === item.id && (
+                    <div className="mt-2">
+                      <MarketOriginalityPanel title={item.title} market={market} />
+                    </div>
+                  )}
                 </li>
               );
             })}

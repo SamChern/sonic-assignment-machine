@@ -525,7 +525,7 @@ const Index = () => {
           SonicSIM SCOPE audioscope
         </h2>
         <SonicSimPanel
-          title="SCOPE"
+          title="SonicSIM 's MultiModal Semantics"
           description="A live audioscope of the six-category semantic layer."
           defaultMode="scope"
           height={200}

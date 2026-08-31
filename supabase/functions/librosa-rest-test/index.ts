@@ -72,11 +72,16 @@ Deno.serve(async (req) => {
     }
 
     if (!resp.ok) {
+      // A 401/403 means the box and the app hold different secrets — say how to fix it.
+      const authFailed = isAuthFailure(resp.status, text);
       return await record(
         admin, authz.userId, false, startedAt,
-        `HTTP ${resp.status}: ${text.slice(0, 300)}`,
+        authFailed
+          ? `HTTP ${resp.status} — ${UPSTREAM_AUTH_HINT}`
+          : `HTTP ${resp.status}: ${text.slice(0, 300)}`,
       );
     }
+
 
     let parsed: { ok?: boolean; service?: string; version?: string } | null = null;
     try { parsed = JSON.parse(text); } catch { /* noop */ }

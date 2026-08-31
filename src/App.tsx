@@ -132,6 +132,8 @@ const App = () => (
               <Route path="/creator" element={<CreatorDoor />} />
               <Route path="/creator/profile" element={<CreatorProfile />} />
               <Route path="/library/catalog" element={<MusicCatalog />} />
+              <Route path="/market" element={<SymbolMarket />} />
+
 
               <Route path="/demo" element={<Demo />} />
 

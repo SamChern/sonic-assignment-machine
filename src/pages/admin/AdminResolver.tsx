@@ -11,6 +11,8 @@ import { ArrowLeft, Bot, Loader2, RefreshCw, Search } from "lucide-react";
 import { ResolverNudge } from "@/components/admin/ResolverNudge";
 import { ResolverPanel } from "@/components/admin/ResolverPanel";
 import { AdminToolsPanel } from "@/components/admin/AdminToolsPanel";
+import { SymbolScorePanel, type ScoreFlag } from "@/components/admin/SymbolScorePanel";
+
 
 interface QueueRow {
   id: string;

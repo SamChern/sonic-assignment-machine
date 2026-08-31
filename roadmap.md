@@ -10,4 +10,6 @@
 - [ ] Feed user-uploaded music files through librosa + CLAP so pitch/rhythm/timbre reflect the real audio (not just Intuizi samples).
 - [ ] Originality Score (grounding confidence + taxonomy match + pitch/rhythm/timbre) surfaced in My Library.
 - [ ] Dedicated music catalog page in My Library: upload albums / tracks / labels and link them to symbols.
-- [ ] Ungrounded symbols: flag for a manual grounding run and show the agent's reasoning in the admin panel.
+- [ ] Ungrounded symbols: flag panel — pick an ungrounded symbol, run a manual grounding, show the agent's reasoning in admin.
+- [ ] Catalog originality: track originality from its linked analysis; a label's originality is a weighted average of its linked symbols.
+- [ ] Symbol market page: list catalog tracks for sale with their originality and category scores.

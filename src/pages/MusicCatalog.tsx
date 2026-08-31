@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Disc3, Loader2, Music4, Plus, Tag, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Disc3,
+  Loader2,
+  Music4,
+  Plus,
+  Store,
+  Tag,
+  Trash2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAudioSources } from "@/hooks/useAudioSources";
@@ -19,6 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { OriginalityBadge } from "@/components/OriginalityBadge";
+import { formatCents, rollupCatalogOriginality } from "@/lib/catalogOriginality";
 
 type Kind = "label" | "album" | "track";
 
@@ -34,6 +45,10 @@ interface CatalogItem {
   symbols: string[];
   notes: string | null;
   created_at: string;
+  for_sale: boolean;
+  price_cents: number | null;
+  currency: string | null;
+  listing_note: string | null;
 }
 
 const KIND_META: Record<Kind, { label: string; icon: typeof Music4 }> = {
@@ -41,6 +56,7 @@ const KIND_META: Record<Kind, { label: string; icon: typeof Music4 }> = {
   album: { label: "Album", icon: Disc3 },
   track: { label: "Track", icon: Music4 },
 };
+
 
 /**
  * Music catalog — the listener's own releases, structured the way music actually
@@ -52,9 +68,12 @@ const MusicCatalog = () => {
   const { user } = useAuth();
   const { mySources } = useAudioSources();
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const [scores, setScores] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [view, setView] = useState<"all" | Kind>("all");
+  const [priceDraft, setPriceDraft] = useState<Record<string, string>>({});
+  const [listBusy, setListBusy] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     kind: "track" as Kind,
@@ -77,7 +96,30 @@ const MusicCatalog = () => {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     if (error) toast.error("Could not load your catalog");
-    setItems((data ?? []) as unknown as CatalogItem[]);
+    const rows = (data ?? []) as unknown as CatalogItem[];
+    setItems(rows);
+
+    // Originality comes from the analysis behind each linked audio source.
+    const sourceIds = [...new Set(rows.map((r) => r.audio_source_id).filter(Boolean))] as string[];
+    if (sourceIds.length) {
+      const { data: analyses } = await supabase
+        .from("source_analyses")
+        .select("audio_source_id, originality_score, created_at")
+        .in("audio_source_id", sourceIds)
+        .order("created_at", { ascending: false });
+      const map = new Map<string, number>();
+      for (const row of (analyses ?? []) as {
+        audio_source_id: string | null;
+        originality_score: number | null;
+      }[]) {
+        if (!row.audio_source_id || map.has(row.audio_source_id)) continue;
+        if (row.originality_score === null || row.originality_score === undefined) continue;
+        map.set(row.audio_source_id, Number(row.originality_score));
+      }
+      setScores(map);
+    } else {
+      setScores(new Map());
+    }
     setLoading(false);
   }, [user]);
 
@@ -99,6 +141,52 @@ const MusicCatalog = () => {
   );
 
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+
+  /** Track scores measured, album / label scores weighted by their symbols. */
+  const { byItem: originality, bySymbol } = useMemo(
+    () => rollupCatalogOriginality(items, scores),
+    [items, scores],
+  );
+
+  const listedCount = useMemo(() => items.filter((i) => i.for_sale).length, [items]);
+
+  const toggleListing = async (item: CatalogItem) => {
+    setListBusy(item.id);
+    try {
+      if (item.for_sale) {
+        const { error } = await supabase
+          .from("catalog_items")
+          .update({ for_sale: false, listed_at: null })
+          .eq("id", item.id);
+        if (error) throw error;
+        toast.success(`${item.title} unlisted`);
+      } else {
+        const raw = (priceDraft[item.id] ?? "").trim();
+        const dollars = raw ? Number(raw) : NaN;
+        if (!raw || !Number.isFinite(dollars) || dollars < 0 || dollars > 1_000_000) {
+          toast.error("Set a price between 0 and 1,000,000 to list");
+          return;
+        }
+        const { error } = await supabase
+          .from("catalog_items")
+          .update({
+            for_sale: true,
+            price_cents: Math.round(dollars * 100),
+            currency: "USD",
+            listed_at: new Date().toISOString(),
+          })
+          .eq("id", item.id);
+        if (error) throw error;
+        toast.success(`${item.title} listed on the symbol market`);
+      }
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setListBusy(null);
+    }
+  };
+
 
   const submit = async () => {
     if (!user) return;
@@ -177,7 +265,16 @@ const MusicCatalog = () => {
             Back to My Library
           </Link>
         </Button>
-        <h1 className="text-2xl font-semibold tracking-tight">Music catalog</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight">Music catalog</h1>
+          <Button asChild size="sm" variant="outline" className="ml-auto text-xs">
+            <Link to="/market">
+              <Store className="mr-1 h-3.5 w-3.5" />
+              Symbol market ({listedCount} listed)
+            </Link>
+          </Button>
+        </div>
+
         <p className="max-w-2xl text-sm text-muted-foreground">
           Labels hold albums, albums hold tracks. Link an entry to an analyzed audio source and to
           the symbols it should resolve to, so the ontology reads your catalog the same way it reads
@@ -357,6 +454,7 @@ const MusicCatalog = () => {
             {visible.map((item) => {
               const Icon = KIND_META[item.kind].icon;
               const parent = item.parent_id ? byId.get(item.parent_id) : null;
+              const roll = originality.get(item.id);
               return (
                 <li key={item.id}>
                   <Card className="flex h-full flex-col gap-2 border-border/60 bg-card/70 p-3">
@@ -381,7 +479,7 @@ const MusicCatalog = () => {
                       </Button>
                     </div>
 
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap items-center gap-1">
                       <Badge variant="secondary" className="text-[10px]">
                         {KIND_META[item.kind].label}
                       </Badge>
@@ -395,17 +493,97 @@ const MusicCatalog = () => {
                           audio linked
                         </Badge>
                       )}
-                      {(item.symbols ?? []).map((sym) => (
-                        <Badge key={sym} className="bg-primary/10 text-[10px] text-primary">
-                          {sym}
-                        </Badge>
-                      ))}
+                      {roll?.score !== null && roll?.score !== undefined && (
+                        <OriginalityBadge
+                          score={roll.score}
+                          detail={{
+                            summary:
+                              roll.basis === "symbols"
+                                ? `Weighted across ${roll.symbols} symbol${roll.symbols === 1 ? "" : "s"} from ${roll.tracks} scored track${roll.tracks === 1 ? "" : "s"}.`
+                                : "Measured from this track's own analysis.",
+                          }}
+                        />
+                      )}
+                      {item.kind !== "track" && roll?.score === null && (
+                        <span className="text-[10px] text-muted-foreground">
+                          no scored tracks yet
+                        </span>
+                      )}
+                      {(item.symbols ?? []).map((sym) => {
+                        const stat = bySymbol.get(sym);
+                        return (
+                          <Badge
+                            key={sym}
+                            className="bg-primary/10 text-[10px] text-primary"
+                            title={
+                              stat
+                                ? `Originality ${stat.score} across ${stat.tracks} track(s)`
+                                : "No scored tracks carry this symbol yet"
+                            }
+                          >
+                            {sym}
+                            {stat ? ` · ${stat.score}` : ""}
+                          </Badge>
+                        );
+                      })}
                     </div>
 
                     {item.notes && (
                       <p className="text-[11px] text-muted-foreground">{item.notes}</p>
                     )}
+
+                    {item.kind === "track" && (
+                      <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-border/50 pt-2">
+                        {item.for_sale ? (
+                          <>
+                            <Badge className="bg-emerald-500/15 text-[10px] text-emerald-600">
+                              Listed{" "}
+                              {formatCents(item.price_cents, item.currency ?? "USD") ?? ""}
+                            </Badge>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="ml-auto h-7 text-[10px]"
+                              disabled={listBusy === item.id}
+                              onClick={() => void toggleListing(item)}
+                            >
+                              {listBusy === item.id ? (
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              ) : null}
+                              Unlist
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Input
+                              value={priceDraft[item.id] ?? ""}
+                              onChange={(e) =>
+                                setPriceDraft((prev) => ({ ...prev, [item.id]: e.target.value }))
+                              }
+                              inputMode="decimal"
+                              placeholder="Price USD"
+                              className="h-7 w-24 text-[11px]"
+                              aria-label={`Price for ${item.title}`}
+                            />
+                            <Button
+                              size="sm"
+                              className="ml-auto h-7 text-[10px]"
+                              disabled={listBusy === item.id}
+                              onClick={() => void toggleListing(item)}
+                            >
+                              {listBusy === item.id ? (
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              ) : (
+                                <Store className="mr-1 h-3 w-3" />
+                              )}
+                              List for sale
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </Card>
+
                 </li>
               );
             })}

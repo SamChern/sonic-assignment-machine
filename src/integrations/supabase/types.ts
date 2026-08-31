@@ -264,11 +264,16 @@ export type Database = {
           artist: string | null
           audio_source_id: string | null
           created_at: string
+          currency: string
+          for_sale: boolean
           id: string
           kind: string
           label_name: string | null
+          listed_at: string | null
+          listing_note: string | null
           notes: string | null
           parent_id: string | null
+          price_cents: number | null
           release_year: number | null
           symbols: string[]
           title: string
@@ -279,11 +284,16 @@ export type Database = {
           artist?: string | null
           audio_source_id?: string | null
           created_at?: string
+          currency?: string
+          for_sale?: boolean
           id?: string
           kind: string
           label_name?: string | null
+          listed_at?: string | null
+          listing_note?: string | null
           notes?: string | null
           parent_id?: string | null
+          price_cents?: number | null
           release_year?: number | null
           symbols?: string[]
           title: string
@@ -294,11 +304,16 @@ export type Database = {
           artist?: string | null
           audio_source_id?: string | null
           created_at?: string
+          currency?: string
+          for_sale?: boolean
           id?: string
           kind?: string
           label_name?: string | null
+          listed_at?: string | null
+          listing_note?: string | null
           notes?: string | null
           parent_id?: string | null
+          price_cents?: number | null
           release_year?: number | null
           symbols?: string[]
           title?: string

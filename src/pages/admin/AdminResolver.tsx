@@ -12,6 +12,8 @@ import { ResolverNudge } from "@/components/admin/ResolverNudge";
 import { ResolverPanel } from "@/components/admin/ResolverPanel";
 import { AdminToolsPanel } from "@/components/admin/AdminToolsPanel";
 import { SymbolScorePanel, type ScoreFlag } from "@/components/admin/SymbolScorePanel";
+import { GroundingFlagPanel } from "@/components/admin/GroundingFlagPanel";
+
 
 
 interface QueueRow {
@@ -170,6 +172,8 @@ export default function AdminResolver() {
 
         <AdminToolsPanel />
 
+        <GroundingFlagPanel />
+
         <SymbolScorePanel
           rows={rows}
           nodes={nodes}
@@ -177,6 +181,7 @@ export default function AdminResolver() {
           loading={loading}
           onRefresh={load}
         />
+
 
 
 

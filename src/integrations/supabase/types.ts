@@ -2706,6 +2706,7 @@ export type Database = {
           emotional_score: number
           grounding_level: string
           id: string
+          musical_scores: Json | null
           normalization: Json | null
           organization_id: string | null
           raw_scores: Json | null
@@ -2732,6 +2733,7 @@ export type Database = {
           emotional_score: number
           grounding_level?: string
           id?: string
+          musical_scores?: Json | null
           normalization?: Json | null
           organization_id?: string | null
           raw_scores?: Json | null
@@ -2758,6 +2760,7 @@ export type Database = {
           emotional_score?: number
           grounding_level?: string
           id?: string
+          musical_scores?: Json | null
           normalization?: Json | null
           organization_id?: string | null
           raw_scores?: Json | null

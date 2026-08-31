@@ -40,7 +40,7 @@ export const UnderstandTab = ({
   onToggleCategory,
   onClearCategories,
 }: {
-  results: { sources: any[]; images: any[] } | null;
+  results: { sources: any[]; images: any[]; musical?: any[] } | null;
   selectedSources: string[];
   selectedCategories: string[];
   highlightSourceName: string | null;
@@ -135,7 +135,12 @@ export const UnderstandTab = ({
         )}
       </div>
 
-      <AnalysisResults results={scoped} isAnalyzing={false} sourceImages={images} />
+      <AnalysisResults
+        results={scoped}
+        isAnalyzing={false}
+        sourceImages={images}
+        musical={results.musical ?? []}
+      />
     </div>
   );
 };

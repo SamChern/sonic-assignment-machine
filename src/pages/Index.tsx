@@ -54,6 +54,10 @@ const Index = () => {
   
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [spotifyTracks, setSpotifyTracks] = useState<any[]>([]);
+  // Library picks that are not Spotify rows (uploads, CTV/Intuizi signals, …).
+  // They used to be dropped on the floor: "Added N sources" toasted, nothing
+  // selected. They now carry their audio_source_id straight into analysis.
+  const [librarySources, setLibrarySources] = useState<AudioSource[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<{
     total: number;
@@ -61,7 +65,7 @@ const Index = () => {
     fresh: number;
     status: 'idle' | 'checking-cache' | 'analyzing' | 'complete';
   } | null>(null);
-  const [results, setResults] = useState<{ sources: any[]; images: any[] } | null>(null);
+  const [results, setResults] = useState<{ sources: any[]; images: any[]; musical?: any[] } | null>(null);
   /** Source name currently playing in "See my SonicSIM" — pulses its ontology nodes. */
   const [sonicSimSubject, setSonicSimSubject] = useState<string | null>(null);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
@@ -146,6 +150,8 @@ const Index = () => {
   };
 
   const handleLibrarySelect = (sources: AudioSource[]) => {
+    let added = 0;
+    const nextLibrary: AudioSource[] = [];
     sources.forEach(source => {
       if (source.source_type === 'spotify') {
         // Convert to track format for analysis
@@ -159,14 +165,46 @@ const Index = () => {
           },
           external_urls: { spotify: source.spotify_url },
           preview_url: source.preview_url,
+          audio_source_id: source.id,
         };
         if (!spotifyTracks.find(t => t.id === mockTrack.id)) {
-          setSpotifyTracks(prev => [...prev, mockTrack]);
+          setSpotifyTracks(prev =>
+            prev.find(t => t.id === mockTrack.id) ? prev : [...prev, mockTrack],
+          );
+          added += 1;
         }
+        return;
+      }
+      // Every other library row (file upload, CTV/Intuizi signal, ingested
+      // source) is selectable too — analysis reuses the stored audio.
+      const alreadySelected =
+        librarySources.some(s2 => s2.id === source.id) ||
+        nextLibrary.some(s2 => s2.id === source.id);
+      if (!alreadySelected) {
+        nextLibrary.push(source);
+        added += 1;
       }
     });
-    toast.success(`Added ${sources.length} source(s) to analysis`);
+
+    if (nextLibrary.length) {
+      setLibrarySources(prev => {
+        const seen = new Set(prev.map(s2 => s2.id));
+        return [...prev, ...nextLibrary.filter(s2 => !seen.has(s2.id))];
+      });
+    }
+
+    if (added === 0) {
+      toast.info(
+        sources.length === 1 ? 'Already selected' : 'Those sources are already selected',
+      );
+    } else {
+      toast.success(`Added ${added} source${added > 1 ? 's' : ''} to analysis`);
+    }
     setActiveTab("listen");
+  };
+
+  const removeLibrarySource = (id: string) => {
+    setLibrarySources(prev => prev.filter(s2 => s2.id !== id));
   };
 
   const removeFile = (index: number) => {
@@ -177,7 +215,7 @@ const Index = () => {
     setSpotifyTracks(prev => prev.filter(t => t.id !== id));
   };
 
-  const totalItems = selectedFiles.length + spotifyTracks.length;
+  const totalItems = selectedFiles.length + spotifyTracks.length + librarySources.length;
 
   const handleAnalyze = async () => {
     if (totalItems === 0) {
@@ -201,7 +239,16 @@ const Index = () => {
         name: `${t.name} - ${t.artists[0].name}`,
         type: 'track' as const,
         spotify_id: t.id, // Enable cache lookup by Spotify ID
-      }))
+        ...(t.audio_source_id ? { audio_source_id: t.audio_source_id } : {}),
+      })),
+      // Library rows already live in the backend: pass the id so the pipeline
+      // reuses the stored audio, tags and cached features.
+      ...librarySources.map(s2 => ({
+        name: s2.name,
+        type: (s2.source_type === 'spotify' ? 'track' : 'file') as 'track' | 'file',
+        audio_source_id: s2.id,
+        ...(s2.file_url ? { file_url: s2.file_url } : {}),
+      })),
     ];
 
     const invokeAnalysis = async () => {
@@ -275,7 +322,7 @@ const Index = () => {
           imageUrl: track.album.images[0].url
         }));
 
-      setResults({ sources: resultsWithIcons, images: imageData });
+      setResults({ sources: resultsWithIcons, images: imageData, musical: data.musical ?? [] });
       setIsAnalyzing(false);
       setActiveTab("understand"); // Switch to network tab after analysis
       
@@ -535,6 +582,7 @@ const Index = () => {
               isSignedIn={!!user}
               selectedFiles={selectedFiles}
               spotifyTracks={spotifyTracks}
+              librarySources={librarySources}
               totalItems={totalItems}
               isAnalyzing={isAnalyzing}
               analysisProgress={analysisProgress}
@@ -544,9 +592,11 @@ const Index = () => {
               onLibrarySelect={handleLibrarySelect}
               onRemoveFile={removeFile}
               onRemoveTrack={removeTrack}
+              onRemoveLibrarySource={removeLibrarySource}
               onClearAll={() => {
                 setSelectedFiles([]);
                 setSpotifyTracks([]);
+                setLibrarySources([]);
               }}
               onAnalyze={handleAnalyze}
               onScopeSubjectChange={(s) =>

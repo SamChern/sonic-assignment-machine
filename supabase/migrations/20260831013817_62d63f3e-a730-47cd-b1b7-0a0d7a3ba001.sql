@@ -1,0 +1,2 @@
+ALTER TABLE public.source_analyses ADD COLUMN IF NOT EXISTS musical_scores jsonb;
+COMMENT ON COLUMN public.source_analyses.musical_scores IS 'Musical read for music-driven audio: pitch/rhythm/timbre 0-100 plus a musicality trust weight, derived from librosa scalars and CLAP/AudioSet tag affinity.';

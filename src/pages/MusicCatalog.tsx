@@ -521,6 +521,7 @@ const MusicCatalog = () => {
                           }}
                         />
                       )}
+                      {market && <MarketOriginalityBadge market={market} />}
                       {item.kind !== "track" && roll?.score === null && (
                         <span className="text-[10px] text-muted-foreground">
                           no scored tracks yet

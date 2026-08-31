@@ -80,11 +80,14 @@ export default function AdminResolver() {
         rows?: QueueRow[];
         total?: number | null;
         nodes?: NodeRow[];
+        flags?: ScoreFlag[];
       };
       if (res?.success === false) throw new Error(res.error ?? "queue read failed");
       setRows(res.rows ?? []);
       setTotal(res.total ?? null);
       setNodes(Object.fromEntries((res.nodes ?? []).map((n) => [n.id, n])));
+      setFlags(res.flags ?? []);
+
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

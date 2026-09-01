@@ -3357,6 +3357,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      intuizi_activation_coverage: {
+        Args: { p_activation?: string }
+        Returns: {
+          activation_id: string
+          identifiers: number
+          scored: number
+          tagged: number
+        }[]
+      }
       intuizi_score_queue_depth: {
         Args: { p_cap?: number }
         Returns: {

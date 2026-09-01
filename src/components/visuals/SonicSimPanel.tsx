@@ -92,6 +92,7 @@ export const SonicSimPanel = ({
   title = "See my SonicSIM",
   description = "Play your sonic fingerprint, or any single semantic analysis, as a live audioscope.",
   defaultMode = "radial",
+  modes,
   height = 340,
   lens = "consumer",
 }: SonicSimPanelProps) => {

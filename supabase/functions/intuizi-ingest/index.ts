@@ -783,42 +783,36 @@ Deno.serve(async (req) => {
       !activationId || (activationIdFromKey(f.object_key) ?? "unassigned") === activationId
     );
 
-    // Identifier-level coverage per activation. Counted with head-only count
-    // queries so the 1000-row read cap cannot understate a large delivery.
-    const cols = Object.values(SIGNAL_COLUMN);
-    const activationIds = activationId
-      ? [activationId]
-      : Array.from(
-        new Set([
-          ...(files ?? []).map((f) => activationIdFromKey(f.object_key) ?? "unassigned"),
-          "unassigned",
-        ]),
-      );
-
+    // Identifier-level coverage per activation. One aggregate SQL pass — the
+    // old per-column/per-activation `count(exact)` fan-out (up to ~150 round
+    // trips) exceeded the invocation timeout on large deliveries, which the
+    // client saw as "Failed to send a request to the Edge Function".
     const coverage: Record<string, { identifiers: number; tagged: number; scored: number }> = {};
-    for (const act of activationIds) {
-      const bucket = coverage[act] = { identifiers: 0, tagged: 0, scored: 0 };
-      for (const col of cols) {
-        const base = () => {
-          const q = admin
-            .from("intuizi_identifiers")
-            .select("id", { count: "exact", head: true })
-            .not(col, "eq", "{}");
-          return act === "unassigned"
-            ? q.is(`${col}->>activation_id`, null)
-            : q.eq(`${col}->>activation_id`, act);
-        };
-        const [all, tagged, scored] = await Promise.all([
-          base(),
-          base().not("tag_codes", "eq", "{}"),
-          base().not(`${col}->>scores`, "is", null),
-        ]);
-        bucket.identifiers += all.count ?? 0;
-        bucket.tagged += tagged.count ?? 0;
-        bucket.scored += scored.count ?? 0;
-      }
-
+    const { data: covRows, error: covErr } = await admin.rpc(
+      "intuizi_activation_coverage",
+      { p_activation: activationId },
+    );
+    if (covErr) return json({ error: covErr.message }, 500);
+    for (const row of (covRows ?? []) as Array<{
+      activation_id: string;
+      identifiers: number;
+      tagged: number;
+      scored: number;
+    }>) {
+      coverage[row.activation_id] = {
+        identifiers: Number(row.identifiers ?? 0),
+        tagged: Number(row.tagged ?? 0),
+        scored: Number(row.scored ?? 0),
+      };
     }
+    // Activations that have files but no identifiers yet still need a row.
+    for (const f of files ?? []) {
+      const act = activationIdFromKey(f.object_key) ?? "unassigned";
+      if (!activationId || act === activationId) {
+        coverage[act] ??= { identifiers: 0, tagged: 0, scored: 0 };
+      }
+    }
+
 
 
     const readinessOf = (c?: { identifiers: number; tagged: number; scored: number }) =>

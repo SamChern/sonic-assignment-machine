@@ -49,6 +49,8 @@ interface SonicSimPanelProps {
   title?: string;
   description?: string;
   defaultMode?: PanelMode;
+  /** Restrict which visualization modes are offered (defaults to all). */
+  modes?: PanelMode[];
   height?: number;
   /**
    * Role lens for the Semantic Scope: consumers get the playful instrument,
@@ -90,6 +92,7 @@ export const SonicSimPanel = ({
   title = "See my SonicSIM",
   description = "Play your sonic fingerprint, or any single semantic analysis, as a live audioscope.",
   defaultMode = "radial",
+  modes,
   height = 340,
   lens = "consumer",
 }: SonicSimPanelProps) => {
@@ -259,7 +262,7 @@ export const SonicSimPanel = ({
 
 
         <div className="inline-flex flex-wrap gap-1 rounded-md border border-border bg-muted p-0.5">
-          {MODES.map((m) => (
+          {(modes ? MODES.filter((m) => modes.includes(m.key)) : MODES).map((m) => (
             <Button
               key={m.key}
               size="sm"

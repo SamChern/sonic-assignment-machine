@@ -506,6 +506,7 @@ const Index = () => {
           title="SonicSIM 's MultiModal Semantics"
           description=""
           defaultMode="scope"
+          modes={["scope", "radial", "nodes"]}
           height={200}
           subjects={[
             {

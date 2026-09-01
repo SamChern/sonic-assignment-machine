@@ -564,7 +564,6 @@ const Index = () => {
               totalItems={totalItems}
               isAnalyzing={isAnalyzing}
               analysisProgress={analysisProgress}
-              scopeSubjects={scopeSubjects}
               onFileSelect={handleFileSelect}
               onSpotifyTrack={handleSpotifyTrack}
               onLibrarySelect={handleLibrarySelect}
@@ -577,9 +576,6 @@ const Index = () => {
                 setLibrarySources([]);
               }}
               onAnalyze={handleAnalyze}
-              onScopeSubjectChange={(s) =>
-                setSonicSimSubject(s && !s.id.startsWith("fingerprint-") ? s.label : null)
-              }
             />
           </TabsContent>
 

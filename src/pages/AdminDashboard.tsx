@@ -10,6 +10,8 @@ import {
   Activity,
   ArrowLeft,
   BookOpen,
+  ChevronDown,
+  ChevronUp,
   Command,
   Eye,
   Fingerprint,
@@ -21,6 +23,7 @@ import {
   SlidersHorizontal,
   Users,
 } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -156,6 +159,8 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const { isAdmin, loading } = useAuth();
   const [counts, setCounts] = useState<Record<string, number | null>>({});
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   const [depth, setDepth] = useUiPreferenceValue<Depth>(
     "admin.depth",
     "glance",
@@ -249,22 +254,31 @@ const AdminDashboard = () => {
             ))}
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+              aria-expanded={previewOpen}
+              onClick={() => setPreviewOpen((v) => !v)}
+            >
               <Eye className="h-3 w-3" />
               Preview as
-            </span>
-            {PREVIEW_ROLES.map((r) => (
-              <Button
-                key={r.to}
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={() => window.open(r.to, "_blank", "noopener")}
-              >
-                {r.label}
-              </Button>
-            ))}
+              {previewOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </Button>
+            {previewOpen &&
+              PREVIEW_ROLES.map((r) => (
+                <Button
+                  key={r.to}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => window.open(r.to, "_blank", "noopener")}
+                >
+                  {r.label}
+                </Button>
+              ))}
           </div>
+
         </div>
       </header>
 

@@ -375,28 +375,6 @@ const Index = () => {
     setSelectedCategories([]);
   };
 
-  /** Scope subjects: the aggregate fingerprint first, then recent analyses. */
-  const scopeSubjects = useMemo(
-    () => [
-      ...(myFingerprint
-        ? [
-            {
-              id: `fingerprint-${myFingerprint.user_id}`,
-              label: "My sonic fingerprint (aggregate)",
-              sublabel: `Aggregate · ${myFingerprint.total_sources_analyzed} sources`,
-              scores: fingerprintToScores(myFingerprint as never),
-            },
-          ]
-        : []),
-      ...(myAnalyses || []).slice(0, 25).map((a) => ({
-        id: a.id,
-        label: a.source_name,
-        sublabel: `Analysis · ${a.source_name}`,
-        scores: analysisToScores(a as never),
-      })),
-    ],
-    [myFingerprint, myAnalyses],
-  );
 
   return (
     <div className="min-h-screen">

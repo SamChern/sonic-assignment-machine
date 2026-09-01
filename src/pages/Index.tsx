@@ -31,7 +31,7 @@ import ConsumerDoor from "@/components/home/ConsumerDoor";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useFingerprints } from "@/hooks/useFingerprints";
-import { analysisToScores, fingerprintToScores } from "@/lib/audioscope";
+import { analysisToScores } from "@/lib/audioscope";
 
 
 
@@ -375,28 +375,6 @@ const Index = () => {
     setSelectedCategories([]);
   };
 
-  /** Scope subjects: the aggregate fingerprint first, then recent analyses. */
-  const scopeSubjects = useMemo(
-    () => [
-      ...(myFingerprint
-        ? [
-            {
-              id: `fingerprint-${myFingerprint.user_id}`,
-              label: "My sonic fingerprint (aggregate)",
-              sublabel: `Aggregate · ${myFingerprint.total_sources_analyzed} sources`,
-              scores: fingerprintToScores(myFingerprint as never),
-            },
-          ]
-        : []),
-      ...(myAnalyses || []).slice(0, 25).map((a) => ({
-        id: a.id,
-        label: a.source_name,
-        sublabel: `Analysis · ${a.source_name}`,
-        scores: analysisToScores(a as never),
-      })),
-    ],
-    [myFingerprint, myAnalyses],
-  );
 
   return (
     <div className="min-h-screen">
@@ -586,7 +564,6 @@ const Index = () => {
               totalItems={totalItems}
               isAnalyzing={isAnalyzing}
               analysisProgress={analysisProgress}
-              scopeSubjects={scopeSubjects}
               onFileSelect={handleFileSelect}
               onSpotifyTrack={handleSpotifyTrack}
               onLibrarySelect={handleLibrarySelect}
@@ -599,9 +576,6 @@ const Index = () => {
                 setLibrarySources([]);
               }}
               onAnalyze={handleAnalyze}
-              onScopeSubjectChange={(s) =>
-                setSonicSimSubject(s && !s.id.startsWith("fingerprint-") ? s.label : null)
-              }
             />
           </TabsContent>
 

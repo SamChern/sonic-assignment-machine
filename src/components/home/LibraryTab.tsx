@@ -129,6 +129,8 @@ export const LibraryTab = ({
         </Button>
       </Card>
 
+      <SyncedEnterpriseCard />
+
 
       {compareIds.length === 2 && (
         <AnalysisCompare

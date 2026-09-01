@@ -208,13 +208,6 @@ export const ListenTab = ({
         />
       )}
 
-      {isSignedIn && scopeSubjects.length > 0 && (
-        <SonicSimPanel
-          lens="consumer"
-          subjects={scopeSubjects}
-          onSubjectChange={onScopeSubjectChange}
-        />
-      )}
     </div>
   );
 };

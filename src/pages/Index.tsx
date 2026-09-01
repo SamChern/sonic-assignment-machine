@@ -31,7 +31,7 @@ import ConsumerDoor from "@/components/home/ConsumerDoor";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useFingerprints } from "@/hooks/useFingerprints";
-import { analysisToScores, fingerprintToScores } from "@/lib/audioscope";
+import { analysisToScores } from "@/lib/audioscope";
 
 
 

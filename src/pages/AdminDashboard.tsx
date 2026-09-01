@@ -5,6 +5,8 @@ import { AdminDigestCard } from "@/components/admin/AdminDigestCard";
 import { ResolverNudge } from "@/components/admin/ResolverNudge";
 import { AudioSignalQueue } from "@/components/admin/AudioSignalQueue";
 import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
+import { CollapsibleSection } from "@/components/admin/CollapsibleSection";
+
 
 import {
   Activity,

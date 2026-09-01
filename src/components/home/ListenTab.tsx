@@ -1,7 +1,7 @@
 import { AudioUploader } from "@/components/AudioUploader";
 import { AudioJobsPanel } from "@/components/AudioJobsPanel";
 import { UploadProgressPanel } from "@/components/UploadProgressPanel";
-import SonicSimPanel, { type SonicSimSubject } from "@/components/visuals/SonicSimPanel";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";

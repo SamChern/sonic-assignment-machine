@@ -262,7 +262,7 @@ export const SonicSimPanel = ({
 
 
         <div className="inline-flex flex-wrap gap-1 rounded-md border border-border bg-muted p-0.5">
-          {MODES.map((m) => (
+          {(modes ? MODES.filter((m) => modes.includes(m.key)) : MODES).map((m) => (
             <Button
               key={m.key}
               size="sm"

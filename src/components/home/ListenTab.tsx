@@ -24,7 +24,6 @@ export const ListenTab = ({
   totalItems,
   isAnalyzing,
   analysisProgress,
-  scopeSubjects,
   onFileSelect,
   onSpotifyTrack,
   onLibrarySelect,
@@ -33,7 +32,6 @@ export const ListenTab = ({
   onRemoveLibrarySource,
   onClearAll,
   onAnalyze,
-  onScopeSubjectChange,
 }: {
   isSignedIn: boolean;
   selectedFiles: File[];
@@ -42,7 +40,6 @@ export const ListenTab = ({
   totalItems: number;
   isAnalyzing: boolean;
   analysisProgress: { total: number; status: UploadProgressStatus } | null;
-  scopeSubjects: SonicSimSubject[];
   onFileSelect: (file: File) => void;
   onSpotifyTrack: (track: any) => void;
   onLibrarySelect: (sources: AudioSource[]) => void;
@@ -51,7 +48,6 @@ export const ListenTab = ({
   onRemoveLibrarySource: (id: string) => void;
   onClearAll: () => void;
   onAnalyze: () => void;
-  onScopeSubjectChange: (subject: SonicSimSubject | null) => void;
 }) => {
   const [sourcesExpanded, setSourcesExpanded] = useUiPreference("home.sources.expanded", true);
 

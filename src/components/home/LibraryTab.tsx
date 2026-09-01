@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TasteNeighbors } from "@/components/TasteNeighbors";
 import { AnalysisCompare } from "@/components/home/AnalysisCompare";
+import SyncedEnterpriseCard from "@/components/home/SyncedEnterpriseCard";
+
 import { OriginalityBadge, type OriginalityDetail } from "@/components/OriginalityBadge";
 import { Columns2, Disc3, Library, Users } from "lucide-react";
 
@@ -126,6 +128,8 @@ export const LibraryTab = ({
           <Link to="/library/catalog">Open catalog</Link>
         </Button>
       </Card>
+
+      <SyncedEnterpriseCard />
 
 
       {compareIds.length === 2 && (

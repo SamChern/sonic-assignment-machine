@@ -49,6 +49,8 @@ interface SonicSimPanelProps {
   title?: string;
   description?: string;
   defaultMode?: PanelMode;
+  /** Restrict which visualization modes are offered (defaults to all). */
+  modes?: PanelMode[];
   height?: number;
   /**
    * Role lens for the Semantic Scope: consumers get the playful instrument,

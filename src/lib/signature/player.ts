@@ -96,7 +96,7 @@ async function startElement(
     getLevel: () => {
       if (stopped || el.paused) return 0;
       const t = el.currentTime;
-      // Smooth,音-agnostic pulse: two detuned envelopes so the bloom breathes
+      // Smooth,content-agnostic pulse: two detuned envelopes so the bloom breathes
       // with the phrase without needing an analyser tap on the output.
       const pulse = 0.5 + 0.5 * Math.sin(t * 7.4) * Math.sin(t * 2.1 + 0.6);
       return Math.max(0, Math.min(1, pulse * 0.8));

@@ -129,6 +129,7 @@ const App = () => (
 
               <Route path="/admin/semantic" element={<SemanticAnalysis />} />
 
+              <Route path="/portal" element={<Portal />} />
               <Route path="/workspace" element={<Workspace />} />
               <Route path="/creator" element={<CreatorDoor />} />
               <Route path="/creator/profile" element={<CreatorProfile />} />

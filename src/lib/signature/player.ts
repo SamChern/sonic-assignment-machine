@@ -61,7 +61,6 @@ async function startElement(
   const el = document.createElement("audio");
   el.src = src;
   el.preload = "auto";
-  el.crossOrigin = "anonymous";
   el.volume = 1;
   // Keep it out of layout but attached, so mobile Safari treats it as a real
   // media element rather than a detached node it may garbage-collect.

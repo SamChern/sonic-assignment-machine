@@ -77,7 +77,15 @@ export const DoorSwitcher = ({
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64 bg-popover">
-        <DropdownMenuLabel>Access Levels</DropdownMenuLabel>
+        <DropdownMenuLabel className="p-0">
+          <Link
+            to="/portal"
+            className="flex items-center justify-between gap-2 rounded-sm px-2 py-1.5 hover:bg-accent"
+          >
+            <span>Access Levels</span>
+            <span className="text-[11px] font-normal text-primary">View all</span>
+          </Link>
+        </DropdownMenuLabel>
         {PERSONAS.map((p) => {
           const Icon = ICONS[p.value];
           return (

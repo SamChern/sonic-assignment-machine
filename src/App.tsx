@@ -38,6 +38,7 @@ const IntegrationStatus = lazy(() => import("./pages/IntegrationStatus"));
 const IngestionCompatibility = lazy(() => import("./pages/IngestionCompatibility"));
 const SemanticAnalysis = lazy(() => import("./pages/SemanticAnalysis"));
 const Workspace = lazy(() => import("./pages/Workspace"));
+const Portal = lazy(() => import("./pages/Portal"));
 const Demo = lazy(() => import("./pages/Demo"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 

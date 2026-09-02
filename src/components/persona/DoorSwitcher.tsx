@@ -56,7 +56,7 @@ export const DoorSwitcher = ({
         {isSignedIn ? (
           <button
             type="button"
-            aria-label="Account and portal"
+            aria-label="Account and access level"
             className="flex items-center gap-2 rounded-full p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Avatar className="h-8 w-8">
@@ -72,12 +72,12 @@ export const DoorSwitcher = ({
         ) : (
           <Button variant="ghost" size="sm" className="gap-2 text-foreground/80">
             <DoorOpen className="h-4 w-4" />
-            <span className="hidden sm:inline">Portal</span>
+            <span className="hidden sm:inline">Access Levels</span>
           </Button>
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64 bg-popover">
-        <DropdownMenuLabel>Switch portal</DropdownMenuLabel>
+        <DropdownMenuLabel>Access Levels</DropdownMenuLabel>
         {PERSONAS.map((p) => {
           const Icon = ICONS[p.value];
           return (

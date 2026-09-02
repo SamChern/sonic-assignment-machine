@@ -19,19 +19,19 @@ export const PERSONAS: Array<{
 }> = [
   {
     value: "curious",
-    label: "I'm curious",
+    label: "User",
     blurb: "Hear what one piece of audio says about you.",
     path: "/?tab=listen",
   },
   {
     value: "marketing",
-    label: "I run marketing",
+    label: "Enterprise",
     blurb: "Find audiences, predict performance, activate segments.",
     path: "/workspace",
   },
   {
     value: "creator",
-    label: "I make things",
+    label: "Creator",
     blurb: "Fingerprint your work and see its lineage.",
     path: "/?tab=library",
   },

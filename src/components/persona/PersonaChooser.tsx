@@ -43,8 +43,8 @@ export const PersonaChooser = ({
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">What brings you here?</DialogTitle>
           <DialogDescription>
-            One question, once. It only sets your starting view — you can switch doors any
-            time from your menu.
+            One question, once. It only sets your starting view — you can switch access levels
+            any time from your menu.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 py-2">

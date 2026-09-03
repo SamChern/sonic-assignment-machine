@@ -307,7 +307,12 @@ const SemanticAnalysis = () => {
   const savedSortRef = useRef<SavedSort>("newest");
   const savedRangeRef = useRef({ from: "", to: "" });
   const savedCountRef = useRef(0);
+  // Kept in a ref so loadSaved stays a stable callback while still scoping the
+  // query to this account (see the user_id filter below).
+  const userIdRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  userIdRef.current = user?.id ?? null;
+
 
 
 

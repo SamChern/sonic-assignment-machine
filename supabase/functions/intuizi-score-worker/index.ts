@@ -395,8 +395,10 @@ Deno.serve(async (req) => {
       success: true,
       trace_id: runTraceId,
       scored,
+      materialized,
       unchanged,
       failed,
+
       paused,
       pending: remaining,
       pending_capped_at: depthCap,

@@ -3297,41 +3297,77 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      claim_intuizi_score_jobs: {
-        Args: { p_limit?: number }
-        Returns: {
-          activation_id: string | null
-          attempts: number
-          confidence: number
-          created_at: string
-          dead_lettered_at: string | null
-          failure_kind: string | null
-          finished_at: string | null
-          id: string
-          identifier: string
-          label: string | null
-          last_error: string | null
-          last_stage: string | null
-          max_attempts: number
-          next_attempt_at: string
-          object_key: string
-          owner_id: string | null
-          report_type: string
-          signals: Json
-          started_at: string | null
-          status: string
-          step_scale: number
-          tags: Json
-          trace_id: string | null
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "intuizi_score_queue"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
+      claim_intuizi_score_jobs:
+        | {
+            Args: { p_limit?: number }
+            Returns: {
+              activation_id: string | null
+              attempts: number
+              confidence: number
+              created_at: string
+              dead_lettered_at: string | null
+              failure_kind: string | null
+              finished_at: string | null
+              id: string
+              identifier: string
+              label: string | null
+              last_error: string | null
+              last_stage: string | null
+              max_attempts: number
+              next_attempt_at: string
+              object_key: string
+              owner_id: string | null
+              report_type: string
+              signals: Json
+              started_at: string | null
+              status: string
+              step_scale: number
+              tags: Json
+              trace_id: string | null
+              updated_at: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "intuizi_score_queue"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
+        | {
+            Args: { p_activation_id?: string; p_limit: number }
+            Returns: {
+              activation_id: string | null
+              attempts: number
+              confidence: number
+              created_at: string
+              dead_lettered_at: string | null
+              failure_kind: string | null
+              finished_at: string | null
+              id: string
+              identifier: string
+              label: string | null
+              last_error: string | null
+              last_stage: string | null
+              max_attempts: number
+              next_attempt_at: string
+              object_key: string
+              owner_id: string | null
+              report_type: string
+              signals: Json
+              started_at: string | null
+              status: string
+              step_scale: number
+              tags: Json
+              trace_id: string | null
+              updated_at: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "intuizi_score_queue"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
       claim_next_ingest_file: {
         Args: { p_worker: string }
         Returns: {

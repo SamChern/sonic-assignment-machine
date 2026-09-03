@@ -281,12 +281,21 @@ Deno.serve(async (req) => {
       }));
     };
 
+    // Optional operator focus: drain ONE activation end to end instead of the
+    // global oldest-first backlog (a six-figure older queue would otherwise
+    // starve a freshly ingested activation for days).
+    const focusActivation = reqBody.activation_id ?? null;
+
     while (timeLeft() > SAFETY_MS && !paused) {
       const { data: claimed, error: claimErr } = await admin.rpc(
         "claim_intuizi_score_jobs",
-        { p_limit: concurrency === 1 ? 1 : batchSize },
+        {
+          p_limit: concurrency === 1 ? 1 : batchSize,
+          p_activation_id: focusActivation,
+        },
       );
       if (claimErr) return json({ success: false, error: claimErr.message }, 500);
+
       const tasks = (claimed ?? []) as QueuedTask[];
       if (!tasks.length) break;
 
@@ -313,15 +322,29 @@ Deno.serve(async (req) => {
     // Exact counts over a six-figure backlog blow past the database statement
     // timeout, so the depth is measured against a cap: all we need to decide is
     // "is there more work", and the reported number is a capped indicator.
-    const { data: depthRows } = await admin.rpc("intuizi_score_queue_depth", {
-      p_cap: 5000,
-    });
-    const depth = (Array.isArray(depthRows) ? depthRows[0] : depthRows) as
-      | { pending_capped?: number; dead_letter_capped?: number; capped_at?: number }
-      | null;
-    const pending = depth?.pending_capped ?? 0;
-    const deadLetter = depth?.dead_letter_capped ?? 0;
-    const depthCap = depth?.capped_at ?? 5000;
+    let pending = 0;
+    let deadLetter = 0;
+    let depthCap = 5000;
+    if (focusActivation) {
+      // Bounded probe scoped to the focused activation only.
+      const { count } = await admin
+        .from("intuizi_score_queue")
+        .select("id", { count: "exact", head: true })
+        .eq("activation_id", focusActivation)
+        .eq("status", "pending")
+        .limit(1000);
+      pending = count ?? 0;
+    } else {
+      const { data: depthRows } = await admin.rpc("intuizi_score_queue_depth", {
+        p_cap: 5000,
+      });
+      const depth = (Array.isArray(depthRows) ? depthRows[0] : depthRows) as
+        | { pending_capped?: number; dead_letter_capped?: number; capped_at?: number }
+        | null;
+      pending = depth?.pending_capped ?? 0;
+      deadLetter = depth?.dead_letter_capped ?? 0;
+      depthCap = depth?.capped_at ?? 5000;
+    }
 
     const remaining = pending ?? 0;
 
@@ -329,9 +352,14 @@ Deno.serve(async (req) => {
     if (willChain) {
       // Self-chaining: fire and forget, so this response returns immediately.
       admin.functions.invoke("intuizi-score-worker", {
-        body: { source: "chain", trace_id: runTraceId },
+        body: {
+          source: "chain",
+          trace_id: runTraceId,
+          ...(focusActivation ? { activation_id: focusActivation } : {}),
+        },
       }).catch((e: unknown) => console.warn("chain failed", errMsg(e)));
     }
+
 
     const body = {
       success: true,

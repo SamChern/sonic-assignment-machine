@@ -295,7 +295,9 @@ Deno.serve(async (req) => {
     // thousands more rows for the next bulk pass.
     let materialized = 0;
     const materializePass = async () => {
-      if (!focusActivation) return;
+      // No focus activation means the whole backlog: cached tag patterns are
+      // drained globally (oldest first) before any credit is spent.
+
       while (timeLeft() > SAFETY_MS && !paused) {
         const { data, error } = await admin.rpc(
           "materialize_cached_intuizi_scores",

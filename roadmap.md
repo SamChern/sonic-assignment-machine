@@ -20,3 +20,8 @@
 - [ ] Sonic Signature card: make it visually prominent in the teal palette and hide raw edge-function error text.
 - [ ] Enterprise Intuizi analysis sync: retry in batches until it completes, then surface synced analyses on the homepage.
 - [x] Admin "Preview as" row collapsed behind a click-to-expand toggle.
+
+## Intuizi backlog scoring
+- [x] Bulk materialize step works across the whole queue (all activations)
+- [ ] Drain the ~1.1M pending identifiers via cached tag patterns (no AI credits)
+- [ ] Admin dashboard: AI credit usage per activation's scoring, to budget the backlog

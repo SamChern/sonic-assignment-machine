@@ -4,6 +4,8 @@ import { ComplianceAlert } from "@/components/admin/ComplianceAlert";
 import { AdminDigestCard } from "@/components/admin/AdminDigestCard";
 import { ResolverNudge } from "@/components/admin/ResolverNudge";
 import { AudioSignalQueue } from "@/components/admin/AudioSignalQueue";
+import { ActivationCostPanel } from "@/components/admin/ActivationCostPanel";
+
 import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
 import { CollapsibleSection } from "@/components/admin/CollapsibleSection";
 
@@ -293,6 +295,10 @@ const AdminDashboard = () => {
           <CollapsibleSection title="Audio signals to refresh">
             <AudioSignalQueue />
           </CollapsibleSection>
+          <CollapsibleSection title="Scoring credit budget">
+            <ActivationCostPanel />
+          </CollapsibleSection>
+
         </div>
 
 

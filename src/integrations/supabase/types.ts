@@ -3432,6 +3432,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      intuizi_activation_cost_estimate: {
+        Args: { p_sample?: number }
+        Returns: {
+          activation_id: string
+          billable_signatures: number
+          distinct_signatures: number
+          done_rows: number
+          pending_rows: number
+          sampled_cached_rows: number
+          sampled_rows: number
+          total_rows: number
+        }[]
+      }
       intuizi_activation_coverage: {
         Args: { p_activation?: string }
         Returns: {

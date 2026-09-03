@@ -3449,6 +3449,10 @@ export type Database = {
           pending_capped: number
         }[]
       }
+      intuizi_tag_signature: {
+        Args: { p_report_type: string; p_tags: Json }
+        Returns: string
+      }
       is_org_owner: { Args: { _org: string }; Returns: boolean }
       lease_ingest_file: {
         Args: { p_stale_after?: string; p_worker_id: string }
@@ -3501,6 +3505,13 @@ export type Database = {
           id: string
           label: string
           similarity: number
+        }[]
+      }
+      materialize_cached_intuizi_scores: {
+        Args: { p_activation_id: string; p_limit?: number }
+        Returns: {
+          materialized: number
+          remaining_pending: number
         }[]
       }
       normalize_intuizi_subject_keys: {
@@ -3561,6 +3572,10 @@ export type Database = {
       recalculate_user_fingerprint: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      refresh_intuizi_activation_dataset: {
+        Args: { p_activation_id: string }
+        Returns: string
       }
       refresh_taxonomy_grounding: {
         Args: never

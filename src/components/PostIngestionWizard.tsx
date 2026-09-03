@@ -786,29 +786,28 @@ const PostIngestionWizard = () => {
       setStage("score", {
         state: "error",
         summary: "no analysis row was produced",
-        notes: ["The profile exists but analyze-audio did not return scores. Re-run the ingest for this activation."],
+        notes: [
+          "The profile exists but no per-identifier scores were available to aggregate yet. Let the scoring queue drain for this activation, then re-run this step.",
+        ],
       });
     }
 
     // --- Stage: audience linkage ------------------------------------------
-    setStage("link", { state: "running", summary: "counting linked identifiers…" });
-    const { count } = await supabase
-      .from("intuizi_identifiers")
-      .select("id", { count: "exact", head: true })
-      .eq("audio_source_id", sourceId);
+    setStage("link", { state: "running", summary: "counting activation identifiers…" });
 
     setStage("link", {
-      state: (count ?? 0) > 1 ? "ok" : "warn",
-      summary: `${count ?? 0} identifier(s) linked to this profile`,
+      state: identifiersSeen > 0 ? "ok" : "warn",
+      summary: `${identifiersSeen.toLocaleString()} identifier row(s) in this activation`,
       outputs: [
         ["Activation profile", `activation:${activation.activation_id}`],
-        ["Devices / emails joined", String(Math.max(0, (count ?? 0) - 1))],
+        ["Identifier rows", identifiersSeen.toLocaleString()],
       ],
       notes:
-        (count ?? 0) > 1
+        identifiersSeen > 0
           ? undefined
           : ["No device roster is linked yet — ingest the maid/hem delivery for this activation id."],
     });
+
 
     setRunning(false);
   }, [activation, drainScoreQueue]);

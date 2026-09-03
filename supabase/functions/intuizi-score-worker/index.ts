@@ -340,7 +340,18 @@ Deno.serve(async (req) => {
             const task = tasks[cursor++];
             if (!task) break;
             await runTask(task);
-          }
+    }
+
+    // Keep the activation's enterprise summary (the homepage "synced enterprise
+    // analyses" card) in step with what has actually been scored.
+    if (focusActivation) {
+      const { error: refreshErr } = await admin.rpc(
+        "refresh_intuizi_activation_dataset",
+        { p_activation_id: focusActivation },
+      );
+      if (refreshErr) console.warn("dataset refresh failed", refreshErr.message);
+    }
+
         },
       );
       await Promise.all(lanes);

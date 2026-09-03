@@ -340,6 +340,10 @@ Deno.serve(async (req) => {
             const task = tasks[cursor++];
             if (!task) break;
             await runTask(task);
+          }
+        },
+      );
+      await Promise.all(lanes);
     }
 
     // Keep the activation's enterprise summary (the homepage "synced enterprise
@@ -352,10 +356,6 @@ Deno.serve(async (req) => {
       if (refreshErr) console.warn("dataset refresh failed", refreshErr.message);
     }
 
-        },
-      );
-      await Promise.all(lanes);
-    }
 
 
 

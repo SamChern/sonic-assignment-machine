@@ -281,12 +281,21 @@ Deno.serve(async (req) => {
       }));
     };
 
+    // Optional operator focus: drain ONE activation end to end instead of the
+    // global oldest-first backlog (a six-figure older queue would otherwise
+    // starve a freshly ingested activation for days).
+    const focusActivation = reqBody.activation_id ?? null;
+
     while (timeLeft() > SAFETY_MS && !paused) {
       const { data: claimed, error: claimErr } = await admin.rpc(
         "claim_intuizi_score_jobs",
-        { p_limit: concurrency === 1 ? 1 : batchSize },
+        {
+          p_limit: concurrency === 1 ? 1 : batchSize,
+          p_activation_id: focusActivation,
+        },
       );
       if (claimErr) return json({ success: false, error: claimErr.message }, 500);
+
       const tasks = (claimed ?? []) as QueuedTask[];
       if (!tasks.length) break;
 

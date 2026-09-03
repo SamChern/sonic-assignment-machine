@@ -96,6 +96,48 @@ export function errMsg(e: unknown): string {
   return messageOf(e);
 }
 
+/**
+ * Stable signature for a tag set: the semantic score depends only on WHICH
+ * ontology codes are present, not on their order or on which device carried
+ * them, so sort + hash is the correct cache key.
+ */
+export async function tagSignatureOf(
+  reportType: string,
+  tagCodes: string[],
+): Promise<string> {
+  const canonical = `${reportType}|${[...new Set(tagCodes)].sort().join(",")}`;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(canonical),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * `supabase.functions.invoke` surfaces every non-2xx as the useless string
+ * "Edge Function returned a non-2xx status code" and hides the real body on
+ * `error.context` (a Response). That is why 161 dead letters were classified
+ * `unknown`: the gateway's actual reason never reached `classifyFailure`.
+ * Reading the body once here makes those failures classifiable (and therefore
+ * correctly retryable or correctly paused).
+ */
+async function enrichInvokeError(error: unknown): Promise<unknown> {
+  // deno-lint-ignore no-explicit-any
+  const ctx = (error as any)?.context;
+  if (!ctx || typeof ctx.text !== "function") return error;
+  try {
+    const body = (await ctx.clone().text()).slice(0, 800);
+    // deno-lint-ignore no-explicit-any
+    const e = error as any;
+    if (typeof ctx.status === "number") e.status = ctx.status;
+    if (body) e.message = `${messageOf(error)} :: ${body}`;
+  } catch { /* body already consumed — keep the original error */ }
+  return error;
+}
+
+
+
 
 /** Rate-limit / retry telemetry for one invocation. */
 export function createRateMetrics() {
@@ -166,8 +208,8 @@ export async function invokeAnalyzeAudio(
       if (!data?.sources?.[0]) throw new Error("analyze-audio returned no source");
       return data;
     }
-    lastErr = error;
-    const verdict = classifyFailure(error);
+    lastErr = await enrichInvokeError(error);
+    const verdict = classifyFailure(lastErr);
     if (verdict.kind === "rate_limit") {
       metrics.rateLimited++;
       metrics.byReport[reportType] = (metrics.byReport[reportType] ?? 0) + 1;
@@ -403,75 +445,165 @@ async function runScore(
   }
 
 
-  // 3. Calibration priors + kNN warm start.
-  //    `stepScale` < 1 means a previous attempt was killed for compute: keep the
-  //    warm start smaller (fewer neighbours, shorter context) so the retry fits.
-  enter("context");
-  let taxonomyContext = await buildTaxonomyContext(admin, nodeIds);
-  const neighbourCount = Math.max(1, Math.round(5 * stepScale));
-  const queryEmbedding = stepScale >= 0.5
-    ? await embed(`intuizi ${task.report_type}; tags: ${tagCodes.join(",")}`)
-    : null;
-  if (queryEmbedding) {
-    const { data: neighbors } = await admin.rpc("match_audio_profiles", {
-      query_embedding: queryEmbedding,
-      match_count: neighbourCount,
-      exclude_id: audioSourceId,
-    });
-    if (neighbors?.length) {
-      // deno-lint-ignore no-explicit-any
-      const lines = neighbors.map((n: any) =>
-        `  - ${n.name} (sim=${Number(n.similarity).toFixed(2)}): ` +
-        `emo=${Math.round(n.emotional_score)} cog=${Math.round(n.cognitive_score)} ` +
-        `soc=${Math.round(n.social_score)} com=${Math.round(n.communication_score)} ` +
-        `ctx=${Math.round(n.contextual_score)} art=${Math.round(n.artistic_score)}`
-      ).join("\n");
-      taxonomyContext = `${taxonomyContext}\nnearest_neighbors:\n${lines}`;
+  // 3. Tag-signature score cache.
+  //
+  // This is the single biggest cost lever in the whole pipeline. A CTV delivery
+  // has ~1.1M identifiers but only a few thousand DISTINCT tag sets (measured:
+  // 20k queued rows collapse to 1.1k signatures, ~5%). The semantic score is a
+  // pure function of the tag set — two devices that watched the same
+  // channel/genre/IAB combination cannot produce different category scores — so
+  // calling the AI gateway per identifier burned ~95% of every credit budget on
+  // recomputing identical answers, which is what stalled the mapping and
+  // dead-lettered the run on `credit_limit_reached`.
+  //
+  // On a hit we still write this identifier's own rows (audio_source_tags
+  // above, source_analyses + intuizi_identifiers below) so the UI and the
+  // per-identifier views are byte-for-byte what they'd be after a live call.
+  const tagSignature = await tagSignatureOf(task.report_type, tagCodes);
+  const { data: cachedRow } = await admin
+    .from("intuizi_tag_score_cache")
+    .select("scores,descriptions,grounding_level,confidence,hits")
+    .eq("tag_signature", tagSignature)
+    .maybeSingle();
+
+  let scoreMap = {} as Record<Category, number>;
+  let descMap: Record<string, string> = {};
+  let groundingLevel = "text-only";
+  let fromCache = false;
+
+  if (cachedRow?.scores) {
+    fromCache = true;
+    scoreMap = { ...(cachedRow.scores as Record<Category, number>) };
+    descMap = (cachedRow.descriptions as Record<string, string>) ?? {};
+    groundingLevel = cachedRow.grounding_level ?? "text-only";
+    // Deliberately NOT re-running calibration or the profile embedding: the
+    // prior already learned from this exact tag set on the representative call,
+    // and repeating it per identifier would re-weight the same evidence
+    // thousands of times (and cost a write per identifier).
+    await admin
+      .from("intuizi_tag_score_cache")
+      .update({ hits: (cachedRow.hits ?? 0) + 1, updated_at: new Date().toISOString() })
+      .eq("tag_signature", tagSignature);
+  } else {
+    // 3b. Calibration priors + kNN warm start.
+    //     `stepScale` < 1 means a previous attempt was killed for compute: keep
+    //     the warm start smaller (fewer neighbours, shorter context).
+    enter("context");
+    let taxonomyContext = await buildTaxonomyContext(admin, nodeIds);
+    const neighbourCount = Math.max(1, Math.round(5 * stepScale));
+    const queryEmbedding = stepScale >= 0.5
+      ? await embed(`intuizi ${task.report_type}; tags: ${tagCodes.join(",")}`)
+      : null;
+    if (queryEmbedding) {
+      const { data: neighbors } = await admin.rpc("match_audio_profiles", {
+        query_embedding: queryEmbedding,
+        match_count: neighbourCount,
+        exclude_id: audioSourceId,
+      });
+      if (neighbors?.length) {
+        // deno-lint-ignore no-explicit-any
+        const lines = neighbors.map((n: any) =>
+          `  - ${n.name} (sim=${Number(n.similarity).toFixed(2)}): ` +
+          `emo=${Math.round(n.emotional_score)} cog=${Math.round(n.cognitive_score)} ` +
+          `soc=${Math.round(n.social_score)} com=${Math.round(n.communication_score)} ` +
+          `ctx=${Math.round(n.contextual_score)} art=${Math.round(n.artistic_score)}`
+        ).join("\n");
+        taxonomyContext = `${taxonomyContext}\nnearest_neighbors:\n${lines}`;
+      }
     }
+
+    // 4. Score through the same ontology path as music sources
+    enter("analyze");
+    const ana = await invokeAnalyzeAudio(admin, {
+      sources: [{
+        name: label,
+        type: "file",
+        audio_source_id: audioSourceId,
+        taxonomy_context: taxonomyContext,
+      }],
+      user_id: ownerId,
+      save_results: true,
+    }, task.report_type, metrics, { traceId, stepScale });
+
+    const sourceOut = ana.sources[0];
+    for (const c of sourceOut.categories ?? []) {
+      const key = (c.name ?? "").toLowerCase() as Category;
+      scoreMap[key] = Number(c.score) || 0;
+      if (c.description) descMap[key] = String(c.description);
+    }
+    groundingLevel = sourceOut.grounding_level ?? "text-only";
+
+    // 4b. Speech-skew normalization for vocal-heavy Intuizi feeds.
+    enter("normalize");
+    const normCfg = await loadNormalization(admin, "intuizi");
+    const normScores = await applyNormalizationToAnalysis(
+      admin,
+      audioSourceId!,
+      scoreMap,
+      normCfg,
+    );
+    for (const c of CATEGORIES) scoreMap[c] = normScores[c] ?? scoreMap[c];
+
+    // 5. Continuous learning: calibration + profile embedding
+    enter("learn");
+    await updateCalibration(admin, nodeIds, scoreMap);
+    const profileEmbedding = await embed(
+      `intuizi ${task.report_type}; tags: ${tagCodes.join(",")}; ` +
+      `scores: ${CATEGORIES.map((c) => `${c}=${scoreMap[c] ?? "?"}`).join(",")}`,
+    );
+    if (profileEmbedding) {
+      await admin.from("audio_sources")
+        .update({ profile_embedding: profileEmbedding })
+        .eq("id", audioSourceId);
+    }
+
+    // 5b. Publish the result for every future identifier with this tag set.
+    //     Scores are cached POST-normalization, so a hit reproduces the final
+    //     numbers without re-reading the normalization config.
+    const { error: cacheErr } = await admin
+      .from("intuizi_tag_score_cache")
+      .upsert({
+        tag_signature: tagSignature,
+        report_type: task.report_type,
+        tag_codes: tagCodes,
+        scores: scoreMap,
+        descriptions: descMap,
+        grounding_level: groundingLevel,
+        confidence: task.confidence ?? 0.5,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "tag_signature" });
+    // A cache write failure must not fail an identifier that scored fine.
+    if (cacheErr) console.warn("tag score cache write failed", cacheErr.message);
   }
 
-  // 4. Score through the same ontology path as music sources
-  enter("analyze");
-  const ana = await invokeAnalyzeAudio(admin, {
-    sources: [{
-      name: label,
-      type: "file",
+  // 5c. On a cache hit nothing wrote `source_analyses` for this source, and the
+  //     UI joins identifiers -> audio_sources -> source_analyses. Without this
+  //     the identifier looks scored everywhere except the screen the user is
+  //     actually looking at.
+  if (fromCache) {
+    const { error: anaErr } = await admin.from("source_analyses").insert({
+      user_id: ownerId,
       audio_source_id: audioSourceId,
-      taxonomy_context: taxonomyContext,
-    }],
-    user_id: ownerId,
-    save_results: true,
-  }, task.report_type, metrics, { traceId, stepScale });
-
-  const sourceOut = ana.sources[0];
-  const scoreMap = {} as Record<Category, number>;
-  for (const c of sourceOut.categories ?? []) {
-    scoreMap[(c.name ?? "").toLowerCase() as Category] = Number(c.score) || 0;
+      source_name: label,
+      confidence: task.confidence ?? 0.5,
+      grounding_level: groundingLevel,
+      raw_scores: { scores: scoreMap, from_tag_cache: true, tag_signature: tagSignature },
+      emotional_score: Math.round(scoreMap.emotional ?? 0),
+      cognitive_score: Math.round(scoreMap.cognitive ?? 0),
+      social_score: Math.round(scoreMap.social ?? 0),
+      communication_score: Math.round(scoreMap.communication ?? 0),
+      contextual_score: Math.round(scoreMap.contextual ?? 0),
+      artistic_score: Math.round(scoreMap.artistic ?? 0),
+      emotional_desc: descMap.emotional ?? null,
+      cognitive_desc: descMap.cognitive ?? null,
+      social_desc: descMap.social ?? null,
+      communication_desc: descMap.communication ?? null,
+      contextual_desc: descMap.contextual ?? null,
+      artistic_desc: descMap.artistic ?? null,
+    });
+    if (anaErr) throw anaErr;
   }
 
-  // 4b. Speech-skew normalization for vocal-heavy Intuizi feeds.
-  enter("normalize");
-  const normCfg = await loadNormalization(admin, "intuizi");
-  const normScores = await applyNormalizationToAnalysis(
-    admin,
-    audioSourceId!,
-    scoreMap,
-    normCfg,
-  );
-  for (const c of CATEGORIES) scoreMap[c] = normScores[c] ?? scoreMap[c];
-
-  // 5. Continuous learning: calibration + profile embedding
-  enter("learn");
-  await updateCalibration(admin, nodeIds, scoreMap);
-  const profileEmbedding = await embed(
-    `intuizi ${task.report_type}; tags: ${tagCodes.join(",")}; ` +
-    `scores: ${CATEGORIES.map((c) => `${c}=${scoreMap[c] ?? "?"}`).join(",")}`,
-  );
-  if (profileEmbedding) {
-    await admin.from("audio_sources")
-      .update({ profile_embedding: profileEmbedding })
-      .eq("id", audioSourceId);
-  }
 
   // 6. Idempotent progress marking, in the same step as the work
   enter("persist");

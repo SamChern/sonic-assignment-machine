@@ -14,6 +14,8 @@ import {
   HarmonicPreview,
   NeighborContext,
 } from "@/components/analysis/SourceDetailPanels";
+import { IntuiziTagMapping } from "@/components/analysis/IntuiziTagMapping";
+
 const SignatureCard = lazy(() =>
   import("@/components/SignatureCard").then((m) => ({ default: m.SignatureCard }))
 );

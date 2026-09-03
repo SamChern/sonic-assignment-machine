@@ -194,10 +194,16 @@ Deno.serve(async (req) => {
         outcome = "failed";
         const attemptsUsed = task.attempts ?? 1;
         const maxAttempts = task.max_attempts ?? 5;
+        // An account-level stop (no credits, workspace policy) says nothing
+        // about this identifier — it would score fine tomorrow. Dead-lettering
+        // it burned 167 perfectly good rows on one credit limit and required a
+        // manual requeue. These rows go back to `pending` with their attempt
+        // refunded; the pipeline pause below is what stops the stampede.
+        const accountStop = verdict.kind === "credits" || verdict.kind === "policy";
         // Dead-letter (never retried, never silently dropped) when the error is
         // permanent, or when the attempt budget is spent. Everything else is
         // rescheduled with a classified backoff and a smaller workload.
-        const dead = !verdict.retryable || attemptsUsed >= maxAttempts;
+        const dead = !accountStop && (!verdict.retryable || attemptsUsed >= maxAttempts);
         const nextScale = verdict.shrink
           ? Math.max(0.25, stepScale * 0.5)
           : stepScale;
@@ -208,12 +214,16 @@ Deno.serve(async (req) => {
           last_stage: lastStage,
           trace_id: traceId,
           step_scale: nextScale,
+          // Refund the attempt on an account stop so a long outage can't quietly
+          // exhaust the budget of every queued identifier.
+          ...(accountStop ? { attempts: Math.max(0, attemptsUsed - 1) } : {}),
           next_attempt_at: new Date(
-            Date.now() + backoffFor(verdict, attemptsUsed),
+            Date.now() + (accountStop ? 60_000 : backoffFor(verdict, attemptsUsed)),
           ).toISOString(),
           dead_lettered_at: dead ? new Date().toISOString() : null,
           finished_at: dead ? new Date().toISOString() : null,
         }).eq("id", task.id);
+
 
         if (dead) {
           console.error(JSON.stringify({

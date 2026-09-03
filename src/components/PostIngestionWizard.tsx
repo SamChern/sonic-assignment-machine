@@ -730,11 +730,12 @@ const PostIngestionWizard = () => {
     }[];
 
     setStage("source", {
-      state: src ? (src.analysis_status === "failed" ? "error" : "ok") : "warn",
+      state: !src || tags.length === 0 ? "warn" : src.analysis_status === "failed" ? "error" : "ok",
       summary: src
-        ? `${src.name} · ${src.source_type} · ${src.analysis_status}${src.profile_embedding ? " · embedded" : ""}`
+        ? `${src.name} · ${tags.length} taxonomy tag(s) · ${src.analysis_status}${src.profile_embedding ? " · embedded" : ""}`
         : "audio source row not found",
       outputs: [
+        ["Queued rows aggregated", identifiersSeen.toLocaleString()],
         ["Taxonomy tags", String(tags.length)],
         ...tags.slice(0, 8).map(
           (t) =>
@@ -744,8 +745,17 @@ const PostIngestionWizard = () => {
             ],
         ),
       ],
-      notes: src?.analysis_error ? [src.analysis_error] : undefined,
+      notes: [
+        ...(src?.analysis_error ? [src.analysis_error] : []),
+        ...(tags.length === 0
+          ? [
+              "No queued tag code matched a taxonomy node. Run the Intuizi taxonomy crosswalk so these codes resolve, then re-run this step.",
+            ]
+          : []),
+        ...(buildError ? [`Profile builder warning: ${buildError}`] : []),
+      ].slice(0, 3),
     });
+
 
     // --- Stage: scoring ----------------------------------------------------
     setStage("score", { state: "running", summary: "reading ontology scores…" });

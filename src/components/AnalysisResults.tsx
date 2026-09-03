@@ -14,6 +14,8 @@ import {
   HarmonicPreview,
   NeighborContext,
 } from "@/components/analysis/SourceDetailPanels";
+import { IntuiziTagMapping } from "@/components/analysis/IntuiziTagMapping";
+
 const SignatureCard = lazy(() =>
   import("@/components/SignatureCard").then((m) => ({ default: m.SignatureCard }))
 );
@@ -473,6 +475,16 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                   })}
                 </div>
               </div>
+              {audioSourceId && (
+                <IntuiziTagMapping
+                  audioSourceId={audioSourceId}
+                  refreshKey={refreshKey}
+                  scores={Object.fromEntries(
+                    categories.map((c) => [c.name.toLowerCase(), c.score]),
+                  )}
+                />
+              )}
+
               {audioSourceId && (
                 <NeighborContext audioSourceId={audioSourceId} refreshKey={refreshKey} />
               )}

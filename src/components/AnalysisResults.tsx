@@ -471,6 +471,7 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                       </div>
                     );
                   })}
+                </div>
               </div>
               {audioSourceId && (
                 <IntuiziTagMapping
@@ -482,7 +483,6 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                 />
               )}
 
-              </div>
               {audioSourceId && (
                 <NeighborContext audioSourceId={audioSourceId} refreshKey={refreshKey} />
               )}

@@ -1120,8 +1120,15 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
         .insert(insertData);
 
       if (insertError) {
+        // Never swallow this. The UI joins identifiers -> audio_sources ->
+        // source_analyses, so a silent failure here produced identifiers that
+        // were marked `done` in the queue and `scored` in the ledger while the
+        // analysis screen had nothing to show — the exact "ingested but never
+        // mapped" symptom. Failing loudly lets the queue retry the identifier.
         console.error('Error batch inserting source analyses:', insertError);
+        throw new Error(`source_analyses insert failed: ${insertError.message}`);
       } else {
+
         console.log(`Batch inserted ${insertData.length} analyses`);
 
         // === Speech-skew normalization ===

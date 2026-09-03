@@ -208,8 +208,8 @@ export async function invokeAnalyzeAudio(
       if (!data?.sources?.[0]) throw new Error("analyze-audio returned no source");
       return data;
     }
-    lastErr = error;
-    const verdict = classifyFailure(error);
+    lastErr = await enrichInvokeError(error);
+    const verdict = classifyFailure(lastErr);
     if (verdict.kind === "rate_limit") {
       metrics.rateLimited++;
       metrics.byReport[reportType] = (metrics.byReport[reportType] ?? 0) + 1;

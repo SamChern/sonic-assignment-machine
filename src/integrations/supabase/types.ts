@@ -3573,6 +3573,10 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      refresh_intuizi_activation_dataset: {
+        Args: { p_activation_id: string }
+        Returns: string
+      }
       refresh_taxonomy_grounding: {
         Args: never
         Returns: {

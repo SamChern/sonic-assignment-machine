@@ -293,6 +293,10 @@ const AdminDashboard = () => {
           <CollapsibleSection title="Audio signals to refresh">
             <AudioSignalQueue />
           </CollapsibleSection>
+          <CollapsibleSection title="Scoring credit budget">
+            <ActivationCostPanel />
+          </CollapsibleSection>
+
         </div>
 
 

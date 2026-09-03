@@ -96,6 +96,48 @@ export function errMsg(e: unknown): string {
   return messageOf(e);
 }
 
+/**
+ * Stable signature for a tag set: the semantic score depends only on WHICH
+ * ontology codes are present, not on their order or on which device carried
+ * them, so sort + hash is the correct cache key.
+ */
+export async function tagSignatureOf(
+  reportType: string,
+  tagCodes: string[],
+): Promise<string> {
+  const canonical = `${reportType}|${[...new Set(tagCodes)].sort().join(",")}`;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(canonical),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * `supabase.functions.invoke` surfaces every non-2xx as the useless string
+ * "Edge Function returned a non-2xx status code" and hides the real body on
+ * `error.context` (a Response). That is why 161 dead letters were classified
+ * `unknown`: the gateway's actual reason never reached `classifyFailure`.
+ * Reading the body once here makes those failures classifiable (and therefore
+ * correctly retryable or correctly paused).
+ */
+async function enrichInvokeError(error: unknown): Promise<unknown> {
+  // deno-lint-ignore no-explicit-any
+  const ctx = (error as any)?.context;
+  if (!ctx || typeof ctx.text !== "function") return error;
+  try {
+    const body = (await ctx.clone().text()).slice(0, 800);
+    // deno-lint-ignore no-explicit-any
+    const e = error as any;
+    if (typeof ctx.status === "number") e.status = ctx.status;
+    if (body) e.message = `${messageOf(error)} :: ${body}`;
+  } catch { /* body already consumed — keep the original error */ }
+  return error;
+}
+
+
+
 
 /** Rate-limit / retry telemetry for one invocation. */
 export function createRateMetrics() {

@@ -286,7 +286,37 @@ Deno.serve(async (req) => {
     // starve a freshly ingested activation for days).
     const focusActivation = reqBody.activation_id ?? null;
 
+    // Cheap pass first: every queued identifier whose tag set was ALREADY
+    // scored is a pure database write (no AI, no embedding, no kNN). Draining
+    // those in bulk before touching the gateway is what makes a six-figure
+    // activation finishable — measured ~800 identifiers/second versus ~3 per
+    // minute through the AI path. The AI loop below then only pays for tag
+    // sets nobody has seen yet, and each new signature it learns unlocks
+    // thousands more rows for the next bulk pass.
+    let materialized = 0;
+    const materializePass = async () => {
+      if (!focusActivation) return;
+      while (timeLeft() > SAFETY_MS && !paused) {
+        const { data, error } = await admin.rpc(
+          "materialize_cached_intuizi_scores",
+          { p_activation_id: focusActivation, p_limit: 2000 },
+        );
+        if (error) {
+          console.warn("materialize pass failed", error.message);
+          return;
+        }
+        const row = (Array.isArray(data) ? data[0] : data) as
+          | { materialized?: number }
+          | null;
+        const n = row?.materialized ?? 0;
+        materialized += n;
+        if (n === 0) return;
+      }
+    };
+    await materializePass();
+
     while (timeLeft() > SAFETY_MS && !paused) {
+
       const { data: claimed, error: claimErr } = await admin.rpc(
         "claim_intuizi_score_jobs",
         {

@@ -654,7 +654,30 @@ const PostIngestionWizard = () => {
     await drainScoreQueue(activation.activation_id);
 
     // --- Stage: source + tags ---------------------------------------------
-    setStage("source", { state: "running", summary: "resolving activation profile…" });
+    // The activation profile is BUILT here, not merely read: normalization now
+    // happens on the EC2 worker, which emits per-identifier rows only, so the
+    // audience-level profile has to be assembled from what already landed in the
+    // database (queue tags + scored identifiers). This is idempotent, costs no AI
+    // credits, and repairs an activation whose profile is missing or stale.
+    setStage("source", { state: "running", summary: "building the activation profile…" });
+
+    let identifiersSeen = 0;
+    let buildError: string | null = null;
+    try {
+      const { data: built, error: buildErr } = await supabase.rpc("build_activation_profile", {
+        p_activation: activation.activation_id,
+        p_sample: 20000,
+        p_top_tags: 40,
+      });
+      if (buildErr) throw new Error(buildErr.message);
+      const row = (Array.isArray(built) ? built[0] : built) as
+        | { identifiers_seen?: number | null }
+        | null;
+      identifiersSeen = Number(row?.identifiers_seen ?? 0) || 0;
+    } catch (e) {
+      buildError = e instanceof Error ? e.message : String(e);
+    }
+
     const { data: profileRow } = await supabase
       .from("intuizi_identifiers")
       .select("audio_source_id")
@@ -665,9 +688,11 @@ const PostIngestionWizard = () => {
     if (!sourceId) {
       setStage("source", {
         state: "warn",
-        summary: "no activation profile was created",
+        summary: "no activation profile could be built",
         notes: [
-          "This delivery carried no taxonomy content (device rosters only), so there is nothing to score. Ingest the matching summary or signals report for this activation id.",
+          buildError
+            ? `Profile builder: ${buildError}`
+            : "No normalized taxonomy rows are queued for this activation id yet, so there is nothing to aggregate. Re-run the ingest, or ingest the summary/signals report for this activation.",
         ],
       });
       setStage("score", { state: "idle", summary: "waiting on a scored profile" });
@@ -675,6 +700,7 @@ const PostIngestionWizard = () => {
       setRunning(false);
       return;
     }
+
 
     const [srcRes, tagRes] = await Promise.all([
       supabase

@@ -1508,6 +1508,45 @@ export type Database = {
         }
         Relationships: []
       }
+      intuizi_tag_score_cache: {
+        Row: {
+          confidence: number
+          created_at: string
+          descriptions: Json | null
+          grounding_level: string
+          hits: number
+          report_type: string
+          scores: Json
+          tag_codes: string[]
+          tag_signature: string
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          descriptions?: Json | null
+          grounding_level?: string
+          hits?: number
+          report_type: string
+          scores: Json
+          tag_codes?: string[]
+          tag_signature: string
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          descriptions?: Json | null
+          grounding_level?: string
+          hits?: number
+          report_type?: string
+          scores?: Json
+          tag_codes?: string[]
+          tag_signature?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       job_worker_state: {
         Row: {
           created_at: string

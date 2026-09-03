@@ -654,7 +654,30 @@ const PostIngestionWizard = () => {
     await drainScoreQueue(activation.activation_id);
 
     // --- Stage: source + tags ---------------------------------------------
-    setStage("source", { state: "running", summary: "resolving activation profile…" });
+    // The activation profile is BUILT here, not merely read: normalization now
+    // happens on the EC2 worker, which emits per-identifier rows only, so the
+    // audience-level profile has to be assembled from what already landed in the
+    // database (queue tags + scored identifiers). This is idempotent, costs no AI
+    // credits, and repairs an activation whose profile is missing or stale.
+    setStage("source", { state: "running", summary: "building the activation profile…" });
+
+    let identifiersSeen = 0;
+    let buildError: string | null = null;
+    try {
+      const { data: built, error: buildErr } = await supabase.rpc("build_activation_profile", {
+        p_activation: activation.activation_id,
+        p_sample: 20000,
+        p_top_tags: 40,
+      });
+      if (buildErr) throw new Error(buildErr.message);
+      const row = (Array.isArray(built) ? built[0] : built) as
+        | { identifiers_seen?: number | null }
+        | null;
+      identifiersSeen = Number(row?.identifiers_seen ?? 0) || 0;
+    } catch (e) {
+      buildError = e instanceof Error ? e.message : String(e);
+    }
+
     const { data: profileRow } = await supabase
       .from("intuizi_identifiers")
       .select("audio_source_id")
@@ -665,9 +688,11 @@ const PostIngestionWizard = () => {
     if (!sourceId) {
       setStage("source", {
         state: "warn",
-        summary: "no activation profile was created",
+        summary: "no activation profile could be built",
         notes: [
-          "This delivery carried no taxonomy content (device rosters only), so there is nothing to score. Ingest the matching summary or signals report for this activation id.",
+          buildError
+            ? `Profile builder: ${buildError}`
+            : "No normalized taxonomy rows are queued for this activation id yet, so there is nothing to aggregate. Re-run the ingest, or ingest the summary/signals report for this activation.",
         ],
       });
       setStage("score", { state: "idle", summary: "waiting on a scored profile" });
@@ -675,6 +700,7 @@ const PostIngestionWizard = () => {
       setRunning(false);
       return;
     }
+
 
     const [srcRes, tagRes] = await Promise.all([
       supabase
@@ -704,11 +730,12 @@ const PostIngestionWizard = () => {
     }[];
 
     setStage("source", {
-      state: src ? (src.analysis_status === "failed" ? "error" : "ok") : "warn",
+      state: !src || tags.length === 0 ? "warn" : src.analysis_status === "failed" ? "error" : "ok",
       summary: src
-        ? `${src.name} · ${src.source_type} · ${src.analysis_status}${src.profile_embedding ? " · embedded" : ""}`
+        ? `${src.name} · ${tags.length} taxonomy tag(s) · ${src.analysis_status}${src.profile_embedding ? " · embedded" : ""}`
         : "audio source row not found",
       outputs: [
+        ["Queued rows aggregated", identifiersSeen.toLocaleString()],
         ["Taxonomy tags", String(tags.length)],
         ...tags.slice(0, 8).map(
           (t) =>
@@ -718,8 +745,17 @@ const PostIngestionWizard = () => {
             ],
         ),
       ],
-      notes: src?.analysis_error ? [src.analysis_error] : undefined,
+      notes: [
+        ...(src?.analysis_error ? [src.analysis_error] : []),
+        ...(tags.length === 0
+          ? [
+              "No queued tag code matched a taxonomy node. Run the Intuizi taxonomy crosswalk so these codes resolve, then re-run this step.",
+            ]
+          : []),
+        ...(buildError ? [`Profile builder warning: ${buildError}`] : []),
+      ].slice(0, 3),
     });
+
 
     // --- Stage: scoring ----------------------------------------------------
     setStage("score", { state: "running", summary: "reading ontology scores…" });
@@ -750,29 +786,28 @@ const PostIngestionWizard = () => {
       setStage("score", {
         state: "error",
         summary: "no analysis row was produced",
-        notes: ["The profile exists but analyze-audio did not return scores. Re-run the ingest for this activation."],
+        notes: [
+          "The profile exists but no per-identifier scores were available to aggregate yet. Let the scoring queue drain for this activation, then re-run this step.",
+        ],
       });
     }
 
     // --- Stage: audience linkage ------------------------------------------
-    setStage("link", { state: "running", summary: "counting linked identifiers…" });
-    const { count } = await supabase
-      .from("intuizi_identifiers")
-      .select("id", { count: "exact", head: true })
-      .eq("audio_source_id", sourceId);
+    setStage("link", { state: "running", summary: "counting activation identifiers…" });
 
     setStage("link", {
-      state: (count ?? 0) > 1 ? "ok" : "warn",
-      summary: `${count ?? 0} identifier(s) linked to this profile`,
+      state: identifiersSeen > 0 ? "ok" : "warn",
+      summary: `${identifiersSeen.toLocaleString()} identifier row(s) in this activation`,
       outputs: [
         ["Activation profile", `activation:${activation.activation_id}`],
-        ["Devices / emails joined", String(Math.max(0, (count ?? 0) - 1))],
+        ["Identifier rows", identifiersSeen.toLocaleString()],
       ],
       notes:
-        (count ?? 0) > 1
+        identifiersSeen > 0
           ? undefined
           : ["No device roster is linked yet — ingest the maid/hem delivery for this activation id."],
     });
+
 
     setRunning(false);
   }, [activation, drainScoreQueue]);

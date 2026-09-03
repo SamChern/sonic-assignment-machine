@@ -3269,9 +3269,25 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      backfill_intuizi_activation_ids: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
       block_ingest_file: {
         Args: { p_id: string; p_reason: string }
         Returns: undefined
+      }
+      build_activation_profile: {
+        Args: { p_activation: string; p_sample?: number; p_top_tags?: number }
+        Returns: {
+          analysis_written: boolean
+          audio_source_id: string
+          category: string
+          confidence: number
+          identifiers_seen: number
+          scored_identifiers: number
+          tags_written: number
+        }[]
       }
       claim_analysis_jobs: {
         Args: { p_limit?: number }

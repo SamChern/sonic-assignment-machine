@@ -35,7 +35,7 @@ const corsHeaders = {
 /** Wall-clock ceiling per invocation; well under the 150s gateway idle limit. */
 const RUN_BUDGET_MS = 60_000;
 /** Max identifiers scored concurrently. Dropped to 1 under rate-limit pressure. */
-const CONCURRENCY_DEFAULT = 1;
+const CONCURRENCY_DEFAULT = 3;
 /** Stop claiming when a single task took longer than this share of the budget. */
 const SAFETY_MS = 12_000;
 
@@ -68,10 +68,10 @@ Deno.serve(async (req) => {
 
     // Control Room knob (60s cached), falls back to the shipped default.
     const batchSize = Math.round(
-      await controlNumber(admin, "ingest.score_batch_size", 3, { min: 1, max: 64 }),
+      await controlNumber(admin, "ingest.score_batch_size", 16, { min: 1, max: 64 }),
     );
     const configuredConcurrency = Math.round(
-      await controlNumber(admin, "ingest.score_concurrency", CONCURRENCY_DEFAULT, { min: 1, max: 4 }),
+      await controlNumber(admin, "ingest.score_concurrency", CONCURRENCY_DEFAULT, { min: 1, max: 8 }),
     );
 
 

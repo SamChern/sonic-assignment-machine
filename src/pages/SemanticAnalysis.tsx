@@ -387,12 +387,17 @@ const SemanticAnalysis = () => {
     const sort = savedSortRef.current;
     const { from, to } = savedRangeRef.current;
     setSavedLoading(true);
+    // Two things used to make this query time out for admins: the admin RLS
+    // policy makes every one of the ~750k Intuizi analyses visible, and
+    // `count: "exact"` forced a full scan on top of the sort. Scoping to this
+    // account hits idx_source_analyses_user_created, and the total is derived
+    // from paging instead of a counting scan.
     let query = supabase
       .from("source_analyses")
       .select(
         "id, source_name, audio_source_id, category, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
-        { count: "exact" },
       );
+    if (userIdRef.current) query = query.eq("user_id", userIdRef.current);
     // Date-looking queries (e.g. "2026-08" or "08/25") are matched client-side
     // against the timestamp; anything else narrows by source name server-side.
     const isDateQuery = /^[\d\-/:. ]+$/.test(q);
@@ -401,9 +406,10 @@ const SemanticAnalysis = () => {
     if (to) query = query.lte("created_at", new Date(`${to}T23:59:59.999`).toISOString());
 
     const [column, ascending] = SORT_ORDER[sort];
-    const { data, error, count } = await query
+    // One extra row tells us whether another page exists without a count query.
+    const { data, error } = await query
       .order(column, { ascending })
-      .range(offset, offset + SAVED_PAGE_SIZE - 1);
+      .range(offset, offset + SAVED_PAGE_SIZE);
     setSavedLoading(false);
 
 
@@ -415,8 +421,11 @@ const SemanticAnalysis = () => {
       });
       return;
     }
-    const page = (data ?? []) as unknown as SavedAnalysis[];
-    setSavedTotal(count ?? 0);
+    const rawPage = (data ?? []) as unknown as SavedAnalysis[];
+    const hasMore = rawPage.length > SAVED_PAGE_SIZE;
+    const page = hasMore ? rawPage.slice(0, SAVED_PAGE_SIZE) : rawPage;
+    setSavedTotal(offset + page.length + (hasMore ? 1 : 0));
+
     setSaved((prev) => {
       const list = append ? [...prev, ...page] : page;
       savedCountRef.current = list.length;

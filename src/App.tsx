@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-ro
 import { AuthProvider } from "@/hooks/useAuth";
 import { Suspense, lazy, useEffect } from "react";
 
+import AppErrorBoundary from "@/components/AppErrorBoundary";
+import RequireAdmin from "@/components/RequireAdmin";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import MobileAuthFallback from "@/components/MobileAuthFallback";
 
@@ -104,6 +106,7 @@ const App = () => (
         <BrowserRouter>
           <FreshSessionAdminHome />
           <div className="pb-mobile-nav">
+          <AppErrorBoundary>
           <Suspense fallback={<RouteFallback />}>
 
             <Routes>
@@ -112,22 +115,22 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
 
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/workbench" element={<AdminWorkbench />} />
-              <Route path="/admin/ec2" element={<AdminEc2 />} />
-              <Route path="/admin/integrations" element={<AdminIntegrations />} />
-              <Route path="/admin/connected" element={<AdminConnected />} />
-              <Route path="/admin/ctv" element={<AdminCTV />} />
-              <Route path="/admin/activations" element={<AdminActivationGrants />} />
-              <Route path="/admin/control-room" element={<AdminControlRoom />} />
-              <Route path="/admin/sound-library" element={<AdminSoundLibrary />} />
-              <Route path="/admin/guide" element={<AdminGuide />} />
-              <Route path="/admin/setup" element={<AdminSetup />} />
-              <Route path="/admin/resolver" element={<AdminResolver />} />
-              <Route path="/admin/pipeline" element={<IntegrationStatus />} />
-              <Route path="/admin/compatibility" element={<IngestionCompatibility />} />
+              <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
+              <Route path="/admin/workbench" element={<RequireAdmin><AdminWorkbench /></RequireAdmin>} />
+              <Route path="/admin/ec2" element={<RequireAdmin><AdminEc2 /></RequireAdmin>} />
+              <Route path="/admin/integrations" element={<RequireAdmin><AdminIntegrations /></RequireAdmin>} />
+              <Route path="/admin/connected" element={<RequireAdmin><AdminConnected /></RequireAdmin>} />
+              <Route path="/admin/ctv" element={<RequireAdmin><AdminCTV /></RequireAdmin>} />
+              <Route path="/admin/activations" element={<RequireAdmin><AdminActivationGrants /></RequireAdmin>} />
+              <Route path="/admin/control-room" element={<RequireAdmin><AdminControlRoom /></RequireAdmin>} />
+              <Route path="/admin/sound-library" element={<RequireAdmin><AdminSoundLibrary /></RequireAdmin>} />
+              <Route path="/admin/guide" element={<RequireAdmin><AdminGuide /></RequireAdmin>} />
+              <Route path="/admin/setup" element={<RequireAdmin><AdminSetup /></RequireAdmin>} />
+              <Route path="/admin/resolver" element={<RequireAdmin><AdminResolver /></RequireAdmin>} />
+              <Route path="/admin/pipeline" element={<RequireAdmin><IntegrationStatus /></RequireAdmin>} />
+              <Route path="/admin/compatibility" element={<RequireAdmin><IngestionCompatibility /></RequireAdmin>} />
 
-              <Route path="/admin/semantic" element={<SemanticAnalysis />} />
+              <Route path="/admin/semantic" element={<RequireAdmin><SemanticAnalysis /></RequireAdmin>} />
 
               <Route path="/portal" element={<Portal />} />
               <Route path="/workspace" element={<Workspace />} />
@@ -144,6 +147,8 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
+          </AppErrorBoundary>
+
           </div>
           <MobileAuthFallback />
           <MobileBottomNav />

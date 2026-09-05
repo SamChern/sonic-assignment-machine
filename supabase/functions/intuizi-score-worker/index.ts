@@ -303,7 +303,7 @@ Deno.serve(async (req) => {
       while (timeLeft() > SAFETY_MS && !paused) {
         const { data, error } = await admin.rpc(
           "materialize_cached_intuizi_scores",
-          { p_activation_id: focusActivation, p_limit: 2000 },
+          { p_activation_id: focusActivation, p_limit: 250 },
         );
         if (error) {
           console.warn("materialize pass failed", error.message);

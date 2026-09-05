@@ -479,6 +479,7 @@ export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourc
                 <IntuiziTagMapping
                   audioSourceId={audioSourceId}
                   refreshKey={refreshKey}
+                  technical={showTechnicalDetail}
                   scores={Object.fromEntries(
                     categories.map((c) => [c.name.toLowerCase(), c.score]),
                   )}

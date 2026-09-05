@@ -331,9 +331,25 @@ Deno.serve(async (req) => {
       const tasks = (claimed ?? []) as QueuedTask[];
       if (!tasks.length) break;
 
+      // Warm every DISTINCT tag pattern in this batch with a single
+      // multi-source analyze-audio call each (up to 5 patterns per call), then
+      // let the identifiers take the cache path. This is the difference between
+      // one gateway call per identifier and one per ~5 distinct patterns.
+      try {
+        await prewarmTagSignatures(admin, tasks, metrics, {
+          traceId: runTraceId,
+          batchSize: 5,
+        });
+      } catch (e) {
+        const verdict = classifyFailure(e);
+        console.warn("tag prewarm failed, falling back per identifier", verdict.reason);
+        if (verdict.kind === "credits" || verdict.kind === "policy") paused = true;
+      }
+
       // Bounded parallelism: `concurrency` identifiers in flight at once. Each
       // task is independent (own row, own idempotency check), so a slow AI
       // gateway round-trip no longer blocks the whole batch.
+
       let cursor = 0;
       const lanes = Array.from(
         { length: Math.max(1, Math.min(concurrency, tasks.length)) },

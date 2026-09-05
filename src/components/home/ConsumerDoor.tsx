@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/friendlyError";
 import {
   ChevronDown,
   Link2,
@@ -252,7 +253,7 @@ export const ConsumerDoor = ({
           setGuestRuns(next);
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Analysis failed.");
+        toast.error(friendlyError(err, "We couldn't analyse that. Please try again."));
       } finally {
         setRunning(false);
       }

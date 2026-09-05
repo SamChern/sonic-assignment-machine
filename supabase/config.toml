@@ -47,3 +47,13 @@ verify_jwt = false
 # anonymous callers are allowed. Any token supplied is still validated in code.
 [functions.signature-render]
 verify_jwt = false
+
+# Tracking beacon: fired from the browser with no session at all. The pixel id
+# is validated in code and only anonymous event rows are written.
+[functions.pixel-collect]
+verify_jwt = false
+
+# The ingest worker bootstraps itself before it has any user session; it
+# authenticates with INGEST_WORKER_SECRET / the service-role token, in code.
+[functions.ingest-worker-bootstrap]
+verify_jwt = false

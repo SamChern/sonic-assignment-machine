@@ -26,3 +26,8 @@ dist-ssr
 # Python bytecode from EC2 deploy bundles
 __pycache__/
 *.pyc
+
+# Local environment (managed by Lovable Cloud)
+.env
+.env.*
+!.env.example

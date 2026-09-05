@@ -144,11 +144,11 @@ export const ConsumerDoor = ({
 
   const quotaExhausted = isSignedIn
     ? (monthlyUsed ?? 0) >= FREE_MONTHLY_LIMIT
-    : guestRuns >= GUEST_LIMIT;
+    : guestRemaining !== null && guestRemaining <= 0;
 
   const remaining = isSignedIn
     ? Math.max(0, FREE_MONTHLY_LIMIT - (monthlyUsed ?? 0))
-    : Math.max(0, GUEST_LIMIT - guestRuns);
+    : Math.max(0, guestRemaining ?? GUEST_LIMIT);
 
   // A shared permalink renders the same result view, read-only.
   useEffect(() => {

@@ -5,27 +5,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Slider } from "@/components/ui/slider";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 import {
   ArrowLeft,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  CircleDashed,
   Loader2,
   RefreshCw,
   ShieldCheck,
-  ChevronDown,
-  Wrench,
-  Bug,
-  PlayCircle,
-  Layers,
-
 } from "lucide-react";
 
 import {
@@ -33,30 +21,20 @@ import {
   mergeReport,
   ORDER,
   type Report,
-  type SampledObject,
   type Scope,
-  scopeForFeed,
   SOURCES,
   type Status,
-  VERDICT_COPY,
 } from "@/lib/compatibilityReport";
-
-const STATUS_META: Record<Status, { label: string; icon: typeof CheckCircle2; className: string }> = {
-  pass: { label: "Pass", icon: CheckCircle2, className: "bg-primary/15 text-primary border-primary/30" },
-  warn: { label: "Mismatch", icon: AlertTriangle, className: "bg-amber-500/15 text-amber-500 border-amber-500/30" },
-  fail: { label: "Blocking", icon: XCircle, className: "bg-destructive/15 text-destructive border-destructive/30" },
-  skip: { label: "Not applicable", icon: CircleDashed, className: "bg-muted text-muted-foreground border-border" },
-};
-
-
-interface ParallelResult {
-  scope: Exclude<Scope, "all">;
-  label: string;
-  ok: boolean;
-  ms: number;
-  counts?: Report["summary"];
-  error?: string;
-}
+import { STATUS_META } from "@/components/admin/compatibility/statusMeta";
+import { type ParallelResult } from "@/components/admin/compatibility/types";
+import { RunSettingsCard } from "@/components/admin/compatibility/RunSettingsCard";
+import { SourcesPanel } from "@/components/admin/compatibility/SourcesPanel";
+import { ParallelSummaryCard } from "@/components/admin/compatibility/ParallelSummaryCard";
+import { SummaryFilterCard } from "@/components/admin/compatibility/SummaryFilterCard";
+import { FeedChecksCard } from "@/components/admin/compatibility/FeedChecksCard";
+import { RemediationChecklistCard } from "@/components/admin/compatibility/RemediationChecklistCard";
+import { ProbedObjectsCard } from "@/components/admin/compatibility/ProbedObjectsCard";
+import { DebugTraceCard } from "@/components/admin/compatibility/DebugTraceCard";
 
 const IngestionCompatibility = () => {
   const { isAdmin, loading } = useAuth();
@@ -276,259 +254,33 @@ const IngestionCompatibility = () => {
           and how to fix it.
         </p>
 
-        <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Objects probed per run</span>
-                <span className="text-muted-foreground">{maxObjects}</span>
-              </div>
-              <Slider
-                value={[maxObjects]}
-                min={1}
-                max={8}
-                step={1}
-                onValueChange={([v]) => setMaxObjects(v)}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Rows sampled per object</span>
-                <span className="text-muted-foreground">{maxRows}</span>
-              </div>
-              <Slider
-                value={[maxRows]}
-                min={20}
-                max={2000}
-                step={20}
-                onValueChange={([v]) => setMaxRows(v)}
-              />
-            </div>
-          </div>
-        </Card>
+        <RunSettingsCard
+          maxObjects={maxObjects}
+          setMaxObjects={setMaxObjects}
+          maxRows={maxRows}
+          setMaxRows={setMaxRows}
+        />
 
-        <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">Per-source tests</h2>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  setSelected(
-                    selected.length === SOURCES.length ? [] : SOURCES.map((s) => s.scope),
-                  )
-                }
-                disabled={running}
-              >
-                {selected.length === SOURCES.length ? "Clear all" : "Select all"}
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => runSelected(false)}
-                disabled={running || selected.length === 0}
-              >
-                {running && runningScopes.length > 0 ? (
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Layers className="mr-2 h-3.5 w-3.5" />
-                )}
-                Run selected in parallel ({selected.length})
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => runSelected(true)}
-                disabled={running || selected.length === 0}
-              >
-                <Bug className="mr-2 h-3.5 w-3.5 text-primary" />
-                Debug selected
-              </Button>
-            </div>
-          </div>
-          <ul className="space-y-2">
-            {SOURCES.map((src) => {
-              const feedChecks = report?.checks.filter((c) => c.feed === src.feed) ?? [];
-              const worst: Status | null = feedChecks.length
-                ? (["fail", "warn", "pass", "skip"] as Status[]).find((s) =>
-                    feedChecks.some((c) => c.status === s),
-                  ) ?? null
-                : null;
-              const last = lastRun[src.feed];
-              const busy =
-                running && (runningScope === src.scope || runningScopes.includes(src.scope));
-              const isSelected = selected.includes(src.scope);
-              return (
-                <li
-                  key={src.scope}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 p-3"
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <Checkbox
-                      id={`sel-${src.scope}`}
-                      className="mt-0.5"
-                      checked={isSelected}
-                      disabled={running}
-                      onCheckedChange={(v) =>
-                        setSelected((prev) =>
-                          v ? [...prev, src.scope] : prev.filter((s) => s !== src.scope),
-                        )
-                      }
-                    />
-                    <div className="min-w-0">
+        <SourcesPanel
+          report={report}
+          lastRun={lastRun}
+          running={running}
+          runningScope={runningScope}
+          runningScopes={runningScopes}
+          selected={selected}
+          setSelected={setSelected}
+          run={run}
+          runSelected={runSelected}
+        />
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium">{src.label}</span>
-                      {worst && (
-                        <Badge variant="outline" className={`text-[10px] ${STATUS_META[worst].className}`}>
-                          {STATUS_META[worst].label}
-                        </Badge>
-                      )}
-                      {last?.debug && (
-                        <Badge variant="outline" className="text-[10px]">debug</Badge>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {feedChecks.length
-                        ? `${feedChecks.length} check(s)`
-                        : "Not tested yet"}
-                      {last && ` · ran ${new Date(last.at).toLocaleTimeString()} in ${last.ms}ms`}
-                    </p>
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => run(src.scope)}
-                      disabled={running}
-                    >
-                      {busy ? (
-                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <PlayCircle className="mr-2 h-3.5 w-3.5" />
-                      )}
-                      Run tests
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => run(src.scope, true)}
-                      disabled={running}
-                    >
-                      <Bug className="mr-2 h-3.5 w-3.5 text-primary" />
-                      Rerun with debug
-                    </Button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-
-        {parallel && (
-          <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="flex items-center gap-2 text-sm font-semibold">
-                <Layers className="h-4 w-4 text-primary" />
-                Parallel run summary
-                {parallel.debug && (
-                  <Badge variant="outline" className="text-[10px]">debug</Badge>
-                )}
-              </h2>
-              <span className="text-xs text-muted-foreground">
-                {parallel.results.length} source(s) ·{" "}
-                {new Date(parallel.at).toLocaleTimeString()} · wall {parallel.ms}ms
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="text-muted-foreground">
-                  <tr className="border-b border-border/60">
-                    <th className="py-2 pr-3 font-medium">Source</th>
-                    <th className="py-2 pr-3 font-medium">Result</th>
-                    <th className="py-2 pr-3 font-medium">Pass</th>
-                    <th className="py-2 pr-3 font-medium">Mismatch</th>
-                    <th className="py-2 pr-3 font-medium">Blocking</th>
-                    <th className="py-2 pr-3 font-medium">Skipped</th>
-                    <th className="py-2 font-medium">Latency</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parallel.results.map((r) => (
-                    <tr key={r.scope} className="border-b border-border/40 last:border-0">
-                      <td className="py-2 pr-3 font-medium">{r.label}</td>
-                      <td className="py-2 pr-3">
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] ${
-                            r.ok
-                              ? STATUS_META[
-                                  r.counts?.fail ? "fail" : r.counts?.warn ? "warn" : "pass"
-                                ].className
-                              : STATUS_META.fail.className
-                          }`}
-                        >
-                          {r.ok ? r.counts?.verdict ?? "ok" : "error"}
-                        </Badge>
-                      </td>
-                      <td className="py-2 pr-3">{r.counts?.pass ?? "—"}</td>
-                      <td className="py-2 pr-3">{r.counts?.warn ?? "—"}</td>
-                      <td className="py-2 pr-3">{r.counts?.fail ?? "—"}</td>
-                      <td className="py-2 pr-3">{r.counts?.skip ?? "—"}</td>
-                      <td className="py-2">{r.ms}ms</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {parallel.results.some((r) => !r.ok) && (
-              <ul className="mt-3 space-y-1 text-xs text-destructive">
-                {parallel.results
-                  .filter((r) => !r.ok)
-                  .map((r) => (
-                    <li key={r.scope} className="break-words">
-                      <span className="font-medium">{r.label}:</span> {r.error}
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </Card>
-        )}
-
-
+        {parallel && <ParallelSummaryCard parallel={parallel} />}
 
         {report && (
-          <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              {(["all", "fail", "warn", "pass", "skip"] as const).map((s) => {
-                const count = s === "all"
-                  ? report.summary.total
-                  : report.summary[s as Status];
-                return (
-                  <Button
-                    key={s}
-                    size="sm"
-                    variant={statusFilter === s ? "default" : "outline"}
-                    onClick={() => setStatusFilter(s)}
-                  >
-                    {s === "all" ? "All" : STATUS_META[s as Status].label} ({count})
-                  </Button>
-                );
-              })}
-            </div>
-            <p className="mt-3 text-sm text-muted-foreground">
-              {VERDICT_COPY[report.summary.verdict] ?? ""}{" "}
-              {report.backend && (
-                <>Backend <span className="font-medium text-foreground">{report.backend.backend}</span>.{" "}</>
-              )}
-              {report.discovered_objects != null && (
-                <>{report.discovered_objects} object(s) discovered.{" "}</>
-              )}
-              Ran {new Date(report.ran_at).toLocaleTimeString()} in {report.duration_ms}ms.
-            </p>
-          </Card>
+          <SummaryFilterCard
+            report={report}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+          />
         )}
 
         {running && !report && (
@@ -539,197 +291,25 @@ const IngestionCompatibility = () => {
         )}
 
         {feeds.map(({ feed, checks }) => (
-          <Card key={feed} className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                {feed}
-              </h2>
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => run(scopeForFeed(feed))}
-                  disabled={running}
-                >
-                  {running && runningScope === scopeForFeed(feed) ? (
-                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                  )}
-                  Run tests
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => run(scopeForFeed(feed), true)}
-                  disabled={running}
-                >
-                  <Bug className="mr-2 h-3.5 w-3.5 text-primary" />
-                  Rerun with debug
-                </Button>
-              </div>
-            </div>
-            <ul className="space-y-2">
-              {checks.map((c) => {
-                const meta = STATUS_META[c.status];
-                const Icon = meta.icon;
-                const isOpen = !!open[c.id];
-                const hasDetail = !!(c.expected || c.actual || c.remediation || c.evidence || c.debug);
-                return (
-                  <li key={c.id} className="rounded-lg border border-border/60 bg-background/40">
-                    <button
-                      type="button"
-                      className="flex w-full items-start gap-3 p-3 text-left"
-                      onClick={() => setOpen((p) => ({ ...p, [c.id]: !p[c.id] }))}
-                    >
-                      <Icon
-                        className={`mt-0.5 h-4 w-4 shrink-0 ${
-                          c.status === "pass"
-                            ? "text-primary"
-                            : c.status === "warn"
-                            ? "text-amber-500"
-                            : c.status === "fail"
-                            ? "text-destructive"
-                            : "text-muted-foreground"
-                        }`}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium">{c.title}</span>
-                          <Badge variant="outline" className={`text-[10px] ${meta.className}`}>
-                            {meta.label}
-                          </Badge>
-                        </span>
-                        <span className="mt-1 block break-words text-xs text-muted-foreground">
-                          {c.detail}
-                        </span>
-                      </span>
-                      {hasDetail && (
-                        <ChevronDown
-                          className={`mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-                            isOpen ? "rotate-180" : ""
-                          }`}
-                        />
-                      )}
-                    </button>
-
-                    {isOpen && hasDetail && (
-                      <div className="space-y-2 border-t border-border/60 p-3 text-xs">
-                        {c.expected && (
-                          <div>
-                            <span className="font-medium text-muted-foreground">Expected: </span>
-                            <span className="break-words font-mono">{c.expected}</span>
-                          </div>
-                        )}
-                        {c.actual && (
-                          <div>
-                            <span className="font-medium text-muted-foreground">Actual: </span>
-                            <span className="break-words font-mono">{c.actual}</span>
-                          </div>
-                        )}
-                        {c.remediation && (
-                          <div className="rounded-md border border-primary/30 bg-primary/5 p-2">
-                            <span className="flex items-center gap-1 font-medium text-primary">
-                              <Wrench className="h-3 w-3" /> Remediation
-                            </span>
-                            <p className="mt-1 break-words text-muted-foreground">{c.remediation}</p>
-                          </div>
-                        )}
-                        {c.evidence && (
-                          <pre className="max-h-40 overflow-auto rounded-md bg-muted/40 p-2 font-mono text-[10px] leading-relaxed">
-                            {JSON.stringify(c.evidence, null, 2)}
-                          </pre>
-                        )}
-                        {c.debug && (
-                          <div className="rounded-md border border-primary/20 bg-primary/5 p-2">
-                            <span className="flex items-center gap-1 font-medium text-primary">
-                              <Bug className="h-3 w-3" /> Debug
-                            </span>
-                            <pre className="mt-1 max-h-56 overflow-auto font-mono text-[10px] leading-relaxed">
-                              {JSON.stringify(c.debug, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
+          <FeedChecksCard
+            key={feed}
+            feed={feed}
+            checks={checks}
+            running={running}
+            runningScope={runningScope}
+            open={open}
+            setOpen={setOpen}
+            run={run}
+          />
         ))}
 
-        {remediations.length > 0 && (
-          <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Wrench className="h-4 w-4 text-primary" />
-              Remediation checklist ({remediations.length})
-            </h2>
-            <ol className="space-y-2 text-xs">
-              {remediations.map((c, i) => (
-                <li key={c.id} className="flex gap-2">
-                  <span className="text-muted-foreground">{i + 1}.</span>
-                  <span>
-                    <span className="font-medium">{c.title}</span>
-                    <span className="block text-muted-foreground">{c.remediation}</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </Card>
-        )}
+        {remediations.length > 0 && <RemediationChecklistCard remediations={remediations} />}
 
         {report && report.objects_sampled.length > 0 && (
-          <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-            <h2 className="mb-3 text-sm font-semibold">Probed deliveries</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="text-muted-foreground">
-                  <tr className="border-b border-border/60">
-                    <th className="py-2 pr-3 font-medium">Object</th>
-                    <th className="py-2 pr-3 font-medium">Type</th>
-                    <th className="py-2 pr-3 font-medium">Rows</th>
-                    <th className="py-2 pr-3 font-medium">With id</th>
-                    <th className="py-2 pr-3 font-medium">Summary</th>
-                    <th className="py-2 pr-3 font-medium">Roster</th>
-                    <th className="py-2 pr-3 font-medium">Tagged</th>
-                    <th className="py-2 font-medium">Columns</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.objects_sampled.map((o) => (
-                    <tr key={o.key} className="border-b border-border/40 last:border-0">
-                      <td className="max-w-[220px] truncate py-2 pr-3 font-mono" title={o.key}>
-                        {o.key.split("/").pop()}
-                      </td>
-                      <td className="py-2 pr-3">{o.report_type}</td>
-                      <td className="py-2 pr-3">{o.rows_read}</td>
-                      <td className="py-2 pr-3">{o.rows_with_identifier}</td>
-                      <td className="py-2 pr-3">{o.summary_rows}</td>
-                      <td className="py-2 pr-3">{o.roster_rows}</td>
-                      <td className="py-2 pr-3">{o.normalized_rows}</td>
-                      <td className="max-w-[260px] truncate py-2" title={o.columns.join(", ")}>
-                        {o.columns.length}: {o.columns.slice(0, 4).join(", ")}
-                        {o.columns.length > 4 ? "…" : ""}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <ProbedObjectsCard objects={report.objects_sampled} />
         )}
         {report?.trace && report.trace.length > 0 && (
-          <Card className="border-border/60 bg-card/60 p-5 backdrop-blur-sm">
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Bug className="h-4 w-4 text-primary" /> Debug trace ({report.trace.length} step(s))
-            </h2>
-            <pre className="max-h-64 overflow-auto rounded-md bg-muted/40 p-2 font-mono text-[10px] leading-relaxed">
-              {report.trace.map((t) => `+${t.at}ms  ${t.step}${
-                t.detail !== undefined ? `  ${JSON.stringify(t.detail)}` : ""
-              }`).join("\n")}
-            </pre>
-          </Card>
+          <DebugTraceCard trace={report.trace} />
         )}
       </main>
     </div>

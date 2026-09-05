@@ -159,7 +159,7 @@ export const ResolverPanel = () => {
           </>
         )}
         <div className="ml-auto flex gap-1">
-          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={load}>
+          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={load} aria-label="Refresh resolver status">
             {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
           </Button>
           <Button

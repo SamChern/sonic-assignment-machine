@@ -123,7 +123,7 @@ export const ResolverNudge = ({ compact = false }: { compact?: boolean }) => {
           </Badge>
         )}
         <div className="ml-auto flex gap-1">
-          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={load}>
+          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={load} aria-label="Refresh nudges">
             {loading ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (

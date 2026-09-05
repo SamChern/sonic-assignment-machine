@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Select,
@@ -352,70 +353,92 @@ const Workspace = () => {
           </TabsList>
 
         <TabsContent value="analyses" className="mt-4">
-          <WorkspaceAnalyses key={refreshKey} organizationId={active.organization_id} />
+          <PanelErrorBoundary label="Analyses">
+            <WorkspaceAnalyses key={refreshKey} organizationId={active.organization_id} />
+          </PanelErrorBoundary>
         </TabsContent>
         <TabsContent value="sonicsim" className="mt-4">
-          <WorkspaceSonicSim
-            key={refreshKey}
-            organizationId={active.organization_id}
-            orgName={active.name}
-          />
+          <PanelErrorBoundary label="SonicSIM">
+            <WorkspaceSonicSim
+              key={refreshKey}
+              organizationId={active.organization_id}
+              orgName={active.name}
+            />
+          </PanelErrorBoundary>
         </TabsContent>
         <TabsContent value="data" className="mt-4 space-y-4">
-          <IntuiziSyncPanel
-            organizationId={active.organization_id}
-            canWrite={canWrite}
-            onSynced={() => {
-              setRefreshKey((k) => k + 1);
-              void loadDatasets();
-            }}
-          />
-          <IntuiziSyncStatusPanel
-            organizationId={active.organization_id}
-            refreshKey={refreshKey}
-          />
-
-          <WorkspaceUpload
-            organizationId={active.organization_id}
-            canWrite={canWrite}
-            onIngested={() => setRefreshKey((k) => k + 1)}
-          />
-
-          <OrgComplianceStrip organizationId={active.organization_id} />
+          <PanelErrorBoundary label="Data sync">
+            <IntuiziSyncPanel
+              organizationId={active.organization_id}
+              canWrite={canWrite}
+              onSynced={() => {
+                setRefreshKey((k) => k + 1);
+                void loadDatasets();
+              }}
+            />
+          </PanelErrorBoundary>
+          <PanelErrorBoundary label="Sync status">
+            <IntuiziSyncStatusPanel
+              organizationId={active.organization_id}
+              refreshKey={refreshKey}
+            />
+          </PanelErrorBoundary>
+          <PanelErrorBoundary label="Upload">
+            <WorkspaceUpload
+              organizationId={active.organization_id}
+              canWrite={canWrite}
+              onIngested={() => setRefreshKey((k) => k + 1)}
+            />
+          </PanelErrorBoundary>
+          <PanelErrorBoundary label="Compliance">
+            <OrgComplianceStrip organizationId={active.organization_id} />
+          </PanelErrorBoundary>
         </TabsContent>
 
         <TabsContent value="discover" className="mt-4">
-          <DatasetDiscovery key={refreshKey} organizationId={active.organization_id} />
+          <PanelErrorBoundary label="Discover">
+            <DatasetDiscovery key={refreshKey} organizationId={active.organization_id} />
+          </PanelErrorBoundary>
         </TabsContent>
         <TabsContent value="categories" className="mt-4">
-          <CategoryProfileEditor
-            organizationId={active.organization_id}
-            canEdit={isOrgAdmin}
-            onSaved={() => setRefreshKey((k) => k + 1)}
-          />
-
+          <PanelErrorBoundary label="Categories">
+            <CategoryProfileEditor
+              organizationId={active.organization_id}
+              canEdit={isOrgAdmin}
+              onSaved={() => setRefreshKey((k) => k + 1)}
+            />
+          </PanelErrorBoundary>
         </TabsContent>
         <TabsContent value="users" className="mt-4">
-          <PredictUsersPanel
-            key={refreshKey}
-            organizationId={active.organization_id}
-            canWrite={canWrite}
-          />
+          <PanelErrorBoundary label="Audiences">
+            <PredictUsersPanel
+              key={refreshKey}
+              organizationId={active.organization_id}
+              canWrite={canWrite}
+            />
+          </PanelErrorBoundary>
         </TabsContent>
 
         <TabsContent value="outcomes" className="mt-4">
-          <PredictOutcomesPanel
-            organizationId={active.organization_id}
-            canWrite={canWrite}
-            datasets={datasets}
-          />
+          <PanelErrorBoundary label="Outcomes">
+            <PredictOutcomesPanel
+              organizationId={active.organization_id}
+              canWrite={canWrite}
+              datasets={datasets}
+            />
+          </PanelErrorBoundary>
         </TabsContent>
         <TabsContent value="playbooks" className="mt-4">
-          <PlaybooksPanel organizationId={active.organization_id} canWrite={canWrite} />
+          <PanelErrorBoundary label="Playbooks">
+            <PlaybooksPanel organizationId={active.organization_id} canWrite={canWrite} />
+          </PanelErrorBoundary>
         </TabsContent>
         <TabsContent value="tags" className="mt-4">
-          <PixelSetupPanel organizationId={active.organization_id} canWrite={canWrite} />
+          <PanelErrorBoundary label="Tags">
+            <PixelSetupPanel organizationId={active.organization_id} canWrite={canWrite} />
+          </PanelErrorBoundary>
         </TabsContent>
+
         </Tabs>
       </main>
     </div>

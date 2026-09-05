@@ -81,35 +81,37 @@ export function PerfMetricsBadge({ className }: { className?: string }) {
             No samples yet — load or filter identifiers to collect timings.
           </p>
         ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wide text-muted-foreground">
-                <th className="pb-1 font-medium">Stage</th>
-                <th className="pb-1 text-right font-medium">Last</th>
-                <th className="pb-1 text-right font-medium">p50</th>
-                <th className="pb-1 text-right font-medium">p95</th>
-                <th className="pb-1 text-right font-medium">n</th>
-              </tr>
-            </thead>
-            <tbody className="font-mono">
-              {stats.map((s) => (
-                <tr key={s.metric} className="border-t border-border/50">
-                  <td className="py-1 font-sans">
-                    {PERF_LABELS[s.metric]}
-                    {s.lastCount !== undefined && (
-                      <span className="ml-1 text-[10px] text-muted-foreground">
-                        {s.lastCount.toLocaleString()} rows
-                      </span>
-                    )}
-                  </td>
-                  <td className={cn("py-1 text-right", tone(s.metric, s.last))}>{fmt(s.last)}</td>
-                  <td className="py-1 text-right text-muted-foreground">{fmt(s.p50)}</td>
-                  <td className="py-1 text-right text-muted-foreground">{fmt(s.p95)}</td>
-                  <td className="py-1 text-right text-muted-foreground">{s.samples}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <th className="pb-1 font-medium">Stage</th>
+                  <th className="pb-1 text-right font-medium">Last</th>
+                  <th className="pb-1 text-right font-medium">p50</th>
+                  <th className="pb-1 text-right font-medium">p95</th>
+                  <th className="pb-1 text-right font-medium">n</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="font-mono">
+                {stats.map((s) => (
+                  <tr key={s.metric} className="border-t border-border/50">
+                    <td className="py-1 font-sans">
+                      {PERF_LABELS[s.metric]}
+                      {s.lastCount !== undefined && (
+                        <span className="ml-1 text-[10px] text-muted-foreground">
+                          {s.lastCount.toLocaleString()} rows
+                        </span>
+                      )}
+                    </td>
+                    <td className={cn("py-1 text-right", tone(s.metric, s.last))}>{fmt(s.last)}</td>
+                    <td className="py-1 text-right text-muted-foreground">{fmt(s.p50)}</td>
+                    <td className="py-1 text-right text-muted-foreground">{fmt(s.p95)}</td>
+                    <td className="py-1 text-right text-muted-foreground">{s.samples}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         <div className="mt-3 flex items-center justify-between gap-2">

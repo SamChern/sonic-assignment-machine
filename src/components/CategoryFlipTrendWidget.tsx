@@ -184,7 +184,7 @@ const CategoryFlipTrendWidget = () => {
               {g === "day" ? "Daily" : "Weekly"}
             </Button>
           ))}
-          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={load} disabled={loading}>
+          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={load} disabled={loading} aria-label="Refresh trend">
             {loading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (

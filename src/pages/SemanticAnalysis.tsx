@@ -5,9 +5,6 @@ import { friendlyError } from "@/lib/friendlyError";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 
 import { IdentifierFilterBar, type FilterSegment } from "@/components/IdentifierFilterBar";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -25,260 +22,33 @@ import ConfidenceBreakdownPanel from "@/components/ConfidenceBreakdownPanel";
 import ScoreQueueHealthPanel from "@/components/ScoreQueueHealthPanel";
 import SpeechNormalizationPanel from "@/components/SpeechNormalizationPanel";
 import CategoryFlipTrendWidget from "@/components/CategoryFlipTrendWidget";
-import PerfMetricsBadge from "@/components/PerfMetricsBadge";
 import { measurePerfSync, recordPageLoad, recordPerf } from "@/lib/perfMetrics";
 
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
 
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-import {
-  ArrowLeft,
-  RefreshCw,
-  Loader2,
-  CheckCircle2,
-  AlertTriangle,
-  CircleDashed,
-  Layers,
-  Radio,
-  ChevronRight,
-  ArrowUpDown,
-  CalendarRange,
-  Maximize2,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import SavedAnalysisDrawer from "@/components/SavedAnalysisDrawer";
+import SemanticAnalysisHeader from "@/components/analysis/semantic/SemanticAnalysisHeader";
+import SemanticAnalysisStats from "@/components/analysis/semantic/SemanticAnalysisStats";
+import LatestSavedAnalysisCard from "@/components/analysis/semantic/LatestSavedAnalysisCard";
+import IdentifierPipelineCard from "@/components/analysis/semantic/IdentifierPipelineCard";
+import DeleteAnalysisDialog from "@/components/analysis/semantic/DeleteAnalysisDialog";
+import { useSemanticAnalysisData } from "@/components/analysis/semantic/useSemanticAnalysisData";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
-type StepState = "ok" | "pending" | "error";
-
-interface IdentifierRow {
-  id: string;
-  primary_identifier: string;
-  ctv_signals: Record<string, unknown> | null;
-  apps_signals: Record<string, unknown> | null;
-  visitation_signals: Record<string, unknown> | null;
-  demographics_signals: Record<string, unknown> | null;
-  origin_signals: Record<string, unknown> | null;
-  tag_codes: string[] | null;
-  audio_source_id: string | null;
-  observation_count: number;
-  last_seen_at: string | null;
-  updated_at: string;
-}
-
-interface SourceRow {
-  id: string;
-  name: string;
-  analysis_status: string;
-  analysis_error: string | null;
-  profile_embedding: unknown | null;
-}
-
-interface AnalysisRow {
-  audio_source_id: string | null;
-  category: string | null;
-  confidence: number | null;
-  created_at: string;
-  emotional_score: number;
-  cognitive_score: number;
-  social_score: number;
-  communication_score: number;
-  contextual_score: number;
-  artistic_score: number;
-}
-
-interface SavedAnalysis extends AnalysisRow {
-  id: string;
-  source_name: string;
-}
-
-
-
-const SAVED_PAGE_SIZE = 25;
-
-type SavedSort =
-  | "newest"
-  | "oldest"
-  | "confidence_desc"
-  | "confidence_asc"
-  | "name_asc"
-  | "name_desc";
-
-const SAVED_SORTS: Array<[SavedSort, string]> = [
-  ["newest", "Newest first"],
-  ["oldest", "Oldest first"],
-  ["confidence_desc", "Highest confidence"],
-  ["confidence_asc", "Lowest confidence"],
-  ["name_asc", "Source A–Z"],
-  ["name_desc", "Source Z–A"],
-];
-
-const SORT_ORDER: Record<SavedSort, [string, boolean]> = {
-  newest: ["created_at", false],
-  oldest: ["created_at", true],
-  confidence_desc: ["confidence", false],
-  confidence_asc: ["confidence", true],
-  name_asc: ["source_name", true],
-  name_desc: ["source_name", false],
-};
-
-/** Quick date-range presets; null = all time. */
-const DATE_PRESETS: Array<[string, number | null]> = [
-  ["All time", null],
-  ["7d", 7],
-  ["30d", 30],
-  ["90d", 90],
-];
-
-const CATEGORY_KEYS = [
-  ["emotional_score", "Emo", "bg-category-emotional", "var(--gradient-emotional)"],
-  ["cognitive_score", "Cog", "bg-category-cognitive", "var(--gradient-cognitive)"],
-  ["social_score", "Soc", "bg-category-social", "var(--gradient-social)"],
-  ["communication_score", "Com", "bg-category-communication", "var(--gradient-communication)"],
-  ["contextual_score", "Ctx", "bg-category-contextual", "var(--gradient-contextual)"],
-  ["artistic_score", "Art", "bg-category-artistic", "var(--gradient-artistic)"],
-] as const;
-
-const CATEGORY_GRADIENTS: Record<string, string> = {
-  emotional: "var(--gradient-emotional)",
-  cognitive: "var(--gradient-cognitive)",
-  social: "var(--gradient-social)",
-  communication: "var(--gradient-communication)",
-  contextual: "var(--gradient-contextual)",
-  artistic: "var(--gradient-artistic)",
-};
-
-const relative = (iso: string | null) => {
-  if (!iso) return "never";
-  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 48) return `${hrs}h ago`;
-  return `${Math.round(hrs / 24)}d ago`;
-};
-
-const nonEmpty = (o: Record<string, unknown> | null | undefined) =>
-  !!o && Object.keys(o).length > 0;
-
-const ScoreBars = ({ ana }: { ana: AnalysisRow }) => (
-  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-    {CATEGORY_KEYS.map(([key, short, , gradient]) => {
-      const value = Math.round(Number(ana[key]));
-      return (
-        <div key={key} className="flex items-center gap-2">
-          <span className="w-8 shrink-0 text-[11px] font-medium text-muted-foreground">
-            {short}
-          </span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full transition-smooth"
-              style={{ width: `${Math.max(2, Math.min(100, value))}%`, background: gradient }}
-            />
-          </div>
-          <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-foreground/80">
-            {value}
-          </span>
-        </div>
-      );
-    })}
-  </div>
-);
-
-const StepPill = ({
-  label,
-  state,
-  detail,
-}: {
-  label: string;
-  state: StepState;
-  detail: string;
-}) => {
-  const Icon =
-    state === "ok" ? CheckCircle2 : state === "error" ? AlertTriangle : CircleDashed;
-  const tone =
-    state === "ok"
-      ? "text-success border-success/40 bg-success/10 shadow-[0_0_20px_-8px_hsl(var(--success)/0.6)]"
-      : state === "error"
-        ? "text-destructive border-destructive/40 bg-destructive/10"
-        : "text-muted-foreground border-border bg-muted/40";
-  return (
-    <div className={`rounded-lg border px-3 py-2 backdrop-blur-sm transition-smooth ${tone}`}>
-      <div className="flex items-center gap-1.5 text-xs font-medium">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
-      </div>
-      <p className="mt-0.5 text-[11px] opacity-80 break-all">{detail}</p>
-    </div>
-  );
-};
-
-type Stage = "all" | "normalized" | "linked" | "scored" | "failed";
-
-const StatusDot = ({ state, title }: { state: StepState; title: string }) => (
-  <span
-    title={`${title}: ${state}`}
-    aria-label={`${title}: ${state}`}
-    className={`h-2 w-2 rounded-full ${
-      state === "ok" ? "bg-success" : state === "error" ? "bg-destructive" : "bg-muted-foreground/50"
-    }`}
-  />
-);
-
-/** Per-identifier pipeline status, shared by the filter and the row renderer. */
-function rowStatus(
-  r: IdentifierRow,
-  sources: Record<string, SourceRow>,
-  analyses: Record<string, AnalysisRow>,
-) {
-  const signalGroups = [
-    ["ctv", r.ctv_signals],
-    ["apps", r.apps_signals],
-    ["visitation", r.visitation_signals],
-    ["demographics", r.demographics_signals],
-    ["origin", r.origin_signals],
-  ] as const;
-  const present = signalGroups
-    .filter(([, v]) => nonEmpty(v as Record<string, unknown>))
-    .map(([k]) => k);
-  const tags = r.tag_codes ?? [];
-  const src = r.audio_source_id ? sources[r.audio_source_id] : undefined;
-  const ana = r.audio_source_id ? analyses[r.audio_source_id] : undefined;
-
-  const normState: StepState = present.length ? "ok" : "pending";
-  const createState: StepState = !r.audio_source_id
-    ? "pending"
-    : src?.analysis_status === "failed"
-      ? "error"
-      : "ok";
-  const scoreState: StepState = ana
-    ? "ok"
-    : src?.analysis_status === "failed"
-      ? "error"
-      : "pending";
-
-  return { present, tags, src, ana, normState, createState, scoreState };
-}
-
+  AnalysisRow,
+  DATE_PRESETS,
+  IdentifierRow,
+  SAVED_PAGE_SIZE,
+  SORT_ORDER,
+  SavedAnalysis,
+  SavedSort,
+  SourceRow,
+  Stage,
+  nonEmpty,
+  relative,
+  rowStatus,
+} from "@/lib/semanticAnalysis";
 
 const SemanticAnalysis = () => {
   const navigate = useNavigate();
@@ -286,185 +56,45 @@ const SemanticAnalysis = () => {
   // Activations exported from the Intuizi MCP console deep-link here.
   const activationParam = searchParams.get("activation")?.trim() || "5498";
   const { user, isAdmin, loading: authLoading } = useAuth();
-  const [rows, setRows] = useState<IdentifierRow[]>([]);
-  const [sources, setSources] = useState<Record<string, SourceRow>>({});
-  const [analyses, setAnalyses] = useState<Record<string, AnalysisRow>>({});
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<IdentifierFilterState>({ ...EMPTY_IDENTIFIER_FILTER });
   const [stage, setStage] = useState<Stage>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [saved, setSaved] = useState<SavedAnalysis[]>([]);
-  const [selectedSavedId, setSelectedSavedId] = useState<string>("");
-  const [savedTotal, setSavedTotal] = useState(0);
-  const [savedLoading, setSavedLoading] = useState(false);
-  const [savedQuery, setSavedQuery] = useState("");
-  const [savedSort, setSavedSort] = useState<SavedSort>("newest");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<SavedAnalysis | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const savedQueryRef = useRef("");
-  const savedSortRef = useRef<SavedSort>("newest");
-  const savedRangeRef = useRef({ from: "", to: "" });
-  const savedCountRef = useRef(0);
-  // Kept in a ref so loadSaved stays a stable callback while still scoping the
-  // query to this account (see the user_id filter below).
-  const userIdRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  userIdRef.current = user?.id ?? null;
 
-
-
+  const {
+    rows,
+    sources,
+    analyses,
+    loading,
+    load,
+    saved,
+    selectedSavedId,
+    setSelectedSavedId,
+    savedTotal,
+    savedLoading,
+    savedQuery,
+    setSavedQuery,
+    savedSort,
+    setSavedSort,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    pendingDelete,
+    setPendingDelete,
+    deleting,
+    deleteSaved,
+    loadSaved,
+    savedQueryRef,
+    savedSortRef,
+    savedRangeRef,
+    savedCountRef,
+  } = useSemanticAnalysisData(user?.id ?? null, () => setDrawerOpen(false));
 
   useEffect(() => {
     if (!authLoading && (!user || !isAdmin)) navigate("/");
   }, [authLoading, user, isAdmin, navigate]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const queryStart = performance.now();
-    const { data: ids, error } = await supabase
-      .from("intuizi_identifiers")
-      .select(
-        "id, primary_identifier, ctv_signals, apps_signals, visitation_signals, demographics_signals, origin_signals, tag_codes, audio_source_id, observation_count, last_seen_at, updated_at",
-      )
-      .order("updated_at", { ascending: false })
-      .limit(100);
-
-    if (error) {
-      toast({
-        title: "Could not load identifiers",
-        description: friendlyError(error),
-        variant: "destructive",
-      });
-      setLoading(false);
-      return;
-    }
-
-    const identifiers = (ids ?? []) as unknown as IdentifierRow[];
-    recordPerf("identifier.query", performance.now() - queryStart, identifiers.length);
-    setRows(identifiers);
-
-    const sourceIds = identifiers
-      .map((r) => r.audio_source_id)
-      .filter((v): v is string => !!v);
-
-    if (sourceIds.length) {
-      const [srcRes, anaRes] = await Promise.all([
-        supabase
-          .from("audio_sources")
-          .select("id, name, analysis_status, analysis_error, profile_embedding")
-          .in("id", sourceIds),
-        supabase
-          .from("source_analyses")
-          .select(
-            "audio_source_id, category, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
-          )
-          .in("audio_source_id", sourceIds)
-          .order("created_at", { ascending: false }),
-      ]);
-
-      const srcMap: Record<string, SourceRow> = {};
-      for (const s of (srcRes.data ?? []) as unknown as SourceRow[]) srcMap[s.id] = s;
-      setSources(srcMap);
-
-      const anaMap: Record<string, AnalysisRow> = {};
-      for (const a of (anaRes.data ?? []) as unknown as AnalysisRow[]) {
-        if (a.audio_source_id && !anaMap[a.audio_source_id]) anaMap[a.audio_source_id] = a;
-      }
-      setAnalyses(anaMap);
-    } else {
-      setSources({});
-      setAnalyses({});
-    }
-    setLoading(false);
-  }, []);
-
-  /** Saved analyses — paged, searchable, sortable and date-bounded. */
-  const loadSaved = useCallback(async (append = false) => {
-    const offset = append ? savedCountRef.current : 0;
-    const q = savedQueryRef.current.trim();
-    const sort = savedSortRef.current;
-    const { from, to } = savedRangeRef.current;
-    setSavedLoading(true);
-    // Two things used to make this query time out for admins: the admin RLS
-    // policy makes every one of the ~750k Intuizi analyses visible, and
-    // `count: "exact"` forced a full scan on top of the sort. Scoping to this
-    // account hits idx_source_analyses_user_created, and the total is derived
-    // from paging instead of a counting scan.
-    let query = supabase
-      .from("source_analyses")
-      .select(
-        "id, source_name, audio_source_id, category, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
-      );
-    if (userIdRef.current) query = query.eq("user_id", userIdRef.current);
-    // Date-looking queries (e.g. "2026-08" or "08/25") are matched client-side
-    // against the timestamp; anything else narrows by source name server-side.
-    const isDateQuery = /^[\d\-/:. ]+$/.test(q);
-    if (q && !isDateQuery) query = query.ilike("source_name", `%${q}%`);
-    if (from) query = query.gte("created_at", new Date(`${from}T00:00:00`).toISOString());
-    if (to) query = query.lte("created_at", new Date(`${to}T23:59:59.999`).toISOString());
-
-    const [column, ascending] = SORT_ORDER[sort];
-    // One extra row tells us whether another page exists without a count query.
-    const { data, error } = await query
-      .order(column, { ascending })
-      .range(offset, offset + SAVED_PAGE_SIZE);
-    setSavedLoading(false);
-
-
-    if (error) {
-      toast({
-        title: "Could not load saved analyses",
-        description: friendlyError(error),
-        variant: "destructive",
-      });
-      return;
-    }
-    const rawPage = (data ?? []) as unknown as SavedAnalysis[];
-    const hasMore = rawPage.length > SAVED_PAGE_SIZE;
-    const page = hasMore ? rawPage.slice(0, SAVED_PAGE_SIZE) : rawPage;
-    setSavedTotal(offset + page.length + (hasMore ? 1 : 0));
-
-    setSaved((prev) => {
-      const list = append ? [...prev, ...page] : page;
-      savedCountRef.current = list.length;
-      return list;
-    });
-    setSelectedSavedId((prev) =>
-      prev && (append || page.some((a) => a.id === prev)) ? prev : page[0]?.id ?? "",
-    );
-  }, []);
-
-  /** Remove a saved analysis, then refresh the list immediately. */
-  const deleteSaved = useCallback(async () => {
-    const target = pendingDelete;
-    if (!target) return;
-    setDeleting(true);
-    const { error } = await supabase.from("source_analyses").delete().eq("id", target.id);
-    setDeleting(false);
-    if (error) {
-      toast({
-        title: "Could not delete analysis",
-        description: friendlyError(error),
-        variant: "destructive",
-      });
-      return;
-    }
-    setPendingDelete(null);
-    setDrawerOpen(false);
-    setSaved((prev) => {
-      const list = prev.filter((a) => a.id !== target.id);
-      savedCountRef.current = list.length;
-      return list;
-    });
-    setSavedTotal((t) => Math.max(0, t - 1));
-    setSelectedSavedId((prev) => (prev === target.id ? "" : prev));
-    toast({ title: "Analysis deleted", description: target.source_name });
-    savedCountRef.current = 0;
-    loadSaved();
-  }, [pendingDelete, loadSaved]);
 
   const applyPreset = useCallback((days: number | null) => {
     if (days === null) {
@@ -490,11 +120,9 @@ const SemanticAnalysis = () => {
     return null;
   }, [dateFrom, dateTo]);
 
-
   useEffect(() => {
     if (isAdmin) load();
   }, [isAdmin, load]);
-
 
   /** Debounced reload when search, sort or date range changes; resets paging. */
   useEffect(() => {
@@ -508,7 +136,6 @@ const SemanticAnalysis = () => {
     }, 300);
     return () => clearTimeout(t);
   }, [savedQuery, savedSort, dateFrom, dateTo, isAdmin, loadSaved]);
-
 
   const tagList = useMemo(() => tagOptions(rows.map((r) => r.tag_codes)), [rows]);
 
@@ -655,8 +282,6 @@ const SemanticAnalysis = () => {
     [visibleSaved, selectedSavedId],
   );
 
-
-
   if (authLoading || !isAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -672,324 +297,42 @@ const SemanticAnalysis = () => {
         className="pointer-events-none absolute inset-x-0 top-0 h-72 opacity-40 blur-3xl"
         style={{ background: "var(--gradient-brand)" }}
       />
-      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 shadow-elegant backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <span
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-elegant"
-              style={{ background: "var(--gradient-teal)" }}
-            >
-              <Radio className="h-4 w-4 text-primary-foreground" />
-            </span>
-            <h1
-              className="truncate bg-clip-text text-base font-semibold text-transparent sm:text-lg"
-              style={{ backgroundImage: "var(--gradient-teal)" }}
-            >
-              SonicSIM Analysis Results
-            </h1>
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <img
-              src={sonicSimLogo}
-              alt="SonicSIM.ai"
-              width={1264}
-              height={847}
-              className="hidden h-6 w-auto max-w-[28vw] object-contain opacity-80 sm:block md:h-7"
-              loading="lazy"
-              decoding="async"
-            />
-            <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Admin
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/admin/pipeline")}>
-              Intuizi Console
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                load();
-                loadSaved();
-              }}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="mr-1 h-4 w-4" />
-              )}
-              Refresh
-            </Button>
-          </div>
-        </div>
-      </header>
-
+      <SemanticAnalysisHeader
+        navigate={navigate}
+        loading={loading}
+        onRefresh={() => {
+          load();
+          loadSaved();
+        }}
+      />
 
       <main className="relative mx-auto max-w-6xl px-4 py-6">
-        <div className="grid gap-3 sm:grid-cols-4">
-          {([
-            ["Identifiers", totals.total, "var(--gradient-cognitive)"],
-            ["Normalized", totals.normalized, "var(--gradient-contextual)"],
-            ["Sources created", totals.created, "var(--gradient-social)"],
-            ["Scored", totals.scored, "var(--gradient-artistic)"],
-          ] as const).map(([label, value, gradient]) => (
-            <Card
-              key={label}
-              className="relative overflow-hidden border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth hover:shadow-elegant"
-            >
-              <span
-                aria-hidden
-                className="absolute inset-x-0 top-0 h-1"
-                style={{ background: gradient }}
-              />
-              <p className="text-xs text-muted-foreground">{label}</p>
-              <p
-                className="bg-clip-text text-3xl font-semibold text-transparent"
-                style={{ backgroundImage: gradient }}
-              >
-                {value}
-              </p>
-            </Card>
-          ))}
-        </div>
+        <SemanticAnalysisStats totals={totals} />
 
-        <Card className="mt-6 border-border/60 bg-card/70 p-4 backdrop-blur-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <Radio className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-semibold">Latest saved analysis</h2>
-            <div className="ml-auto flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-              <Input
-                value={savedQuery}
-                onChange={(e) => setSavedQuery(e.target.value)}
-                placeholder="Search by source name or date…"
-                className="h-9 w-full sm:w-52"
-              />
-              <Select value={savedSort} onValueChange={(v) => setSavedSort(v as SavedSort)}>
-                <SelectTrigger className="h-9 w-full sm:w-44" aria-label="Sort analyses">
-                  <ArrowUpDown className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SAVED_SORTS.map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div className="w-full sm:w-80">
-                <Select
-                  value={selectedSaved?.id ?? ""}
-                  onValueChange={setSelectedSavedId}
-                  disabled={!visibleSaved.length}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue
-                      placeholder={
-                        savedLoading
-                          ? "Loading analyses…"
-                          : visibleSaved.length
-                            ? "Select a saved analysis"
-                            : savedQuery
-                              ? "No matches"
-                              : "No saved analyses yet"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent
-                    className="max-h-72"
-                    onScroll={(e) => {
-                      const el = e.currentTarget;
-                      if (
-                        !savedLoading &&
-                        saved.length < savedTotal &&
-                        el.scrollTop + el.clientHeight >= el.scrollHeight - 24
-                      ) {
-                        loadSaved(true);
-                      }
-                    }}
-                  >
-                    {visibleSaved.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.source_name} — {relative(a.created_at)}
-                      </SelectItem>
-                    ))}
-                    {saved.length < savedTotal && (
-                      <div className="px-2 py-2 text-center text-[11px] text-muted-foreground">
-                        {savedLoading
-                          ? "Loading more…"
-                          : `Scroll for more (${saved.length}/${savedTotal})`}
-                      </div>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/20 p-2">
-            <CalendarRange className="h-3.5 w-3.5 text-primary" />
-            <span className="text-[11px] font-medium text-muted-foreground">Date range</span>
-            {DATE_PRESETS.map(([label, days]) => (
-              <Button
-                key={label}
-                size="sm"
-                variant={activePreset === label ? "secondary" : "ghost"}
-                className="h-7 px-2 text-[11px]"
-                onClick={() => applyPreset(days)}
-              >
-                {label}
-              </Button>
-            ))}
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="date"
-                value={dateFrom}
-                max={dateTo || undefined}
-                onChange={(e) => setDateFrom(e.target.value)}
-                aria-label="From date"
-                className="h-7 w-[9.5rem] text-[11px]"
-              />
-              <span className="text-[11px] text-muted-foreground">to</span>
-              <Input
-                type="date"
-                value={dateTo}
-                min={dateFrom || undefined}
-                onChange={(e) => setDateTo(e.target.value)}
-                aria-label="To date"
-                className="h-7 w-[9.5rem] text-[11px]"
-              />
-            </div>
-            {(dateFrom || dateTo) && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-[11px]"
-                onClick={() => {
-                  setDateFrom("");
-                  setDateTo("");
-                }}
-              >
-                <X className="mr-1 h-3 w-3" />
-                Clear dates
-              </Button>
-            )}
-          </div>
-
-
-
-
-          {savedLoading && !saved.length ? (
-            <div className="mt-4 space-y-3" aria-busy="true">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-28" />
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="space-y-1">
-                    <Skeleton className="h-3 w-24" />
-                    <Skeleton className="h-2.5 w-full" />
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground">Fetching saved analyses…</p>
-            </div>
-          ) : selectedSaved ? (
-
-            <div className="mt-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="truncate text-sm font-medium">{selectedSaved.source_name}</p>
-                {selectedSaved.category && (
-                  <Badge
-                    variant="secondary"
-                    className="text-[11px]"
-                    style={{
-                      backgroundImage:
-                        CATEGORY_GRADIENTS[selectedSaved.category.toLowerCase()] ?? undefined,
-                    }}
-                  >
-                    {selectedSaved.category}
-                  </Badge>
-                )}
-                <span className="text-xs text-muted-foreground">
-                  confidence {Math.round(Number(selectedSaved.confidence ?? 0) * 100)}% ·{" "}
-                  {relative(selectedSaved.created_at)}
-                </span>
-              </div>
-              <ScoreBars ana={selectedSaved} />
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => setDrawerOpen(true)}>
-                  <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
-                  View full details
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setPendingDelete(selectedSaved)}
-                >
-                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  Delete analysis
-                </Button>
-              </div>
-              {savedTotal > 0 && (
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  Showing {saved.length} of {savedTotal} saved analyses
-                  {saved.length < savedTotal ? " — scroll the picker to load more." : "."}
-                </p>
-              )}
-            </div>
-          ) : savedQuery.trim() ? (
-            <div className="mt-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-5 text-center">
-              <Radio className="mx-auto h-6 w-6 text-muted-foreground" />
-              <p className="mt-2 text-sm font-semibold">No analyses match “{savedQuery.trim()}”</p>
-              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                Try a different source name, or a date fragment such as “2026-08”.
-              </p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={() => setSavedQuery("")}>
-                Clear search
-              </Button>
-            </div>
-          ) : (
-            <div className="mt-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-5 text-center">
-              <Radio className="mx-auto h-6 w-6 text-primary" />
-              <p className="mt-2 text-sm font-semibold">No saved analyses yet</p>
-              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                Nothing has been scored through the ontology so far. Run a data stream ingest to
-                create the first activation profile, then its analysis will appear here
-                automatically.
-              </p>
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    document
-                      .getElementById("data-stream-wizard")
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                  }
-                >
-                  Run a data stream ingest
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => navigate("/admin/pipeline")}>
-                  Open Intuizi Console
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => loadSaved()} disabled={savedLoading}>
-                  Check again
-                </Button>
-              </div>
-            </div>
-
-          )}
-
-        </Card>
-
+        <LatestSavedAnalysisCard
+          savedQuery={savedQuery}
+          setSavedQuery={setSavedQuery}
+          savedSort={savedSort}
+          setSavedSort={setSavedSort}
+          selectedSaved={selectedSaved}
+          setSelectedSavedId={setSelectedSavedId}
+          visibleSaved={visibleSaved}
+          saved={saved}
+          savedTotal={savedTotal}
+          savedLoading={savedLoading}
+          loadSaved={loadSaved}
+          dateFrom={dateFrom}
+          setDateFrom={setDateFrom}
+          dateTo={dateTo}
+          setDateTo={setDateTo}
+          applyPreset={applyPreset}
+          activePreset={activePreset}
+          setDrawerOpen={setDrawerOpen}
+          setPendingDelete={setPendingDelete}
+          navigate={navigate}
+        />
 
         <div className="mt-6" id="data-stream-wizard">
-
           <PostIngestionWizard />
         </div>
 
@@ -1015,181 +358,28 @@ const SemanticAnalysis = () => {
           <CategoryFlipTrendWidget />
         </div>
 
-
-
-
         <div className="mt-6">
           <InspectMappingPanel />
         </div>
 
-        <Card className="mt-6 border-border/60 bg-card/70 p-4 backdrop-blur-sm">
-          <div className="mb-3 flex items-center gap-2">
-            <Layers className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-semibold">Identifier pipeline status</h2>
-            <div className="ml-auto">
-              <PerfMetricsBadge />
-            </div>
-          </div>
-          <IdentifierFilterBar
-            value={filter}
-            onChange={(next) => {
-              setFilter(next);
-              setExpanded(null);
-              scrollRef.current?.scrollTo({ top: 0 });
-            }}
-            tags={tagList}
-            showBasis={false}
-            segments={stageSegments}
-            segmentValue={stage}
-            onSegmentChange={(v) => {
-              setStage(v as Stage);
-              setExpanded(null);
-              scrollRef.current?.scrollTo({ top: 0 });
-            }}
-            resultCount={filtered.length}
-            totalCount={rows.length}
-            placeholder="Search identifier or tag code…"
-          />
-
-          <div
-            ref={scrollRef}
-            className="mt-4 max-h-[560px] overflow-y-auto rounded-lg border border-border/60 bg-background/40"
-          >
-            {loading && rows.length === 0 && (
-              <p className="p-4 text-sm text-muted-foreground">Loading identifiers…</p>
-            )}
-            {!loading && filtered.length === 0 && (
-              <p className="p-4 text-sm text-muted-foreground">
-                {rows.length === 0
-                  ? "No ingested identifiers yet. Once a delivery contains data rows, each identifier will appear here with its normalization, source creation, and scoring status."
-                  : "No identifiers match the current filters."}
-              </p>
-            )}
-
-            {filtered.length > 0 && (
-              <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
-                {virtualRows.map((virtualRow) => {
-                  const r = filtered[virtualRow.index];
-                  if (!r) return null;
-                  const st = rowStatus(r, sources, analyses);
-                  const { present, tags, normState, createState, scoreState, src, ana } = st;
-                  const catGradient = ana?.category
-                    ? CATEGORY_GRADIENTS[ana.category.toLowerCase()] ?? "var(--gradient-brand)"
-                    : "var(--gradient-brand)";
-                  const open = expanded === r.id;
-
-                  return (
-                    <div
-                      key={virtualRow.key}
-                      ref={rowVirtualizer.measureElement}
-                      data-index={virtualRow.index}
-                      className="absolute left-0 top-0 w-full border-b border-border/60"
-                      style={{ transform: `translateY(${virtualRow.start}px)` }}
-                    >
-
-                        <span
-                          aria-hidden
-                          className="absolute inset-y-0 left-0 w-0.5"
-                          style={{ background: ana ? catGradient : "hsl(var(--border))" }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setExpanded(open ? null : r.id)}
-                          aria-expanded={open}
-                          className="flex w-full items-center gap-2 px-3 py-2 pl-4 text-left transition-smooth hover:bg-muted/40"
-                        >
-                          <ChevronRight
-                            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
-                          />
-                          <span className="min-w-0 flex-1 truncate font-mono text-xs">
-                            {r.primary_identifier}
-                          </span>
-                          <span className="hidden items-center gap-1 sm:flex">
-                            <StatusDot state={normState} title="Normalization" />
-                            <StatusDot state={createState} title="Source creation" />
-                            <StatusDot state={scoreState} title="Scoring" />
-                          </span>
-                          {ana?.category && (
-                            <Badge
-                              className="hidden border-0 text-[10px] text-primary-foreground md:inline-flex"
-                              style={{ background: catGradient }}
-                            >
-                              {ana.category}
-                            </Badge>
-                          )}
-                          <span className="hidden text-[11px] text-muted-foreground lg:inline">
-                            {tags.length} tag{tags.length === 1 ? "" : "s"} · {r.observation_count} obs
-                          </span>
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            {relative(r.updated_at)}
-                          </span>
-                        </button>
-
-                        {open && (
-                          <div className="px-4 pb-4 pl-6">
-                            {ana && <ScoreBars ana={ana} />}
-
-                            <div className="mt-3 grid gap-2 md:grid-cols-3">
-                              <StepPill
-                                label="1. Normalization"
-                                state={normState}
-                                detail={
-                                  present.length
-                                    ? `signals: ${present.join(", ")} · ${tags.length} tag code${tags.length === 1 ? "" : "s"}`
-                                    : "no signal groups captured"
-                                }
-                              />
-                              <StepPill
-                                label="2. Source creation"
-                                state={createState}
-                                detail={
-                                  src
-                                    ? `${src.name} · ${src.analysis_status}${src.profile_embedding ? " · embedded" : ""}`
-                                    : "no audio source linked"
-                                }
-                              />
-                              <StepPill
-                                label="3. Scoring"
-                                state={scoreState}
-                                detail={
-                                  ana
-                                    ? `${CATEGORY_KEYS.map(([k, short]) => `${short} ${Math.round(Number(ana[k]))}`).join(" · ")} · conf ${Number(ana.confidence ?? 0).toFixed(2)}`
-                                    : src?.analysis_error || "awaiting analyze-audio"
-                                }
-                              />
-                            </div>
-
-                            {tags.length > 0 && (
-                              <div className="mt-3 flex flex-wrap gap-1">
-                                {tags.slice(0, 12).map((t) => (
-                                  <Badge key={t} variant="secondary" className="text-[11px]">
-                                    {t}
-                                  </Badge>
-                                ))}
-                                {tags.length > 12 && (
-                                  <Badge variant="secondary" className="text-[11px]">
-                                    +{tags.length - 12}
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                })}
-              </div>
-            )}
-          </div>
-
-          {filtered.length > 0 && (
-            <p className="mt-2 text-center text-[11px] text-muted-foreground">
-              Showing {virtualRows.length} of {filtered.length.toLocaleString()} rendered rows —
-              scroll to load more instantly
-            </p>
-          )}
-        </Card>
-
+        <IdentifierPipelineCard
+          filter={filter}
+          setFilter={setFilter}
+          tagList={tagList}
+          stageSegments={stageSegments}
+          stage={stage}
+          setStage={setStage}
+          filtered={filtered}
+          rows={rows}
+          loading={loading}
+          scrollRef={scrollRef}
+          rowVirtualizer={rowVirtualizer}
+          virtualRows={virtualRows}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          sources={sources}
+          analyses={analyses}
+        />
       </main>
 
       <SavedAnalysisDrawer
@@ -1198,33 +388,13 @@ const SemanticAnalysis = () => {
         onOpenChange={setDrawerOpen}
       />
 
-      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this saved analysis?</AlertDialogTitle>
-            <AlertDialogDescription>
-              “{pendingDelete?.source_name}” ({relative(pendingDelete?.created_at ?? "")}) will be
-              permanently removed from SonicSIM Analysis Results. The underlying audio source stays
-              intact and can be re-scored later.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                deleteSaved();
-              }}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteAnalysisDialog
+        pendingDelete={pendingDelete}
+        setPendingDelete={setPendingDelete}
+        deleting={deleting}
+        deleteSaved={deleteSaved}
+      />
     </div>
-
   );
 };
 

@@ -1,7 +1,9 @@
 import { ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import { ChevronDown, ChevronUp } from "lucide-react";
+
 
 /**
  * A lightweight click-to-expand shell for heavy admin modules. Collapsed by
@@ -47,7 +49,7 @@ export const CollapsibleSection = ({
         {title}
         <ChevronUp className="h-3.5 w-3.5" />
       </Button>
-      {children}
+      <PanelErrorBoundary label={title}>{children}</PanelErrorBoundary>
     </div>
   );
 };

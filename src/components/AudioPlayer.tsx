@@ -79,6 +79,7 @@ export const AudioPlayer = ({ file }: AudioPlayerProps) => {
             size="lg"
             className="gradient-primary shadow-elegant h-14 w-14 rounded-full p-0"
             onClick={togglePlayPause}
+            aria-label={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-0.5" />}
           </Button>

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useMemo } from "react";
-import * as d3 from "d3";
+import * as d3 from "@/lib/d3";
 import { Card } from "@/components/ui/card";
 import { Users } from "lucide-react";
 import { useGraphZoom } from "@/components/graph/useGraphZoom";

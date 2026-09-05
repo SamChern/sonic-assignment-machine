@@ -36,6 +36,7 @@ import {
 } from "@/components/catalog/MarketOriginalityPanel";
 import { useMarketOriginality } from "@/hooks/useMarketOriginality";
 import { formatCents, rollupCatalogOriginality } from "@/lib/catalogOriginality";
+import { CreatorNav } from "@/components/creator/CreatorNav";
 
 type Kind = "label" | "album" | "track";
 
@@ -274,12 +275,7 @@ const MusicCatalog = () => {
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:py-10">
       <header className="space-y-2">
-        <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2 text-xs">
-          <Link to="/">
-            <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-            Back to My Library
-          </Link>
-        </Button>
+        <CreatorNav />
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">Music catalog</h1>
           <Button asChild size="sm" variant="outline" className="ml-auto text-xs">

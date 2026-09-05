@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DivergenceQuadrant from "@/components/creator/DivergenceQuadrant";
+import { CreatorNav } from "@/components/creator/CreatorNav";
 
 /**
  * Step 17 — the Creator door.

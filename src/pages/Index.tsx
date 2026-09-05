@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Sparkles, FileAudio, Network, ListTree, User, LogOut, Shield, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { friendlyError } from '@/lib/friendlyError';
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";
 import heroBackground from "@/assets/hero-background.jpg";
@@ -337,7 +338,7 @@ const Index = () => {
       console.error('Analysis error:', error);
       setIsAnalyzing(false);
       setAnalysisProgress(null);
-      toast.error(error instanceof Error ? error.message : 'Analysis failed. Please try again.');
+      toast.error(friendlyError(error, 'We couldn\'t finish that analysis. Please try again.'));
     }
   };
 

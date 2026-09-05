@@ -208,7 +208,11 @@ export const ConsumerDoor = ({
           setGuestRemaining(data.guest_runs_remaining);
         }
         if (data?.code === "guest_limit_reached" && !isSignedIn) setGuestRemaining(0);
-        if (error) throw error;
+        if (error) {
+          // The limit answer comes back as a non-2xx, so read it off the message.
+          if (!isSignedIn && /free look for today/i.test(error.message)) setGuestRemaining(0);
+          throw error;
+        }
         if (data?.error) throw new Error(String(data.error));
         const first = data?.sources?.[0];
         if (!first) throw new Error("No result came back — try again.");

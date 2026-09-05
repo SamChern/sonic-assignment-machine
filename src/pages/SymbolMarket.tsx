@@ -142,7 +142,7 @@ const SymbolMarket = () => {
         </div>
         <p className="max-w-2xl text-sm text-muted-foreground">
           Tracks listed by their owners, priced alongside the evidence: Originality Score, the six
-          SemanticAC categories, and the symbols each track resolves to.
+          the six categories, and the symbols each track resolves to.
         </p>
       </header>
 

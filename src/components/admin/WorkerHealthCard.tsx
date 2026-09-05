@@ -97,8 +97,18 @@ const WorkerHealthCard = () => {
 
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 60_000);
-    return () => clearInterval(t);
+    // Poll only while the tab is actually being looked at.
+    const t = setInterval(() => {
+      if (!document.hidden) void load();
+    }, 60_000);
+    const onVisible = () => {
+      if (!document.hidden) void load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   const live = beats.filter((b) => Date.now() - new Date(b.last_seen).getTime() < STALE_MS);

@@ -7,10 +7,10 @@ import { cn } from "@/lib/utils";
  * so a creator never has to guess how to get from one to the next.
  */
 const LINKS = [
-  { to: "/creator", label: "Creator", icon: BadgeCheck },
-  { to: "/creator/profile", label: "Profile", icon: UserRound },
-  { to: "/library/catalog", label: "Catalog", icon: Disc3 },
-  { to: "/market", label: "Market", icon: Store },
+  { to: "/creator", label: "Understand", icon: BadgeCheck, hint: "See how your sound scores" },
+  { to: "/creator/profile", label: "Register", icon: UserRound, hint: "Claim your work" },
+  { to: "/library/catalog", label: "Catalog", icon: Disc3, hint: "Albums, tracks and labels" },
+  { to: "/market", label: "Market", icon: Store, hint: "List work for sale" },
 ] as const;
 
 export const CreatorNav = ({ className }: { className?: string }) => {
@@ -31,13 +31,14 @@ export const CreatorNav = ({ className }: { className?: string }) => {
         <ArrowLeft className="h-3.5 w-3.5" />
         Home
       </Link>
-      {LINKS.map(({ to, label, icon: Icon }) => {
+      {LINKS.map(({ to, label, icon: Icon, hint }) => {
         const active = pathname === to;
         return (
           <Link
             key={to}
             to={to}
             aria-current={active ? "page" : undefined}
+            title={hint}
             className={cn(
               "flex shrink-0 items-center gap-1 rounded-full border px-3 py-1.5 transition-colors",
               active

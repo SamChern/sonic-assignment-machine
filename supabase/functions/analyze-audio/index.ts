@@ -408,16 +408,23 @@ Deno.serve(async (req) => {
       if (gateError) {
         // Never fail closed on a bookkeeping error — log and let the run through.
         console.error('guest run limit check failed:', gateError);
-      } else if (gate && gate.allowed === false) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            code: 'guest_limit_reached',
-            error:
-              "You've used your free look for today. Create a free account to keep analysing audio.",
-          }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
+      } else if (gate) {
+        const used = Number(gate.used) || 0;
+        const cap = Number(gate.limit ?? limit) || 0;
+        guestRunsRemaining = Math.max(0, cap - used);
+        if (gate.allowed === false) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              code: 'guest_limit_reached',
+              guest_runs_remaining: 0,
+              guest_runs_limit: cap,
+              error:
+                "You've used your free look for today. Create a free account to keep analysing audio.",
+            }),
+            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
       }
     }
 

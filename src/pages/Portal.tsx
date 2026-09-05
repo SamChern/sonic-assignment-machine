@@ -75,12 +75,12 @@ const FEATURES: Record<Persona, { label: string; blurb: string; to: string; icon
   curious: [
     { label: "Listen & analyse", blurb: "Drop one track, hear what it says about you.", to: "/?tab=listen", icon: FileAudio },
     { label: "My Library", blurb: "Every analysis, faceted and comparable.", to: "/?tab=library", icon: Layers },
-    { label: "Sonic Signature", blurb: "Your ensemble archetype, rendered as audio.", to: "/?tab=listen", icon: Sparkles },
+    { label: "Sonic Signature", blurb: "Your ensemble archetype, rendered as audio.", to: "/?tab=signature", icon: Sparkles },
   ],
   marketing: [
-    { label: "Enterprise workspace", blurb: "Cohorts, activations and predicted performance.", to: "/workspace", icon: Building2 },
-    { label: "Semantic analysis", blurb: "Six-category scoring across a whole dataset.", to: "/workspace", icon: LineChart },
-    { label: "Ingestion readiness", blurb: "Coverage and match rates before you spend.", to: "/workspace", icon: Check },
+    { label: "Enterprise workspace", blurb: "Cohorts, activations and predicted performance.", to: "/workspace?tab=users", icon: Building2 },
+    { label: "Semantic analysis", blurb: "Six-category scoring across a whole dataset.", to: "/workspace?tab=analyses", icon: LineChart },
+    { label: "Ingestion readiness", blurb: "Coverage and match rates before you spend.", to: "/workspace?tab=data", icon: Check },
   ],
   creator: [
     { label: "Creator door", blurb: "Fingerprint, divergence, lineage.", to: "/creator", icon: Palette },

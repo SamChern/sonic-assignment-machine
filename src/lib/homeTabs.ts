@@ -6,7 +6,10 @@
 export const TAB_ALIASES: Record<string, string> = {
   select: "listen",
   sonicsim: "listen",
+  // The Sonic Signature card lives on the listen surface.
+  signature: "listen",
   listen: "listen",
+
   network: "understand",
   analysis: "understand",
   understand: "understand",

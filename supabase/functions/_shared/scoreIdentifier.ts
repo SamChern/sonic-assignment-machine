@@ -24,6 +24,7 @@ import {
 import {
   applyNormalizationToAnalysis,
   loadNormalization,
+  normalizeScores,
 } from "./normalization.ts";
 import {
   backoffFor,
@@ -769,12 +770,7 @@ export async function prewarmTagSignatures(
       }
       // Same speech-skew normalization the per-identifier path applies, so a
       // cache hit reproduces the final numbers exactly.
-      const normScores = await applyNormalizationToAnalysis(
-        admin,
-        null,
-        scoreMap,
-        normCfg,
-      );
+      const { scores: normScores } = normalizeScores(scoreMap, normCfg);
       for (const c of CATEGORIES) scoreMap[c] = normScores[c] ?? scoreMap[c];
 
       // Learn once per tag pattern, not once per identifier.

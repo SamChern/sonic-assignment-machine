@@ -53,66 +53,101 @@ Deno.serve(async (req) => {
     let scored = 0;
     let unresolved = 0;
 
-    for (const rec of pending ?? []) {
-      const name = (rec.source_name ?? "").trim();
-      let scores: ScoreSet | null = null;
-      let confidence = 0.6;
+    const records = pending ?? [];
+    const names = Array.from(
+      new Set(
+        records
+          .map((r) => (r.source_name ?? "").trim())
+          .filter((n) => n.length > 0),
+      ),
+    );
 
-      if (name) {
-        const { data: prior } = await admin
-          .from("source_analyses")
+    // Two bulk lookups instead of two queries per record. Exact matching (`in`)
+    // replaces `ilike`, so a record literally named "%" can no longer wildcard
+    // its way into another tenant's analysis.
+    const priorByName = new Map<string, { scores: ScoreSet; confidence: number }>();
+    const cacheByName = new Map<string, ScoreSet>();
+
+    if (names.length) {
+      const { data: priors } = await admin
+        .from("source_analyses")
+        .select(
+          "source_name, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score, confidence, created_at",
+        )
+        .in("source_name", names)
+        .order("created_at", { ascending: false });
+
+      for (const p of priors ?? []) {
+        const key = (p.source_name ?? "").trim();
+        if (!key || priorByName.has(key)) continue; // newest wins
+        const s: ScoreSet = {};
+        for (const c of CATEGORIES) s[c] = Number(p[`${c}_score`]);
+        priorByName.set(key, { scores: s, confidence: Number(p.confidence ?? 0.6) });
+      }
+
+      const missing = names.filter((n) => !priorByName.has(n));
+      if (missing.length) {
+        const { data: cached } = await admin
+          .from("source_cache")
           .select(
-            "emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score, confidence",
+            "source_name, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
           )
-          .ilike("source_name", name)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (prior) {
-          scores = {};
-          for (const c of CATEGORIES) scores[c] = Number(prior[`${c}_score`]);
-          confidence = Number(prior.confidence ?? 0.6);
-        } else {
-          const { data: cached } = await admin
-            .from("source_cache")
-            .select(
-              "emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
-            )
-            .ilike("source_name", name)
-            .limit(1)
-            .maybeSingle();
-          if (cached) {
-            scores = {};
-            for (const c of CATEGORIES) scores[c] = Number(cached[`${c}_score`]);
-            confidence = 0.5;
-          }
+          .in("source_name", missing);
+        for (const c0 of cached ?? []) {
+          const key = (c0.source_name ?? "").trim();
+          if (!key || cacheByName.has(key)) continue;
+          const s: ScoreSet = {};
+          for (const c of CATEGORIES) s[c] = Number(c0[`${c}_score`]);
+          cacheByName.set(key, s);
         }
       }
+    }
+
+    const scoredUpdates: Record<string, unknown>[] = [];
+    const unresolvedUpdates: Record<string, unknown>[] = [];
+
+    for (const rec of records) {
+      const name = (rec.source_name ?? "").trim();
+      const prior = name ? priorByName.get(name) : undefined;
+      const cacheHit = !prior && name ? cacheByName.get(name) : undefined;
+      const scores: ScoreSet | null = prior?.scores ?? cacheHit ?? null;
+      const confidence = prior ? prior.confidence : 0.5;
 
       if (!scores) {
         unresolved += 1;
-        await admin
-          .from("enterprise_records")
-          .update({
-            analysis_status: "unresolved",
-            analysis_error: rec.audio_url
-              ? "Audio link present but not yet analyzed — run the audio pipeline for this source"
-              : "No matching analyzed source. Add a source_name that exists in SonicSIM, or an audio link.",
-          })
-          .eq("id", rec.id);
+        unresolvedUpdates.push({
+          id: rec.id,
+          analysis_status: "unresolved",
+          analysis_error: rec.audio_url
+            ? "Audio link present but not yet analyzed — run the audio pipeline for this source"
+            : "No matching analyzed source. Add a source_name that exists in SonicSIM, or an audio link.",
+        });
         continue;
       }
 
       const update: Record<string, unknown> = {
+        id: rec.id,
         analysis_status: "scored",
         analysis_error: null,
         score_confidence: confidence,
       };
       for (const c of CATEGORIES) update[`${c}_score`] = scores[c];
-      await admin.from("enterprise_records").update(update).eq("id", rec.id);
+      scoredUpdates.push(update);
       scored += 1;
     }
+
+    // Bulk write both outcomes (upsert on the primary key = batched update).
+    for (const batch of [scoredUpdates, unresolvedUpdates]) {
+      for (let i = 0; i < batch.length; i += 500) {
+        const chunk = batch.slice(i, i + 500);
+        if (!chunk.length) continue;
+        const { error } = await admin
+          .from("enterprise_records")
+          .upsert(chunk, { onConflict: "id" });
+        if (error) throw new Error(error.message);
+      }
+    }
+
 
     // Recompute dataset roll-up from all scored records.
     const { data: allScored } = await admin

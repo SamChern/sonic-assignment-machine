@@ -1,38 +1,51 @@
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { PlayCircle, Upload, GitCompare, Shield, Building2, User, LogIn } from "lucide-react";
+import { PlayCircle, Headphones, Activity, Library, Shield, Building2, User, LogIn } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
 import { cn } from "@/lib/utils";
+import { normalizeTab } from "@/lib/homeTabs";
 
 type NavItem = {
   key: string;
   label: string;
   to: string;
-  icon: typeof Upload;
-  isActive: (pathname: string, tab: string | null) => boolean;
+  icon: typeof Headphones;
+  isActive: (pathname: string, tab: string) => boolean;
 };
 
+/**
+ * The bar mirrors the three real home tabs (listen / understand / library) so
+ * the highlighted item always matches the surface on screen. Earlier labels
+ * ("Upload", "Compare") pointed at tab names that no longer exist.
+ */
 const ITEMS: NavItem[] = [
+  {
+    key: "listen",
+    label: "Listen",
+    to: "/?tab=listen",
+    icon: Headphones,
+    isActive: (p, tab) => p === "/" && tab === "listen",
+  },
+  {
+    key: "understand",
+    label: "Analyse",
+    to: "/?tab=understand",
+    icon: Activity,
+    isActive: (p, tab) => p === "/" && tab === "understand",
+  },
+  {
+    key: "library",
+    label: "Library",
+    to: "/?tab=library",
+    icon: Library,
+    isActive: (p, tab) => p === "/" && tab === "library",
+  },
   {
     key: "demo",
     label: "Demo",
     to: "/demo",
     icon: PlayCircle,
     isActive: (p) => p === "/demo",
-  },
-  {
-    key: "upload",
-    label: "Upload",
-    to: "/?tab=select",
-    icon: Upload,
-    isActive: (p, tab) => p === "/" && tab !== "discover",
-  },
-  {
-    key: "compare",
-    label: "Compare",
-    to: "/?tab=discover",
-    icon: GitCompare,
-    isActive: (p, tab) => p === "/" && tab === "discover",
   },
   {
     key: "enterprise",
@@ -71,7 +84,7 @@ export function MobileBottomNav() {
   const { user, isAdmin } = useAuth();
   const { orgs } = useOrganization();
   const hasOrg = orgs.length > 0;
-  const tab = searchParams.get("tab");
+  const tab = pathname === "/" ? normalizeTab(searchParams.get("tab")) : "";
 
   if (pathname === "/auth") return null;
 
@@ -81,6 +94,9 @@ export function MobileBottomNav() {
     if (item.key === "account") return !!user;
     if (item.key === "admin") return isAdmin;
     if (item.key === "enterprise") return !!user && hasOrg;
+    // Demo is a marketing surface: keep it for visitors, drop it once a signed-in
+    // user has real doors, so the bar never crowds past five items on a phone.
+    if (item.key === "demo") return !user;
     return true;
   });
 

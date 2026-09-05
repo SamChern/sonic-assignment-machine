@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, useMemo, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -153,8 +153,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error ? new Error(error.message) : null };
   };
 
-  return (
-    <AuthContext.Provider value={{
+  // Without memoisation this object was new on every provider render, so every
+  // consumer in the tree re-rendered on any auth tick.
+  const value = useMemo(
+    () => ({
       user,
       session,
       profile,
@@ -164,7 +166,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signOut,
       updateProfile,
-    }}>
+    }),
+    [user, session, profile, loading, isAdmin],
+  );
+
+  return (
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

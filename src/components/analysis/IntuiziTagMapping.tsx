@@ -13,6 +13,12 @@ interface Props {
   scores: Record<string, number>;
   refreshKey?: number;
   className?: string;
+  /**
+   * Technical view (admin / enterprise): taxonomy codes, weights, observation
+   * counts and the model-vs-tag gap. Consumers get the plain-language version:
+   * which sounds drove each score, no statistics.
+   */
+  technical?: boolean;
 }
 
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -30,6 +36,7 @@ export const IntuiziTagMapping = ({
   scores,
   refreshKey = 0,
   className,
+  technical = false,
 }: Props) => {
   const { attribution, tagCount, loading } = useTagAttribution(audioSourceId, refreshKey);
   const [open, setOpen] = useState(false);
@@ -52,10 +59,14 @@ export const IntuiziTagMapping = ({
     >
       <div className="flex flex-wrap items-center gap-2">
         <Tags className="h-4 w-4 text-primary" />
-        <h4 className="text-sm font-semibold">Intuizi taxonomy mapping</h4>
-        <Badge variant="secondary" className="text-[10px]">
-          {tagCount} tags · {mapped.length}/6 categories
-        </Badge>
+        <h4 className="text-sm font-semibold">
+          {technical ? "Intuizi taxonomy mapping" : "What drove each score"}
+        </h4>
+        {technical && (
+          <Badge variant="secondary" className="text-[10px]">
+            {tagCount} tags · {mapped.length}/6 categories
+          </Badge>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -63,7 +74,7 @@ export const IntuiziTagMapping = ({
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
         >
-          {open ? "Hide detail" : "Tag-to-score detail"}
+          {open ? "Hide detail" : technical ? "Tag-to-score detail" : "Show more"}
           {open ? (
             <ChevronUp className="ml-1 h-3.5 w-3.5" />
           ) : (
@@ -90,11 +101,11 @@ export const IntuiziTagMapping = ({
                   {title(attr.category)}
                 </span>
                 <span className="ml-auto font-mono text-[11px] text-muted-foreground">
-                  tags {attr.tagScore ?? "—"} / model {modelScore}
+                  {technical ? `tags ${attr.tagScore ?? "—"} / model ${modelScore}` : modelScore}
                 </span>
               </div>
 
-              {delta !== null && (
+              {technical && delta !== null && (
                 <p className="mt-1 text-[10px] text-muted-foreground">
                   {delta === 0
                     ? "Tags and model agree"
@@ -108,10 +119,10 @@ export const IntuiziTagMapping = ({
                 {shown.map((t) => (
                   <li key={t.code}>
                     <div className="flex items-center gap-2 text-[11px]">
-                      <span className="truncate" title={t.code}>
+                      <span className="truncate" title={technical ? t.code : t.label}>
                         {t.label}
                       </span>
-                      {t.thin && (
+                      {technical && t.thin && (
                         <Badge
                           variant="outline"
                           className="h-4 shrink-0 px-1 text-[9px] text-muted-foreground"
@@ -132,7 +143,7 @@ export const IntuiziTagMapping = ({
                         style={{ width: `${Math.round(t.share * 100)}%` }}
                       />
                     </div>
-                    {open && (
+                    {open && technical && (
                       <div className="mt-0.5 flex gap-3 text-[10px] text-muted-foreground">
                         <span>weight {t.weight.toFixed(2)}</span>
                         <span>share {Math.round(t.share * 100)}%</span>
@@ -154,9 +165,9 @@ export const IntuiziTagMapping = ({
       </div>
 
       <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
-        Tag scores are the calibrated mean this taxonomy node has earned in the
-        category across every analysis, weighted by the tag's strength on this
-        source. Bars show each tag's share of that category's evidence.
+        {technical
+          ? "Tag scores are the calibrated mean this taxonomy node has earned in the category across every analysis, weighted by the tag's strength on this source. Bars show each tag's share of that category's evidence."
+          : "These are the kinds of sound we heard in your audio, and how strongly each one shaped the score. Longer bars had more influence."}
       </p>
     </div>
   );

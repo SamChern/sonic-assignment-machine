@@ -3,16 +3,20 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronUp, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 import { forceUpdate, getVersionStatus, type VersionStatus } from "@/pwa/registerServiceWorker";
+import { useAuth } from "@/hooks/useAuth";
 
 const short = (value: string | null | undefined) =>
   value ? (value.length > 12 ? `${value.slice(0, 12)}…` : value) : "—";
 
 /**
- * Visible build-stamp / service-worker version panel. Collapsed to a small chip
- * until the compiled build differs from the deployed one, in which case it
- * expands and prompts a reload.
+ * Build-stamp / service-worker status.
+ *
+ * Everyday visitors see nothing at all unless their tab is running an older
+ * release, in which case a single quiet "Update available / Reload" bar appears.
+ * Build ids and service-worker internals are admin-only detail.
  */
 const VersionStatusPanel = () => {
+  const { isAdmin } = useAuth();
   const [status, setStatus] = useState<VersionStatus | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -39,14 +43,23 @@ const VersionStatusPanel = () => {
   if (!status) return null;
 
   const stale = status.stale;
+  // Nothing to say to a non-admin on a current build.
+  if (!stale && !isAdmin) return null;
 
   return (
     <div className="above-mobile-nav z-banner fixed left-3 flex max-w-[min(22rem,calc(100vw-1.5rem))] flex-col">
       <div className="rounded-xl border border-border/60 bg-card/90 shadow-elegant backdrop-blur-md">
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
+          onClick={() => {
+            if (!isAdmin && stale) {
+              setBusy(true);
+              void forceUpdate();
+              return;
+            }
+            setOpen((v) => !v);
+          }}
+          aria-expanded={isAdmin ? open : undefined}
           className="flex w-full items-center gap-2 px-3 py-2 text-left"
         >
           {stale ? (
@@ -55,19 +68,27 @@ const VersionStatusPanel = () => {
             <ShieldCheck className="h-4 w-4 shrink-0 text-primary" aria-hidden />
           )}
           <span className="min-w-0 flex-1 truncate text-xs font-medium">
-            {stale ? "Update available" : "Version up to date"}
+            {stale
+              ? isAdmin
+                ? "Update available"
+                : "A newer version is ready — tap to reload"
+              : "Version up to date"}
           </span>
-          <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
-            {short(status.compiledBuildId)}
-          </Badge>
-          {open ? (
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          ) : (
-            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          {isAdmin && (
+            <>
+              <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
+                {short(status.compiledBuildId)}
+              </Badge>
+              {open ? (
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              ) : (
+                <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              )}
+            </>
           )}
         </button>
 
-        {open && (
+        {open && isAdmin && (
           <div className="space-y-2 border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
             <dl className="space-y-1">
               <div className="flex items-center justify-between gap-2">

@@ -450,7 +450,12 @@ export async function embedAudioProfileCached(
     }
   }
 
-  if (!vec) vec = await embedCached(supabase, profileText);
+  let producedSpace = model;
+  if (!vec) {
+    const fresh = await embedCachedWithSpace(supabase, profileText);
+    vec = fresh.vector;
+    if (fresh.space) producedSpace = fresh.space;
+  }
   if (!vec) return { vector: null, source: "computed" };
 
   if (supabase && cacheKey) {
@@ -458,9 +463,12 @@ export async function embedAudioProfileCached(
       await supabase
         .from("audio_profile_embeddings")
         .upsert(
-          { cache_key: cacheKey, model, embedding: vec, dims: vec.length },
+          // Keyed by the space that actually produced the vector, never the one
+          // we hoped for — a CLAP outage must not poison the CLAP key.
+          { cache_key: cacheKey, model: producedSpace, embedding: vec, dims: vec.length },
           { onConflict: "cache_key,model" },
         );
+
     } catch (e) {
       console.warn(
         "audio_profile_embeddings write failed:",

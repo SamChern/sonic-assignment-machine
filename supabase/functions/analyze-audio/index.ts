@@ -403,7 +403,11 @@ Deno.serve(async (req) => {
         .in('source_key', cacheKeys);
 
       if (cacheError) {
-        console.error('Cache lookup error:', cacheError);
+        // A cache read failure must never look like "nothing to do": analyse
+        // every source instead of returning an empty success to the caller.
+        console.error('Cache lookup error, analysing all sources:', cacheError);
+        uncachedSources.push(...sources);
+
       } else if (cachedData && cachedData.length > 0) {
         console.log(`Found ${cachedData.length} cached analyses`);
         

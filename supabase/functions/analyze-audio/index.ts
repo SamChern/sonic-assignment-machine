@@ -393,8 +393,9 @@ Deno.serve(async (req) => {
       ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
       : null;
 
-    // Guests get a small, *server-enforced* free allowance. The browser copy of
-    // this counter is only a hint — clearing localStorage must not buy more runs.
+    // Guests get a small, *server-enforced* free allowance. The browser never
+    // holds the counter — the server reports how many runs are left.
+    let guestRunsRemaining: number | null = null;
     if (!user_id && supabaseAdmin) {
       const limit = Math.round(
         await controlNumber(supabaseAdmin, 'guest.daily_runs', 2, { min: 0, max: 50 }),

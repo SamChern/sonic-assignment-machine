@@ -81,7 +81,10 @@ export const GroundingBadge = ({
   }, [audioSourceId, level]);
 
   if (!resolved) return null;
-  const { label, cls, hint, Icon } = STYLES[resolved] ?? STYLES["text-only"];
+  const style = STYLES[resolved] ?? STYLES["text-only"];
+  const words = plain ? (PLAIN[resolved] ?? PLAIN["text-only"]) : style;
+  const { cls, Icon } = style;
+  const { label, hint } = words;
 
   return (
     <span

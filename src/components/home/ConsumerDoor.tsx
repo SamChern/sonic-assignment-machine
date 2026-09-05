@@ -54,17 +54,10 @@ interface DoorResult {
 }
 
 
-const GUEST_RUNS_KEY = "sonicsim.guestRuns";
+// Guest allowance is owned by the server (analyze-audio reports what's left);
+// nothing about it is stored in the browser.
 const GUEST_LIMIT = 1;
 const FREE_MONTHLY_LIMIT = 3;
-
-const readGuestRuns = () => {
-  try {
-    return Number(localStorage.getItem(GUEST_RUNS_KEY)) || 0;
-  } catch {
-    return 0;
-  }
-};
 
 const label = (c: string) => c.charAt(0).toUpperCase() + c.slice(1);
 

@@ -306,8 +306,17 @@ const Workspace = () => {
         </div>
 
         <div className="mt-6">
+          <WorkspaceDigestCard
+            key={`${refreshKey}-${active.organization_id}`}
+            organizationId={active.organization_id}
+            onPick={setTab}
+          />
+        </div>
+
+        <div className="mt-4">
           <JobCards onPick={setTab} />
         </div>
+
 
         <Tabs value={group} onValueChange={setGroup} className="mt-6">
           <TabsList className="grid h-auto w-full grid-cols-4 gap-1 border border-border/60 bg-card/70 p-1 backdrop-blur-sm">

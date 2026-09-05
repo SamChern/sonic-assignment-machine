@@ -103,7 +103,8 @@ export const ConsumerDoor = ({
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<DoorResult | null>(null);
   const [monthlyUsed, setMonthlyUsed] = useState<number | null>(null);
-  const [guestRuns, setGuestRuns] = useState(() => readGuestRuns());
+  // Guest allowance as last reported by the server; null until a run happens.
+  const [guestRemaining, setGuestRemaining] = useState<number | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [quotaError, setQuotaError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);

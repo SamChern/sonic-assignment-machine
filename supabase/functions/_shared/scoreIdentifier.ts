@@ -476,15 +476,13 @@ async function runScore(
     scoreMap = { ...(cachedRow.scores as Record<Category, number>) };
     descMap = (cachedRow.descriptions as Record<string, string>) ?? {};
     groundingLevel = cachedRow.grounding_level ?? "text-only";
-    // Deliberately NOT re-running calibration or the profile embedding: the
-    // prior already learned from this exact tag set on the representative call,
-    // and repeating it per identifier would re-weight the same evidence
-    // thousands of times (and cost a write per identifier).
-    await admin
-      .from("intuizi_tag_score_cache")
-      .update({ hits: (cachedRow.hits ?? 0) + 1, updated_at: new Date().toISOString() })
-      .eq("tag_signature", tagSignature);
+    // Deliberately NOT re-running calibration, the profile embedding OR the
+    // `hits` bump: the prior already learned from this exact tag set on the
+    // representative call, and a per-identifier write cost one round trip per
+    // row across ~1.1M rows. Hit counts are recorded per batch by
+    // `prewarmTagSignatures` instead.
   } else {
+
     // 3b. Calibration priors + kNN warm start.
     //     `stepScale` < 1 means a previous attempt was killed for compute: keep
     //     the warm start smaller (fewer neighbours, shorter context).

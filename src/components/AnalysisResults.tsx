@@ -15,6 +15,8 @@ import {
   NeighborContext,
 } from "@/components/analysis/SourceDetailPanels";
 import { IntuiziTagMapping } from "@/components/analysis/IntuiziTagMapping";
+import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 
 const SignatureCard = lazy(() =>
   import("@/components/SignatureCard").then((m) => ({ default: m.SignatureCard }))
@@ -218,6 +220,12 @@ const AnimatedScoreBar = ({ score, categoryName, delay }: { score: number; categ
 };
 
 export const AnalysisResults = ({ results, isAnalyzing, sourceImages = [], sourceIds = [], musical = [] }: AnalysisResultsProps) => {
+  // Taxonomy codes, weights and observation counts are operator detail: only
+  // admins and enterprise members see them. Consumers get plain language.
+  const { isAdmin } = useAuth();
+  const { orgs } = useOrganization();
+  const showTechnicalDetail = isAdmin || orgs.length > 0;
+
   // Locally refreshed scores per audio source (after admin feedback submissions)
   const [overrides, setOverrides] = useState<Record<string, CategoryScore[]>>({});
   const [refreshKeys, setRefreshKeys] = useState<Record<string, number>>({});

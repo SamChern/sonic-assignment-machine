@@ -203,6 +203,11 @@ export const ConsumerDoor = ({
         const { data, error } = await invokeWithTimeout<AnalyzeAudioResponse>("analyze-audio", {
           body: { sources: [source], user_id: userId ?? undefined, save_results: !!userId },
         });
+        // The server owns the free-run count — trust whatever it reports.
+        if (!isSignedIn && typeof data?.guest_runs_remaining === "number") {
+          setGuestRemaining(data.guest_runs_remaining);
+        }
+        if (data?.code === "guest_limit_reached" && !isSignedIn) setGuestRemaining(0);
         if (error) throw error;
         if (data?.error) throw new Error(String(data.error));
         const first = data?.sources?.[0];

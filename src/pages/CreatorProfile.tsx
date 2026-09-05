@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   BadgeCheck,
   FileAudio,
   History,
@@ -20,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LibraryFacetBar } from "@/components/library/LibraryFacetBar";
 import { EMPTY_FILTER, groupLibrary, type FacetFilter } from "@/lib/libraryFacets";
+import { CreatorNav } from "@/components/creator/CreatorNav";
 
 interface LedgerEvent {
   id: string;
@@ -132,14 +132,8 @@ export default function CreatorProfile() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl space-y-4 px-4 py-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="ghost" className="h-8" asChild>
-            <Link to="/creator">
-              <ArrowLeft className="mr-1 h-4 w-4" /> Creator
-            </Link>
-          </Button>
-          <h1 className="text-lg font-semibold">Creator profile</h1>
-        </div>
+        <CreatorNav />
+        <h1 className="text-lg font-semibold">Creator profile</h1>
 
         <Card className="flex flex-wrap items-center gap-3 p-4">
           <Avatar className="h-12 w-12">

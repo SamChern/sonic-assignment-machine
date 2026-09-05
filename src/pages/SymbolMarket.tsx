@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Music4, Store, Tag } from "lucide-react";
+import { Loader2, Music4, Store, Tag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { OriginalityBadge } from "@/components/OriginalityBadge";
 import { formatCents } from "@/lib/catalogOriginality";
+import { CreatorNav } from "@/components/creator/CreatorNav";
 
 interface Listing {
   id: string;
@@ -131,12 +132,7 @@ const SymbolMarket = () => {
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:py-10">
       <header className="space-y-2">
-        <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2 text-xs">
-          <Link to="/library/catalog">
-            <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-            Back to catalog
-          </Link>
-        </Button>
+        <CreatorNav />
         <div className="flex items-center gap-2">
           <Store className="h-5 w-5 text-primary" />
           <h1 className="text-2xl font-semibold tracking-tight">Symbol market</h1>

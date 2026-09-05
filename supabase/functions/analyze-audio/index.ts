@@ -312,6 +312,23 @@ async function resolveCaller(
   }
 }
 
+/**
+ * A stable, non-reversible key for an anonymous caller: the client IP plus a
+ * coarse client hint, hashed so no raw address is stored.
+ */
+async function guestFingerprint(req: Request): Promise<string> {
+  const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() ||
+    req.headers.get('cf-connecting-ip') ||
+    'unknown';
+  const ua = (req.headers.get('user-agent') ?? '').slice(0, 120);
+  const bytes = new TextEncoder().encode(`guest:${ip}:${ua}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+
 /** Rejects malformed bodies before any AI call or DB write happens. */
 function validateSources(sources: unknown): { ok: true; sources: AudioSource[] } | { ok: false; error: string } {
   if (!Array.isArray(sources) || sources.length === 0) {
@@ -376,10 +393,38 @@ Deno.serve(async (req) => {
       ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
       : null;
 
+    // Guests get a small, *server-enforced* free allowance. The browser copy of
+    // this counter is only a hint — clearing localStorage must not buy more runs.
+    if (!user_id && supabaseAdmin) {
+      const limit = Math.round(
+        await controlNumber(supabaseAdmin, 'guest.daily_runs', 2, { min: 0, max: 50 }),
+      );
+      const guestKey = await guestFingerprint(req);
+      const { data: gate, error: gateError } = await supabaseAdmin.rpc('consume_guest_run', {
+        p_key: guestKey,
+        p_limit: limit,
+      });
+      if (gateError) {
+        // Never fail closed on a bookkeeping error — log and let the run through.
+        console.error('guest run limit check failed:', gateError);
+      } else if (gate && gate.allowed === false) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            code: 'guest_limit_reached',
+            error:
+              "You've used your free look for today. Create a free account to keep analysing audio.",
+          }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+    }
+
     // Control Room knobs (60s cached; fall back to the shipped defaults).
     const knnK = Math.round(
       await controlNumber(supabaseAdmin, 'knn.k', 5, { min: 1, max: 32 }),
     );
+
 
     // === OPTIMIZATION 1: Check cache for existing analyses ===
     const cachedResults: SourceResult[] = [];

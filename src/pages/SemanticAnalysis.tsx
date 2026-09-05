@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { friendlyError } from "@/lib/friendlyError";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -334,7 +335,7 @@ const SemanticAnalysis = () => {
     if (error) {
       toast({
         title: "Could not load identifiers",
-        description: error.message,
+        description: friendlyError(error),
         variant: "destructive",
       });
       setLoading(false);
@@ -416,7 +417,7 @@ const SemanticAnalysis = () => {
     if (error) {
       toast({
         title: "Could not load saved analyses",
-        description: error.message,
+        description: friendlyError(error),
         variant: "destructive",
       });
       return;
@@ -446,7 +447,7 @@ const SemanticAnalysis = () => {
     if (error) {
       toast({
         title: "Could not delete analysis",
-        description: error.message,
+        description: friendlyError(error),
         variant: "destructive",
       });
       return;

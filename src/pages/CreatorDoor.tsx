@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DivergenceQuadrant from "@/components/creator/DivergenceQuadrant";
+import { CreatorNav } from "@/components/creator/CreatorNav";
 
 /**
  * Step 17 — the Creator door.
@@ -236,25 +237,15 @@ const CreatorDoor = () => {
   return (
     <div className="relative min-h-screen gradient-app">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto max-w-5xl space-y-2 px-4 py-3">
           <div>
             <h1 className="text-base font-semibold sm:text-lg">Creator door</h1>
             <p className="text-xs text-muted-foreground">
               Understand your work, register its provenance, choose how machines may use it.
             </p>
           </div>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/creator/profile">
-              <UserRound className="mr-1 h-4 w-4" />
-              My profile
-            </Link>
-          </Button>
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/">
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Home
-            </Link>
-          </Button>
+          <CreatorNav />
+
 
         </div>
       </header>

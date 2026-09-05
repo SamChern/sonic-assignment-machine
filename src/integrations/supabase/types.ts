@@ -1065,6 +1065,30 @@ export type Database = {
           },
         ]
       }
+      guest_run_limits: {
+        Row: {
+          created_at: string
+          guest_key: string
+          run_day: string
+          runs: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          guest_key: string
+          run_day?: string
+          runs?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          guest_key?: string
+          run_day?: string
+          runs?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ingest_rollup_chunks: {
         Row: {
           created_at: string
@@ -3413,6 +3437,10 @@ export type Database = {
         Args: { p_id: string; p_rows: number; p_status?: string }
         Returns: undefined
       }
+      consume_guest_run: {
+        Args: { p_key: string; p_limit: number }
+        Returns: Json
+      }
       creator_queued_symbols: {
         Args: never
         Returns: {
@@ -3612,6 +3640,10 @@ export type Database = {
         Returns: Json
       }
       prune_embedding_cache: { Args: { p_idle_days?: number }; Returns: number }
+      prune_guest_run_limits: {
+        Args: { p_keep_days?: number }
+        Returns: number
+      }
       read_ingest_rollup_subject_batch: {
         Args: {
           p_after_subject?: string

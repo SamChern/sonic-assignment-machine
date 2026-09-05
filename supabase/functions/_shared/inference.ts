@@ -221,20 +221,26 @@ function padTo(v: number[], dims: number): number[] {
 }
 
 /**
- * Embed a text string. Order: EC2 semantic-svc (CLAP) -> EC2 OpenAI-compatible
- * server -> Lovable gateway.
- * Returns null on non-terminal failure (embeddings are enrichment, never fatal).
- * Terminal gateway denials (402/403/429) are thrown so callers can trip a breaker.
+ * Embed a text string, reporting which space actually produced the vector.
+ *
+ * Order: EC2 semantic-svc (CLAP) -> EC2 OpenAI-compatible server -> Lovable
+ * gateway. Because the fallbacks live in *different* embedding spaces, the
+ * caller needs to know which one answered: caching a gateway vector under the
+ * CLAP key poisons every kNN comparison downstream.
+ *
+ * Returns `{ vector: null, space: null }` on non-terminal failure (embeddings
+ * are enrichment, never fatal). Terminal gateway denials (402/403/429) are
+ * thrown so callers can trip a breaker.
  */
-export async function embedText(
+export async function embedTextWithSpace(
   text: string,
   // deno-lint-disable-next-line no-explicit-any
   supabase: any | null = null,
-): Promise<number[] | null> {
+): Promise<{ vector: number[] | null; space: string | null }> {
   const svc = await getSemanticSvcConfig(supabase);
   if (svc && !semanticSvcBreakerOpen()) {
     const v = await clapEmbedText(svc, text);
-    if (v) return v;
+    if (v) return { vector: v, space: svc.space };
   }
 
   if (ec2Available(EC2_EMBED_MODEL)) {
@@ -259,15 +265,15 @@ export async function embedText(
         );
       }
       noteEc2Success();
-      return padTo(v as number[], EMBEDDING_DIMS);
+      return { vector: padTo(v as number[], EMBEDDING_DIMS), space: `ec2:${EC2_EMBED_MODEL}` };
     } catch (e) {
       noteEc2Failure(e);
-      if (EC2_REQUIRED) return null;
+      if (EC2_REQUIRED) return { vector: null, space: null };
     }
   }
 
 
-  if (!LOVABLE_API_KEY) return null;
+  if (!LOVABLE_API_KEY) return { vector: null, space: null };
   try {
     const r = await postJson(
       `${GATEWAY}/embeddings`,
@@ -281,29 +287,53 @@ export async function embedText(
           status: r.status,
         });
       }
-      return null;
+      return { vector: null, space: null };
     }
     const j = await r.json();
-    return j?.data?.[0]?.embedding ?? null;
+    const v = j?.data?.[0]?.embedding ?? null;
+    return {
+      vector: Array.isArray(v) ? (v as number[]) : null,
+      space: Array.isArray(v) ? `gateway:${GATEWAY_EMBED_MODEL}` : null,
+    };
   } catch (e) {
     const status = (e as { status?: number })?.status;
     if (status === 402 || status === 403 || status === 429) throw e;
-    return null;
+    return { vector: null, space: null };
   }
+}
+
+/** Back-compatible wrapper: the vector only. */
+export async function embedText(
+  text: string,
+  // deno-lint-disable-next-line no-explicit-any
+  supabase: any | null = null,
+): Promise<number[] | null> {
+  return (await embedTextWithSpace(text, supabase)).vector;
 }
 
 /**
  * Embed with a persistent cache in `public.embedding_cache`, keyed by the hash
- * of the input text *and* the embedding model. Identical taxonomy labels /
- * profile strings never pay for a second embedding call, and switching models
- * simply misses the cache instead of returning vectors from another space.
+ * of the input text *and* the embedding space that produced the vector.
+ *
+ * Reads use the space we *expect* to be active; writes use the space that
+ * actually answered. When CLAP is down and the gateway answers instead, the row
+ * is stored under the gateway key, so a later CLAP read misses the cache rather
+ * than being handed a vector from another space.
  */
 export async function embedCached(
   // deno-lint-disable-next-line no-explicit-any
   supabase: any | null,
   text: string,
 ): Promise<number[] | null> {
-  if (!supabase) return await embedText(text);
+  return (await embedCachedWithSpace(supabase, text)).vector;
+}
+
+export async function embedCachedWithSpace(
+  // deno-lint-disable-next-line no-explicit-any
+  supabase: any | null,
+  text: string,
+): Promise<{ vector: number[] | null; space: string | null }> {
+  if (!supabase) return await embedTextWithSpace(text);
   const hash = await stableHash(text);
   const model = await resolveEmbeddingSpace(supabase);
   try {
@@ -315,24 +345,36 @@ export async function embedCached(
       .maybeSingle();
     if (data?.embedding) {
       const v = typeof data.embedding === "string" ? JSON.parse(data.embedding) : data.embedding;
-      if (Array.isArray(v) && v.length === EMBEDDING_DIMS) return v as number[];
+      if (Array.isArray(v) && v.length === EMBEDDING_DIMS) {
+        return { vector: v as number[], space: model };
+      }
     }
   } catch (e) {
     console.warn("embedding_cache read failed:", e instanceof Error ? e.message : e);
   }
 
-  const vec = await embedText(text, supabase);
-  if (vec) {
+  const { vector: vec, space: producedSpace } = await embedTextWithSpace(text, supabase);
+  if (vec && producedSpace) {
+    if (producedSpace !== model) {
+      console.warn(
+        `embedding space fell back: expected ${model}, got ${producedSpace}; ` +
+          `caching under the producing space so kNN never mixes spaces`,
+      );
+    }
     try {
       await supabase
         .from("embedding_cache")
-        .upsert({ text_hash: hash, model, embedding: vec }, { onConflict: "text_hash,model" });
+        .upsert(
+          { text_hash: hash, model: producedSpace, embedding: vec },
+          { onConflict: "text_hash,model" },
+        );
     } catch (e) {
       console.warn("embedding_cache write failed:", e instanceof Error ? e.message : e);
     }
   }
-  return vec;
+  return { vector: vec, space: producedSpace };
 }
+
 
 /**
  * Content-addressed embedding cache for audio profiles.
@@ -408,7 +450,12 @@ export async function embedAudioProfileCached(
     }
   }
 
-  if (!vec) vec = await embedCached(supabase, profileText);
+  let producedSpace = model;
+  if (!vec) {
+    const fresh = await embedCachedWithSpace(supabase, profileText);
+    vec = fresh.vector;
+    if (fresh.space) producedSpace = fresh.space;
+  }
   if (!vec) return { vector: null, source: "computed" };
 
   if (supabase && cacheKey) {
@@ -416,9 +463,12 @@ export async function embedAudioProfileCached(
       await supabase
         .from("audio_profile_embeddings")
         .upsert(
-          { cache_key: cacheKey, model, embedding: vec, dims: vec.length },
+          // Keyed by the space that actually produced the vector, never the one
+          // we hoped for — a CLAP outage must not poison the CLAP key.
+          { cache_key: cacheKey, model: producedSpace, embedding: vec, dims: vec.length },
           { onConflict: "cache_key,model" },
         );
+
     } catch (e) {
       console.warn(
         "audio_profile_embeddings write failed:",

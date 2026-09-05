@@ -769,18 +769,21 @@ export type Database = {
         Row: {
           created_at: string
           embedding: string
+          last_used_at: string
           model: string
           text_hash: string
         }
         Insert: {
           created_at?: string
           embedding: string
+          last_used_at?: string
           model?: string
           text_hash: string
         }
         Update: {
           created_at?: string
           embedding?: string
+          last_used_at?: string
           model?: string
           text_hash?: string
         }
@@ -2767,6 +2770,7 @@ export type Database = {
           member_count: number
           name: string
           narrative: string | null
+          organization_id: string | null
           slug: string
           updated_at: string
         }
@@ -2779,6 +2783,7 @@ export type Database = {
           member_count?: number
           name: string
           narrative?: string | null
+          organization_id?: string | null
           slug: string
           updated_at?: string
         }
@@ -2791,10 +2796,19 @@ export type Database = {
           member_count?: number
           name?: string
           narrative?: string | null
+          organization_id?: string | null
           slug?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sonic_cohorts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sonic_signatures: {
         Row: {
@@ -3289,6 +3303,7 @@ export type Database = {
           tags_written: number
         }[]
       }
+      bump_share_card_views: { Args: { p_token: string }; Returns: undefined }
       claim_analysis_jobs: {
         Args: { p_limit?: number }
         Returns: {
@@ -3415,6 +3430,20 @@ export type Database = {
       fail_ingest_file: {
         Args: { p_error: string; p_id: string }
         Returns: undefined
+      }
+      get_share_card: {
+        Args: { p_token: string }
+        Returns: {
+          archetype_slug: string
+          created_at: string
+          grounding_level: string
+          narration: string
+          source_name: string
+          tags: Json
+          token: string
+          vector: Json
+          view_count: number
+        }[]
       }
       grounding_coverage: {
         Args: never
@@ -3582,6 +3611,7 @@ export type Database = {
         }
         Returns: Json
       }
+      prune_embedding_cache: { Args: { p_idle_days?: number }; Returns: number }
       read_ingest_rollup_subject_batch: {
         Args: {
           p_after_subject?: string
@@ -3664,6 +3694,7 @@ export type Database = {
         Args: { p_cache_key: string; p_model: string }
         Returns: undefined
       }
+      upsert_category_calibration: { Args: { p_rows: Json }; Returns: number }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"

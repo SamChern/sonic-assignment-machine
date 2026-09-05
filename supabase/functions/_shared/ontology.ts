@@ -158,26 +158,21 @@ export async function updateCalibration(
   nodeIds: string[],
   scores: Record<Category, number>,
 ): Promise<void> {
+  if (!nodeIds.length) return;
+
+  // One atomic statement for every (tag × category) pair. The previous
+  // read-modify-write loop cost 2 round trips per pair (120 for a 10-tag
+  // source) and silently lost updates when two workers touched the same tag.
+  const rows: { node_id: string; category: string; value: number }[] = [];
   for (const nodeId of nodeIds) {
     for (const cat of CATEGORIES) {
-      const x = Number(scores[cat]) || 0;
-      const { data: row } = await supabase
-        .from("category_calibration")
-        .select("id,n,mean_score,m2,bias")
-        .eq("taxonomy_node_id", nodeId).eq("category", cat).maybeSingle();
-      if (!row) {
-        await supabase.from("category_calibration").insert({
-          taxonomy_node_id: nodeId, category: cat, n: 1, mean_score: x, m2: 0, bias: 0,
-        });
-      } else {
-        const n = row.n + 1;
-        const delta = x - Number(row.mean_score);
-        const mean = Number(row.mean_score) + delta / n;
-        const m2 = Number(row.m2) + delta * (x - mean);
-        await supabase.from("category_calibration")
-          .update({ n, mean_score: mean, m2, updated_at: new Date().toISOString() })
-          .eq("id", row.id);
-      }
+      rows.push({ node_id: nodeId, category: cat, value: Number(scores[cat]) || 0 });
     }
   }
+
+  const { error } = await supabase.rpc("upsert_category_calibration", { p_rows: rows });
+  if (error) {
+    console.warn("upsert_category_calibration failed:", error.message);
+  }
 }
+

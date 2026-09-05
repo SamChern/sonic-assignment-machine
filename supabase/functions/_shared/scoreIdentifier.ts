@@ -24,6 +24,7 @@ import {
 import {
   applyNormalizationToAnalysis,
   loadNormalization,
+  normalizeScores,
 } from "./normalization.ts";
 import {
   backoffFor,
@@ -476,15 +477,13 @@ async function runScore(
     scoreMap = { ...(cachedRow.scores as Record<Category, number>) };
     descMap = (cachedRow.descriptions as Record<string, string>) ?? {};
     groundingLevel = cachedRow.grounding_level ?? "text-only";
-    // Deliberately NOT re-running calibration or the profile embedding: the
-    // prior already learned from this exact tag set on the representative call,
-    // and repeating it per identifier would re-weight the same evidence
-    // thousands of times (and cost a write per identifier).
-    await admin
-      .from("intuizi_tag_score_cache")
-      .update({ hits: (cachedRow.hits ?? 0) + 1, updated_at: new Date().toISOString() })
-      .eq("tag_signature", tagSignature);
+    // Deliberately NOT re-running calibration, the profile embedding OR the
+    // `hits` bump: the prior already learned from this exact tag set on the
+    // representative call, and a per-identifier write cost one round trip per
+    // row across ~1.1M rows. Hit counts are recorded per batch by
+    // `prewarmTagSignatures` instead.
   } else {
+
     // 3b. Calibration priors + kNN warm start.
     //     `stepScale` < 1 means a previous attempt was killed for compute: keep
     //     the warm start smaller (fewer neighbours, shorter context).
@@ -633,4 +632,175 @@ async function runScore(
     trace_id: traceId,
   };
 
+}
+
+/**
+ * Score up to `batchSize` DISTINCT tag signatures in a single `analyze-audio`
+ * call, then publish them to `intuizi_tag_score_cache`.
+ *
+ * Why this exists: the worker used to send ONE identifier per call, which
+ * re-transmitted the ~1,300-token system prompt for every row even though the
+ * function accepts several sources per request, and even though thousands of
+ * identifiers share one tag set. Warming the distinct signatures of a claimed
+ * batch up front means every identifier in that batch then takes the cache path
+ * (no gateway call, no embedding, no calibration write), cutting LLM spend on
+ * the main scoring path by roughly the batch's duplication factor.
+ */
+// deno-lint-ignore no-explicit-any
+export async function prewarmTagSignatures(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  tasks: ScoreTask[],
+  metrics: RateMetrics = createRateMetrics(),
+  opts: { traceId?: string; batchSize?: number; stepScale?: number } = {},
+): Promise<{ warmed: number; groups: number; calls: number }> {
+  const batchSize = Math.min(Math.max(opts.batchSize ?? 5, 1), 10);
+  const traceId = opts.traceId ?? newTraceId();
+
+  // 1. Collapse the batch to distinct tag signatures.
+  type Group = {
+    signature: string;
+    reportType: string;
+    tagCodes: string[];
+    tags: OntologyTag[];
+    confidence: number;
+    count: number;
+  };
+  const groups = new Map<string, Group>();
+  for (const task of tasks) {
+    const tags = task.tags ?? [];
+    const tagCodes = tags.map((t) => t.code);
+    if (!tagCodes.length) continue;
+    const signature = await tagSignatureOf(task.report_type, tagCodes);
+    const existing = groups.get(signature);
+    if (existing) existing.count++;
+    else {
+      groups.set(signature, {
+        signature,
+        reportType: task.report_type,
+        tagCodes,
+        tags,
+        confidence: task.confidence ?? 0.5,
+        count: 1,
+      });
+    }
+  }
+  if (!groups.size) return { warmed: 0, groups: 0, calls: 0 };
+
+  // 2. Drop the ones already cached, and record their hit counts in one write
+  //    per signature instead of one per identifier.
+  const signatures = [...groups.keys()];
+  const { data: cached } = await admin
+    .from("intuizi_tag_score_cache")
+    .select("tag_signature,hits")
+    .in("tag_signature", signatures);
+  for (const row of cached ?? []) {
+    const g = groups.get(row.tag_signature as string);
+    if (!g) continue;
+    groups.delete(row.tag_signature as string);
+    await admin.from("intuizi_tag_score_cache")
+      .update({ hits: (row.hits ?? 0) + g.count, updated_at: new Date().toISOString() })
+      .eq("tag_signature", row.tag_signature);
+  }
+  const pending = [...groups.values()];
+  if (!pending.length) return { warmed: 0, groups: signatures.length, calls: 0 };
+
+  const normCfg = await loadNormalization(admin, "intuizi");
+  let warmed = 0;
+  let calls = 0;
+
+  // 3. One gateway call per `batchSize` signatures.
+  for (let i = 0; i < pending.length; i += batchSize) {
+    const slice = pending.slice(i, i + batchSize);
+    const prepared: { group: Group; name: string; nodeIds: string[] }[] = [];
+
+    for (const [idx, group] of slice.entries()) {
+      const nodeIds: string[] = [];
+      for (const t of group.tags) {
+        try {
+          const nid = await resolveTag(admin, t);
+          if (nid) nodeIds.push(nid);
+        } catch (e) {
+          const verdict = classifyFailure(e);
+          if (!verdict.retryable || verdict.kind === "rate_limit") {
+            if (verdict.kind !== "schema") throw e;
+          }
+          console.warn("prewarm tag resolve failed", t.code, errMsg(e));
+        }
+      }
+      prepared.push({
+        group,
+        name: `Intuizi pattern ${group.reportType} ${i + idx + 1}`,
+        nodeIds,
+      });
+    }
+
+    const sources = [];
+    for (const p of prepared) {
+      sources.push({
+        name: p.name,
+        type: "file",
+        taxonomy_context: await buildTaxonomyContext(admin, p.nodeIds),
+      });
+    }
+
+    calls++;
+    const ana = await invokeAnalyzeAudio(
+      admin,
+      { sources, save_results: false },
+      slice[0].reportType,
+      metrics,
+      { traceId, stepScale: opts.stepScale ?? 1 },
+    );
+
+    // deno-lint-ignore no-explicit-any
+    const byName = new Map<string, any>(
+      (ana.sources ?? []).map((s: { name: string }) => [s.name, s]),
+    );
+
+    for (const p of prepared) {
+      const out = byName.get(p.name);
+      if (!out) continue;
+      const scoreMap = {} as Record<Category, number>;
+      const descMap: Record<string, string> = {};
+      for (const c of out.categories ?? []) {
+        const key = String(c.name ?? "").toLowerCase() as Category;
+        scoreMap[key] = Number(c.score) || 0;
+        if (c.description) descMap[key] = String(c.description);
+      }
+      // Same speech-skew normalization the per-identifier path applies, so a
+      // cache hit reproduces the final numbers exactly.
+      const { scores: normScores } = normalizeScores(scoreMap, normCfg);
+      for (const c of CATEGORIES) scoreMap[c] = normScores[c] ?? scoreMap[c];
+
+      // Learn once per tag pattern, not once per identifier.
+      await updateCalibration(admin, p.nodeIds, scoreMap);
+
+      const { error: cacheErr } = await admin
+        .from("intuizi_tag_score_cache")
+        .upsert({
+          tag_signature: p.group.signature,
+          report_type: p.group.reportType,
+          tag_codes: p.group.tagCodes,
+          scores: scoreMap,
+          descriptions: descMap,
+          grounding_level: out.grounding_level ?? "text-only",
+          confidence: p.group.confidence,
+          hits: p.group.count,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "tag_signature" });
+      if (cacheErr) console.warn("prewarm cache write failed", cacheErr.message);
+      else warmed++;
+    }
+  }
+
+  console.log(JSON.stringify({
+    evt: "tag_signature_prewarm",
+    trace_id: traceId,
+    tasks: tasks.length,
+    distinct_signatures: signatures.length,
+    warmed,
+    gateway_calls: calls,
+  }));
+  return { warmed, groups: signatures.length, calls };
 }

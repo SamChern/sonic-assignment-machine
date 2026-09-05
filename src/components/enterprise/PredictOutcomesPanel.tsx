@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { friendlyError } from "@/lib/friendlyError";
 import { toast } from "@/hooks/use-toast";
 import { KPI_OPTIONS } from "@/lib/enterpriseSchema";
 import { AlertTriangle, HelpCircle, LineChart, Loader2, Play, TrendingUp } from "lucide-react";
@@ -169,11 +170,11 @@ const PredictOutcomesPanel = ({
       if (!data?.success) throw new Error(data?.error ?? fnErr?.message ?? "Lift not available");
       setLift(data as LiftReport);
       toast({
-        title: "Lift measured",
-        description: `${data.exposed_events} exposed vs. ${data.holdout_events} holdout events.`,
+        title: "Result measured",
+        description: `${data.exposed_events} responses from people who heard it vs. ${data.holdout_events} from the withheld group.`,
       });
     } catch (e) {
-      setLiftError((e as Error).message);
+      setLiftError(friendlyError((e as Error).message));
     } finally {
       setLiftRunning(false);
     }
@@ -397,9 +398,9 @@ const PredictOutcomesPanel = ({
 
           {result.lift_priors.length > 0 && (
             <Card className="p-4">
-              <h3 className="text-sm font-semibold">Measured activation lift</h3>
+              <h3 className="text-sm font-semibold">What the audio actually moved</h3>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Exposed vs. withheld holdout from live tag events — this is lift, not correlation,
+                People who heard it vs. the withheld group, from live responses — a real difference, not a coincidence,
                 and it feeds back into your calibration.
               </p>
               <div className="mt-3 space-y-1">
@@ -449,12 +450,12 @@ const PredictOutcomesPanel = ({
         <Card className="p-4">
           <div className="flex flex-wrap items-center gap-2">
             <TrendingUp className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold">Measure activation lift</h3>
+            <h3 className="text-sm font-semibold">Measure the difference it made</h3>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Each activation file withholds about a tenth of the cohort. Comparing tag events from
-            the exposed and withheld groups gives lift rather than correlation, and the result is
-            written back into your calibration.
+            Every audience file holds back about one person in ten. Comparing how the people who
+            heard it responded against that withheld group shows the difference the audio made —
+            not just a coincidence — and it feeds straight back into how we score.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Select value={liftSlug} onValueChange={setLiftSlug}>
@@ -475,7 +476,7 @@ const PredictOutcomesPanel = ({
               ) : (
                 <Play className="mr-1 h-4 w-4" />
               )}
-              Measure lift
+              Measure the difference
             </Button>
           </div>
           {liftError && (
@@ -487,11 +488,12 @@ const PredictOutcomesPanel = ({
           {lift && (
             <div className="mt-3 space-y-1 text-xs">
               <p>
-                Exposed {lift.exposed_mean.toFixed(4)} ({lift.exposed_events} events) vs. holdout{" "}
-                {lift.holdout_mean.toFixed(4)} ({lift.holdout_events} events)
+                People who heard it: {lift.exposed_mean.toFixed(4)} ({lift.exposed_events}{" "}
+                responses) · withheld group: {lift.holdout_mean.toFixed(4)} ({lift.holdout_events}{" "}
+                responses)
               </p>
               <p className={lift.absolute_lift >= 0 ? "text-primary" : "text-destructive"}>
-                Lift {lift.absolute_lift >= 0 ? "+" : ""}
+                Difference {lift.absolute_lift >= 0 ? "+" : ""}
                 {lift.absolute_lift.toFixed(4)}
                 {lift.relative_lift !== null && ` (${(lift.relative_lift * 100).toFixed(1)}%)`}
               </p>

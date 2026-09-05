@@ -32,14 +32,33 @@ const STYLES: Record<Level, { label: string; cls: string; hint: string; Icon: ty
   },
 };
 
+/** Everyday wording for the consumer door — same three states, no jargon. */
+const PLAIN: Record<Level, { label: string; hint: string }> = {
+  grounded: {
+    label: "We listened",
+    hint: "We measured the actual sound of this track.",
+  },
+  bridged: {
+    label: "Close match",
+    hint: "We couldn't hear this one directly, so we used sounds we know that are very like it.",
+  },
+  "text-only": {
+    label: "Best guess",
+    hint: "Based on the words describing this sound, not the sound itself.",
+  },
+};
+
 export const GroundingBadge = ({
   audioSourceId,
   level,
   className,
+  plain = false,
 }: {
   audioSourceId?: string;
   level?: Level;
   className?: string;
+  /** Use plain-language wording (consumer views). */
+  plain?: boolean;
 }) => {
   const [resolved, setResolved] = useState<Level | null>(level ?? null);
 
@@ -62,7 +81,10 @@ export const GroundingBadge = ({
   }, [audioSourceId, level]);
 
   if (!resolved) return null;
-  const { label, cls, hint, Icon } = STYLES[resolved] ?? STYLES["text-only"];
+  const style = STYLES[resolved] ?? STYLES["text-only"];
+  const words = plain ? (PLAIN[resolved] ?? PLAIN["text-only"]) : style;
+  const { cls, Icon } = style;
+  const { label, hint } = words;
 
   return (
     <span

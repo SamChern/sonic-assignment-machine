@@ -15,5 +15,10 @@ export interface AnalyzeAudioSource {
 
 export interface AnalyzeAudioResponse {
   error?: string;
+  /** Set when a guest hits the server-side free-run limit. */
+  code?: string;
+  /** Free runs left today for a signed-out visitor (null when signed in). */
+  guest_runs_remaining?: number | null;
+  guest_runs_limit?: number;
   sources?: AnalyzeAudioSource[];
 }

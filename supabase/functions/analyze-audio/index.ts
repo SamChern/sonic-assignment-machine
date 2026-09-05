@@ -393,8 +393,9 @@ Deno.serve(async (req) => {
       ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
       : null;
 
-    // Guests get a small, *server-enforced* free allowance. The browser copy of
-    // this counter is only a hint — clearing localStorage must not buy more runs.
+    // Guests get a small, *server-enforced* free allowance. The browser never
+    // holds the counter — the server reports how many runs are left.
+    let guestRunsRemaining: number | null = null;
     if (!user_id && supabaseAdmin) {
       const limit = Math.round(
         await controlNumber(supabaseAdmin, 'guest.daily_runs', 2, { min: 0, max: 50 }),
@@ -407,16 +408,23 @@ Deno.serve(async (req) => {
       if (gateError) {
         // Never fail closed on a bookkeeping error — log and let the run through.
         console.error('guest run limit check failed:', gateError);
-      } else if (gate && gate.allowed === false) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            code: 'guest_limit_reached',
-            error:
-              "You've used your free look for today. Create a free account to keep analysing audio.",
-          }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
+      } else if (gate) {
+        const used = Number(gate.used) || 0;
+        const cap = Number(gate.limit ?? limit) || 0;
+        guestRunsRemaining = Math.max(0, cap - used);
+        if (gate.allowed === false) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              code: 'guest_limit_reached',
+              guest_runs_remaining: 0,
+              guest_runs_limit: cap,
+              error:
+                "You've used your free look for today. Create a free account to keep analysing audio.",
+            }),
+            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
       }
     }
 
@@ -1251,6 +1259,8 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
 
     return new Response(JSON.stringify({ 
       sources: allResults,
+      // Server-owned free-run allowance for signed-out visitors.
+      guest_runs_remaining: guestRunsRemaining,
       fingerprint,
       cache_stats: {
         cached: cachedResults.length,

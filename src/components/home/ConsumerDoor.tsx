@@ -54,17 +54,10 @@ interface DoorResult {
 }
 
 
-const GUEST_RUNS_KEY = "sonicsim.guestRuns";
+// Guest allowance is owned by the server (analyze-audio reports what's left);
+// nothing about it is stored in the browser.
 const GUEST_LIMIT = 1;
 const FREE_MONTHLY_LIMIT = 3;
-
-const readGuestRuns = () => {
-  try {
-    return Number(localStorage.getItem(GUEST_RUNS_KEY)) || 0;
-  } catch {
-    return 0;
-  }
-};
 
 const label = (c: string) => c.charAt(0).toUpperCase() + c.slice(1);
 
@@ -110,7 +103,8 @@ export const ConsumerDoor = ({
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<DoorResult | null>(null);
   const [monthlyUsed, setMonthlyUsed] = useState<number | null>(null);
-  const [guestRuns, setGuestRuns] = useState(() => readGuestRuns());
+  // Guest allowance as last reported by the server; null until a run happens.
+  const [guestRemaining, setGuestRemaining] = useState<number | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [quotaError, setQuotaError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -150,11 +144,11 @@ export const ConsumerDoor = ({
 
   const quotaExhausted = isSignedIn
     ? (monthlyUsed ?? 0) >= FREE_MONTHLY_LIMIT
-    : guestRuns >= GUEST_LIMIT;
+    : guestRemaining !== null && guestRemaining <= 0;
 
   const remaining = isSignedIn
     ? Math.max(0, FREE_MONTHLY_LIMIT - (monthlyUsed ?? 0))
-    : Math.max(0, GUEST_LIMIT - guestRuns);
+    : Math.max(0, guestRemaining ?? GUEST_LIMIT);
 
   // A shared permalink renders the same result view, read-only.
   useEffect(() => {
@@ -209,7 +203,16 @@ export const ConsumerDoor = ({
         const { data, error } = await invokeWithTimeout<AnalyzeAudioResponse>("analyze-audio", {
           body: { sources: [source], user_id: userId ?? undefined, save_results: !!userId },
         });
-        if (error) throw error;
+        // The server owns the free-run count — trust whatever it reports.
+        if (!isSignedIn && typeof data?.guest_runs_remaining === "number") {
+          setGuestRemaining(data.guest_runs_remaining);
+        }
+        if (data?.code === "guest_limit_reached" && !isSignedIn) setGuestRemaining(0);
+        if (error) {
+          // The limit answer comes back as a non-2xx, so read it off the message.
+          if (!isSignedIn && /free look for today/i.test(error.message)) setGuestRemaining(0);
+          throw error;
+        }
         if (data?.error) throw new Error(String(data.error));
         const first = data?.sources?.[0];
         if (!first) throw new Error("No result came back — try again.");
@@ -243,15 +246,6 @@ export const ConsumerDoor = ({
           groundingLevel: first.grounding_level,
           tags: Array.isArray(first.tags) ? first.tags.map(String) : [],
         });
-        if (!isSignedIn) {
-          const next = readGuestRuns() + 1;
-          try {
-            localStorage.setItem(GUEST_RUNS_KEY, String(next));
-          } catch {
-            /* ignore */
-          }
-          setGuestRuns(next);
-        }
       } catch (err) {
         toast.error(friendlyError(err, "We couldn't analyse that. Please try again."));
       } finally {
@@ -423,7 +417,7 @@ export const ConsumerDoor = ({
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">{plainSentence(result)}</p>
               </div>
-              <GroundingBadge level={result.groundingLevel} />
+              <GroundingBadge level={result.groundingLevel} plain />
             </div>
 
             <div className="mt-4 space-y-2.5">

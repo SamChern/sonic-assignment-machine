@@ -242,15 +242,6 @@ export const ConsumerDoor = ({
           groundingLevel: first.grounding_level,
           tags: Array.isArray(first.tags) ? first.tags.map(String) : [],
         });
-        if (!isSignedIn) {
-          const next = readGuestRuns() + 1;
-          try {
-            localStorage.setItem(GUEST_RUNS_KEY, String(next));
-          } catch {
-            /* ignore */
-          }
-          setGuestRuns(next);
-        }
       } catch (err) {
         toast.error(friendlyError(err, "We couldn't analyse that. Please try again."));
       } finally {

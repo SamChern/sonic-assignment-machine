@@ -16,9 +16,11 @@ import { AuthzError, requireAdmin } from "../_shared/admin.ts";
 import {
   createRateMetrics,
   errMsg,
+  prewarmTagSignatures,
   scoreIdentifier,
   type ScoreTask,
 } from "../_shared/scoreIdentifier.ts";
+
 import {
   backoffFor,
   classifyFailure,

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import InferenceConfigGuard from "@/components/InferenceConfigGuard";
@@ -340,26 +342,29 @@ const PostIngestionWizard = () => {
   /** Step 0 — list inbound objects grouped by activation id. */
   const discover = useCallback(async () => {
     setDiscovering(true);
-    const { data, error } = await supabase.functions.invoke("intuizi-ingest", {
-      body: { action: "activations" },
-    });
+    const { data, error } = await invokeWithTimeout<{
+      activations?: Activation[];
+      errors?: string[];
+    }>("intuizi-ingest", { body: { action: "activations" }, timeoutMs: 60_000 });
     setDiscovering(false);
 
     if (error) {
       toast({ title: "Could not list activations", description: error.message, variant: "destructive" });
       return;
     }
-    const list = ((data as { activations?: Activation[] })?.activations ?? []).filter(
-      (a) => a.files.length > 0,
-    );
+    const list = (data?.activations ?? []).filter((a) => a.files.length > 0);
     setActivations(list);
     setResults({});
     if (!list.length) {
-      toast({ title: "No inbound objects found", description: "Nothing is waiting under the Intuizi prefixes." });
+      const why = data?.errors?.length
+        ? data.errors.join("; ")
+        : "Nothing is waiting under the Intuizi prefixes.";
+      toast({ title: "No inbound objects found", description: why });
       return;
     }
     if (!list.some((a) => a.activation_id === selected)) setSelected(list[0].activation_id);
   }, [selected]);
+
 
 
 

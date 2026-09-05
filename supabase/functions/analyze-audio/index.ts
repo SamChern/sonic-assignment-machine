@@ -312,6 +312,23 @@ async function resolveCaller(
   }
 }
 
+/**
+ * A stable, non-reversible key for an anonymous caller: the client IP plus a
+ * coarse client hint, hashed so no raw address is stored.
+ */
+async function guestFingerprint(req: Request): Promise<string> {
+  const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() ||
+    req.headers.get('cf-connecting-ip') ||
+    'unknown';
+  const ua = (req.headers.get('user-agent') ?? '').slice(0, 120);
+  const bytes = new TextEncoder().encode(`guest:${ip}:${ua}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+
 /** Rejects malformed bodies before any AI call or DB write happens. */
 function validateSources(sources: unknown): { ok: true; sources: AudioSource[] } | { ok: false; error: string } {
   if (!Array.isArray(sources) || sources.length === 0) {

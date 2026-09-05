@@ -76,9 +76,22 @@ Target: same outputs, ~70% less model spend on the backlog. I'll report estimate
 - Worker batching groups on the existing `tag_signature`, mapping responses back by `audio_source_id`.
 - Tests added for: batch grouping/mapping, calibration upsert math, share-token access, server-side quota, wildcard escaping.
 
-## Part 3 — not in this pass
+## Batch E — Part 3, the next level (runs after A–D)
 
-Resonance Point, Sonic Commons, on-device scoring, the `hear()` tool for other models, frames+sound multimodal, Sonic Passport, haptic signatures, live venue context, the public "what it learned" page. All depend on this foundation; I'll propose them as Steps 18a–18c afterwards.
+Each item is built to its "first move" only, admin-only behind a flag in `control_registry` so nothing is exposed until you flip it.
+
+1. **Resonance Point** — define one auditable per-impression score from the six-axis distance between content and audience, validated against the existing holdout-lift loop. Ships as a stored definition + a public methodology page and an admin "Resonance Index" report over real campaigns.
+2. **Sonic Commons (18a)** — a governed, rights-cleared pool built on the creator corpus: inclusion governance, license ledger, attribution accounting, per-inclusion payout records. Admin door only; creators continue to see only their own machine-use terms.
+3. **On-device scoring** — text side first: tags to fingerprint computed in the browser for the consumer door, zero model spend. The audio-encoder path is scaffolded behind a flag, not shipped.
+4. **`hear()` as a tool for other models (18b)** — expose `hear(url|text) -> fingerprint, archetype, signature` over the existing agent infrastructure. Keys are minted from the admin door and accepted only while the flag reads admin-only; going public later is a flag flip plus a docs page.
+5. **Frames + sound** — frame-sample the Sound Library's own licensed clips, embed the frames, and align image and audio vectors in the existing bridge registry so a CTV moment is scored on what is seen and heard together.
+6. **Sonic Passport (18c)** — a portable, signed, revocable profile (fingerprint, archetype, consent scopes, ledger references) generated and verified from the admin door; the creator-door "Export my passport" button exists in code but renders only when the flag flips.
+7. **Signatures beyond hearing** — map the six axes to a vibration pattern and a light/colour pattern so the :03 signature can be felt and seen; accessible to deaf and hard-of-hearing users.
+8. **Live context** — score the ambient sonic context of a place using the Sound Library's licensed field recordings as POI grounding, wired into the cohorts present there. Built as one pilot-ready venue path, admin-only.
+9. **The loop, made visible** — take the admin digest and publish it in plain language as "what SONICSIM learned this week".
+
+Honest scoping note: items 3, 5 and 8 have real research/asset dependencies (a quantized encoder, a vision encoder in the pack, venue data). I'll build the first move for each and say plainly where a dependency blocks going further rather than faking the rest.
+
 
 ## Verification
 

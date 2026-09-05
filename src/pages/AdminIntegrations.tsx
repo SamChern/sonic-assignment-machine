@@ -130,7 +130,7 @@ const AdminIntegrations = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={refreshStatus} disabled={statusLoading} aria-label="Refresh integration status">
+            <Button variant="ghost" size="sm" onClick={refreshStatus} disabled={statusLoading} aria-label="Refresh connection status">
               <RefreshCw className={`h-4 w-4 ${statusLoading ? "animate-spin" : ""}`} />
             </Button>
             <Badge variant="outline" className="gap-1">

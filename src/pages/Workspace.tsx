@@ -30,6 +30,8 @@ import WorkspaceSonicSim from "@/components/enterprise/WorkspaceSonicSim";
 import JobCards from "@/components/enterprise/JobCards";
 import PlaybooksPanel from "@/components/enterprise/PlaybooksPanel";
 import OrgComplianceStrip from "@/components/enterprise/OrgComplianceStrip";
+import WorkspaceDigestCard from "@/components/enterprise/WorkspaceDigestCard";
+
 
 import sonicSimLogo from "@/assets/SonicSIM_transp.png";
 import {

@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";
 import heroBackground from "@/assets/hero-background.jpg";
+import { useScopeShowcase } from "@/hooks/useScopeShowcase";
 import exampleOutput from "@/assets/example-output.png";
 import secondaryImage from "@/assets/secondary-homepage-image.png";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
@@ -512,15 +513,8 @@ const Index = () => {
             {
               id: "home-scope",
               label: "SonicSIM SCOPE",
-              sublabel: "Six-category semantic waveform",
-              scores: {
-                emotional: 72,
-                cognitive: 58,
-                social: 46,
-                communication: 64,
-                contextual: 55,
-                artistic: 68,
-              },
+              sublabel: scopeShowcase.sublabel,
+              scores: scopeShowcase.scores,
             },
           ]}
         />

@@ -748,7 +748,7 @@ export async function prewarmTagSignatures(
     const ana = await invokeAnalyzeAudio(
       admin,
       { sources, save_results: false },
-      slice[0].group.reportType,
+      slice[0].reportType,
       metrics,
       { traceId, stepScale: opts.stepScale ?? 1 },
     );

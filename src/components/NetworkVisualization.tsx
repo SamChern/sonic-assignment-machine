@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Activity, Tag, EyeOff } from "lucide-react";
-import * as d3 from "d3";
+import * as d3 from "@/lib/d3";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";

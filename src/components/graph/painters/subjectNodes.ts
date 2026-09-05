@@ -1,4 +1,4 @@
-import * as d3 from "d3";
+import * as d3 from "@/lib/d3";
 import { CATEGORY_COLORS } from "@/components/network-graph/types";
 import type { NodeLayer } from "@/components/graph/engine";
 import { subjectNodeRadius, type SubjectNode } from "@/components/graph/adapters/singleSubject";

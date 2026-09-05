@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type RefObject } from "react";
-import * as d3 from "d3";
+import * as d3 from "@/lib/d3";
 import type { ZoomableNode } from "./types";
 
 /**

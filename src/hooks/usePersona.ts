@@ -33,7 +33,9 @@ export const PERSONAS: Array<{
     value: "creator",
     label: "Creator",
     blurb: "Fingerprint your work and see its lineage.",
-    path: "/?tab=library",
+    // Creators land on their own workspace, not the listener library.
+    path: "/creator",
+
   },
 ];
 

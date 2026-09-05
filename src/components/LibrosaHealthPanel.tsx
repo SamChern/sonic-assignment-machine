@@ -180,7 +180,7 @@ export function LibrosaHealthPanel() {
           <span className="text-xs text-muted-foreground shrink-0">last 24h</span>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
-          <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
+          <Button variant="ghost" size="sm" onClick={load} disabled={loading} aria-label="Refresh service health">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
           <Button variant="outline" size="sm" onClick={backfill} disabled={backfilling}>

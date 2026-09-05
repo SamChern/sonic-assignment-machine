@@ -190,7 +190,7 @@ const WorkspaceUpload = ({ organizationId, canWrite, onIngested }: Props) => {
           </Button>
         </div>
 
-        <div className="mt-3 overflow-hidden rounded-lg border border-border/60">
+        <div className="mt-3 overflow-x-auto rounded-lg border border-border/60">
           <table className="w-full text-left text-[11px]">
             <thead className="bg-muted/40">
               <tr>

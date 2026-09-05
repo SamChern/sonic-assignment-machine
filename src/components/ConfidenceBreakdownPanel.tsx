@@ -1101,62 +1101,62 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
                             {side.nodes === 1 ? "" : "s"}
                           </span>
                         </div>
-                        <table className="mt-2 w-full text-[11px]">
-                          <thead>
-                            <tr className="border-b border-border text-left text-muted-foreground">
-                              <th className="py-1 pr-2 font-medium">Feed</th>
-                              <th className="py-1 pr-2 font-medium">Category</th>
-                              <th className="py-1 pr-2 font-medium">Share</th>
-                              <th className="py-1 font-medium">Uniques</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {side.rows.length === 0 && (
-                              <tr>
-                                <td colSpan={4} className="py-2 text-muted-foreground">
-                                  No driver rows ingested.
-                                </td>
+                        <div className="overflow-x-auto"><table className="mt-2 w-full text-[11px]">
+                            <thead>
+                              <tr className="border-b border-border text-left text-muted-foreground">
+                                <th className="py-1 pr-2 font-medium">Feed</th>
+                                <th className="py-1 pr-2 font-medium">Category</th>
+                                <th className="py-1 pr-2 font-medium">Share</th>
+                                <th className="py-1 font-medium">Uniques</th>
                               </tr>
-                            )}
-                            {side.rows.slice(0, 10).map((r, i) => {
-                              const sup = rowSupport(r.share, side.factor);
-                              const flg = sup < threshold;
-                              const rank = rowMovers.top.get(rowKey(r));
-                              return (
-                              <tr
-                                key={i}
-                                className={
-                                  "border-b border-border/50 " +
-                                  (rank
-                                    ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
-                                    : flg
-                                      ? "bg-destructive/5"
-                                      : "")
-                                }
-                              >
-                                <td className="py-1 pr-2 text-muted-foreground">{r.feed}</td>
-                                <td className="py-1 pr-2">
-                                  {r.TaxonomyName || r.CategoryName || "—"}
-                                  {flg && <span className="ml-1 text-destructive">⚑</span>}
-                                  {rank && (
-                                    <Badge
-                                      variant="outline"
-                                      className="ml-1 h-4 border-primary/50 px-1 font-mono text-[10px] text-primary"
-                                    >
-                                      mover #{rank}
-                                    </Badge>
-                                  )}
-                                </td>
-                                <td className="py-1 pr-2 font-mono">
-                                  {r.share != null ? `${(Number(r.share) * 100).toFixed(0)}%` : "—"}
-                                </td>
-                                <td className="py-1 font-mono">{Number(r.uniques) || 0}</td>
-                              </tr>
-                              );
-                            })}
+                            </thead>
+                            <tbody>
+                              {side.rows.length === 0 && (
+                                <tr>
+                                  <td colSpan={4} className="py-2 text-muted-foreground">
+                                    No driver rows ingested.
+                                  </td>
+                                </tr>
+                              )}
+                              {side.rows.slice(0, 10).map((r, i) => {
+                                const sup = rowSupport(r.share, side.factor);
+                                const flg = sup < threshold;
+                                const rank = rowMovers.top.get(rowKey(r));
+                                return (
+                                <tr
+                                  key={i}
+                                  className={
+                                    "border-b border-border/50 " +
+                                    (rank
+                                      ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
+                                      : flg
+                                        ? "bg-destructive/5"
+                                        : "")
+                                  }
+                                >
+                                  <td className="py-1 pr-2 text-muted-foreground">{r.feed}</td>
+                                  <td className="py-1 pr-2">
+                                    {r.TaxonomyName || r.CategoryName || "—"}
+                                    {flg && <span className="ml-1 text-destructive">⚑</span>}
+                                    {rank && (
+                                      <Badge
+                                        variant="outline"
+                                        className="ml-1 h-4 border-primary/50 px-1 font-mono text-[10px] text-primary"
+                                      >
+                                        mover #{rank}
+                                      </Badge>
+                                    )}
+                                  </td>
+                                  <td className="py-1 pr-2 font-mono">
+                                    {r.share != null ? `${(Number(r.share) * 100).toFixed(0)}%` : "—"}
+                                  </td>
+                                  <td className="py-1 font-mono">{Number(r.uniques) || 0}</td>
+                                </tr>
+                                );
+                              })}
 
-                          </tbody>
-                        </table>
+                            </tbody>
+                        </table></div>
                       </div>
                     ))}
                   </div>

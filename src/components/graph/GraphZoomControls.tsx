@@ -35,20 +35,20 @@ export const GraphZoomControls = ({
       className,
     )}
   >
-    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onZoomOut} title="Zoom out">
+    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onZoomOut} title="Zoom out" aria-label="Zoom out">
       <ZoomOut className="h-4 w-4" />
     </Button>
     <span className="text-xs text-muted-foreground min-w-[3rem] text-center font-medium">
       {Math.round(currentZoom * 100)}%
     </span>
-    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onZoomIn} title="Zoom in">
+    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onZoomIn} title="Zoom in" aria-label="Zoom in">
       <ZoomIn className="h-4 w-4" />
     </Button>
     <div className="w-px h-6 bg-border mx-1" />
-    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onZoomReset} title="Reset zoom">
+    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onZoomReset} title="Reset zoom" aria-label="Reset zoom">
       <RotateCcw className="h-4 w-4" />
     </Button>
-    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onFitToView} title="Fit all nodes to view">
+    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onFitToView} title="Fit all nodes to view" aria-label="Fit all nodes to view">
       <Maximize className="h-4 w-4" />
     </Button>
     {children && (

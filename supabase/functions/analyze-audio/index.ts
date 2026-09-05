@@ -174,14 +174,31 @@ interface CachedSource {
   artistic_desc: string | null;
 }
 
-// Generate a cache key for a source
+// Generate a cache key for a source.
+//
+// Uploaded files must never collide on filename alone: two people uploading
+// "mix.mp3" are two different pieces of audio. Prefer the evidence hash (same
+// audio + same analysis params => same key, so real duplicates still hit the
+// cache), then the stored object path, and only fall back to the display name
+// when neither is known.
 function getCacheKey(source: AudioSource): string {
   if (source.spotify_id) {
     return `spotify:${source.spotify_id}`;
   }
-  // For files, use normalized name as key
+  if (source.feature_hash) {
+    return `feat:${source.feature_hash}`;
+  }
+  if (source.file_url) {
+    // Strip signing/query noise so a re-signed URL for the same object matches.
+    const path = source.file_url.split('?')[0].trim().toLowerCase();
+    return `obj:${path}`;
+  }
+  if (source.audio_source_id) {
+    return `src:${source.audio_source_id}`;
+  }
   return `file:${source.name.toLowerCase().trim()}`;
 }
+
 
 // Convert cached data to SourceResult format
 function cachedToSourceResult(cached: CachedSource): SourceResult {

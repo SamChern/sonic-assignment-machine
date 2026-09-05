@@ -1259,6 +1259,8 @@ Return JSON with "sources" array. Each source needs: name (exact match), categor
 
     return new Response(JSON.stringify({ 
       sources: allResults,
+      // Server-owned free-run allowance for signed-out visitors.
+      guest_runs_remaining: guestRunsRemaining,
       fingerprint,
       cache_stats: {
         cached: cachedResults.length,

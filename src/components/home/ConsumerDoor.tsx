@@ -417,7 +417,7 @@ export const ConsumerDoor = ({
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">{plainSentence(result)}</p>
               </div>
-              <GroundingBadge level={result.groundingLevel} />
+              <GroundingBadge level={result.groundingLevel} plain />
             </div>
 
             <div className="mt-4 space-y-2.5">

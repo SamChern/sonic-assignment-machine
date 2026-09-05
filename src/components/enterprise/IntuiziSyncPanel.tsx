@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Link2, Loader2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import ConfirmAction from "@/components/ConfirmAction";
+import { friendlyError } from "@/lib/friendlyError";
 
 interface GrantedActivation {
   id: string;
@@ -100,7 +102,7 @@ const IntuiziSyncPanel = ({ organizationId, canWrite, onSynced }: Props) => {
     });
     setGranting(false);
     if (error) {
-      toast({ title: "Could not grant access", description: error.message, variant: "destructive" });
+      toast({ title: "Could not grant access", description: friendlyError(error.message), variant: "destructive" });
       return;
     }
     setNewActivation("");
@@ -111,7 +113,7 @@ const IntuiziSyncPanel = ({ organizationId, canWrite, onSynced }: Props) => {
   const revoke = useCallback(async (id: string) => {
     const { error } = await supabase.from("org_intuizi_activations").delete().eq("id", id);
     if (error) {
-      toast({ title: "Could not revoke", description: error.message, variant: "destructive" });
+      toast({ title: "Could not revoke", description: friendlyError(error.message), variant: "destructive" });
       return;
     }
     void load();
@@ -169,17 +171,22 @@ const IntuiziSyncPanel = ({ organizationId, canWrite, onSynced }: Props) => {
                 : "never synced"}
             </span>
             {isAdmin && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-auto text-destructive"
-                onClick={(e) => {
-                  e.preventDefault();
-                  void revoke(r.id);
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              <ConfirmAction
+                title={`Revoke ${r.label?.trim() || `Activation ${r.activation_id}`}?`}
+                description="This workspace will lose access to that activation's profiles until it is granted again. Data already synced stays."
+                confirmLabel="Revoke access"
+                onConfirm={() => revoke(r.id)}
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto text-destructive"
+                    aria-label={`Revoke access to activation ${r.activation_id}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                }
+              />
             )}
           </label>
         ))}

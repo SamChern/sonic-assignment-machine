@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import ConfidenceChip from "@/components/enterprise/ConfidenceChip";
+import ConfirmAction from "@/components/ConfirmAction";
+import { friendlyError } from "@/lib/friendlyError";
 
 interface Playbook {
   id: string;
@@ -65,7 +67,7 @@ export const PlaybooksPanel = ({
     });
     setBusy(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(friendlyError(error.message));
       return;
     }
     setName("");
@@ -82,7 +84,7 @@ export const PlaybooksPanel = ({
       })
       .eq("id", pb.id);
     if (error) {
-      toast.error(error.message);
+      toast.error(friendlyError(error.message));
       return;
     }
     toast.success(`Re-ran "${pb.name}" on the latest data.`);
@@ -92,9 +94,10 @@ export const PlaybooksPanel = ({
   const remove = async (id: string) => {
     const { error } = await supabase.from("playbooks").delete().eq("id", id);
     if (error) {
-      toast.error(error.message);
+      toast.error(friendlyError(error.message));
       return;
     }
+    toast.success("Playbook deleted.");
     void load();
   };
 
@@ -154,14 +157,21 @@ export const PlaybooksPanel = ({
                       <Play className="mr-1 h-3.5 w-3.5" />
                       Re-run
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Delete ${pb.name}`}
-                      onClick={() => remove(pb.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <ConfirmAction
+                      title={`Delete "${pb.name}"?`}
+                      description="This saved run will be removed for everyone in the workspace. Past results stay where they are."
+                      confirmLabel="Delete playbook"
+                      onConfirm={() => remove(pb.id)}
+                      trigger={
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`Delete playbook ${pb.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      }
+                    />
                   </>
                 )}
               </li>

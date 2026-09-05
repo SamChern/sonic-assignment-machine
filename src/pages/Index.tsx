@@ -76,6 +76,9 @@ const Index = () => {
     () => normalizeTab(searchParams.get("tab")),
   );
   const [showGetStartedDialog, setShowGetStartedDialog] = useState(false);
+  /** Real recent-analysis averages for the home waveform (sample only if empty). */
+  const scopeShowcase = useScopeShowcase();
+
   const logoRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
 

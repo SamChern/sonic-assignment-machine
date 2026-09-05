@@ -118,6 +118,36 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "outputSchema": null
+      },
+      {
+        "name": "hear",
+        "title": "Hear a sound (fingerprint, archetype, signature)",
+        "description": "Score a sound with SONICSIM. Pass `source_id` (an analysed audio source) or `url` (a source already in the library), or `text` describing the sound. Returns the six-category fingerprint, the nearest Ensemble archetype and the sonic signature reference. Disabled until an administrator enables the hear API.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "source_id": {
+              "type": "string",
+              "description": "UUID of an analysed audio source."
+            },
+            "url": {
+              "type": "string",
+              "description": "URL of an audio source already in the library."
+            },
+            "text": {
+              "type": "string",
+              "description": "Text or comma-separated tags describing the sound."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
       }
     ]
   }

@@ -472,6 +472,127 @@ export type Database = {
           },
         ]
       }
+      commons_license_ledger: {
+        Row: {
+          attribution: string | null
+          created_at: string
+          id: string
+          license: string
+          pool_item_id: string
+          rights_holder: string | null
+          terms_url: string | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          attribution?: string | null
+          created_at?: string
+          id?: string
+          license: string
+          pool_item_id: string
+          rights_holder?: string | null
+          terms_url?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          attribution?: string | null
+          created_at?: string
+          id?: string
+          license?: string
+          pool_item_id?: string
+          rights_holder?: string | null
+          terms_url?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commons_license_ledger_pool_item_id_fkey"
+            columns: ["pool_item_id"]
+            isOneToOne: false
+            referencedRelation: "commons_pool_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commons_payouts: {
+        Row: {
+          amount_usd: number
+          created_at: string
+          id: string
+          inclusions: number
+          period_end: string
+          period_start: string
+          pool_item_id: string
+        }
+        Insert: {
+          amount_usd?: number
+          created_at?: string
+          id?: string
+          inclusions?: number
+          period_end: string
+          period_start: string
+          pool_item_id: string
+        }
+        Update: {
+          amount_usd?: number
+          created_at?: string
+          id?: string
+          inclusions?: number
+          period_end?: string
+          period_start?: string
+          pool_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commons_payouts_pool_item_id_fkey"
+            columns: ["pool_item_id"]
+            isOneToOne: false
+            referencedRelation: "commons_pool_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commons_pool_items: {
+        Row: {
+          audio_source_id: string | null
+          catalog_item_id: string | null
+          created_at: string
+          created_by: string | null
+          governance_notes: string | null
+          id: string
+          included_at: string | null
+          rights_holder: string | null
+          status: string
+          title: string
+        }
+        Insert: {
+          audio_source_id?: string | null
+          catalog_item_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          governance_notes?: string | null
+          id?: string
+          included_at?: string | null
+          rights_holder?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          audio_source_id?: string | null
+          catalog_item_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          governance_notes?: string | null
+          id?: string
+          included_at?: string | null
+          rights_holder?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: []
+      }
       control_audit: {
         Row: {
           changed_at: string
@@ -941,6 +1062,42 @@ export type Database = {
           },
         ]
       }
+      frame_embeddings: {
+        Row: {
+          audio_source_id: string | null
+          created_at: string
+          embedding: Json | null
+          embedding_space: string
+          frame_ms: number
+          grounding_asset_id: string | null
+          id: string
+          storage_path: string | null
+          taxonomy_code: string | null
+        }
+        Insert: {
+          audio_source_id?: string | null
+          created_at?: string
+          embedding?: Json | null
+          embedding_space?: string
+          frame_ms?: number
+          grounding_asset_id?: string | null
+          id?: string
+          storage_path?: string | null
+          taxonomy_code?: string | null
+        }
+        Update: {
+          audio_source_id?: string | null
+          created_at?: string
+          embedding?: Json | null
+          embedding_space?: string
+          frame_ms?: number
+          grounding_asset_id?: string | null
+          id?: string
+          storage_path?: string | null
+          taxonomy_code?: string | null
+        }
+        Relationships: []
+      }
       grounding_assets: {
         Row: {
           attribution: string
@@ -1086,6 +1243,42 @@ export type Database = {
           run_day?: string
           runs?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      hear_api_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          key_hash: string
+          key_prefix: string
+          label: string
+          last_used_at: string | null
+          revoked_at: string | null
+          scopes: string[]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key_hash: string
+          key_prefix: string
+          label: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+          scopes?: string[]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          label?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+          scopes?: string[]
         }
         Relationships: []
       }
@@ -1610,6 +1803,36 @@ export type Database = {
           paused?: boolean
           paused_at?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      learning_digests: {
+        Row: {
+          bullets: Json
+          created_at: string
+          created_by: string | null
+          headline: string
+          id: string
+          published: boolean
+          week_start: string
+        }
+        Insert: {
+          bullets?: Json
+          created_at?: string
+          created_by?: string | null
+          headline: string
+          id?: string
+          published?: boolean
+          week_start: string
+        }
+        Update: {
+          bullets?: Json
+          created_at?: string
+          created_by?: string | null
+          headline?: string
+          id?: string
+          published?: boolean
+          week_start?: string
         }
         Relationships: []
       }
@@ -2440,6 +2663,39 @@ export type Database = {
           },
         ]
       }
+      resonance_definitions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          distance_shape: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          version: string
+          weights: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          distance_shape?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          version: string
+          weights: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          distance_shape?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          version?: string
+          weights?: Json
+        }
+        Relationships: []
+      }
       retention_runs: {
         Row: {
           analyses_deleted: number
@@ -2833,6 +3089,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sonic_passports: {
+        Row: {
+          consent_scopes: string[]
+          id: string
+          issued_at: string
+          payload: Json
+          revoked_at: string | null
+          signature: string
+          subject_hash: string
+          user_id: string | null
+        }
+        Insert: {
+          consent_scopes?: string[]
+          id?: string
+          issued_at?: string
+          payload: Json
+          revoked_at?: string | null
+          signature: string
+          subject_hash: string
+          user_id?: string | null
+        }
+        Update: {
+          consent_scopes?: string[]
+          id?: string
+          issued_at?: string
+          payload?: Json
+          revoked_at?: string | null
+          signature?: string
+          subject_hash?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       sonic_signatures: {
         Row: {
@@ -3247,6 +3536,45 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      venue_contexts: {
+        Row: {
+          cohort_ids: string[]
+          context_vector: Json | null
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          notes: string | null
+          place_id: string | null
+          poi_codes: string[]
+          status: string
+        }
+        Insert: {
+          cohort_ids?: string[]
+          context_vector?: Json | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          place_id?: string | null
+          poi_codes?: string[]
+          status?: string
+        }
+        Update: {
+          cohort_ids?: string[]
+          context_vector?: Json | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          place_id?: string | null
+          poi_codes?: string[]
+          status?: string
         }
         Relationships: []
       }

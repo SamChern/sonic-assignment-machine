@@ -55,10 +55,6 @@ export async function runIngestPipeline(
     drainScoreQueue,
   } = deps;
 
-    if (!activation) return;
-    setRunning(true);
-    setResults({});
-
     const dataFiles = files.filter((f) => f.size > 64);
     const emptyFiles = files.filter((f) => f.size <= 64);
 
@@ -98,14 +94,14 @@ export async function runIngestPipeline(
 
     for (const f of dataFiles) {
       const t0 = Date.now();
-      setLiveRun({ key: f.object_key, startedAt: t0, budgetMs: lastBudgetMs.current });
+      setLiveRun({ key: f.object_key, startedAt: t0, budgetMs: lastBudgetMsRef.current });
       const { data, error, retries, shrink } = await invokeIngestWithRetry(
         { object_key: f.object_key, report_type: f.report_type ?? undefined },
         (attempt, nextShrink) => {
           ingestErrors.push(
             `${fileName(f.object_key)}: the dispatch run hit a compute limit — retry ${attempt} re-dispatches at ${Math.round(nextShrink * 100)}% row slice.`,
           );
-          setLiveRun({ key: f.object_key, startedAt: Date.now(), budgetMs: lastBudgetMs.current });
+          setLiveRun({ key: f.object_key, startedAt: Date.now(), budgetMs: lastBudgetMsRef.current });
         },
       );
       setLiveRun(null);
@@ -121,7 +117,7 @@ export async function runIngestPipeline(
         perFile.push([fileName(f.object_key), "not dispatched · retryable"]);
         deadlineInfos.push({
           key: f.object_key,
-          budgetMs: lastBudgetMs.current,
+          budgetMs: lastBudgetMsRef.current,
           defaultBudgetMs: null,
           budgetReason: null,
           elapsedMs: wallMs,
@@ -151,7 +147,7 @@ export async function runIngestPipeline(
       }
 
       const budgetMs = res.run_budget_ms ?? 30_000;
-      lastBudgetMs.current = budgetMs;
+      lastBudgetMsRef.current = budgetMs;
       deadlineInfos.push({
         key: f.object_key,
         budgetMs,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
+import { runIngestPipeline } from "./runIngestPipeline";
 import { toast } from "@/hooks/use-toast";
 import {
   PHASE_HISTORY_KEY,

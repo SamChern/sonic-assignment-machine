@@ -16,6 +16,7 @@ import {
 import { ScopeCompareLens } from "@/components/visuals/ScopeCompareLens";
 import { useFingerprints } from "@/hooks/useFingerprints";
 import { fingerprintToScores } from "@/lib/audioscope";
+import { EMPTY_IDENTIFIER_FILTER } from "@/lib/identifierFilters";
 import { useEC2Api } from "@/hooks/useEC2Api";
 import type { FingerprintMode } from "@/lib/fingerprintMath";
 import { identifierFilterCount } from "@/lib/identifierFilters";

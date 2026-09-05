@@ -65,7 +65,16 @@ const RouteFallback = () => (
 
 const SESSION_FLAG = "sonicsim.sessionStarted";
 
-const stableRefreshPaths = new Set(["/", "/admin", "/auth", "/reset-password", "/workspace", "/creator"]);
+// Shareable, linkable destinations: a fresh session or hard refresh stays put.
+const stableRefreshPaths = new Set([
+  "/",
+  "/admin",
+  "/auth",
+  "/reset-password",
+  "/workspace",
+  "/creator",
+  "/methodology",
+]);
 
 const refreshedPage = () => {
   const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];

@@ -137,6 +137,13 @@ const DESTINATIONS: {
     depths: ["operate", "diagnose"],
   },
   {
+    to: "/admin/lab",
+    label: "The Lab",
+    description: "Nine new capabilities, each switched off until you turn it on.",
+    icon: Activity,
+    depths: ["operate", "diagnose"],
+  },
+  {
     to: "/admin/control-room",
     label: "Control Room",
     description: "Pipeline knobs, thresholds and calibration priors.",

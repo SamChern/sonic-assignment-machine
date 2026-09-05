@@ -3,6 +3,7 @@ import listAnalysesTool from "./tools/list-analyses";
 import getFingerprintTool from "./tools/get-fingerprint";
 import listAudioSourcesTool from "./tools/list-audio-sources";
 import searchTaxonomyTool from "./tools/search-taxonomy";
+import hearTool from "./tools/hear";
 
 // The OAuth issuer must be the direct Supabase host, built from the project ref
 // (inlined by Vite at build time so this module stays import-safe).
@@ -18,5 +19,11 @@ export default defineMcp({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated",
   }),
-  tools: [listAnalysesTool, getFingerprintTool, listAudioSourcesTool, searchTaxonomyTool],
+  tools: [
+    listAnalysesTool,
+    getFingerprintTool,
+    listAudioSourcesTool,
+    searchTaxonomyTool,
+    hearTool,
+  ],
 });

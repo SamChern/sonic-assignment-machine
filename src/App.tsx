@@ -30,6 +30,8 @@ const AdminSoundLibrary = lazy(() => import("./pages/admin/AdminSoundLibrary"));
 const AdminGuide = lazy(() => import("./pages/admin/AdminGuide"));
 const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminResolver = lazy(() => import("./pages/admin/AdminResolver"));
+const AdminNextLevelLab = lazy(() => import("./pages/admin/AdminNextLevelLab"));
+const Methodology = lazy(() => import("./pages/Methodology"));
 const CreatorDoor = lazy(() => import("./pages/CreatorDoor"));
 const CreatorProfile = lazy(() => import("./pages/CreatorProfile"));
 const MusicCatalog = lazy(() => import("./pages/MusicCatalog"));
@@ -63,7 +65,16 @@ const RouteFallback = () => (
 
 const SESSION_FLAG = "sonicsim.sessionStarted";
 
-const stableRefreshPaths = new Set(["/", "/admin", "/auth", "/reset-password", "/workspace", "/creator"]);
+// Shareable, linkable destinations: a fresh session or hard refresh stays put.
+const stableRefreshPaths = new Set([
+  "/",
+  "/admin",
+  "/auth",
+  "/reset-password",
+  "/workspace",
+  "/creator",
+  "/methodology",
+]);
 
 const refreshedPage = () => {
   const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
@@ -127,6 +138,8 @@ const App = () => (
               <Route path="/admin/guide" element={<RequireAdmin><AdminGuide /></RequireAdmin>} />
               <Route path="/admin/setup" element={<RequireAdmin><AdminSetup /></RequireAdmin>} />
               <Route path="/admin/resolver" element={<RequireAdmin><AdminResolver /></RequireAdmin>} />
+              <Route path="/admin/lab" element={<RequireAdmin><AdminNextLevelLab /></RequireAdmin>} />
+              <Route path="/methodology" element={<Methodology />} />
               <Route path="/admin/pipeline" element={<RequireAdmin><IntegrationStatus /></RequireAdmin>} />
               <Route path="/admin/compatibility" element={<RequireAdmin><IngestionCompatibility /></RequireAdmin>} />
 

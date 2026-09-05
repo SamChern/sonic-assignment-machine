@@ -21,6 +21,7 @@ import {
   Fingerprint,
   Layers,
   Library,
+  MonitorPlay,
   Plug,
   Radio,
   ShieldCheck,
@@ -84,6 +85,13 @@ const DESTINATIONS: {
     label: "Intuizi Console",
     description: "Audiences, activations and taxonomy mapping.",
     icon: Layers,
+    depths: ["operate", "diagnose"],
+  },
+  {
+    to: "/admin/ctv",
+    label: "CTV batch ingest",
+    description: "Paste or upload a CTV feed batch and score its rows against the taxonomy.",
+    icon: MonitorPlay,
     depths: ["operate", "diagnose"],
   },
   {

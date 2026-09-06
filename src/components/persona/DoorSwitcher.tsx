@@ -96,6 +96,15 @@ export const DoorSwitcher = ({
             </DropdownMenuItem>
           );
         })}
+        {isSignedIn && <DropdownMenuSeparator />}
+        {isSignedIn && (
+          <DropdownMenuItem asChild>
+            <Link to="/listener" className="gap-2">
+              <Headphones className="h-4 w-4 text-primary" />
+              Your listening dashboard
+            </Link>
+          </DropdownMenuItem>
+        )}
         {(hasEnterprise || isAdmin) && <DropdownMenuSeparator />}
         {hasEnterprise && (
           <DropdownMenuItem asChild>

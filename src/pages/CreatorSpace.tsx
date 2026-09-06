@@ -102,13 +102,19 @@ const CreatorSpace = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="library" className="mt-4">
+          <TabsContent value="library" className="mt-4 space-y-4">
+            <CreatorUploadPanel
+              onAdded={async () => {
+                await Promise.all([refreshSources(), space.refresh()]);
+              }}
+            />
             <CreatorLibraryPanel
               sources={mySources}
               analyses={space.analyses}
               loading={sourcesLoading || space.loading}
             />
           </TabsContent>
+
 
           <TabsContent value="profile" className="mt-4">
             <CreatorProfilePanel

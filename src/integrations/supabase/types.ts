@@ -2012,6 +2012,39 @@ export type Database = {
         }
         Relationships: []
       }
+      listener_signups: {
+        Row: {
+          created_at: string
+          data_sharing_accepted: boolean
+          email: string
+          id: string
+          notified_at: string | null
+          plan: string
+          terms_accepted: boolean
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          data_sharing_accepted?: boolean
+          email: string
+          id?: string
+          notified_at?: string | null
+          plan?: string
+          terms_accepted?: boolean
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          data_sharing_accepted?: boolean
+          email?: string
+          id?: string
+          notified_at?: string | null
+          plan?: string
+          terms_accepted?: boolean
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       market_baselines: {
         Row: {
           created_at: string

@@ -2696,6 +2696,57 @@ export type Database = {
         }
         Relationships: []
       }
+      resonance_runs: {
+        Row: {
+          audience: Json
+          confidence: number | null
+          created_at: string
+          created_by: string | null
+          definition_version: string | null
+          engine: string
+          features: Json
+          id: string
+          is_public_example: boolean
+          label: string | null
+          resonance_score: number | null
+          scores: Json
+          updated_at: string
+          weakest_axis: string | null
+        }
+        Insert: {
+          audience?: Json
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          definition_version?: string | null
+          engine?: string
+          features?: Json
+          id?: string
+          is_public_example?: boolean
+          label?: string | null
+          resonance_score?: number | null
+          scores?: Json
+          updated_at?: string
+          weakest_axis?: string | null
+        }
+        Update: {
+          audience?: Json
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          definition_version?: string | null
+          engine?: string
+          features?: Json
+          id?: string
+          is_public_example?: boolean
+          label?: string | null
+          resonance_score?: number | null
+          scores?: Json
+          updated_at?: string
+          weakest_axis?: string | null
+        }
+        Relationships: []
+      }
       retention_runs: {
         Row: {
           analyses_deleted: number

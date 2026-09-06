@@ -39,9 +39,7 @@ import {
 } from "lucide-react";
 import { IntegrationDetailsDrawer } from "@/components/admin/IntegrationDetailsDrawer";
 import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
-import IntuiziConsolePanel from "@/components/admin/IntuiziConsolePanel";
-import ScoringRunsDashboard from "@/components/admin/intuizi/ScoringRunsDashboard";
-import ScoreQueueHealthPanel from "@/components/ScoreQueueHealthPanel";
+import IntuiziConsoleView from "@/components/admin/intuizi/IntuiziConsoleView";
 import { replaceLegacyBrandText } from "@/lib/brandText";
 
 interface StatusEntry {
@@ -166,16 +164,7 @@ const AdminIntegrations = () => {
         </Tabs>
 
         {view === "console" ? (
-          <div className="space-y-6">
-            <p className="text-sm text-muted-foreground">
-              Live view of the Intuizi scoring pipeline — what is waiting, what is being scored right
-              now, and what has just finished — plus the MCP console for browsing audiences and
-              handing deliveries to ingest.
-            </p>
-            <ScoringRunsDashboard />
-            <ScoreQueueHealthPanel />
-            <IntuiziConsolePanel />
-          </div>
+          <IntuiziConsoleView />
         ) : view === "connected" ? (
           <ConnectedIntegrationsPanel
             status={statusByIntegration}

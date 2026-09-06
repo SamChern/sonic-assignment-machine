@@ -247,7 +247,10 @@ Deno.serve(async (req) => {
           ).toISOString(),
           dead_lettered_at: dead ? new Date().toISOString() : null,
           finished_at: dead ? new Date().toISOString() : null,
-        }).eq("id", task.id);
+        });
+        // A pause/park decision below reads its own state, so flush the
+        // classified failures first — the run may end right after.
+        if (accountStop || verdict.kind === "rate_limit") await flushWrites();
 
 
         if (dead) {

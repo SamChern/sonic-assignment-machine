@@ -52,14 +52,9 @@ export default function Methodology() {
           .eq("published", true)
           .order("week_start", { ascending: false })
           .limit(8),
-        supabase
-          .from("source_analyses")
-          .select(
-            "id, source_name, grounding_level, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
-          )
-          .in("grounding_level", ["grounded", "bridged"])
-          .order("created_at", { ascending: false })
-          .limit(6),
+        // Read through a definer function so the worked examples are visible to
+        // everyone (the analyses table itself stays private to its owner).
+        supabase.rpc("get_method_examples", { _limit: 6 }),
       ]);
       if (def.data) {
         setDefinition({

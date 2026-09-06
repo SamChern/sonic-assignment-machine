@@ -111,10 +111,11 @@ export const useScoringRuns = (pollMs = 10000): ScoringRunsData => {
             .order("last_seen", { ascending: false })
             .limit(6),
           supabase
-            .from("job_worker_state")
-            .select("paused,pause_reason")
-            .eq("id", "intuizi_score")
+            .from("intuizi_ingest_state")
+            .select("paused,pause_reason,parked_until")
+            .eq("id", "singleton")
             .maybeSingle(),
+
         ]);
 
       const firstError =

@@ -21,91 +21,103 @@ All colors MUST be HSL.
     --z-nav: 60; /* sticky mobile bottom nav */
     --z-toast: 70; /* toasts (always readable, docked above the nav) */
 
-    --background: 175 58% 4%;
-    --foreground: 172 34% 87%;
+    /* ---------------------------------------------------------------
+       Light theme (default). The dark theme below keeps the original
+       SonicSIM palette untouched; both carry the full token set so a
+       switch can never leave a half-themed surface behind.
+       --------------------------------------------------------------- */
+    color-scheme: light;
 
-    --card: 171 39% 7%;
-    --card-foreground: 172 34% 87%;
+    --background: 180 20% 97%;
+    --foreground: 194 37% 9%;
 
-    --popover: 171 39% 7%;
-    --popover-foreground: 172 34% 87%;
+    --card: 0 0% 100%;
+    --card-foreground: 194 37% 9%;
 
-    --primary: 186 14% 74%;
-    --primary-foreground: 171 57% 5%;
-    --primary-glow: 186 16% 84%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 194 37% 9%;
 
-    --secondary: 172 41% 11%;
-    --secondary-foreground: 172 34% 87%;
-    --secondary-glow: 172 41% 20%;
+    --primary: 175 74% 31%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 174 62% 45%;
 
-    --muted: 172 41% 11%;
-    --muted-foreground: 171 9% 57%;
+    --secondary: 187 15% 92%;
+    --secondary-foreground: 194 37% 9%;
+    --secondary-glow: 187 20% 86%;
 
-    --accent: 186 14% 74%;
-    --accent-foreground: 180 40% 7%;
+    --muted: 187 15% 92%;
+    --muted-foreground: 191 10% 40%;
 
-    --destructive: 0 100% 60%;
-    --destructive-foreground: 160 37% 97%;
+    --accent: 173 80% 40%;
+    --accent-foreground: 0 0% 100%;
 
-    --border: 170 30% 16%;
-    --input: 172 41% 11%;
-    --ring: 186 14% 74%;
+    --destructive: 3 63% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 185 14% 85%;
+    --input: 187 15% 94%;
+    --ring: 175 74% 31%;
 
     --radius: 0.75rem;
 
     /* Sidebar */
-    --sidebar-background: 175 46% 5%;
-    --sidebar-foreground: 172 34% 87%;
-    --sidebar-primary: 186 14% 74%;
-    --sidebar-primary-foreground: 171 57% 5%;
-    --sidebar-accent: 172 41% 11%;
-    --sidebar-accent-foreground: 172 34% 87%;
-    --sidebar-border: 170 30% 16%;
-    --sidebar-ring: 186 14% 74%;
+    --sidebar-background: 180 20% 96%;
+    --sidebar-foreground: 194 37% 9%;
+    --sidebar-primary: 175 74% 31%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 187 15% 92%;
+    --sidebar-accent-foreground: 194 37% 9%;
+    --sidebar-border: 185 14% 85%;
+    --sidebar-ring: 175 74% 31%;
 
     /* Functional graphics */
-    --success: 190 100% 63%;
-    --success-foreground: 171 57% 5%;
-    --gold: 188 12% 58%;
-    --gold-foreground: 171 57% 5%;
+    --success: 175 74% 31%;
+    --success-foreground: 0 0% 100%;
+    --gold: 212 71% 25%;
+    --gold-foreground: 0 0% 100%;
 
-    --chart-1: 186 14% 74%;
-    --chart-2: 190 100% 63%;
-    --chart-3: 168 71% 41%;
-    --chart-4: 188 12% 58%;
-    --chart-5: 0 73% 55%;
+    --chart-1: 175 74% 31%;
+    --chart-2: 212 71% 32%;
+    --chart-3: 178 65% 38%;
+    --chart-4: 200 75% 45%;
+    --chart-5: 172 45% 55%;
 
-    /* Semantic category colors */
-    --category-emotional: 186 14% 74%;
-    --category-cognitive: 190 100% 63%;
-    --category-social: 168 71% 41%;
-    --category-communication: 188 12% 58%;
-    --category-contextual: 180 70% 48%;
-    --category-artistic: 0 73% 55%;
+    /* Semantic category colors — spaced by hue and lightness so the six
+       stay tellable apart on a light background. */
+    --category-emotional: 175 74% 31%;
+    --category-cognitive: 212 71% 32%;
+    --category-social: 173 80% 38%;
+    --category-communication: 200 75% 45%;
+    --category-contextual: 186 60% 36%;
+    --category-artistic: 218 55% 45%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(168 76% 42%) 0%, hsl(174 72% 47%) 100%);
-    --gradient-brand: linear-gradient(135deg, hsl(168 76% 42%) 0%, hsl(174 72% 47%) 100%);
-    --gradient-teal: linear-gradient(135deg, hsl(171 52% 59%) 0%, hsl(174 62% 47%) 100%);
-    --gradient-subtle: linear-gradient(180deg, hsl(175 58% 4%) 0%, hsl(171 39% 7%) 100%);
-    --gradient-app: radial-gradient(1200px 700px at 15% -10%, hsl(175 60% 10% / 0.85) 0%, transparent 60%),
-      radial-gradient(1000px 600px at 90% 5%, hsl(186 40% 12% / 0.55) 0%, transparent 65%),
-      radial-gradient(1000px 800px at 50% 110%, hsl(168 55% 9% / 0.7) 0%, transparent 70%),
-      linear-gradient(170deg, hsl(180 45% 5%) 0%, hsl(175 58% 4%) 45%, hsl(0 0% 2%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(175 74% 31%) 0%, hsl(174 62% 42%) 100%);
+    --gradient-brand: linear-gradient(135deg, hsl(175 74% 31%) 0%, hsl(212 71% 32%) 100%);
+    --gradient-teal: linear-gradient(135deg, hsl(174 62% 42%) 0%, hsl(178 65% 34%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(180 20% 97%) 0%, hsl(0 0% 100%) 100%);
+    --gradient-app: radial-gradient(1200px 700px at 15% -10%, hsl(175 55% 88% / 0.75) 0%, transparent 60%),
+      radial-gradient(1000px 600px at 90% 5%, hsl(200 70% 90% / 0.6) 0%, transparent 65%),
+      radial-gradient(1000px 800px at 50% 110%, hsl(173 55% 90% / 0.6) 0%, transparent 70%),
+      linear-gradient(170deg, hsl(0 0% 100%) 0%, hsl(180 20% 97%) 45%, hsl(185 18% 94%) 100%);
 
-    --gradient-emotional: linear-gradient(135deg, hsl(186 14% 74%) 0%, hsl(186 20% 60%) 100%);
-    --gradient-cognitive: linear-gradient(135deg, hsl(190 100% 63%) 0%, hsl(180 70% 48%) 100%);
-    --gradient-social: linear-gradient(135deg, hsl(168 71% 41%) 0%, hsl(180 70% 48%) 100%);
-    --gradient-communication: linear-gradient(135deg, hsl(188 12% 58%) 0%, hsl(190 16% 40%) 100%);
-    --gradient-contextual: linear-gradient(135deg, hsl(180 70% 48%) 0%, hsl(190 100% 63%) 100%);
-    --gradient-artistic: linear-gradient(135deg, hsl(0 73% 55%) 0%, hsl(186 14% 74%) 100%);
+    --gradient-emotional: linear-gradient(135deg, hsl(175 74% 31%) 0%, hsl(175 60% 45%) 100%);
+    --gradient-cognitive: linear-gradient(135deg, hsl(212 71% 32%) 0%, hsl(206 70% 45%) 100%);
+    --gradient-social: linear-gradient(135deg, hsl(173 80% 38%) 0%, hsl(178 65% 30%) 100%);
+    --gradient-communication: linear-gradient(135deg, hsl(200 75% 45%) 0%, hsl(196 70% 58%) 100%);
+    --gradient-contextual: linear-gradient(135deg, hsl(186 60% 36%) 0%, hsl(190 65% 48%) 100%);
+    --gradient-artistic: linear-gradient(135deg, hsl(218 55% 45%) 0%, hsl(212 60% 32%) 100%);
 
-    --shadow-elegant: 0 10px 40px -10px hsl(168 76% 42% / 0.35);
-    --shadow-glow: 0 0 60px hsl(186 14% 74% / 0.35);
+    --shadow-elegant: 0 10px 30px -12px hsl(194 37% 9% / 0.18);
+    --shadow-glow: 0 0 40px hsl(175 74% 31% / 0.22);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
   }
 
   .dark {
+    color-scheme: dark;
+
     --background: 175 58% 4%;
+
     --foreground: 172 34% 87%;
 
     --card: 171 39% 7%;
@@ -318,7 +330,7 @@ All colors MUST be HSL.
     overflow: hidden;
     background: var(--gradient-teal);
     color: hsl(var(--primary-foreground));
-    box-shadow: 0 1px 2px hsl(174 62% 20% / 0.35);
+    box-shadow: 0 1px 2px hsl(var(--primary) / 0.35);
     transition: box-shadow 220ms ease, filter 220ms ease, transform 120ms ease;
   }
 
@@ -341,8 +353,8 @@ All colors MUST be HSL.
   .btn-teal-glow:focus-visible {
     filter: brightness(1.06);
     box-shadow:
-      0 0 0 1px hsl(174 62% 47% / 0.5),
-      0 6px 24px -4px hsl(174 62% 47% / 0.55);
+      0 0 0 1px hsl(var(--primary-glow) / 0.5),
+      0 6px 24px -4px hsl(var(--primary-glow) / 0.55);
   }
 
   .btn-teal-glow:hover::after,

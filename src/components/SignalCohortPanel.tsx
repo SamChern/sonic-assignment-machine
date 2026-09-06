@@ -29,15 +29,15 @@ import {
 } from "@/lib/identifierSignals";
 
 const CATEGORY_META = [
-  { name: "Emotional", color: "#ef4444" },
-  { name: "Cognitive", color: "#3b82f6" },
-  { name: "Social", color: "#22c55e" },
-  { name: "Communication", color: "#eab308" },
-  { name: "Contextual", color: "#a855f7" },
-  { name: "Artistic", color: "#ec4899" },
+  { name: "Emotional", color: "hsl(var(--category-emotional))" },
+  { name: "Cognitive", color: "hsl(var(--category-cognitive))" },
+  { name: "Social", color: "hsl(var(--category-social))" },
+  { name: "Communication", color: "hsl(var(--category-communication))" },
+  { name: "Contextual", color: "hsl(var(--category-contextual))" },
+  { name: "Artistic", color: "hsl(var(--category-contextual))" },
 ];
 
-const COHORT_COLORS = ["#06b6d4", "#f97316", "#84cc16", "#6366f1", "#f43f5e", "#14b8a6", "#8b5cf6", "#ec4899"];
+const COHORT_COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--category-social))", "hsl(var(--category-artistic))", "hsl(var(--category-contextual))"];
 
 const BASIS_LABEL: Record<SignalPoint["basis"], string> = {
   scored: "scored by ingest",

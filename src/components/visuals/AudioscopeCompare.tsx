@@ -1,3 +1,4 @@
+import { useThemeTick } from "@/hooks/useThemeTick";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,7 +56,6 @@ const TRANSPORT_CLS_ACTIVE =
 /** Deterministic time offset (seconds) the Static view freezes on. */
 const STATIC_FRAME_T = 1.25;
 
-
 function readVar(name: string, fallback: string): string {
   if (typeof window === "undefined") return fallback;
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -68,6 +68,7 @@ function readVar(name: string, fallback: string): string {
  * similarity score, so the number has a visual explanation.
  */
 export const AudioscopeCompare = ({ entities, similarity, height = 240 }: AudioscopeCompareProps) => {
+  const themeTick = useThemeTick();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [playing, setPlaying] = useState(() => !initialStatic(MOTION_PREF_KEY));
   const [speed, setSpeed] = useState(0.25);
@@ -145,10 +146,10 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
     }));
 
     const colors = {
-      bg: readVar("--background", "#06121a"),
-      grid: readVar("--border", "#1f2937"),
-      muted: readVar("--muted-foreground", "#94a3b8"),
-      destructive: readVar("--destructive", "#ef4444"),
+      bg: readVar("--background", "hsl(180 20% 97%)"),
+      grid: readVar("--border", "hsl(185 14% 85%)"),
+      muted: readVar("--muted-foreground", "hsl(191 10% 40%)"),
+      destructive: readVar("--destructive", "hsl(3 63% 48%)"),
     };
 
     const resize = () => {
@@ -259,7 +260,7 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
       io.disconnect();
       signals.forEach((s) => s.signal.dispose());
     };
-  }, [entities, playing, speed, isStatic, reduced, isMobile, height]);
+  }, [entities, playing, speed, isStatic, reduced, isMobile, height, themeTick]);
 
   const animating = playing && !isStatic;
 
@@ -370,7 +371,6 @@ export const AudioscopeCompare = ({ entities, similarity, height = 240 }: Audios
                 : " — off. Activate to freeze the comparison on a single still frame. Shortcut: S."}
             </span>
           </Button>
-
 
           <div className="flex h-7 items-center gap-1.5 rounded-md border border-border/40 bg-background/30 px-2 backdrop-blur-sm">
             <Gauge className="h-3 w-3 text-muted-foreground/70" aria-hidden />

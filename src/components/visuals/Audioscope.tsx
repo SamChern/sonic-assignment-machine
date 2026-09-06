@@ -1,3 +1,4 @@
+import { useThemeTick } from "@/hooks/useThemeTick";
 import { useEffect, useMemo, useRef } from "react";
 import {
   AUDIOSCOPE_CATEGORIES,
@@ -65,6 +66,7 @@ export const Audioscope = ({
   signal: externalSignal = null,
   onFrame,
 }: AudioscopeProps) => {
+  const themeTick = useThemeTick();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const signalRef = useRef<AudioscopeSignal | null>(null);
@@ -125,11 +127,11 @@ export const Audioscope = ({
     const spec = new Float32Array(bins);
 
     const colors = {
-      bg: readVar("--background", "#06121a"),
-      grid: readVar("--border", "#1f2937"),
-      primary: readVar("--primary", "#14b8a6"),
-      muted: readVar("--muted-foreground", "#94a3b8"),
-      cats: AUDIOSCOPE_CATEGORIES.map((c) => readVar(`--category-${c}`, "#14b8a6")),
+      bg: readVar("--background", "hsl(180 20% 97%)"),
+      grid: readVar("--border", "hsl(185 14% 85%)"),
+      primary: readVar("--primary", "hsl(175 74% 31%)"),
+      muted: readVar("--muted-foreground", "hsl(191 10% 40%)"),
+      cats: AUDIOSCOPE_CATEGORIES.map((c) => readVar(`--category-${c}`, "hsl(175 74% 31%)")),
     };
 
     const resize = () => {
@@ -398,7 +400,7 @@ export const Audioscope = ({
       window.removeEventListener("resize", resize);
       io.disconnect();
     };
-  }, [mode, playing, speed, staticFrame, reduced, isMobile, height, caption, scores, externalSignal]);
+  }, [mode, playing, speed, staticFrame, reduced, isMobile, height, caption, scores, externalSignal, themeTick]);
 
   return (
     <canvas

@@ -7,6 +7,7 @@
  * tag-fire trail as regions so a buyer can click straight to the moment a tag
  * fired. Loaded via dynamic import so consumer and admin bundles are unaffected.
  */
+import { useThemeTick } from "@/hooks/useThemeTick";
 import { useEffect, useRef, useState } from "react";
 import { formatTrailTime, type TrailEntry } from "@/lib/audioscope/trail";
 
@@ -24,6 +25,7 @@ function cssVar(name: string, fallback: string): string {
 }
 
 export const WaveInspect = ({ mediaEl, trail, onSeek, height = 64 }: Props) => {
+  const themeTick = useThemeTick();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const wsRef = useRef<{ destroy: () => void } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -41,9 +43,9 @@ export const WaveInspect = ({ mediaEl, trail, onSeek, height = 64 }: Props) => {
           container: hostRef.current,
           media: mediaEl as HTMLMediaElement,
           height,
-          waveColor: cssVar("--muted-foreground", "#94a3b8"),
-          progressColor: cssVar("--primary", "#14b8a6"),
-          cursorColor: cssVar("--primary", "#14b8a6"),
+          waveColor: cssVar("--muted-foreground", "hsl(191 10% 40%)"),
+          progressColor: cssVar("--primary", "hsl(175 74% 31%)"),
+          cursorColor: cssVar("--primary", "hsl(175 74% 31%)"),
           cursorWidth: 1,
           barWidth: 2,
           barGap: 1,
@@ -64,7 +66,7 @@ export const WaveInspect = ({ mediaEl, trail, onSeek, height = 64 }: Props) => {
       }
       wsRef.current = null;
     };
-  }, [mediaEl, height]);
+  }, [mediaEl, height, themeTick]);
 
   if (!mediaEl) return null;
 

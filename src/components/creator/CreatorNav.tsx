@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, BadgeCheck, Disc3, Store, UserRound } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Disc3, LayoutDashboard, Store, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**

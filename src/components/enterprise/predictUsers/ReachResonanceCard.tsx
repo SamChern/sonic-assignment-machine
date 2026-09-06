@@ -29,8 +29,16 @@ const ReachResonanceCard = ({
   setThreshold,
   atThresholdCount,
 }: ReachResonanceCardProps) => {
+  // The usable range follows the strengths actually found, so the slider never
+  // sits in a region where nobody can match.
+  const thresholds = curve.map((p) => p.threshold);
+  const sliderMin = thresholds.length ? Math.floor(Math.min(...thresholds) * 100) : 40;
+  const sliderMax = thresholds.length
+    ? Math.max(sliderMin + 1, Math.ceil(Math.max(...thresholds) * 100))
+    : 95;
   return (
     <Card className="p-4">
+
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold">Audience size vs. match strength</h3>
         <Badge variant="outline" className="text-[11px]">
@@ -85,14 +93,15 @@ const ReachResonanceCard = ({
       </div>
       <div className="mt-2">
         <Slider
-          value={[threshold * 100]}
-          min={40}
-          max={95}
+          value={[Math.round(Math.min(Math.max(threshold, sliderMin / 100), sliderMax / 100) * 100)]}
+          min={sliderMin}
+          max={sliderMax}
           step={1}
           onValueChange={([v]) => setThreshold(v / 100)}
           aria-label="Minimum match strength"
         />
       </div>
+
       <p className="mt-2 text-[11px] text-muted-foreground">
         Saving here creates this audience and keeps a comparison group aside, so you can measure
         what the audio actually changed.

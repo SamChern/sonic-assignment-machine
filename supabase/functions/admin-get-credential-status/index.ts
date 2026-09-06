@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
       if (!lastTest[row.integration_id]) lastTest[row.integration_id] = row;
     }
 
-    const fieldsByIntegration: Record<string, { fields: string[]; updated_at: string | null }> = {};
+    const fieldsByIntegration: Record<string, { fields: string[]; updated_at: string | null; env_fields?: string[] }> = {};
     for (const c of creds ?? []) {
       if (!fieldsByIntegration[c.integration_id]) {
         fieldsByIntegration[c.integration_id] = { fields: [], updated_at: null };
@@ -53,7 +53,27 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Credentials can also live as platform secrets (env vars) with no row in
+    // integration_credentials — the runtime functions read those directly, so a
+    // setup page that ignores them wrongly reports "not configured".
+    const ENV_BACKED: Record<string, string[]> = {
+      spotify: ["SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET"],
+      apple_music: ["APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY"],
+      librosa_rest: ["LIBROSA_REST_URL", "LIBROSA_REST_TOKEN"],
+      semantic_svc: ["SEMANTIC_SVC_URL", "SEMANTIC_SVC_TOKEN"],
+      ec2_inference: ["EC2_INFERENCE_URL", "EC2_INFERENCE_API_KEY"],
+      aws_s3: ["S3_BUCKET", "S3_REGION", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"],
+    };
+    for (const [id, keys] of Object.entries(ENV_BACKED)) {
+      const present = keys.filter((k) => (Deno.env.get(k) ?? "").trim().length > 0);
+      if (!present.length) continue;
+      const entry = fieldsByIntegration[id] ??= { fields: [], updated_at: null };
+      entry.env_fields = present;
+      for (const k of present) if (!entry.fields.includes(k)) entry.fields.push(k);
+    }
+
     return json({ status: fieldsByIntegration, lastTest });
+
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "Unknown" }, 500);
   }

@@ -17,6 +17,7 @@ type Row = {
   sampled_cached_rows: number;
   distinct_signatures: number;
   billable_signatures: number;
+  computed_at: string;
 };
 
 /**

@@ -58,9 +58,14 @@ export default function AdminNextLevelLab() {
         <CommonsPanel />
       </PanelErrorBoundary>
 
+      <PanelErrorBoundary label="Measure a sound on this device">
+        <OnDeviceAudioPanel />
+      </PanelErrorBoundary>
+
       <PanelErrorBoundary label="Scoring in the browser">
         <OnDevicePanel />
       </PanelErrorBoundary>
+
 
       <PanelErrorBoundary label="hear() for other systems">
         <HearApiPanel />

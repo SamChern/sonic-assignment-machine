@@ -357,6 +357,23 @@ Deno.serve(async (req) => {
       /** Band width as a share of matched count: priors' std / 100, capped. */
       const bandShare = clamp(meanStd / 100, 0.03, 0.4);
 
+      // The curve must span the similarities actually retrieved. A fixed
+      // 0.40-0.95 sweep reads as "0 matched" whenever the embedding space is
+      // tighter than that, so the sweep and the opening threshold are derived
+      // from the retrieved distribution and the configured floor is only used
+      // when it is reachable.
+      const sims = ranked
+        .map((r) => clamp(r.knn_similarity, 0, 1))
+        .sort((a, b) => a - b);
+      const quantile = (q: number) =>
+        sims.length ? sims[clamp(Math.floor(q * (sims.length - 1)), 0, sims.length - 1)] : 0;
+      const maxSim = sims.length ? sims[sims.length - 1] : 0;
+      const lowEdge = sims.length ? Math.max(0, quantile(0.05) - 0.01) : 0.4;
+      const highEdge = sims.length ? Math.max(lowEdge + 0.01, maxSim) : 0.95;
+      const usableFloor = defaultFloor <= maxSim
+        ? defaultFloor
+        : Number(clamp(quantile(0.5), lowEdge, highEdge).toFixed(3));
+
       const curve: {
         threshold: number;
         matched: number;
@@ -364,8 +381,9 @@ Deno.serve(async (req) => {
         high: number;
         mean_similarity: number;
       }[] = [];
-      for (let t = 0.4; t <= 0.951; t += 0.05) {
-        const threshold = Math.round(t * 100) / 100;
+      const steps = 12;
+      for (let i = 0; i < steps; i++) {
+        const threshold = Number((lowEdge + ((highEdge - lowEdge) * i) / (steps - 1)).toFixed(3));
         const hits = ranked.filter((r) => r.knn_similarity >= threshold);
         const meanSim = hits.length
           ? hits.reduce((s, r) => s + r.knn_similarity, 0) / hits.length
@@ -383,11 +401,14 @@ Deno.serve(async (req) => {
         success: true,
         action,
         knn_k: k,
-        default_threshold: defaultFloor,
+        default_threshold: usableFloor,
+        configured_floor: defaultFloor,
+        similarity_range: { min: Number(lowEdge.toFixed(4)), max: Number(highEdge.toFixed(4)) },
         retrieved: neighbours.length,
         band_share: bandShare,
         category_std: stdByCat,
         curve,
+
         matches: ranked.slice(0, 100).map((r) => ({
           key: r.key,
           label: r.label,

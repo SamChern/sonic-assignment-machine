@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_source_analyses_created_at ON public.source_analyses USING btree (created_at DESC);

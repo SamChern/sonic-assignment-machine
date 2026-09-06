@@ -90,18 +90,23 @@ const CategoryFlipTrendWidget = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
+    // Only the trailing window the chart can actually draw (8 weeks / 14 days,
+    // plus slack) — scanning the whole analyses table times out at scale.
+    const cutoff = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from("source_analyses")
       .select(
         "created_at,raw_scores,emotional_score,cognitive_score,social_score,communication_score,contextual_score,artistic_score,audio_sources(source_type)",
       )
+      .gte("created_at", cutoff)
       .order("created_at", { ascending: false })
-      .limit(1000);
+      .limit(500);
     setLoading(false);
     if (error) {
       toast({ title: "Could not load flip trend", description: error.message, variant: "destructive" });
       return;
     }
+
     const mapped: Analysis[] = (data ?? []).map((r: any) => {
       const after = {} as Record<string, number>;
       for (const c of CATEGORIES) after[c] = Number(r[`${c}_score`] ?? 0);

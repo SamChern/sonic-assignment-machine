@@ -24,11 +24,8 @@ import {
 } from "lucide-react";
 import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
 import IntuiziConsoleView from "@/components/admin/intuizi/IntuiziConsoleView";
-import {
-  IntegrationCard,
-  type StatusEntry,
-  type TestEntry,
-} from "@/components/admin/IntegrationCard";
+import type { StatusEntry, TestEntry } from "@/components/admin/IntegrationCard";
+import { IntegrationSetupList } from "@/components/admin/IntegrationSetupList";
 
 
 

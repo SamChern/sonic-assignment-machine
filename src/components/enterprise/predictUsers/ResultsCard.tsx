@@ -19,7 +19,7 @@ interface ResultsCardProps {
   toggleSeed: (id: string) => void;
 }
 
-/** Ranked results — kNN neighbours once retrieved, otherwise the local six-axis fallback. */
+/** Ranked matched people, or the local six-axis ranking when no match run exists yet. */
 const ResultsCard = ({
   loading,
   reweighted,
@@ -33,11 +33,11 @@ const ResultsCard = ({
       <div className="flex flex-wrap items-center gap-2">
         <Users className="h-4 w-4 text-primary" />
         <h3 className="text-sm font-semibold">
-          {reweighted ? "Nearest profiles in the shared space" : "Closest records by six axes"}
+          {reweighted ? "People matched" : "Closest people by the six qualities"}
         </h3>
         {reweighted && (
           <Badge variant="outline" className="text-[11px]">
-            ranked by kNN, re-weighted by your sliders
+            ranked by match strength, adjusted by your sliders
           </Badge>
         )}
       </div>
@@ -53,13 +53,13 @@ const ResultsCard = ({
             >
               <span className="w-6 text-muted-foreground">{i + 1}</span>
               <span className="min-w-0 flex-1 truncate">{m.label}</span>
-              <span className="text-primary">sim {(m.knn_similarity * 100).toFixed(0)}%</span>
-              <span className="text-muted-foreground">axes {(m.axis_fit * 100).toFixed(0)}%</span>
+              <span className="text-primary">match {(m.knn_similarity * 100).toFixed(0)}%</span>
+              <span className="text-muted-foreground">confidence {(m.axis_fit * 100).toFixed(0)}%</span>
             </div>
           ))}
           {!atThreshold.length && (
             <p className="text-xs text-muted-foreground">
-              Nothing clears this similarity floor — lower it to trade resonance for reach.
+              Nobody reaches this match strength — lower it to reach more people.
             </p>
           )}
         </div>
@@ -74,7 +74,7 @@ const ResultsCard = ({
               <Checkbox
                 checked={seedIds.includes(m.record.id)}
                 onCheckedChange={() => toggleSeed(m.record.id)}
-                aria-label="Use as seed exemplar"
+                aria-label="Use this person as an example"
               />
               <span className="min-w-0 flex-1 truncate">
                 {m.record.external_user_id ?? m.record.source_name ?? m.record.id.slice(0, 8)}

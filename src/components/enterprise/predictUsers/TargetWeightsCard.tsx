@@ -69,7 +69,7 @@ const TargetWeightsCard = ({
         </Badge>
         {vector && (
           <Badge className="text-[11px]">
-            seeded from {seedOrigin === "brief" ? "brief" : "exemplars"}
+            started from {seedOrigin === "brief" ? "your description" : "example people"}
           </Badge>
         )}
       </div>

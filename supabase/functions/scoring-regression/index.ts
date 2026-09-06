@@ -124,6 +124,8 @@ async function rescore(source: Any, ctxText: string | undefined) {
       save_results: false,
       bypass_cache: true,
     }),
+    // A diagnostic must never hold the invocation open indefinitely.
+    signal: AbortSignal.timeout(60_000),
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`analyze-audio ${res.status}: ${text.slice(0, 240)}`);
@@ -158,7 +160,9 @@ Deno.serve(async (req) => {
     body = {};
   }
   const mode = body.mode === "tag_only" ? "tag_only" : "calibration";
-  const limit = Math.max(1, Math.min(50, Math.round(Number(body.limit) || 50)));
+  // Each checked source costs one uncached LLM call, so the default stays small;
+  // an admin can still ask for more explicitly (hard ceiling 50).
+  const limit = Math.max(1, Math.min(50, Math.round(Number(body.limit) || 5)));
   const tolerance = await controlNumber(admin, "regression.tolerance", 8, {
     min: 1,
     max: 40,
@@ -235,10 +239,14 @@ Deno.serve(async (req) => {
     const details: Any[] = [];
     let failures = 0;
 
-    for (const src of rows) {
+    // Bounded concurrency: three rescores in flight keeps wall clock down
+    // without stampeding the gateway.
+    const CONCURRENCY = 3;
+    let cursor = 0;
+    const runOne = async (src: Any) => {
       try {
         const ctx = await contextFor(admin, src.id);
-        if (mode === "tag_only" && ctx.tags.length === 0) continue;
+        if (mode === "tag_only" && ctx.tags.length === 0) return;
         const out = await rescore(src, ctx.text);
         const base = baselines.get(src.id);
         const diffs: Record<string, number | null> = {};
@@ -271,7 +279,15 @@ Deno.serve(async (req) => {
         failures++;
         details.push({ id: src.id, name: src.name, error: errMsg(e) });
       }
-    }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, rows.length) }, async () => {
+        while (cursor < rows.length) {
+          const src = rows[cursor++];
+          await runOne(src);
+        }
+      }),
+    );
 
     const { count: librosaAfter } = await admin
       .from("librosa_call_log")

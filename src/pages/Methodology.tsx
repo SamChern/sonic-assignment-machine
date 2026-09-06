@@ -148,6 +148,49 @@ export default function Methodology() {
         </CardContent>
       </Card>
 
+      {examples.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Worked examples from real sounds</CardTitle>
+            <CardDescription>
+              The most recently analysed sounds where we listened to real audio. Each match compares
+              that sound with the average of the sounds below, so you can follow the arithmetic.
+              Average match: <span className="font-semibold text-foreground">{overall.index}</span>{" "}
+              across {overall.count}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {examples.map((e) => {
+              const r = resonancePoint(e.vector, audience, definition);
+              return (
+                <article key={e.id} className="rounded-lg border bg-muted/30 p-3">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <h2 className="text-base font-medium">{e.name}</h2>
+                    <Badge variant="secondary">{e.grounding}</Badge>
+                    <span className="ml-auto text-xl font-semibold tabular-nums text-primary">
+                      {r.score}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {resonanceWording(r.score)}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-muted-foreground sm:grid-cols-3">
+                    {RESONANCE_AXES.map((axis) => (
+                      <span key={axis} className="capitalize">
+                        {axis}:{" "}
+                        <span className="text-foreground">{Math.round(e.vector[axis] ?? 0)}</span>
+                      </span>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+
+
       {digests.length > 0 && (
         <Card>
           <CardHeader>

@@ -46,6 +46,10 @@ const Index = () => {
   const [showGetStartedDialog, setShowGetStartedDialog] = useState(false);
   /** Real recent-analysis averages for the home waveform (sample only if empty). */
   const scopeShowcase = useScopeShowcase();
+  /** Scores from the visitor's own trial run, once they have one. */
+  const [trialScope, setTrialScope] = useState<{ name: string; scores: Record<string, number> } | null>(
+    null,
+  );
 
   const { logoRef, headerRef } = useHeaderScrollEffect();
 
@@ -211,8 +215,19 @@ const Index = () => {
             {
               id: "home-scope",
               label: "SonicSIM SCOPE",
-              sublabel: scopeShowcase.sublabel,
-              scores: scopeShowcase.scores,
+              sublabel: trialScope
+                ? `Your analysis · ${trialScope.name}`
+                : scopeShowcase.sublabel,
+              scores: trialScope
+                ? {
+                    emotional: Math.round(trialScope.scores.emotional || 0),
+                    cognitive: Math.round(trialScope.scores.cognitive || 0),
+                    social: Math.round(trialScope.scores.social || 0),
+                    communication: Math.round(trialScope.scores.communication || 0),
+                    contextual: Math.round(trialScope.scores.contextual || 0),
+                    artistic: Math.round(trialScope.scores.artistic || 0),
+                  }
+                : scopeShowcase.scores,
             },
           ]}
         />
@@ -252,6 +267,7 @@ const Index = () => {
             isSignedIn={!!user}
             userId={user?.id ?? null}
             allFingerprints={allFingerprints || []}
+            onResult={setTrialScope}
           />
         </div>
       )}

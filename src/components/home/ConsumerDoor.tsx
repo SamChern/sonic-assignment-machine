@@ -93,10 +93,13 @@ export const ConsumerDoor = ({
   isSignedIn,
   userId,
   allFingerprints,
+  onResult,
 }: {
   isSignedIn: boolean;
   userId: string | null;
   allFingerprints: UserFingerprint[];
+  /** Reports the six scores of the latest run so the page waveform can show them. */
+  onResult?: (result: { name: string; scores: Scores } | null) => void;
 }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState("");
@@ -191,6 +194,13 @@ export const ConsumerDoor = ({
       cancelled = true;
     };
   }, [sharedId]);
+
+  // Hand the freshly measured scores up so the audioscope at the top of the page
+  // draws this run instead of the illustrative sample.
+  useEffect(() => {
+    if (!onResult) return;
+    onResult(result ? { name: result.name, scores: result.scores } : null);
+  }, [result, onResult]);
 
   const run = useCallback(
     async (source: { name: string; type: "file" | "track" }) => {

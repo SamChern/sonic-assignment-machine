@@ -143,19 +143,37 @@ const AdminIntegrations = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-6 py-8 max-w-3xl space-y-6">
-        <Tabs value={view} onValueChange={(v) => setView(v as "connected" | "setup")}>
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+      <main
+        className={`container mx-auto px-6 py-8 space-y-6 ${
+          view === "console" ? "max-w-5xl" : "max-w-3xl"
+        }`}
+      >
+        <Tabs value={view} onValueChange={(v) => setView(v as "connected" | "setup" | "console")}>
+          <TabsList className="grid w-full max-w-2xl grid-cols-3">
             <TabsTrigger value="connected" className="gap-1">
               <Zap className="h-3.5 w-3.5" /> Connected ({connectedCount})
             </TabsTrigger>
             <TabsTrigger value="setup" className="gap-1">
               <Settings2 className="h-3.5 w-3.5" /> Needs setup ({setupCount})
             </TabsTrigger>
+            <TabsTrigger value="console" className="gap-1">
+              <Activity className="h-3.5 w-3.5" /> Intuizi Console
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {view === "connected" ? (
+        {view === "console" ? (
+          <div className="space-y-6">
+            <p className="text-sm text-muted-foreground">
+              Live view of the Intuizi scoring pipeline — what is waiting, what is being scored right
+              now, and what has just finished — plus the MCP console for browsing audiences and
+              handing deliveries to ingest.
+            </p>
+            <ScoringRunsDashboard />
+            <ScoreQueueHealthPanel />
+            <IntuiziConsolePanel />
+          </div>
+        ) : view === "connected" ? (
           <ConnectedIntegrationsPanel
             status={statusByIntegration}
             lastTest={lastTestByIntegration}
@@ -165,6 +183,7 @@ const AdminIntegrations = () => {
           />
         ) : (
         <div className="space-y-6">
+
         <p className="text-sm text-muted-foreground">
           Manage credentials for third-party APIs and Model Context Protocol
           (MCP) servers. Credentials are stored server-side and only readable

@@ -3838,6 +3838,20 @@ export type Database = {
         Args: { p_error: string; p_id: string }
         Returns: undefined
       }
+      get_method_examples: {
+        Args: { _limit?: number }
+        Returns: {
+          artistic_score: number
+          cognitive_score: number
+          communication_score: number
+          contextual_score: number
+          emotional_score: number
+          grounding_level: string
+          id: string
+          social_score: number
+          source_name: string
+        }[]
+      }
       get_share_card: {
         Args: { p_token: string }
         Returns: {

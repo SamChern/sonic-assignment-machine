@@ -94,11 +94,12 @@ All colors MUST be HSL.
     --gradient-primary: linear-gradient(135deg, hsl(175 74% 31%) 0%, hsl(174 62% 42%) 100%);
     --gradient-brand: linear-gradient(135deg, hsl(175 74% 31%) 0%, hsl(212 71% 32%) 100%);
     --gradient-teal: linear-gradient(135deg, hsl(174 62% 42%) 0%, hsl(178 65% 34%) 100%);
-    --gradient-subtle: linear-gradient(180deg, hsl(180 20% 97%) 0%, hsl(0 0% 100%) 100%);
-    --gradient-app: radial-gradient(1200px 700px at 15% -10%, hsl(175 55% 88% / 0.75) 0%, transparent 60%),
-      radial-gradient(1000px 600px at 90% 5%, hsl(200 70% 90% / 0.6) 0%, transparent 65%),
-      radial-gradient(1000px 800px at 50% 110%, hsl(173 55% 90% / 0.6) 0%, transparent 70%),
-      linear-gradient(170deg, hsl(0 0% 100%) 0%, hsl(180 20% 97%) 45%, hsl(185 18% 94%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(178 26% 96.5%) 0%, hsl(180 30% 99%) 100%);
+    --gradient-app: radial-gradient(1200px 700px at 15% -10%, hsl(176 48% 87% / 0.55) 0%, transparent 60%),
+      radial-gradient(1000px 600px at 90% 5%, hsl(190 45% 91% / 0.45) 0%, transparent 65%),
+      radial-gradient(1000px 800px at 50% 110%, hsl(174 45% 90% / 0.5) 0%, transparent 70%),
+      linear-gradient(170deg, hsl(180 32% 99%) 0%, hsl(179 26% 96.5%) 45%, hsl(180 22% 94%) 100%);
+
 
     --gradient-emotional: linear-gradient(135deg, hsl(175 74% 31%) 0%, hsl(175 60% 45%) 100%);
     --gradient-cognitive: linear-gradient(135deg, hsl(212 71% 32%) 0%, hsl(206 70% 45%) 100%);

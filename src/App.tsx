@@ -2,11 +2,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { Suspense, lazy, useEffect } from "react";
 
 import AppErrorBoundary from "@/components/AppErrorBoundary";
+import AdminErrorBoundary from "@/components/AdminErrorBoundary";
 import RequireAdmin from "@/components/RequireAdmin";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import MobileAuthFallback from "@/components/MobileAuthFallback";
@@ -126,24 +127,36 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
 
-              <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
-              <Route path="/admin/workbench" element={<RequireAdmin><AdminWorkbench /></RequireAdmin>} />
-              <Route path="/admin/ec2" element={<RequireAdmin><AdminEc2 /></RequireAdmin>} />
-              <Route path="/admin/integrations" element={<RequireAdmin><AdminIntegrations /></RequireAdmin>} />
-              <Route path="/admin/connected" element={<RequireAdmin><AdminConnected /></RequireAdmin>} />
-              <Route path="/admin/ctv" element={<RequireAdmin><AdminCTV /></RequireAdmin>} />
-              <Route path="/admin/activations" element={<RequireAdmin><AdminActivationGrants /></RequireAdmin>} />
-              <Route path="/admin/control-room" element={<RequireAdmin><AdminControlRoom /></RequireAdmin>} />
-              <Route path="/admin/sound-library" element={<RequireAdmin><AdminSoundLibrary /></RequireAdmin>} />
-              <Route path="/admin/guide" element={<RequireAdmin><AdminGuide /></RequireAdmin>} />
-              <Route path="/admin/setup" element={<RequireAdmin><AdminSetup /></RequireAdmin>} />
-              <Route path="/admin/resolver" element={<RequireAdmin><AdminResolver /></RequireAdmin>} />
-              <Route path="/admin/lab" element={<RequireAdmin><AdminNextLevelLab /></RequireAdmin>} />
+              {/* One gate for every admin screen: access checked once, crashes
+                  contained once, no per-route wrappers to keep in sync. */}
+              <Route
+                path="/admin"
+                element={
+                  <RequireAdmin>
+                    <AdminErrorBoundary>
+                      <Outlet />
+                    </AdminErrorBoundary>
+                  </RequireAdmin>
+                }
+              >
+                <Route index element={<AdminDashboard />} />
+                <Route path="workbench" element={<AdminWorkbench />} />
+                <Route path="ec2" element={<AdminEc2 />} />
+                <Route path="integrations" element={<AdminIntegrations />} />
+                <Route path="connected" element={<AdminConnected />} />
+                <Route path="ctv" element={<AdminCTV />} />
+                <Route path="activations" element={<AdminActivationGrants />} />
+                <Route path="control-room" element={<AdminControlRoom />} />
+                <Route path="sound-library" element={<AdminSoundLibrary />} />
+                <Route path="guide" element={<AdminGuide />} />
+                <Route path="setup" element={<AdminSetup />} />
+                <Route path="resolver" element={<AdminResolver />} />
+                <Route path="lab" element={<AdminNextLevelLab />} />
+                <Route path="pipeline" element={<IntegrationStatus />} />
+                <Route path="compatibility" element={<IngestionCompatibility />} />
+                <Route path="semantic" element={<SemanticAnalysis />} />
+              </Route>
               <Route path="/methodology" element={<Methodology />} />
-              <Route path="/admin/pipeline" element={<RequireAdmin><IntegrationStatus /></RequireAdmin>} />
-              <Route path="/admin/compatibility" element={<RequireAdmin><IngestionCompatibility /></RequireAdmin>} />
-
-              <Route path="/admin/semantic" element={<RequireAdmin><SemanticAnalysis /></RequireAdmin>} />
 
               <Route path="/portal" element={<Portal />} />
               <Route path="/workspace" element={<Workspace />} />

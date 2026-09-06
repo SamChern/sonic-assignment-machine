@@ -85,14 +85,15 @@ const ReachResonanceCard = ({
       </div>
       <div className="mt-2">
         <Slider
-          value={[threshold * 100]}
-          min={40}
-          max={95}
+          value={[Math.round(Math.min(Math.max(threshold, sliderMin / 100), sliderMax / 100) * 100)]}
+          min={sliderMin}
+          max={sliderMax}
           step={1}
           onValueChange={([v]) => setThreshold(v / 100)}
           aria-label="Minimum match strength"
         />
       </div>
+
       <p className="mt-2 text-[11px] text-muted-foreground">
         Saving here creates this audience and keeps a comparison group aside, so you can measure
         what the audio actually changed.

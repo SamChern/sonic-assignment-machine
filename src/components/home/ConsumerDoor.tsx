@@ -34,6 +34,9 @@ import {
 import { GroundingBadge } from "@/components/GroundingBadge";
 import { SignatureCard } from "@/components/SignatureCard";
 import CohortUpsellCard from "@/components/home/CohortUpsellCard";
+import ListenerPaymentPending from "@/components/home/ListenerPaymentPending";
+import DoorQuotaNote from "@/components/home/DoorQuotaNote";
+import { useListenerSubscription } from "@/hooks/useListenerSubscription";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";
@@ -145,9 +148,13 @@ export const ConsumerDoor = ({
     };
   }, [userId, result]);
 
-  const quotaExhausted = isSignedIn
-    ? (monthlyUsed ?? 0) >= FREE_MONTHLY_LIMIT
-    : guestRemaining !== null && guestRemaining <= 0;
+  const { awaitingPayment } = useListenerSubscription(userId);
+
+  const quotaExhausted = awaitingPayment
+    ? true
+    : isSignedIn
+      ? (monthlyUsed ?? 0) >= FREE_MONTHLY_LIMIT
+      : guestRemaining !== null && guestRemaining <= 0;
 
   const remaining = isSignedIn
     ? Math.max(0, FREE_MONTHLY_LIMIT - (monthlyUsed ?? 0))
@@ -365,38 +372,21 @@ export const ConsumerDoor = ({
             e.currentTarget.value = "";
           }}
         />
-        <p className="mt-3 text-xs text-muted-foreground">
-          {quotaExhausted ? (
-            isSignedIn ? (
-              <>
-                You've used your {FREE_MONTHLY_LIMIT} free analyses this month.{" "}
-                <Link to="/workspace" className="text-primary underline-offset-4 hover:underline">
-                  See what this does at scale
-                </Link>
-                .
-              </>
-            ) : (
-              <>
-                That was your free look.{" "}
-                <Link to="/auth" className="text-primary underline-offset-4 hover:underline">
-                  Create a free account
-                </Link>{" "}
-                to save, share, and run {FREE_MONTHLY_LIMIT} a month.
-              </>
-            )
-          ) : (
-            <>
-              {remaining} free {remaining === 1 ? "analysis" : "analyses"} left
-              {isSignedIn ? " this month" : " — no signup needed"}.
-            </>
-          )}
-        </p>
+        <DoorQuotaNote
+          awaitingPayment={awaitingPayment}
+          quotaExhausted={quotaExhausted}
+          isSignedIn={isSignedIn}
+          remaining={remaining}
+          monthlyLimit={FREE_MONTHLY_LIMIT}
+        />
         {quotaError && (
           <p role="status" className="mt-2 text-xs text-muted-foreground">
             {quotaError}
           </p>
         )}
       </Card>
+
+      {awaitingPayment && <ListenerPaymentPending />}
 
       {shareError && (
         <Card role="alert" className="border-destructive/40 bg-destructive/5 p-4">

@@ -48,6 +48,26 @@ export const useListenerSubscription = (userId: string | null) => {
     void load();
   }, [load]);
 
+  /** Records a pending Listener membership for the person who just signed in. */
+  const claimPending = useCallback(
+    async (email: string | null, dataSharing: boolean) => {
+      if (!userId) return;
+      const { error: err } = await supabase.from("listener_subscriptions").insert({
+        user_id: userId,
+        email,
+        plan: "listener",
+        status: "awaiting_payment",
+        terms_accepted: true,
+        data_sharing_accepted: dataSharing,
+      });
+      if (err && !err.message.includes("duplicate")) {
+        console.warn("membership record failed", err.message);
+      }
+      await load();
+    },
+    [userId, load],
+  );
+
   // A visitor who signed up as a Listener may only be able to sign in later, so
   // their pending membership is recorded on their first signed-in visit.
   useEffect(() => {
@@ -68,26 +88,6 @@ export const useListenerSubscription = (userId: string | null) => {
       localStorage.removeItem(PENDING_KEY);
     })();
   }, [userId, loading, membership, claimPending]);
-
-  /** Records a pending Listener membership for the person who just signed in. */
-  const claimPending = useCallback(
-    async (email: string | null, dataSharing: boolean) => {
-      if (!userId) return;
-      const { error: err } = await supabase.from("listener_subscriptions").insert({
-        user_id: userId,
-        email,
-        plan: "listener",
-        status: "awaiting_payment",
-        terms_accepted: true,
-        data_sharing_accepted: dataSharing,
-      });
-      if (err && !err.message.includes("duplicate")) {
-        console.warn("membership record failed", err.message);
-      }
-      await load();
-    },
-    [userId, load],
-  );
 
   return {
     membership,

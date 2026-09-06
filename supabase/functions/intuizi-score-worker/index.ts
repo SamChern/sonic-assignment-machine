@@ -231,7 +231,8 @@ Deno.serve(async (req) => {
         const nextScale = verdict.shrink
           ? Math.max(0.25, stepScale * 0.5)
           : stepScale;
-        await admin.from("intuizi_score_queue").update({
+        writes.push({
+          id: task.id,
           status: dead ? "dead_letter" : "pending",
           last_error: msg.slice(0, 1000),
           failure_kind: verdict.kind,

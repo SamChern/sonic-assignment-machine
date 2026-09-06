@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import SonicSimPanel from "@/components/visuals/SonicSimPanel";
 import ListenTab from "@/components/home/ListenTab";
+import AccessPlans from "@/components/home/AccessPlans";
 import UnderstandTab from "@/components/home/UnderstandTab";
 import LibraryTab from "@/components/home/LibraryTab";
 import HomeHeader from "@/components/home/HomeHeader";
@@ -317,6 +318,8 @@ const Index = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {!user && <AccessPlans />}
 
       {/* Step 16.0 — asked once: "What brings you here?" */}
       <PersonaChooser

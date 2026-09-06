@@ -34,6 +34,8 @@ import {
 import { GroundingBadge } from "@/components/GroundingBadge";
 import { SignatureCard } from "@/components/SignatureCard";
 import CohortUpsellCard from "@/components/home/CohortUpsellCard";
+import ListenerPaymentPending from "@/components/home/ListenerPaymentPending";
+import { useListenerSubscription } from "@/hooks/useListenerSubscription";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";
@@ -401,6 +403,8 @@ export const ConsumerDoor = ({
           </p>
         )}
       </Card>
+
+      {awaitingPayment && <ListenerPaymentPending />}
 
       {shareError && (
         <Card role="alert" className="border-destructive/40 bg-destructive/5 p-4">

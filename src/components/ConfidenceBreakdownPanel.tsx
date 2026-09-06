@@ -27,6 +27,12 @@ import {
 } from "@/components/ui/select";
 import DriverRowsTable from "@/components/confidence/DriverRowsTable";
 import ComparisonSection from "@/components/confidence/ComparisonSection";
+import ConfidenceHeadline from "@/components/confidence/ConfidenceHeadline";
+import {
+  NodeWeightsAndScores,
+  WhyLowList,
+  WhatWouldRaiseIt,
+} from "@/components/confidence/EvidenceSections";
 import {
   SCORE_KEYS,
   computeDriverRows,

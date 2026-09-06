@@ -191,7 +191,13 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLi
       </TabsContent>
 
       <TabsContent value="library">
+        {showHints && (
+          <p className="mb-2 text-sm text-muted-foreground">
+            Pick one or more sounds other people have already added, then analyse them yourself.
+          </p>
+        )}
         <Card className="p-6">
+
           <UserLibrary onSelectMultiple={onLibrarySelect} />
         </Card>
       </TabsContent>

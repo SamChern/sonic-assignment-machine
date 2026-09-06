@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, BadgeCheck, Disc3, Store, UserRound } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Disc3, LayoutDashboard, Store, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
  * so a creator never has to guess how to get from one to the next.
  */
 const LINKS = [
+  { to: "/creator/space", label: "Your space", icon: LayoutDashboard, hint: "Library, profile and results" },
   { to: "/creator", label: "Understand", icon: BadgeCheck, hint: "See how your sound scores" },
   { to: "/creator/profile", label: "Register", icon: UserRound, hint: "Claim your work" },
   { to: "/library/catalog", label: "Catalog", icon: Disc3, hint: "Albums, tracks and labels" },

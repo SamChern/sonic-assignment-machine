@@ -75,7 +75,7 @@ export const AdminSonicSim = () => {
 
   return (
     <SonicSimPanel
-      lens="admin"
+      lens="debug"
       defaultMode="semantic"
       modes={["semantic", "scope", "radial", "nodes"]}
       subjects={subjects}

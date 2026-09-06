@@ -131,6 +131,13 @@ const DESTINATIONS: {
     depths: ["operate"],
   },
   {
+    to: "/admin/demo-requests",
+    label: "Enterprise demos",
+    description: "Demo requests from enterprise accounts, with status and booked times.",
+    icon: ShieldCheck,
+    depths: ["operate"],
+  },
+  {
     to: "/admin/resolver",
     label: "Resolver",
     description: "Queue of unknown symbols, symbol details, tools and the signal nudge.",

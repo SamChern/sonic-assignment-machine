@@ -13,6 +13,7 @@ export type ListenerMembership = {
   status: "awaiting_payment" | "active" | "cancelled";
   plan: string;
   price_cents: number;
+  billing_period: "monthly" | "annual";
   activated_at: string | null;
 };
 
@@ -29,7 +30,7 @@ export const useListenerSubscription = (userId: string | null) => {
     setLoading(true);
     const { data, error: err } = await supabase
       .from("listener_subscriptions")
-      .select("id, status, plan, price_cents, activated_at")
+      .select("id, status, plan, price_cents, billing_period, activated_at")
       .eq("user_id", userId)
       .maybeSingle();
     setLoading(false);
@@ -50,13 +51,19 @@ export const useListenerSubscription = (userId: string | null) => {
 
   /** Records a pending Listener membership for the person who just signed in. */
   const claimPending = useCallback(
-    async (email: string | null, dataSharing: boolean) => {
+    async (
+      email: string | null,
+      dataSharing: boolean,
+      billingPeriod: "monthly" | "annual" = "monthly",
+    ) => {
       if (!userId) return;
       const { error: err } = await supabase.from("listener_subscriptions").insert({
         user_id: userId,
         email,
         plan: "listener",
         status: "awaiting_payment",
+        billing_period: billingPeriod,
+        price_cents: billingPeriod === "annual" ? 2999 : 299,
         terms_accepted: true,
         data_sharing_accepted: dataSharing,
       });

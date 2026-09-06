@@ -4,7 +4,7 @@
  * appear when the role actually grants them.
  */
 import { Link, useNavigate } from "react-router-dom";
-import { Building2, Check, Compass, DoorOpen, LogOut, Megaphone, Palette, Shield, User } from "lucide-react";
+import { Building2, Check, Compass, DoorOpen, Headphones, LogOut, Megaphone, Palette, Shield, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +96,15 @@ export const DoorSwitcher = ({
             </DropdownMenuItem>
           );
         })}
+        {isSignedIn && <DropdownMenuSeparator />}
+        {isSignedIn && (
+          <DropdownMenuItem asChild>
+            <Link to="/listener" className="gap-2">
+              <Headphones className="h-4 w-4 text-primary" />
+              Your listening dashboard
+            </Link>
+          </DropdownMenuItem>
+        )}
         {(hasEnterprise || isAdmin) && <DropdownMenuSeparator />}
         {hasEnterprise && (
           <DropdownMenuItem asChild>

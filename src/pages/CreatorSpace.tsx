@@ -12,6 +12,7 @@ import { CreatorNav } from "@/components/creator/CreatorNav";
 import CreatorLibraryPanel from "@/components/creator/CreatorLibraryPanel";
 import CreatorProfilePanel from "@/components/creator/CreatorProfilePanel";
 import CreatorAnalyticsPanel from "@/components/creator/CreatorAnalyticsPanel";
+import CreatorUploadPanel from "@/components/creator/CreatorUploadPanel";
 
 /**
  * The Creator space: the same three things a Listener gets — their library,
@@ -19,7 +20,7 @@ import CreatorAnalyticsPanel from "@/components/creator/CreatorAnalyticsPanel";
  */
 const CreatorSpace = () => {
   const { user, loading: authLoading } = useAuth();
-  const { mySources, loading: sourcesLoading } = useAudioSources();
+  const { mySources, loading: sourcesLoading, refresh: refreshSources } = useAudioSources();
   const space = useCreatorSpace();
   const [profile, setProfile] = useState<{ username: string | null; avatar_url: string | null } | null>(
     null,

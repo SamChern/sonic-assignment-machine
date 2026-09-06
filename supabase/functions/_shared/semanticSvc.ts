@@ -14,7 +14,9 @@
 const TEXT_DIM = 512;
 const TARGET_DIM = 1536;
 const TIMEOUT_MS = 30_000;
-const AUDIO_TIMEOUT_MS = 120_000;
+// Audio embedding is enrichment only: a slow box must not eat the whole request
+// budget, or the caller gets a gateway timeout before scoring even starts.
+const AUDIO_TIMEOUT_MS = 35_000;
 const CONFIG_TTL_MS = 300_000;
 
 export interface SemanticSvcConfig {

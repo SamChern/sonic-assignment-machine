@@ -127,6 +127,7 @@ const gatewayDriver: S3Driver = {
       const res = await fetch(`${GATEWAY_BASE}/${CONNECTOR}/?${params}`, {
         method: "GET",
         headers: gatewayHeaders(),
+        signal: AbortSignal.timeout(30_000),
       });
       if (!res.ok) {
         const body = await res.text();
@@ -153,6 +154,7 @@ const gatewayDriver: S3Driver = {
         method: "POST",
         headers: { ...gatewayHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ object_path: objectKey }),
+        signal: AbortSignal.timeout(30_000),
       },
     );
     if (!res.ok) {
@@ -172,6 +174,7 @@ const gatewayDriver: S3Driver = {
     const res = await fetch(`${GATEWAY_BASE}/${CONNECTOR}/${encodedKey}`, {
       method: "HEAD",
       headers: gatewayHeaders(),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!res.ok) {
@@ -196,6 +199,7 @@ const gatewayDriver: S3Driver = {
         method: "POST",
         headers: { ...gatewayHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ object_path: objectKey }),
+        signal: AbortSignal.timeout(30_000),
       },
     );
     if (!res.ok) {
@@ -212,7 +216,12 @@ const gatewayDriver: S3Driver = {
     };
     if (opts?.contentEncoding) headers["Content-Encoding"] = opts.contentEncoding;
 
-    const put = await fetch(url as string, { method: "PUT", headers, body });
+    const put = await fetch(url as string, {
+      method: "PUT",
+      headers,
+      body,
+      signal: AbortSignal.timeout(120_000),
+    });
     if (!put.ok) {
       const text = await put.text();
       throw Object.assign(new Error(`S3 put failed [${put.status}]: ${text}`), {
@@ -334,6 +343,7 @@ async function signedFetch(
 
   const url = `https://${cfg.host}${path}${canonicalQuery ? `?${canonicalQuery}` : ""}`;
   return await fetch(url, {
+    signal: AbortSignal.timeout(30_000),
     method,
     headers: {
       ...extraHeaders,

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export type ScopeScores = {
   emotional: number;
@@ -26,8 +27,13 @@ const SAMPLE: ScopeScores = {
  * sample when the platform has no analyses yet.
  */
 export function useScopeShowcase() {
+  // Stored analyses are only readable with a session, so a signed-out visitor
+  // would only ever get a 401 back. Skip the request and show the labelled
+  // sample straight away instead of logging a failure on every home page load.
+  const { user } = useAuth();
   const { data } = useQuery({
-    queryKey: ["scope-showcase"],
+    queryKey: ["scope-showcase", user?.id ?? "anon"],
+    enabled: !!user,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const { data: rows, error } = await supabase

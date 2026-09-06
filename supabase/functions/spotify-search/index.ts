@@ -6,14 +6,20 @@ const corsHeaders = {
 const SPOTIFY_CLIENT_ID = Deno.env.get('SPOTIFY_CLIENT_ID')?.trim();
 const SPOTIFY_CLIENT_SECRET = Deno.env.get('SPOTIFY_CLIENT_SECRET')?.trim();
 
+// Never log anything derived from the credentials themselves — presence only.
 console.log('Spotify credentials check:', {
   hasClientId: !!SPOTIFY_CLIENT_ID,
   hasClientSecret: !!SPOTIFY_CLIENT_SECRET,
-  clientIdLength: SPOTIFY_CLIENT_ID?.length,
-  clientSecretLength: SPOTIFY_CLIENT_SECRET?.length
 });
 
+// Client-credentials tokens live ~1h; memoize so a warm isolate stops
+// re-minting one on every single search.
+let tokenCache: { token: string; expiresAt: number } | null = null;
+
 async function getSpotifyToken(): Promise<string> {
+  if (tokenCache && tokenCache.expiresAt > Date.now() + 30_000) {
+    return tokenCache.token;
+  }
   console.log('Getting Spotify access token...');
   
   const response = await fetch('https://accounts.spotify.com/api/token', {
@@ -33,6 +39,8 @@ async function getSpotifyToken(): Promise<string> {
 
   const data = await response.json();
   console.log('Successfully obtained Spotify token');
+  const ttl = Number(data.expires_in) > 0 ? Number(data.expires_in) : 3600;
+  tokenCache = { token: data.access_token, expiresAt: Date.now() + ttl * 1000 };
   return data.access_token;
 }
 

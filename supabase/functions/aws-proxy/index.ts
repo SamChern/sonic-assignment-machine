@@ -87,7 +87,10 @@ serve(async (req) => {
       fetchOptions.body = JSON.stringify(body);
     }
 
-    const response = await fetch(targetUrl, fetchOptions);
+    const response = await fetch(targetUrl, {
+      ...fetchOptions,
+      signal: AbortSignal.timeout(30_000),
+    });
     const responseData = await response.json().catch(() => ({}));
     console.log(`aws-proxy upstream status: ${response.status}`);
 

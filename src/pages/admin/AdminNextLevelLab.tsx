@@ -6,6 +6,8 @@ import { useNextLevelFlags } from "@/hooks/useNextLevelFlags";
 import { NextLevelFlagsPanel } from "@/components/nextlevel/NextLevelFlagsPanel";
 import { ResonanceLabPanel } from "@/components/nextlevel/ResonanceLabPanel";
 import { ResonanceAudioPanel } from "@/components/nextlevel/ResonanceAudioPanel";
+import { OnDeviceAudioPanel } from "@/components/nextlevel/OnDeviceAudioPanel";
+
 
 import { CommonsPanel } from "@/components/nextlevel/CommonsPanel";
 import { OnDevicePanel } from "@/components/nextlevel/OnDevicePanel";
@@ -56,9 +58,14 @@ export default function AdminNextLevelLab() {
         <CommonsPanel />
       </PanelErrorBoundary>
 
+      <PanelErrorBoundary label="Measure a sound on this device">
+        <OnDeviceAudioPanel />
+      </PanelErrorBoundary>
+
       <PanelErrorBoundary label="Scoring in the browser">
         <OnDevicePanel />
       </PanelErrorBoundary>
+
 
       <PanelErrorBoundary label="hear() for other systems">
         <HearApiPanel />

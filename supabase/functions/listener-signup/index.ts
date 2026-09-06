@@ -85,6 +85,34 @@ Deno.serve(async (req) => {
       console.warn("Sign-up notification not sent yet:", String(err));
     }
 
+    // Confirmation to the person who just signed up: what they get, and that
+    // their analyses unlock once the $2.99 membership is paid.
+    let confirmed = false;
+    try {
+      const welcome =
+        `<p>Welcome to SonicSIM.</p>` +
+        `<p>Your Listener account is created and your place is held. Membership is ` +
+        `$2.99 a month (or $29.99 a year). Card payments open shortly \u2014 as soon as your ` +
+        `membership is paid, your analyses unlock and everything you run is saved to your library.</p>` +
+        `<p>We recorded your agreement to the terms and conditions` +
+        (dataSharing ? `, and your consent to share analysis data with the SonicSIM commons` : ``) +
+        `.</p><p>\u2014 SonicSIM</p>`;
+      const { error: welcomeError } = await supabase.rpc("enqueue_email", {
+        queue_name: "transactional_emails",
+        payload: {
+          to: email,
+          subject: "Your SonicSIM Listener account",
+          html: welcome,
+          purpose: "transactional",
+          idempotency_key: `listener-welcome-${row?.id ?? email}`,
+        },
+      });
+      if (welcomeError) throw welcomeError;
+      confirmed = true;
+    } catch (err) {
+      console.warn("Listener confirmation not sent yet:", String(err));
+    }
+
     if (notified && row?.id) {
       await supabase
         .from("listener_signups")
@@ -92,7 +120,7 @@ Deno.serve(async (req) => {
         .eq("id", row.id);
     }
 
-    return json({ ok: true, id: row?.id ?? null, notified });
+    return json({ ok: true, id: row?.id ?? null, notified, confirmed });
   } catch (err) {
     console.error("listener-signup failed", err);
     return json({ error: "Unexpected error." }, 500);

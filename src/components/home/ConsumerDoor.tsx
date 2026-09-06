@@ -372,7 +372,9 @@ export const ConsumerDoor = ({
           }}
         />
         <p className="mt-3 text-xs text-muted-foreground">
-          {quotaExhausted ? (
+          {awaitingPayment ? (
+            <>Your analyses unlock as soon as your $2.99 membership payment goes through.</>
+          ) : quotaExhausted ? (
             isSignedIn ? (
               <>
                 You've used your {FREE_MONTHLY_LIMIT} free analyses this month.{" "}

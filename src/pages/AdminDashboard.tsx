@@ -313,6 +313,9 @@ const AdminDashboard = () => {
           <CollapsibleSection title="Scoring credit budget">
             <ActivationCostPanel />
           </CollapsibleSection>
+          <CollapsibleSection title="Semantic scope (audioscope)">
+            <AdminSonicSim />
+          </CollapsibleSection>
 
         </div>
 

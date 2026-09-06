@@ -84,12 +84,54 @@ Deno.serve(async (req) => {
       object_key?: string;
       activation_id?: string;
       include_dead_letter?: boolean;
+      reason?: string;
     };
     /** One id for this invocation; inherited from the caller when chaining. */
     const runTraceId = reqBody.trace_id ?? newTraceId("run");
 
+    /** Operator visibility: the console reads these rows to show worker health. */
+    const heartbeat = async (stats: Record<string, unknown>) => {
+      const { error } = await admin.from("worker_heartbeats").upsert({
+        worker_id: "intuizi-score-worker",
+        host: reqBody.source ?? "manual",
+        last_seen: new Date().toISOString(),
+        stats: { trace_id: runTraceId, ...stats },
+      }, { onConflict: "worker_id" });
+      if (error) console.warn("heartbeat failed", error.message);
+    };
+
+    // Operator switch: stop / restart the pipeline without a database console.
+    if (reqBody.action === "pause" || reqBody.action === "resume") {
+      const pausing = reqBody.action === "pause";
+      const { error: stErr } = await admin.from("intuizi_ingest_state").update(
+        pausing
+          ? {
+            paused: true,
+            pause_reason: (reqBody.reason ?? "Paused by operator").slice(0, 500),
+            paused_at: new Date().toISOString(),
+          }
+          : {
+            paused: false,
+            pause_reason: null,
+            paused_at: null,
+            parked_until: null,
+            consecutive_rate_limits: 0,
+          },
+      ).eq("id", "singleton");
+      if (stErr) return json({ success: false, error: stErr.message }, 500);
+      if (!pausing) {
+        admin.functions.invoke("intuizi-score-worker", {
+          body: { source: "resume", trace_id: runTraceId },
+        }).catch((e: unknown) => console.warn("kick failed", errMsg(e)));
+      }
+      return json({ success: true, action: reqBody.action, trace_id: runTraceId });
+    }
+
+    await heartbeat({ phase: "started" });
+
     // Keep bounded queue cleanup out of the latency-sensitive claim RPC.
     await admin.rpc("retire_exhausted_intuizi_score_jobs", { p_limit: 50 });
+
 
     // Operator action: put failed / dead-lettered identifiers back in the queue.
     // Scoring is idempotent per identifier, so already-completed work is skipped

@@ -1402,6 +1402,42 @@ export type Database = {
         }
         Relationships: []
       }
+      intuizi_cost_estimate_cache: {
+        Row: {
+          activation_id: string
+          billable_signatures: number
+          computed_at: string
+          distinct_signatures: number
+          done_rows: number
+          pending_rows: number
+          sampled_cached_rows: number
+          sampled_rows: number
+          total_rows: number
+        }
+        Insert: {
+          activation_id: string
+          billable_signatures?: number
+          computed_at?: string
+          distinct_signatures?: number
+          done_rows?: number
+          pending_rows?: number
+          sampled_cached_rows?: number
+          sampled_rows?: number
+          total_rows?: number
+        }
+        Update: {
+          activation_id?: string
+          billable_signatures?: number
+          computed_at?: string
+          distinct_signatures?: number
+          done_rows?: number
+          pending_rows?: number
+          sampled_cached_rows?: number
+          sampled_rows?: number
+          total_rows?: number
+        }
+        Relationships: []
+      }
       intuizi_identifiers: {
         Row: {
           apps_signals: Json
@@ -3899,10 +3935,15 @@ export type Database = {
         Returns: boolean
       }
       intuizi_activation_cost_estimate: {
-        Args: { p_sample?: number }
+        Args: {
+          p_force?: boolean
+          p_max_age_seconds?: number
+          p_sample?: number
+        }
         Returns: {
           activation_id: string
           billable_signatures: number
+          computed_at: string
           distinct_signatures: number
           done_rows: number
           pending_rows: number

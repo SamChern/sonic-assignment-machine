@@ -161,7 +161,30 @@ Deno.serve(async (req) => {
       step_scale: number | null;
     };
 
-    /** Scores one identifier and persists its terminal queue state. */
+    // Terminal queue states are buffered and flushed once per claimed batch
+    // (one `finish_intuizi_score_jobs` call) instead of one UPDATE per
+    // identifier: with a batch of 16 that is 1 round trip instead of 16.
+    let writes: Record<string, unknown>[] = [];
+    const flushWrites = async () => {
+      if (!writes.length) return;
+      const rows = writes;
+      writes = [];
+      const { error } = await admin.rpc("finish_intuizi_score_jobs", {
+        p_rows: rows,
+      });
+      if (error) {
+        // A lost write means a claimed row keeps its lease and is retried once
+        // the lease expires, so it must be loud but not fatal.
+        console.error(JSON.stringify({
+          evt: "intuizi_score_flush_failed",
+          trace_id: runTraceId,
+          rows: rows.length,
+          error: error.message,
+        }));
+      }
+    };
+
+    /** Scores one identifier and buffers its terminal queue state. */
     const runTask = async (task: QueuedTask) => {
       const t0 = Date.now();
       const traceId = task.trace_id ?? `${runTraceId}.${task.id.slice(0, 8)}`;

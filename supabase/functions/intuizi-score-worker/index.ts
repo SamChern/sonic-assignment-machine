@@ -161,7 +161,30 @@ Deno.serve(async (req) => {
       step_scale: number | null;
     };
 
-    /** Scores one identifier and persists its terminal queue state. */
+    // Terminal queue states are buffered and flushed once per claimed batch
+    // (one `finish_intuizi_score_jobs` call) instead of one UPDATE per
+    // identifier: with a batch of 16 that is 1 round trip instead of 16.
+    let writes: Record<string, unknown>[] = [];
+    const flushWrites = async () => {
+      if (!writes.length) return;
+      const rows = writes;
+      writes = [];
+      const { error } = await admin.rpc("finish_intuizi_score_jobs", {
+        p_rows: rows,
+      });
+      if (error) {
+        // A lost write means a claimed row keeps its lease and is retried once
+        // the lease expires, so it must be loud but not fatal.
+        console.error(JSON.stringify({
+          evt: "intuizi_score_flush_failed",
+          trace_id: runTraceId,
+          rows: rows.length,
+          error: error.message,
+        }));
+      }
+    };
+
+    /** Scores one identifier and buffers its terminal queue state. */
     const runTask = async (task: QueuedTask) => {
       const t0 = Date.now();
       const traceId = task.trace_id ?? `${runTraceId}.${task.id.slice(0, 8)}`;
@@ -179,14 +202,13 @@ Deno.serve(async (req) => {
         });
         if (out.status === "scored") scored++;
         else unchanged++;
-        await admin.from("intuizi_score_queue").update({
+        writes.push({
+          id: task.id,
           status: out.status === "scored" ? "done" : "skipped",
           finished_at: new Date().toISOString(),
-          last_error: null,
-          failure_kind: null,
           last_stage: out.stage,
           trace_id: traceId,
-        }).eq("id", task.id);
+        });
       } catch (e) {
         failed++;
         const verdict = classifyFailure(e);
@@ -209,7 +231,8 @@ Deno.serve(async (req) => {
         const nextScale = verdict.shrink
           ? Math.max(0.25, stepScale * 0.5)
           : stepScale;
-        await admin.from("intuizi_score_queue").update({
+        writes.push({
+          id: task.id,
           status: dead ? "dead_letter" : "pending",
           last_error: msg.slice(0, 1000),
           failure_kind: verdict.kind,
@@ -224,7 +247,10 @@ Deno.serve(async (req) => {
           ).toISOString(),
           dead_lettered_at: dead ? new Date().toISOString() : null,
           finished_at: dead ? new Date().toISOString() : null,
-        }).eq("id", task.id);
+        });
+        // A pause/park decision below reads its own state, so flush the
+        // classified failures first — the run may end right after.
+        if (accountStop || verdict.kind === "rate_limit") await flushWrites();
 
 
         if (dead) {
@@ -364,7 +390,10 @@ Deno.serve(async (req) => {
         },
       );
       await Promise.all(lanes);
+      // One write for the whole batch's outcomes.
+      await flushWrites();
     }
+    await flushWrites();
 
     // Keep the activation's enterprise summary (the homepage "synced enterprise
     // analyses" card) in step with what has actually been scored.

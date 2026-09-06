@@ -143,6 +143,8 @@ const App = () => (
                 <Route path="workbench" element={<AdminWorkbench />} />
                 <Route path="ec2" element={<AdminEc2 />} />
                 <Route path="integrations" element={<AdminIntegrations />} />
+                <Route path="integrations/:integrationId" element={<AdminIntegrationSetup />} />
+
                 <Route path="connected" element={<AdminConnected />} />
                 <Route path="ctv" element={<AdminCTV />} />
                 <Route path="activations" element={<AdminActivationGrants />} />

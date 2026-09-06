@@ -4,7 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Cpu, Loader2 } from "lucide-react";
+import { Cpu, Loader2, ShieldCheck } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { toast } from "sonner";
 import { friendlyError } from "@/lib/friendlyError";
 import { AxisVectorEditor } from "./AxisVectorEditor";
@@ -21,10 +23,29 @@ import {
  * On-device audio encoder: decodes the uploaded file in this browser, measures
  * it, and runs the full six-axis match locally — no upload, no model call.
  */
+interface ServerMatch {
+  success: boolean;
+  saved?: boolean;
+  save_error?: string;
+  error?: unknown;
+  scores: Record<string, number>;
+  confidence: number;
+  definition_version: string;
+  match: {
+    score: number;
+    gaps: Record<string, number>;
+    weakestAxis: string;
+  };
+}
+
 export function OnDeviceAudioPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<AudioFingerprint | null>(null);
+  const [label, setLabel] = useState("");
+  const [save, setSave] = useState(false);
+  const [publicExample, setPublicExample] = useState(false);
+  const [server, setServer] = useState<ServerMatch | null>(null);
   const [audience, setAudience] = useState<AxisVector>({
     emotional: 55,
     cognitive: 60,
@@ -43,10 +64,34 @@ export function OnDeviceAudioPanel() {
     if (!file) return;
     setBusy(true);
     setResult(null);
+    setServer(null);
     try {
       const fingerprint = await encodeAudioFile(file);
       setResult(fingerprint);
-      toast.success("Measured on this device — nothing was uploaded.");
+
+      // The browser measured it; the backend is the authority on what those
+      // measurements mean, and stores the run when asked.
+      const { data, error } = await invokeWithTimeout<ServerMatch>(
+        "resonance-encode",
+        {
+          action: "score",
+          features: fingerprint.features,
+          audience,
+          label: label.trim() || file.name,
+          persist: save,
+          public_example: save && publicExample,
+        },
+        { timeoutMs: 30000 },
+      );
+      if (error) throw error;
+      if (data?.success) {
+        setServer(data);
+        if (data.save_error) toast.warning(data.save_error);
+        else if (data.saved) toast.success("Measured here, confirmed and saved as a worked example.");
+        else toast.success("Measured on this device and confirmed by the backend.");
+      } else {
+        throw new Error(data?.error ? String(data.error) : "The match could not be confirmed.");
+      }
     } catch (e) {
       toast.error(friendlyError(e, "We couldn't read that sound in this browser."));
     } finally {
@@ -55,6 +100,11 @@ export function OnDeviceAudioPanel() {
   };
 
   const f = result?.features;
+  const shown = server
+    ? { scores: server.scores, gaps: server.match.gaps, score: server.match.score, weakest: server.match.weakestAxis, confidence: server.confidence }
+    : result && match
+      ? { scores: result.scores, gaps: match.gaps, score: match.score, weakest: match.weakestAxis, confidence: result.confidence }
+      : null;
 
   return (
     <Card>
@@ -94,27 +144,60 @@ export function OnDeviceAudioPanel() {
           </Button>
         </div>
 
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="ondevice-label">Name this run (optional)</Label>
+            <Input
+              id="ondevice-label"
+              value={label}
+              placeholder="e.g. Album intro, take 2"
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2 rounded-md border p-3">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="ondevice-save" className="text-sm">Keep this run</Label>
+              <Switch id="ondevice-save" checked={save} onCheckedChange={setSave} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="ondevice-public" className="text-sm text-muted-foreground">
+                Show it as a public worked example
+              </Label>
+              <Switch
+                id="ondevice-public"
+                checked={publicExample}
+                disabled={!save}
+                onCheckedChange={setPublicExample}
+              />
+            </div>
+          </div>
+        </div>
+
         <AxisVectorEditor title="Audience" value={audience} onChange={setAudience} />
 
-        {result && match && f && (
+        {shown && f && (
           <div className="space-y-3 rounded-lg border bg-muted/40 p-4">
             <div className="flex flex-wrap items-baseline gap-3">
-              <span className="text-3xl font-semibold tabular-nums text-primary">{match.score}</span>
-              <span className="text-sm text-muted-foreground">{resonanceWording(match.score)}</span>
+              <span className="text-3xl font-semibold tabular-nums text-primary">{shown.score}</span>
+              <span className="text-sm text-muted-foreground">{resonanceWording(shown.score)}</span>
               <Badge variant="secondary">measured here</Badge>
-              <Badge variant="outline">
-                confidence {Math.round(result.confidence * 100)}%
-              </Badge>
+              <Badge variant="outline">confidence {Math.round(shown.confidence * 100)}%</Badge>
+              {server && (
+                <Badge variant="outline" className="gap-1">
+                  <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                  confirmed ({server.definition_version})
+                </Badge>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {RESONANCE_AXES.map((axis) => (
                 <div key={axis} className="rounded-md border bg-background p-2">
                   <p className="text-xs capitalize text-muted-foreground">{axis}</p>
-                  <p className="text-lg font-semibold tabular-nums">{result.scores[axis]}</p>
+                  <p className="text-lg font-semibold tabular-nums">{shown.scores[axis]}</p>
                   <p className="text-[11px] text-muted-foreground">
-                    {match.gaps[axis] > 0 ? "+" : ""}
-                    {match.gaps[axis]} vs audience
+                    {shown.gaps[axis] > 0 ? "+" : ""}
+                    {shown.gaps[axis]} vs audience
                   </p>
                 </div>
               ))}
@@ -133,7 +216,7 @@ export function OnDeviceAudioPanel() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Held back most by <span className="capitalize text-foreground">{match.weakestAxis}</span>.
+              Held back most by <span className="capitalize text-foreground">{shown.weakest}</span>.
               Up to the first minute of audio is measured.
             </p>
           </div>

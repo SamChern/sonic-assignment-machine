@@ -23,6 +23,7 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminWorkbench = lazy(() => import("./pages/admin/AdminWorkbench"));
 const AdminEc2 = lazy(() => import("./pages/admin/AdminEc2"));
 const AdminIntegrations = lazy(() => import("./pages/AdminIntegrations"));
+const AdminIntegrationSetup = lazy(() => import("./pages/AdminIntegrationSetup"));
 const AdminConnected = lazy(() => import("./pages/AdminConnected"));
 const AdminCTV = lazy(() => import("./pages/AdminCTV"));
 const AdminActivationGrants = lazy(() => import("./pages/AdminActivationGrants"));

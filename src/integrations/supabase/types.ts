@@ -3874,6 +3874,7 @@ export type Database = {
         Args: { p_error: string; p_id: string }
         Returns: undefined
       }
+      finish_intuizi_score_jobs: { Args: { p_rows: Json }; Returns: number }
       get_method_examples: {
         Args: { _limit?: number }
         Returns: {

@@ -57,3 +57,6 @@ verify_jwt = false
 # authenticates with INGEST_WORKER_SECRET / the service-role token, in code.
 [functions.ingest-worker-bootstrap]
 verify_jwt = false
+
+[functions.listener-signup]
+verify_jwt = false

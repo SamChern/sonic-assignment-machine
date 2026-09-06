@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Check, Building2, Palette, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import ListenerSignupDialog from "@/components/home/ListenerSignupDialog";
 
 /**
  * Open-web access levels. Shown only to visitors who are not signed in — the
@@ -122,7 +123,9 @@ export const AccessPlans = () => {
                 )}
 
                 <div className="mt-6">
-                  {plan.cta.to ? (
+                  {plan.id === "listener" ? (
+                    <ListenerSignupDialog triggerLabel={plan.cta.label} triggerVariant="outline" />
+                  ) : plan.cta.to ? (
                     <Button
                       asChild
                       variant={plan.cta.variant ?? "default"}

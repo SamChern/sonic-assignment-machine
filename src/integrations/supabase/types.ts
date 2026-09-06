@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_applications: {
+        Row: {
+          admin_notes: string | null
+          catalogue_size: string | null
+          contact_email: string
+          contact_name: string
+          created_at: string
+          id: string
+          kind: string
+          message: string | null
+          notified_at: string | null
+          org_name: string | null
+          preferred_timing: string | null
+          status: string
+          submitted_by: string | null
+          team_size: string | null
+          terms_accepted: boolean
+          updated_at: string
+          use_case: string | null
+          user_agent: string | null
+          website: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          catalogue_size?: string | null
+          contact_email: string
+          contact_name: string
+          created_at?: string
+          id?: string
+          kind: string
+          message?: string | null
+          notified_at?: string | null
+          org_name?: string | null
+          preferred_timing?: string | null
+          status?: string
+          submitted_by?: string | null
+          team_size?: string | null
+          terms_accepted?: boolean
+          updated_at?: string
+          use_case?: string | null
+          user_agent?: string | null
+          website?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          catalogue_size?: string | null
+          contact_email?: string
+          contact_name?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          message?: string | null
+          notified_at?: string | null
+          org_name?: string | null
+          preferred_timing?: string | null
+          status?: string
+          submitted_by?: string | null
+          team_size?: string | null
+          terms_accepted?: boolean
+          updated_at?: string
+          use_case?: string | null
+          user_agent?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
       admin_guide_entries: {
         Row: {
           archived: boolean

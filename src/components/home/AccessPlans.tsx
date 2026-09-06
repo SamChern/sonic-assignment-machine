@@ -116,7 +116,7 @@ export const AccessPlans = () => {
                 )}
 
                 <div className="mt-6">
-                  {plan.to ?? plan.cta.to ? (
+                  {plan.cta.to ? (
                     <Button
                       asChild
                       variant={plan.cta.variant ?? "default"}

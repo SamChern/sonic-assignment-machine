@@ -128,8 +128,14 @@ export const useScoringRuns = (pollMs = 10000): ScoringRunsData => {
       setRunning((runningRes.data ?? []) as QueueItem[]);
       setRecent((recentRes.data ?? []) as QueueItem[]);
       setWorkers((workerRes.data ?? []) as WorkerRow[]);
-      setPaused(!!stateRes.data?.paused);
-      setPauseReason(stateRes.data?.pause_reason ?? null);
+      const parked = stateRes.data?.parked_until
+        ? new Date(stateRes.data.parked_until as string) > new Date()
+        : false;
+      setPaused(!!stateRes.data?.paused || parked);
+      setPauseReason(
+        stateRes.data?.pause_reason ??
+          (parked ? "Waiting out a rate-limit cool-down." : null),
+      );
       setFetchedAt(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read scoring runs.");
@@ -138,6 +144,83 @@ export const useScoringRuns = (pollMs = 10000): ScoringRunsData => {
       inFlight.current = false;
     }
   }, []);
+
+  /** One place for every pipeline-driving call to the scoring worker. */
+  const invokeWorker = useCallback(
+    async (label: string, body: Record<string, unknown>) => {
+      setBusy(label);
+      setError(null);
+      try {
+        const { data, error: fnErr } = await supabase.functions.invoke(
+          "intuizi-score-worker",
+          { body },
+        );
+        if (fnErr) throw fnErr;
+        const res = (data ?? {}) as {
+          success?: boolean;
+          error?: string;
+          scored?: number;
+          materialized?: number;
+          failed?: number;
+          pending?: number;
+          requeued?: number;
+          chained?: boolean;
+          skipped?: string;
+        };
+        if (res.success === false) throw new Error(res.error ?? "Worker refused the run.");
+        if (typeof res.requeued === "number") {
+          setLastRun(`Put ${res.requeued.toLocaleString()} item(s) back in the queue.`);
+        } else if (res.skipped) {
+          setLastRun(`Worker skipped: ${res.skipped}.`);
+        } else if (typeof res.scored === "number") {
+          setLastRun(
+            `Scored ${(res.scored ?? 0).toLocaleString()}, reused ${(res.materialized ?? 0)
+              .toLocaleString()}, failed ${(res.failed ?? 0).toLocaleString()}. ${
+              res.chained ? "Still working through the queue." : "Queue drained for now."
+            }`,
+          );
+        } else {
+          setLastRun("Done.");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "The scoring worker could not be reached.");
+      } finally {
+        setBusy(null);
+        load();
+      }
+    },
+    [load],
+  );
+
+  const start = useCallback(
+    (activationId?: string) =>
+      invokeWorker("start", {
+        source: "console",
+        ...(activationId ? { activation_id: activationId } : {}),
+      }),
+    [invokeWorker],
+  );
+
+  const requeueFailed = useCallback(
+    (activationId?: string) =>
+      invokeWorker("requeue", {
+        action: "requeue_failed",
+        source: "console",
+        include_dead_letter: true,
+        ...(activationId ? { activation_id: activationId } : {}),
+      }),
+    [invokeWorker],
+  );
+
+  const setPausedState = useCallback(
+    (next: boolean) =>
+      invokeWorker(next ? "pause" : "resume", {
+        action: next ? "pause" : "resume",
+        source: "console",
+        reason: "Paused from the Intuizi Console",
+      }),
+    [invokeWorker],
+  );
 
   useEffect(() => {
     load();
@@ -163,5 +246,11 @@ export const useScoringRuns = (pollMs = 10000): ScoringRunsData => {
     reload: load,
     live,
     setLive,
+    busy,
+    lastRun,
+    start,
+    requeueFailed,
+    setPaused: setPausedState,
   };
+
 };

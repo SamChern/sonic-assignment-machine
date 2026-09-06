@@ -42,7 +42,7 @@ export const ActivationCostPanel = () => {
   const load = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc("intuizi_activation_cost_estimate", {
-      p_sample: 5000,
+      p_sample: 2000,
     });
     setLoading(false);
     if (error) {

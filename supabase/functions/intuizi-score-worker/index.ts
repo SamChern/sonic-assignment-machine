@@ -390,7 +390,10 @@ Deno.serve(async (req) => {
         },
       );
       await Promise.all(lanes);
+      // One write for the whole batch's outcomes.
+      await flushWrites();
     }
+    await flushWrites();
 
     // Keep the activation's enterprise summary (the homepage "synced enterprise
     // analyses" card) in step with what has actually been scored.

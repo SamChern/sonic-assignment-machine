@@ -169,7 +169,7 @@ export const ActivationCostPanel = () => {
       </ul>
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-        Pattern counts come from a 5,000-row sample of each activation's pending
+        Pattern counts come from a 2,000-row sample of each activation's pending
         queue, so they are a lower bound: rows sharing an already-learned tag
         pattern cost nothing, and every new pattern the worker learns removes
         cost from the rest of the backlog.

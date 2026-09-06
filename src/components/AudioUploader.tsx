@@ -80,7 +80,13 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLi
       </TabsList>
       
       <TabsContent value="upload">
+        {showHints && (
+          <p className="mb-2 text-sm text-muted-foreground">
+            Drop in your own audio file (music, voice or ambience) to hear how SonicSIM reads it.
+          </p>
+        )}
         <Card 
+
           className={`relative overflow-hidden border-2 transition-smooth ${
             isDragging 
               ? "border-primary bg-primary/5 shadow-glow" 

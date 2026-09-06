@@ -66,13 +66,16 @@ const AdminIntegrations = () => {
   const [statusLoading, setStatusLoading] = useState(true);
   const [kindFilter, setKindFilter] = useState<IntegrationKind>("rest");
   const [searchParams, setSearchParams] = useSearchParams();
-  const view = searchParams.get("view") === "connected" ? "connected" : "setup";
-  const setView = (v: "connected" | "setup") => {
+  const viewParam = searchParams.get("view");
+  const view: "connected" | "setup" | "console" =
+    viewParam === "connected" ? "connected" : viewParam === "console" ? "console" : "setup";
+  const setView = (v: "connected" | "setup" | "console") => {
     const next = new URLSearchParams(searchParams);
-    if (v === "connected") next.set("view", "connected");
-    else next.delete("view");
+    if (v === "setup") next.delete("view");
+    else next.set("view", v);
     setSearchParams(next, { replace: true });
   };
+
 
   useEffect(() => {
     if (!loading) {

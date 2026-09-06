@@ -40,26 +40,38 @@ export const ActivationCostPanel = () => {
   const [loading, setLoading] = useState(false);
   const [perPattern, setPerPattern] = useState(String(DEFAULT_CREDITS_PER_PATTERN));
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase.rpc("intuizi_activation_cost_estimate", {
-      p_sample: 2000,
-    });
-    setLoading(false);
-    if (error) {
-      toast({
-        title: "Could not read scoring cost",
-        description: error.message,
-        variant: "destructive",
+  // The queue holds over a million rows, so the count is kept as a stored
+  // snapshot: reading is instant, and only "Recompute" pays for a fresh scan.
+  const load = useCallback(
+    async (force = false) => {
+      setLoading(true);
+      const { data, error } = await supabase.rpc("intuizi_activation_cost_estimate", {
+        p_sample: 1000,
+        p_force: force,
       });
-      return;
-    }
-    setRows((data ?? []) as Row[]);
-  }, [toast]);
+      setLoading(false);
+      if (error) {
+        toast({
+          title: "Could not read scoring cost",
+          description: /timeout|57014/i.test(error.message)
+            ? "The queue was too busy to measure just now. Try Recompute again in a minute."
+            : error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      setRows((data ?? []) as Row[]);
+    },
+    [toast],
+  );
 
   useEffect(() => {
-    void load();
+    void load(false);
   }, [load]);
+
+  const computedAt = rows[0]?.computed_at
+    ? new Date(rows[0].computed_at).toLocaleString()
+    : null;
 
   const rate = Number.parseFloat(perPattern);
   const creditRate = Number.isFinite(rate) && rate > 0 ? rate : DEFAULT_CREDITS_PER_PATTERN;

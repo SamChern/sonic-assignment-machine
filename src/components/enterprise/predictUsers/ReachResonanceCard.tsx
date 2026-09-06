@@ -29,8 +29,16 @@ const ReachResonanceCard = ({
   setThreshold,
   atThresholdCount,
 }: ReachResonanceCardProps) => {
+  // The usable range follows the strengths actually found, so the slider never
+  // sits in a region where nobody can match.
+  const thresholds = curve.map((p) => p.threshold);
+  const sliderMin = thresholds.length ? Math.floor(Math.min(...thresholds) * 100) : 40;
+  const sliderMax = thresholds.length
+    ? Math.max(sliderMin + 1, Math.ceil(Math.max(...thresholds) * 100))
+    : 95;
   return (
     <Card className="p-4">
+
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold">Audience size vs. match strength</h3>
         <Badge variant="outline" className="text-[11px]">

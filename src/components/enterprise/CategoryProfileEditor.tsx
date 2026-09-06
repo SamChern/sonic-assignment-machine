@@ -1,24 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { CATEGORY_KEYS, type CategoryKey } from "@/lib/enterpriseSchema";
+import { type CategoryKey } from "@/lib/enterpriseSchema";
 import {
-  DEFAULT_CATEGORY_LABELS,
   defaultCategoryProfileConfig,
   compareCategoryProfiles,
   diffCategoryProfiles,
@@ -28,33 +13,11 @@ import {
 } from "@/lib/categoryProfile";
 
 import { useCategoryProfiles } from "@/hooks/useCategoryProfiles";
-import {
-  ArrowDownRight,
-  ArrowRight,
-  ArrowUpRight,
-  CheckCircle2,
-  GitBranch,
-  GitCompare,
-  Layers,
-  Minus,
-  RotateCcw,
-  Save,
-  Sliders,
-  Lock,
-  Unlock,
-  TrendingUp,
-  Wand2,
-} from "lucide-react";
 
-
-const SAMPLE_INPUT: Record<CategoryKey, number> = {
-  emotional: 72,
-  cognitive: 54,
-  social: 61,
-  communication: 78,
-  contextual: 47,
-  artistic: 66,
-};
+import { CalibrationCard } from "./categoryProfile/CalibrationCard";
+import { VersionDiffCard } from "./categoryProfile/VersionDiffCard";
+import { InputMappingPreview } from "./categoryProfile/InputMappingPreview";
+import { SAMPLE_INPUT } from "./categoryProfile/types";
 
 /**
  * Editor for an organization's 6 SonicSIM semantic categories. Saving always
@@ -290,488 +253,52 @@ const CategoryProfileEditor = ({
 
   return (
     <div className="space-y-4">
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Sliders className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold">Semantic category editor</h2>
-          <Badge variant="outline" className="text-[11px]">
-            {versions.length} version{versions.length === 1 ? "" : "s"}
-          </Badge>
-          {activeProfile && (
-            <Badge className="text-[11px]">active: v{activeProfile.version}</Badge>
-          )}
-          <Badge variant={canEdit ? "secondary" : "outline"} className="text-[11px]">
-            {canEdit ? (
-              <>
-                <Unlock className="mr-1 h-3 w-3" />
-                Admin — editing unlocked
-              </>
-            ) : (
-              <>
-                <Lock className="mr-1 h-3 w-3" />
-                View only
-              </>
-            )}
-          </Badge>
+      <CalibrationCard
+        versions={versions}
+        activeProfile={activeProfile}
+        canEdit={canEdit}
+        selectedId={selectedId}
+        selectVersion={selectVersion}
+        draft={draft}
+        setDraft={setDraft}
+        patch={patch}
+        name={name}
+        setName={setName}
+        notes={notes}
+        setNotes={setNotes}
+        saving={saving}
+        nextVersion={nextVersion}
+        saveVersion={saveVersion}
+        activateSelected={activateSelected}
+        defaultCategoryProfileConfig={defaultCategoryProfileConfig}
+      />
 
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Rename, re-weight, calibrate, or mute any of the 6 categories for {""}
-          your organization. Stored scores never change — this is a mapping layer, and every save
-          becomes a new numbered version you can return to.
-        </p>
+      <VersionDiffCard
+        compareMode={compareMode}
+        setCompareMode={setCompareMode}
+        changedRows={changedRows}
+        multiChangedCount={multiChangedCount}
+        sideOptions={sideOptions}
+        multiIds={multiIds}
+        toggleMultiId={toggleMultiId}
+        orderedMultiIds={orderedMultiIds}
+        sideLabel={sideLabel}
+        multiRows={multiRows}
+        leftId={leftId}
+        setLeftId={setLeftId}
+        rightId={rightId}
+        setRightId={setRightId}
+        diffRows={diffRows}
+        impact={impact}
+        impactEnds={impactEnds}
+      />
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Select value={selectedId || undefined} onValueChange={selectVersion}>
-            <SelectTrigger className="w-[260px]">
-              <SelectValue placeholder="Start from defaults" />
-            </SelectTrigger>
-            <SelectContent>
-              {versions.map((v) => (
-                <SelectItem key={v.id} value={v.id}>
-                  v{v.version} · {v.name}
-                  {v.is_active ? " (active)" : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setDraft(defaultCategoryProfileConfig())}
-            disabled={!canEdit}
-          >
-            <RotateCcw className="mr-1 h-4 w-4" />
-            Reset to SonicSIM defaults
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={activateSelected}
-            disabled={!canEdit || saving || !selectedId || !!versions.find((v) => v.id === selectedId)?.is_active}
-          >
-            <CheckCircle2 className="mr-1 h-4 w-4" />
-            Activate selected version
-          </Button>
-        </div>
-
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={!canEdit}
-            placeholder="Version name (e.g. Spoken-word calibration)"
-          />
-          <Textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            disabled={!canEdit}
-            rows={2}
-            placeholder="What changed and why (optional)"
-            className="text-xs"
-          />
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {CATEGORY_KEYS.map((c) => (
-            <div
-              key={c}
-              className={`rounded-lg border p-3 ${
-                draft[c].enabled ? "border-border/60" : "border-dashed border-border/50 opacity-70"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Input
-                  value={draft[c].label}
-                  onChange={(e) => patch(c, { label: e.target.value })}
-                  disabled={!canEdit}
-                  className="h-8 text-xs"
-                  placeholder={DEFAULT_CATEGORY_LABELS[c]}
-                />
-                <Switch
-                  checked={draft[c].enabled}
-                  onCheckedChange={(v) => patch(c, { enabled: v })}
-                  disabled={!canEdit}
-                />
-              </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                maps SonicSIM <span className="font-mono">{c}</span>
-              </p>
-
-              <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>weight</span>
-                <span>×{draft[c].weight.toFixed(1)}</span>
-              </div>
-              <Slider
-                value={[draft[c].weight]}
-                min={0}
-                max={3}
-                step={0.1}
-                disabled={!canEdit || !draft[c].enabled}
-                onValueChange={([v]) => patch(c, { weight: v })}
-                className="mt-1"
-              />
-
-              <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>calibration shift</span>
-                <span>
-                  {draft[c].bias > 0 ? "+" : ""}
-                  {draft[c].bias.toFixed(0)} pts
-                </span>
-              </div>
-              <Slider
-                value={[draft[c].bias]}
-                min={-25}
-                max={25}
-                step={1}
-                disabled={!canEdit || !draft[c].enabled}
-                onValueChange={([v]) => patch(c, { bias: v })}
-                className="mt-1"
-              />
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => saveVersion(true)} disabled={!canEdit || saving}>
-            <Save className="mr-1 h-4 w-4" />
-            Save as v{nextVersion} &amp; activate
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => saveVersion(false)}
-            disabled={!canEdit || saving}
-          >
-            <GitBranch className="mr-1 h-4 w-4" />
-            Save as draft version
-          </Button>
-          {!canEdit && (
-            <span className="self-center text-[11px] text-muted-foreground">
-              Locked — only enterprise admins (organization owners) can change the 6 categories.
-            </span>
-          )}
-        </div>
-      </Card>
-
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <GitCompare className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold">Version diff</h3>
-          <Badge variant="outline" className="text-[11px]">
-            {compareMode === "two" ? changedRows.length : multiChangedCount} of 6 categories changed
-          </Badge>
-          <div className="ml-auto flex gap-1">
-            <Button
-              size="sm"
-              variant={compareMode === "two" ? "default" : "outline"}
-              onClick={() => setCompareMode("two")}
-            >
-              Two-way
-            </Button>
-            <Button
-              size="sm"
-              variant={compareMode === "multi" ? "default" : "outline"}
-              onClick={() => setCompareMode("multi")}
-            >
-              <Layers className="mr-1 h-4 w-4" />
-              Multi-version
-            </Button>
-          </div>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {compareMode === "two"
-            ? "Compare any two calibrations side by side — renamed categories, weight and match-influence shifts, calibration offsets, and anything muted or re-enabled."
-            : "Pick three or more calibrations to see the full timeline. Each column is highlighted where it differs from the column before it."}
-        </p>
-
-        {compareMode === "multi" ? (
-          <div className="mt-3 space-y-3">
-            <div className="flex flex-wrap gap-1.5">
-              {sideOptions.map((o) => {
-                const on = multiIds.includes(o.id);
-                return (
-                  <button
-                    key={`m-${o.id}`}
-                    type="button"
-                    onClick={() => toggleMultiId(o.id)}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
-                      on
-                        ? "border-primary bg-primary/15 text-primary"
-                        : "border-border/60 text-muted-foreground hover:border-primary/40"
-                    }`}
-                  >
-                    {o.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {orderedMultiIds.length < 2 ? (
-              <p className="rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
-                Select at least two calibrations to compare.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <div
-                  className="min-w-[560px] space-y-2"
-                  style={{ ["--cols" as string]: orderedMultiIds.length }}
-                >
-                  <div
-                    className="grid gap-2 px-2 text-[11px] font-medium text-muted-foreground"
-                    style={{
-                      gridTemplateColumns: `140px repeat(${orderedMultiIds.length}, minmax(0,1fr))`,
-                    }}
-                  >
-                    <span>Category</span>
-                    {orderedMultiIds.map((id) => (
-                      <span key={`h-${id}`} className="truncate">
-                        {sideLabel(id)}
-                      </span>
-                    ))}
-                  </div>
-
-                  {multiRows.map((r) => (
-                    <div
-                      key={r.key}
-                      className={`rounded-lg border p-3 ${
-                        r.changed ? "border-primary/40 bg-primary/5" : "border-border/40 bg-muted/10"
-                      }`}
-                    >
-                      <div
-                        className="grid gap-2"
-                        style={{
-                          gridTemplateColumns: `140px repeat(${orderedMultiIds.length}, minmax(0,1fr))`,
-                        }}
-                      >
-                        <div className="min-w-0">
-                          <p className="font-mono text-[11px] text-muted-foreground">{r.key}</p>
-                          <span className="text-[11px] text-muted-foreground">
-                            {r.changed
-                              ? `${r.changeCount} change${r.changeCount === 1 ? "" : "s"}`
-                              : "unchanged"}
-                          </span>
-                        </div>
-                        {r.cells.map((cell, i) => (
-                          <div
-                            key={`${r.key}-${orderedMultiIds[i]}`}
-                            className={`space-y-0.5 rounded-md p-2 text-[11px] ${
-                              cell.changedFromPrev ? "bg-primary/10 ring-1 ring-primary/30" : ""
-                            }`}
-                          >
-                            <p className={cell.labelChanged ? "font-medium text-primary" : ""}>
-                              {cell.setting.label}
-                            </p>
-                            <p className={cell.weightChanged ? "font-medium text-primary" : ""}>
-                              ×{cell.setting.weight.toFixed(1)} ·{" "}
-                              {(cell.influence * 100).toFixed(0)}%
-                            </p>
-                            <p className={cell.biasChanged ? "font-medium text-primary" : ""}>
-                              shift {cell.setting.bias > 0 ? "+" : ""}
-                              {cell.setting.bias.toFixed(0)} pts
-                            </p>
-                            <p className={cell.enabledChanged ? "font-medium text-primary" : ""}>
-                              {cell.setting.enabled ? "active" : "muted"}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-        <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-          <Select value={leftId} onValueChange={setLeftId}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {sideOptions.map((o) => (
-                <SelectItem key={`l-${o.id}`} value={o.id}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <ArrowRight className="mx-auto hidden h-4 w-4 text-muted-foreground sm:block" />
-          <Select value={rightId} onValueChange={setRightId}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {sideOptions.map((o) => (
-                <SelectItem key={`r-${o.id}`} value={o.id}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        )}
-
-
-        {compareMode === "multi" ? null : !changedRows.length ? (
-          <p className="mt-4 rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
-            {sideLabel(leftId)} and {sideLabel(rightId)} are identical across all 6 categories.
-          </p>
-        ) : (
-          <div className="mt-4 space-y-2">
-            <div className="hidden grid-cols-[1fr_1fr_1fr] gap-2 px-2 text-[11px] font-medium text-muted-foreground sm:grid">
-              <span>Category</span>
-              <span className="truncate">{sideLabel(leftId)}</span>
-              <span className="truncate">{sideLabel(rightId)}</span>
-            </div>
-            {diffRows.map((r) => (
-              <div
-                key={r.key}
-                className={`rounded-lg border p-3 ${
-                  r.changed ? "border-primary/40 bg-primary/5" : "border-border/40 bg-muted/10"
-                }`}
-              >
-                <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr]">
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium">{r.right.label}</p>
-                    <p className="font-mono text-[11px] text-muted-foreground">{r.key}</p>
-                    {!r.changed && (
-                      <span className="text-[11px] text-muted-foreground">unchanged</span>
-                    )}
-                  </div>
-
-                  {(["left", "right"] as const).map((side) => {
-                    const s = side === "left" ? r.left : r.right;
-                    const influence = side === "left" ? r.leftInfluence : r.rightInfluence;
-                    return (
-                      <div key={side} className="space-y-1 text-[11px]">
-                        <p className="sm:hidden text-muted-foreground">
-                          {sideLabel(side === "left" ? leftId : rightId)}
-                        </p>
-                        <p className={r.labelChanged ? "font-medium text-primary" : ""}>
-                          name: {s.label}
-                        </p>
-                        <p className={r.weightChanged ? "font-medium text-primary" : ""}>
-                          weight ×{s.weight.toFixed(1)} · {(influence * 100).toFixed(0)}% of match
-                        </p>
-                        <p className={r.biasChanged ? "font-medium text-primary" : ""}>
-                          shift {s.bias > 0 ? "+" : ""}
-                          {s.bias.toFixed(0)} pts
-                        </p>
-                        <p className={r.enabledChanged ? "font-medium text-primary" : ""}>
-                          {s.enabled ? "active" : "muted"}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {impact && (
-          <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" />
-              <h4 className="text-xs font-semibold">Impact on Predict SonicSIM-Users</h4>
-              <Badge
-                variant={impact.severity === "none" ? "outline" : "secondary"}
-                className="text-[10px] capitalize"
-              >
-                {impact.severity === "none" ? "no impact" : `${impact.severity} impact`}
-              </Badge>
-              <span className="ml-auto text-[11px] text-muted-foreground">
-                {sideLabel(impactEnds!.from)} → {sideLabel(impactEnds!.to)}
-              </span>
-            </div>
-
-            <p className="mt-2 text-xs">{impact.headline}</p>
-
-            <div className="mt-2 flex items-center gap-2">
-              <div className="h-1.5 flex-1 overflow-hidden rounded bg-muted">
-                <div className="h-full bg-primary" style={{ width: `${impact.magnitude}%` }} />
-              </div>
-              <span className="w-32 text-right text-[11px] text-muted-foreground">
-                {impact.magnitude}/100 expected shuffle
-              </span>
-            </div>
-
-            {impact.points.length > 0 && (
-              <ul className="mt-3 space-y-1.5">
-                {impact.points.map((p, i) => (
-                  <li key={i} className="flex gap-2 text-[11px] text-muted-foreground">
-                    {p.direction === "up" ? (
-                      <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                    ) : p.direction === "down" ? (
-                      <ArrowDownRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
-                    ) : (
-                      <Minus className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    )}
-                    <span>{p.text}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </Card>
-
-
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Wand2 className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold">Input mapping preview</h3>
-          <Badge variant="outline" className="text-[11px]">
-            {enabledCount}/6 categories active
-          </Badge>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Move a sample input score to see the value each category receives after calibration, and
-          the share of influence it carries when Predict SonicSIM-Users ranks look-alikes.
-        </p>
-
-        <div className="mt-3 space-y-3">
-          {preview.map((p) => (
-            <div key={p.key} className="rounded-lg border border-border/50 bg-muted/10 p-3">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="font-medium">{p.label}</span>
-                {!p.enabled && (
-                  <Badge variant="outline" className="text-[10px]">muted</Badge>
-                )}
-                <span className="ml-auto text-muted-foreground">
-                  input {p.raw} → mapped {p.mapped.toFixed(0)}
-                  {p.delta !== 0 && (
-                    <span className="ml-1 text-primary">
-                      ({p.delta > 0 ? "+" : ""}
-                      {p.delta.toFixed(0)})
-                    </span>
-                  )}
-                </span>
-              </div>
-              <Slider
-                value={[sample[p.key]]}
-                min={0}
-                max={100}
-                step={1}
-                onValueChange={([v]) => setSample((prev) => ({ ...prev, [p.key]: v }))}
-                className="mt-2"
-              />
-              <div className="mt-2 flex items-center gap-2">
-                <div className="h-1.5 flex-1 overflow-hidden rounded bg-muted">
-                  <div
-                    className="h-full bg-primary"
-                    style={{ width: `${Math.round(p.influence * 100)}%` }}
-                  />
-                </div>
-                <span className="w-28 text-right text-[11px] text-muted-foreground">
-                  {(p.influence * 100).toFixed(0)}% of match weight
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <InputMappingPreview
+        preview={preview}
+        enabledCount={enabledCount}
+        sample={sample}
+        setSample={setSample}
+      />
     </div>
   );
 };

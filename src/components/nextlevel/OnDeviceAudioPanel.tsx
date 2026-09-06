@@ -71,9 +71,8 @@ export function OnDeviceAudioPanel() {
 
       // The browser measured it; the backend is the authority on what those
       // measurements mean, and stores the run when asked.
-      const { data, error } = await invokeWithTimeout<ServerMatch>(
-        "resonance-encode",
-        {
+      const { data, error } = await invokeWithTimeout<ServerMatch>("resonance-encode", {
+        body: {
           action: "score",
           features: fingerprint.features,
           audience,
@@ -81,8 +80,9 @@ export function OnDeviceAudioPanel() {
           persist: save,
           public_example: save && publicExample,
         },
-        { timeoutMs: 30000 },
-      );
+        timeoutMs: 30000,
+      });
+
       if (error) throw error;
       if (data?.success) {
         setServer(data);

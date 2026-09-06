@@ -54,10 +54,17 @@ export interface ScoringRunsData {
   reload: () => void;
   live: boolean;
   setLive: (v: boolean) => void;
+  /** Actions that actually drive the pipeline. */
+  busy: string | null;
+  lastRun: string | null;
+  start: (activationId?: string) => Promise<void>;
+  requeueFailed: (activationId?: string) => Promise<void>;
+  setPaused: (next: boolean) => Promise<void>;
 }
 
 const QUEUE_COLS =
   "id,identifier,activation_id,status,attempts,last_stage,last_error,updated_at";
+
 
 export const useScoringRuns = (pollMs = 10000): ScoringRunsData => {
   const [depth, setDepth] = useState<QueueDepth | null>(null);

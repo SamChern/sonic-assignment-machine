@@ -5,9 +5,14 @@ import { ArrowRight, Palette } from "lucide-react";
 
 const LINKS = [
   {
+    to: "/creator/space",
+    label: "Your space",
+    description: "Your library, your profile and your results in one place.",
+  },
+  {
     to: "/creator",
-    label: "Your Creator view",
-    description: "Your own work, how it reads, and who it lands with.",
+    label: "Register your work",
+    description: "Claim a work and choose how it may be used.",
   },
   {
     to: "/catalog",

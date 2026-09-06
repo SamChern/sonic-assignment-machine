@@ -202,14 +202,13 @@ Deno.serve(async (req) => {
         });
         if (out.status === "scored") scored++;
         else unchanged++;
-        await admin.from("intuizi_score_queue").update({
+        writes.push({
+          id: task.id,
           status: out.status === "scored" ? "done" : "skipped",
           finished_at: new Date().toISOString(),
-          last_error: null,
-          failure_kind: null,
           last_stage: out.stage,
           trace_id: traceId,
-        }).eq("id", task.id);
+        });
       } catch (e) {
         failed++;
         const verdict = classifyFailure(e);

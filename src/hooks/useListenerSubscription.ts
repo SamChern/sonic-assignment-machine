@@ -6,6 +6,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+export const PENDING_KEY = "sonicsim_listener_pending";
+
 export type ListenerMembership = {
   id: string;
   status: "awaiting_payment" | "active" | "cancelled";
@@ -45,6 +47,27 @@ export const useListenerSubscription = (userId: string | null) => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A visitor who signed up as a Listener may only be able to sign in later, so
+  // their pending membership is recorded on their first signed-in visit.
+  useEffect(() => {
+    if (!userId || loading || membership) return;
+    const pending = localStorage.getItem(PENDING_KEY);
+    if (!pending) return;
+    let sharing = false;
+    let email: string | null = null;
+    try {
+      const parsed = JSON.parse(pending) as { email?: string; sharing?: boolean };
+      sharing = parsed.sharing === true;
+      email = parsed.email ?? null;
+    } catch {
+      /* a malformed flag is simply ignored */
+    }
+    void (async () => {
+      await claimPending(email, sharing);
+      localStorage.removeItem(PENDING_KEY);
+    })();
+  }, [userId, loading, membership, claimPending]);
 
   /** Records a pending Listener membership for the person who just signed in. */
   const claimPending = useCallback(

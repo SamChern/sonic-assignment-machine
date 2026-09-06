@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { PENDING_KEY } from "@/hooks/useListenerSubscription";
 
 const schema = z.object({
   email: z.string().trim().email("Enter a valid email address").max(255),
@@ -80,9 +81,17 @@ export const ListenerSignupDialog = ({
     });
     if (recordError) console.warn("Sign-up notice failed", recordError.message);
 
+    // Held so the pending membership is recorded the first time they sign in.
+    localStorage.setItem(
+      PENDING_KEY,
+      JSON.stringify({ email: parsed.data.email, sharing }),
+    );
+
     setSubmitting(false);
     setOpen(false);
-    toast.success("Account created — check your email to confirm, then sign in.");
+    toast.success(
+      "Account created — we've emailed you a confirmation. Your analyses unlock once your $2.99 membership is paid.",
+    );
     navigate("/auth");
   };
 
@@ -97,7 +106,8 @@ export const ListenerSignupDialog = ({
         <DialogHeader>
           <DialogTitle>Create your Listener account</DialogTitle>
           <DialogDescription>
-            Your email and your agreement to the terms are all we need to get started.
+            Your email and your agreement to the terms are all we need. Membership is $2.99 a
+            month — card payments open shortly, and your analyses unlock as soon as it&apos;s paid.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">

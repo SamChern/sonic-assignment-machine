@@ -92,13 +92,27 @@ export const ActivationCostPanel = () => {
           size="sm"
           variant="outline"
           className="ml-auto h-7 text-xs"
-          onClick={() => void load()}
+          onClick={() => void load(false)}
           disabled={loading}
         >
           <RefreshCw className={`mr-1 h-3 w-3 ${loading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-7 text-xs"
+          onClick={() => void load(true)}
+          disabled={loading}
+        >
+          Recompute
+        </Button>
       </div>
+      {computedAt && (
+        <p className="mb-3 text-[11px] text-muted-foreground">
+          Measured {computedAt}
+        </p>
+      )}
 
       <div className="mb-3 flex flex-wrap items-end gap-3 rounded-lg border border-border/50 bg-muted/10 p-3">
         <label className="text-[11px] text-muted-foreground">

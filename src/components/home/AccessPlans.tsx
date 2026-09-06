@@ -29,8 +29,8 @@ const PLANS: Plan[] = [
     name: "Listener",
     icon: Headphones,
     blurb: "For anyone who wants to hear what their own sound says about them.",
-    price: "Free",
-    priceNote: "email sign-in, no card",
+    price: "$2.99/month",
+    priceNote: "or $29.99 a year",
     cta: { label: "Create your account", to: "/auth", variant: "outline" },
     headline: ["Up to 3 trial analyses", "Email address + terms consent"],
     features: [
@@ -45,8 +45,8 @@ const PLANS: Plan[] = [
     name: "Creator",
     icon: Palette,
     blurb: "For artists and sound designers who want their work measured and credited.",
-    price: "Creator access",
-    priceNote: "by application",
+    price: "$29.99/month",
+    priceNote: "or $299.99 a year",
     cta: { label: "Apply for creator access", to: "/creator" },
     highlight: true,
     headline: ["Everything in Listener", "Rights and licence records"],
@@ -62,10 +62,10 @@ const PLANS: Plan[] = [
     name: "Enterprise",
     icon: Building2,
     blurb: "For teams using sound to understand and reach real audiences.",
-    price: "Platform fee",
-    priceNote: "volume based, talk to us",
+    price: "Inquire for demo and pricing",
+    priceNote: undefined,
     cta: {
-      label: "Book a demo",
+      label: "Inquire for demo and pricing",
       href: "mailto:hello@sonicsimai.com?subject=SonicSIM%20Enterprise%20—%20Book%20a%20demo",
     },
     headline: ["Everything in Creator", "Shared team workspace"],
@@ -89,7 +89,7 @@ export const AccessPlans = () => {
           Choose your access level
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Start free as a Listener. Move up when you want your own catalogue or your team&apos;s
+          Start as a Listener. Move up when you want your own catalogue or your team&apos;s
           audiences measured.
         </p>
       </div>
@@ -110,7 +110,13 @@ export const AccessPlans = () => {
                 </div>
                 <p className="mt-2 min-h-[3rem] text-sm text-muted-foreground">{plan.blurb}</p>
 
-                <p className="mt-4 text-3xl font-bold text-foreground">{plan.price}</p>
+                <p
+                  className={`mt-4 font-bold text-foreground ${
+                    plan.price.length > 18 ? "text-xl" : "text-3xl"
+                  }`}
+                >
+                  {plan.price}
+                </p>
                 {plan.priceNote && (
                   <p className="mt-1 text-xs text-muted-foreground">{plan.priceNote}</p>
                 )}

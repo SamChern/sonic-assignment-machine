@@ -5,6 +5,8 @@ import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import { useNextLevelFlags } from "@/hooks/useNextLevelFlags";
 import { NextLevelFlagsPanel } from "@/components/nextlevel/NextLevelFlagsPanel";
 import { ResonanceLabPanel } from "@/components/nextlevel/ResonanceLabPanel";
+import { ResonanceAudioPanel } from "@/components/nextlevel/ResonanceAudioPanel";
+
 import { CommonsPanel } from "@/components/nextlevel/CommonsPanel";
 import { OnDevicePanel } from "@/components/nextlevel/OnDevicePanel";
 import { HearApiPanel } from "@/components/nextlevel/HearApiPanel";
@@ -44,6 +46,11 @@ export default function AdminNextLevelLab() {
       <PanelErrorBoundary label="Resonance Point">
         <ResonanceLabPanel />
       </PanelErrorBoundary>
+
+      <PanelErrorBoundary label="Match a real sound">
+        <ResonanceAudioPanel />
+      </PanelErrorBoundary>
+
 
       <PanelErrorBoundary label="Sonic Commons">
         <CommonsPanel />

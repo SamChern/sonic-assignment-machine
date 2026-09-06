@@ -28,7 +28,7 @@ const ITEMS: NavItem[] = [
   },
   {
     key: "understand",
-    label: "Analyse",
+    label: "Understand",
     to: "/?tab=understand",
     icon: Activity,
     isActive: (p, tab) => p === "/" && tab === "understand",

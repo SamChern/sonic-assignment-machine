@@ -142,7 +142,13 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLi
       </TabsContent>
       
       <TabsContent value="external">
+        {showHints && (
+          <p className="mb-2 text-sm text-muted-foreground">
+            Search a streaming service by song or artist name and add the track you want analysed.
+          </p>
+        )}
         <Card className="p-6 space-y-4">
+
           {providersLoading ? (
             <p className="text-sm text-muted-foreground">Loading available services…</p>
           ) : providers.length === 0 ? (

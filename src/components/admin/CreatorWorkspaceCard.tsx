@@ -36,7 +36,7 @@ const CreatorWorkspaceCard = () => (
     <p className="mt-1 text-sm text-muted-foreground">
       Add your work, see what makes it distinct, and set your licence terms.
     </p>
-    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {LINKS.map((link) => (
         <div key={link.to} className="rounded-lg border border-border/60 p-4">
           <p className="text-sm font-medium text-foreground">{link.label}</p>

@@ -178,6 +178,7 @@ const App = () => (
 
               <Route path="/portal" element={<Portal />} />
               <Route path="/workspace" element={<Workspace />} />
+              <Route path="/listener" element={<ListenerSpace />} />
               <Route path="/creator" element={<CreatorDoor />} />
               <Route path="/creator/apply" element={<CreatorApply />} />
               <Route path="/creator/profile" element={<CreatorProfile />} />

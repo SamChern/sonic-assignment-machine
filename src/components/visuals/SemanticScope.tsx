@@ -13,6 +13,7 @@
  * all, the provider is a deterministic silhouette synthesized from the
  * tag-weighted embedding, so the instrument reads identically.
  */
+import { useThemeTick } from "@/hooks/useThemeTick";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -106,6 +107,7 @@ export const SemanticScope = ({
   caption,
   subjectRef,
 }: SemanticScopeProps) => {
+  const themeTick = useThemeTick();
   const stripRef = useRef<HTMLCanvasElement | null>(null);
   const gramRef = useRef<ScrollingSpectrogram | null>(null);
   const windowRef = useRef(new FeatureWindow());
@@ -175,11 +177,11 @@ export const SemanticScope = ({
     let gram: ScrollingSpectrogram;
     try {
       gram = new ScrollingSpectrogram(canvas, {
-        bg: readVar("--background", "#06121a"),
-        grid: readVar("--border", "#1f2937"),
-        cats: AUDIOSCOPE_CATEGORIES.map((c) => readVar(`--category-${c}`, "#14b8a6")),
-        energy: readVar("--primary", "#14b8a6"),
-        brightness: readVar("--muted-foreground", "#94a3b8"),
+        bg: readVar("--background", "hsl(180 20% 97%)"),
+        grid: readVar("--border", "hsl(185 14% 85%)"),
+        cats: AUDIOSCOPE_CATEGORIES.map((c) => readVar(`--category-${c}`, "hsl(175 74% 31%)")),
+        energy: readVar("--primary", "hsl(175 74% 31%)"),
+        brightness: readVar("--muted-foreground", "hsl(191 10% 40%)"),
       });
     } catch {
       return;
@@ -191,7 +193,7 @@ export const SemanticScope = ({
       window.removeEventListener("resize", onResize);
       gramRef.current = null;
     };
-  }, []);
+  }, [themeTick]);
 
   /**
    * One callback per painted frame: push a spectrogram column, accumulate the

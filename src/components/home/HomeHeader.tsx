@@ -1,4 +1,5 @@
 import { RefObject } from "react";
+import ThemeToggle from "@/components/ThemeToggle";
 import DoorSwitcher from "@/components/persona/DoorSwitcher";
 import type { Persona } from "@/hooks/usePersona";
 import sonicSimLogo from "@/assets/SonicSIM_blend.png";
@@ -54,6 +55,8 @@ const HomeHeader = ({
       {/* Auth Controls */}
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {/* EC2 Health check lives in the admin dashboard header */}
+
+        <ThemeToggle className="h-8 w-8 text-muted-foreground hover:text-foreground" />
 
         {authLoading ? (
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />

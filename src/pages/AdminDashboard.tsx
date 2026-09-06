@@ -1,3 +1,4 @@
+import ThemeToggle from "@/components/ThemeToggle";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ComplianceAlert } from "@/components/admin/ComplianceAlert";
@@ -255,6 +256,7 @@ const AdminDashboard = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle className="h-8 w-8 text-muted-foreground hover:text-foreground" />
             <Badge variant="outline" className="hidden gap-1 sm:flex">
               <Command className="h-3 w-3" />
               K

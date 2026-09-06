@@ -1,3 +1,4 @@
+import ThemeToggle from "@/components/ThemeToggle";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -238,11 +239,14 @@ const CreatorDoor = () => {
     <div className="relative min-h-screen gradient-app">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-md">
         <div className="mx-auto max-w-5xl space-y-2 px-4 py-3">
-          <div>
+          <div className="flex items-start justify-between gap-2">
+            <div>
             <h1 className="text-base font-semibold sm:text-lg">Creator door</h1>
             <p className="text-xs text-muted-foreground">
               Understand your work, register its provenance, choose how machines may use it.
             </p>
+            </div>
+            <ThemeToggle className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground" />
           </div>
           <CreatorNav />
 

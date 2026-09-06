@@ -40,17 +40,17 @@ interface FingerprintComparisonProps {
 }
 
 const categories = [
-  { key: "emotional_avg", recentKey: "emotional_avg_recent", name: "Emotional", color: "#ef4444", icon: Heart },
-  { key: "cognitive_avg", recentKey: "cognitive_avg_recent", name: "Cognitive", color: "#3b82f6", icon: Brain },
-  { key: "social_avg", recentKey: "social_avg_recent", name: "Social", color: "#22c55e", icon: Users },
-  { key: "communication_avg", recentKey: "communication_avg_recent", name: "Communication", color: "#eab308", icon: MessageCircle },
-  { key: "contextual_avg", recentKey: "contextual_avg_recent", name: "Contextual", color: "#a855f7", icon: Map },
-  { key: "artistic_avg", recentKey: "artistic_avg_recent", name: "Artistic", color: "#ec4899", icon: Palette },
+  { key: "emotional_avg", recentKey: "emotional_avg_recent", name: "Emotional", color: "hsl(var(--category-emotional))", icon: Heart },
+  { key: "cognitive_avg", recentKey: "cognitive_avg_recent", name: "Cognitive", color: "hsl(var(--category-cognitive))", icon: Brain },
+  { key: "social_avg", recentKey: "social_avg_recent", name: "Social", color: "hsl(var(--category-social))", icon: Users },
+  { key: "communication_avg", recentKey: "communication_avg_recent", name: "Communication", color: "hsl(var(--category-communication))", icon: MessageCircle },
+  { key: "contextual_avg", recentKey: "contextual_avg_recent", name: "Contextual", color: "hsl(var(--category-contextual))", icon: Map },
+  { key: "artistic_avg", recentKey: "artistic_avg_recent", name: "Artistic", color: "hsl(var(--category-contextual))", icon: Palette },
 ];
 
 const userColors = [
-  "#06b6d4", "#f97316", "#84cc16", "#6366f1",
-  "#f43f5e", "#14b8a6", "#8b5cf6", "#ec4899",
+  "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))", "hsl(var(--category-social))", "hsl(var(--category-artistic))", "hsl(var(--category-contextual))",
 ];
 
 function valueFor(fp: UserFingerprint, cat: typeof categories[number], mode: FingerprintMode): number {

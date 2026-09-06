@@ -1,3 +1,4 @@
+import ThemeToggle from "@/components/ThemeToggle";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -238,6 +239,7 @@ const Workspace = () => {
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
+            <ThemeToggle className="h-8 w-8 text-muted-foreground hover:text-foreground" />
             <img
               src={sonicSimLogo}
               alt="SonicSIM.ai"

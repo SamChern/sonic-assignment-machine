@@ -51,16 +51,16 @@ export interface AggregateLink extends EngineLink<AggregateNode> {
 }
 
 export const CATEGORY_AXES: CategoryAxis[] = [
-  { key: "emotional_avg", name: "Emotional", color: "#ef4444", icon: Heart },
-  { key: "cognitive_avg", name: "Cognitive", color: "#3b82f6", icon: Brain },
-  { key: "social_avg", name: "Social", color: "#22c55e", icon: Users },
-  { key: "communication_avg", name: "Communication", color: "#eab308", icon: MessageCircle },
-  { key: "contextual_avg", name: "Contextual", color: "#a855f7", icon: Map },
-  { key: "artistic_avg", name: "Artistic", color: "#ec4899", icon: Palette },
+  { key: "emotional_avg", name: "Emotional", color: "hsl(var(--category-emotional))", icon: Heart },
+  { key: "cognitive_avg", name: "Cognitive", color: "hsl(var(--category-cognitive))", icon: Brain },
+  { key: "social_avg", name: "Social", color: "hsl(var(--category-social))", icon: Users },
+  { key: "communication_avg", name: "Communication", color: "hsl(var(--category-communication))", icon: MessageCircle },
+  { key: "contextual_avg", name: "Contextual", color: "hsl(var(--category-contextual))", icon: Map },
+  { key: "artistic_avg", name: "Artistic", color: "hsl(var(--category-contextual))", icon: Palette },
 ];
 
 /** Cluster hues, deliberately distinct from the six category colors. */
-export const CLUSTER_COLORS = ["#06b6d4", "#f97316", "#84cc16", "#6366f1", "#f43f5e", "#14b8a6"];
+export const CLUSTER_COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--category-social))"];
 
 export const getVector = (fp: UserFingerprint): number[] =>
   CATEGORY_AXES.map((c) => Number(fp[c.key as keyof UserFingerprint]) || 0);

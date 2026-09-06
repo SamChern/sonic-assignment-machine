@@ -162,6 +162,17 @@ export const AccessPlans = () => {
           );
         })}
       </div>
+
+      <p className="mt-6 text-sm text-muted-foreground">
+        Questions about Creator or Enterprise access? Write to{" "}
+        <a
+          href="mailto:info@sonicsimai.com?subject=SonicSIM%20Access%20Enquiry"
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
+          info@sonicSIMai.com
+        </a>
+        .
+      </p>
     </section>
   );
 };

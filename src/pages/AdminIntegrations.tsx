@@ -24,11 +24,8 @@ import {
 } from "lucide-react";
 import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
 import IntuiziConsoleView from "@/components/admin/intuizi/IntuiziConsoleView";
-import {
-  IntegrationCard,
-  type StatusEntry,
-  type TestEntry,
-} from "@/components/admin/IntegrationCard";
+import type { StatusEntry, TestEntry } from "@/components/admin/IntegrationCard";
+import { IntegrationSetupList } from "@/components/admin/IntegrationSetupList";
 
 
 
@@ -156,11 +153,10 @@ const AdminIntegrations = () => {
         <div className="space-y-6">
 
         <p className="text-sm text-muted-foreground">
-          Manage credentials for third-party APIs and Model Context Protocol
-          (MCP) servers. Credentials are stored server-side and only readable
-          by edge functions. Use{" "}
-          <span className="font-medium">Test Connection</span> to validate
-          before relying on them in features.
+          Every connector has its own setup page. Credentials are stored
+          server-side and only readable by edge functions — open a connector to
+          paste keys, run <span className="font-medium">Test connection</span>,
+          and review its test history.
         </p>
 
         <Tabs
@@ -177,16 +173,12 @@ const AdminIntegrations = () => {
           </TabsList>
         </Tabs>
 
-        {INTEGRATIONS.filter((i) => i.kind === kindFilter).map((integration) => (
-          <IntegrationCard
-            key={integration.id}
-            integration={integration}
-            status={statusByIntegration[integration.id]}
-            lastTest={lastTestByIntegration[integration.id]}
-            statusLoading={statusLoading}
-            onSaved={refreshStatus}
-          />
-        ))}
+        <IntegrationSetupList
+          integrations={INTEGRATIONS.filter((i) => i.kind === kindFilter)}
+          status={statusByIntegration}
+          lastTest={lastTestByIntegration}
+          statusLoading={statusLoading}
+        />
 
         {INTEGRATIONS.filter((i) => i.kind === kindFilter).length === 0 && (
           <Card className="p-8 text-center text-sm text-muted-foreground">
@@ -197,6 +189,7 @@ const AdminIntegrations = () => {
 
         {kindFilter === "mcp" && <LibrosaAudioTester />}
         </div>
+
         )}
       </main>
     </div>

@@ -23,6 +23,7 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminWorkbench = lazy(() => import("./pages/admin/AdminWorkbench"));
 const AdminEc2 = lazy(() => import("./pages/admin/AdminEc2"));
 const AdminIntegrations = lazy(() => import("./pages/AdminIntegrations"));
+const AdminIntegrationSetup = lazy(() => import("./pages/AdminIntegrationSetup"));
 const AdminConnected = lazy(() => import("./pages/AdminConnected"));
 const AdminCTV = lazy(() => import("./pages/AdminCTV"));
 const AdminActivationGrants = lazy(() => import("./pages/AdminActivationGrants"));
@@ -143,6 +144,8 @@ const App = () => (
                 <Route path="workbench" element={<AdminWorkbench />} />
                 <Route path="ec2" element={<AdminEc2 />} />
                 <Route path="integrations" element={<AdminIntegrations />} />
+                <Route path="integrations/:integrationId" element={<AdminIntegrationSetup />} />
+
                 <Route path="connected" element={<AdminConnected />} />
                 <Route path="ctv" element={<AdminCTV />} />
                 <Route path="activations" element={<AdminActivationGrants />} />

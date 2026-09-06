@@ -63,7 +63,8 @@ const BASELINE = 42;
 const MAX_LIFT = 46;
 
 export const ON_DEVICE_AUDIO_STATUS =
-  "Audio encoding on-device is scaffolded but not shipped: it needs a quantised CLAP audio encoder (~40 MB int8 ONNX) in the grounding pack plus WebGPU/WASM fallback benchmarking. The text side below runs today with no model spend.";
+  "Audio is now measured on-device too: the file is decoded in this browser and its loudness, brightness, noisiness, voice and rhythm drive the six scores — no upload, no model spend. A learned encoder (quantised CLAP) would sharpen it further; the tags below stay useful when there is no audio at all.";
+
 
 export function onDeviceFingerprint(tags: OnDeviceTag[]): OnDeviceFingerprint {
   const lift = {} as Record<ResonanceAxis, number>;

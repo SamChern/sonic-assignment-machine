@@ -2,33 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { INTEGRATIONS, type Integration, type IntegrationKind } from "@/config/integrations";
+import { INTEGRATIONS, type IntegrationKind } from "@/config/integrations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ConnectedIntegrationsPanel,
   verifiedIntegrations,
 } from "@/components/admin/ConnectedIntegrationsPanel";
-import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
 import {
   ArrowLeft,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
   Loader2,
-  ExternalLink,
-  ChevronDown,
   ShieldCheck,
   Plug,
   Network,
@@ -37,10 +22,14 @@ import {
   RefreshCw,
   Activity,
 } from "lucide-react";
-import { IntegrationDetailsDrawer } from "@/components/admin/IntegrationDetailsDrawer";
 import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
 import IntuiziConsoleView from "@/components/admin/intuizi/IntuiziConsoleView";
-import { replaceLegacyBrandText } from "@/lib/brandText";
+import {
+  IntegrationCard,
+  type StatusEntry,
+  type TestEntry,
+} from "@/components/admin/IntegrationCard";
+
 
 
 

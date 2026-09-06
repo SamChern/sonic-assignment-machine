@@ -44,7 +44,7 @@ const GetStartedDialog = ({ open, onOpenChange, onGetStarted }: GetStartedDialog
             </ol>
             <div className="mt-3 flex flex-wrap items-center gap-4">
               <a
-                href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20—%20Learn%20More"
+                href="mailto:info@sonicsimai.com?subject=SonicSIM%20Enterprise%20—%20Learn%20More"
                 className="inline-flex items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
               >
                 Learn More

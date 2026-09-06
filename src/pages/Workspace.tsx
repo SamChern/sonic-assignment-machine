@@ -195,7 +195,7 @@ const Workspace = () => {
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <Button asChild>
-              <a href="mailto:hello@example.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More">
+              <a href="mailto:info@sonicsimai.com?subject=SonicSIM%20Enterprise%20%E2%80%94%20Learn%20More">
                 Learn about Enterprise
               </a>
             </Button>

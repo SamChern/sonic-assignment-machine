@@ -16,8 +16,11 @@ import {
   Cpu,
   Loader2,
   PauseCircle,
+  Play,
   RefreshCw,
+  RotateCcw,
   Skull,
+
 } from "lucide-react";
 import { useScoringRuns, type QueueItem } from "./useScoringRuns";
 
@@ -126,6 +129,46 @@ export const ScoringRunsDashboard = () => {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" onClick={() => s.start()} disabled={!!s.busy || s.paused}>
+          {s.busy === "start" ? (
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Play className="mr-1 h-4 w-4" aria-hidden="true" />
+          )}
+          Run scoring now
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => s.requeueFailed()}
+          disabled={!!s.busy}
+        >
+          {s.busy === "requeue" ? (
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <RotateCcw className="mr-1 h-4 w-4" aria-hidden="true" />
+          )}
+          Retry failed items
+        </Button>
+        <Button
+          size="sm"
+          variant={s.paused ? "default" : "ghost"}
+          onClick={() => s.setPaused(!s.paused)}
+          disabled={!!s.busy}
+        >
+          {s.busy === "pause" || s.busy === "resume" ? (
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : s.paused ? (
+            <Play className="mr-1 h-4 w-4" aria-hidden="true" />
+          ) : (
+            <PauseCircle className="mr-1 h-4 w-4" aria-hidden="true" />
+          )}
+          {s.paused ? "Resume scoring" : "Pause scoring"}
+        </Button>
+        {s.lastRun && <span className="text-xs text-muted-foreground">{s.lastRun}</span>}
+      </div>
+
       {s.paused && (
         <p className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
           Scoring is paused{s.pauseReason ? `: ${s.pauseReason}` : ""}. Nothing will move until it
@@ -139,6 +182,7 @@ export const ScoringRunsDashboard = () => {
           {s.error}
         </p>
       )}
+
 
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <Stat
@@ -187,6 +231,16 @@ export const ScoringRunsDashboard = () => {
                     <span className="ml-auto text-muted-foreground">
                       updated {ago(a.computed_at)}
                     </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => s.start(a.activation_id)}
+                      disabled={!!s.busy || s.paused}
+                    >
+                      Score this one
+                    </Button>
+
                   </div>
                   <Progress value={pct} aria-label={`Activation ${a.activation_id} progress`} />
                 </li>

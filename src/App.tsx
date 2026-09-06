@@ -82,6 +82,7 @@ const stableRefreshPaths = new Set([
   "/auth",
   "/reset-password",
   "/workspace",
+  "/listen",
   "/creator",
   "/methodology",
 ]);

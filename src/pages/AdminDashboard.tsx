@@ -138,6 +138,13 @@ const DESTINATIONS: {
     depths: ["operate"],
   },
   {
+    to: "/admin/creator-applications",
+    label: "Creator applications",
+    description: "Applications from creators, with review status and internal notes.",
+    icon: ShieldCheck,
+    depths: ["operate"],
+  },
+  {
     to: "/admin/resolver",
     label: "Resolver",
     description: "Queue of unknown symbols, symbol details, tools and the signal nudge.",

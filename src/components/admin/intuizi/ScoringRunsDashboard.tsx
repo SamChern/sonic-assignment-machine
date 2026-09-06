@@ -231,6 +231,16 @@ export const ScoringRunsDashboard = () => {
                     <span className="ml-auto text-muted-foreground">
                       updated {ago(a.computed_at)}
                     </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => s.start(a.activation_id)}
+                      disabled={!!s.busy || s.paused}
+                    >
+                      Score this one
+                    </Button>
+
                   </div>
                   <Progress value={pct} aria-label={`Activation ${a.activation_id} progress`} />
                 </li>

@@ -22,50 +22,38 @@ const SAMPLE: ScopeScores = {
 };
 
 /**
- * Averages the most recent real analyses so the home page waveform reflects
- * actual results instead of invented numbers. Falls back to a clearly labelled
- * sample when the platform has no analyses yet.
+ * Feeds the home page waveform from the signed-in person's own most recent
+ * analysis, so the shape on screen is a real result of theirs rather than an
+ * invented pattern. Signed-out visitors (and people with no analyses yet) get a
+ * clearly labelled illustrative sample instead.
  */
 export function useScopeShowcase() {
-  // Stored analyses are only readable with a session, so a signed-out visitor
-  // would only ever get a 401 back. Skip the request and show the labelled
-  // sample straight away instead of logging a failure on every home page load.
   const { user } = useAuth();
   const { data } = useQuery({
     queryKey: ["scope-showcase", user?.id ?? "anon"],
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data: rows, error } = await supabase
+      const { data: row, error } = await supabase
         .from("source_analyses")
         .select(
-          "emotional_score,cognitive_score,social_score,communication_score,contextual_score,artistic_score",
+          "source_name,emotional_score,cognitive_score,social_score,communication_score,contextual_score,artistic_score",
         )
+        .eq("user_id", user!.id)
         .order("created_at", { ascending: false })
-        .limit(50);
-      if (error || !rows?.length) return null;
+        .limit(1)
+        .maybeSingle();
+      if (error || !row) return null;
 
-      const sum: ScopeScores = {
-        emotional: 0,
-        cognitive: 0,
-        social: 0,
-        communication: 0,
-        contextual: 0,
-        artistic: 0,
+      const scores: ScopeScores = {
+        emotional: Math.round(Number(row.emotional_score) || 0),
+        cognitive: Math.round(Number(row.cognitive_score) || 0),
+        social: Math.round(Number(row.social_score) || 0),
+        communication: Math.round(Number(row.communication_score) || 0),
+        contextual: Math.round(Number(row.contextual_score) || 0),
+        artistic: Math.round(Number(row.artistic_score) || 0),
       };
-      for (const r of rows) {
-        sum.emotional += Number(r.emotional_score) || 0;
-        sum.cognitive += Number(r.cognitive_score) || 0;
-        sum.social += Number(r.social_score) || 0;
-        sum.communication += Number(r.communication_score) || 0;
-        sum.contextual += Number(r.contextual_score) || 0;
-        sum.artistic += Number(r.artistic_score) || 0;
-      }
-      const n = rows.length;
-      const scores = Object.fromEntries(
-        Object.entries(sum).map(([k, v]) => [k, Math.round(v / n)]),
-      ) as ScopeScores;
-      return { scores, count: n };
+      return { scores, name: row.source_name as string | null };
     },
   });
 
@@ -75,6 +63,6 @@ export function useScopeShowcase() {
   return {
     scores: data.scores,
     isLive: true,
-    sublabel: `Average of the ${data.count} most recent analyses`,
+    sublabel: data.name ? `Your latest analysis · ${data.name}` : "Your latest analysis",
   };
 }

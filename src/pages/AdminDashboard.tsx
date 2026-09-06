@@ -5,6 +5,7 @@ import { AdminDigestCard } from "@/components/admin/AdminDigestCard";
 import { ResolverNudge } from "@/components/admin/ResolverNudge";
 import { AudioSignalQueue } from "@/components/admin/AudioSignalQueue";
 import { ActivationCostPanel } from "@/components/admin/ActivationCostPanel";
+import { AdminSonicSim } from "@/components/admin/AdminSonicSim";
 
 import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
 import { CollapsibleSection } from "@/components/admin/CollapsibleSection";
@@ -312,6 +313,9 @@ const AdminDashboard = () => {
           </CollapsibleSection>
           <CollapsibleSection title="Scoring credit budget">
             <ActivationCostPanel />
+          </CollapsibleSection>
+          <CollapsibleSection title="Semantic scope (audioscope)">
+            <AdminSonicSim />
           </CollapsibleSection>
 
         </div>

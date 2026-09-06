@@ -21,9 +21,11 @@ interface AudioUploaderProps {
   selectedFile: File | null;
   onSpotifyTrack?: (track: any) => void;
   onLibrarySelect?: (sources: AudioSource[]) => void;
+  /** Signed-out visitors get one-line guidance under each choice. */
+  showHints?: boolean;
 }
 
-export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLibrarySelect }: AudioUploaderProps) => {
+export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLibrarySelect, showHints = false }: AudioUploaderProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const { providers, loading: providersLoading } = useConfiguredIntegrations();
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
@@ -34,6 +36,7 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLi
       setSelectedProvider(providers[0].id);
     }
   }, [providers, selectedProvider]);
+
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -77,7 +80,13 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLi
       </TabsList>
       
       <TabsContent value="upload">
+        {showHints && (
+          <p className="mb-2 text-sm text-muted-foreground">
+            Drop in your own audio file (music, voice or ambience) to hear how SonicSIM reads it.
+          </p>
+        )}
         <Card 
+
           className={`relative overflow-hidden border-2 transition-smooth ${
             isDragging 
               ? "border-primary bg-primary/5 shadow-glow" 
@@ -139,7 +148,13 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLi
       </TabsContent>
       
       <TabsContent value="external">
+        {showHints && (
+          <p className="mb-2 text-sm text-muted-foreground">
+            Search a streaming service by song or artist name and add the track you want analysed.
+          </p>
+        )}
         <Card className="p-6 space-y-4">
+
           {providersLoading ? (
             <p className="text-sm text-muted-foreground">Loading available services…</p>
           ) : providers.length === 0 ? (
@@ -188,7 +203,13 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLi
       </TabsContent>
 
       <TabsContent value="library">
+        {showHints && (
+          <p className="mb-2 text-sm text-muted-foreground">
+            Pick one or more sounds other people have already added, then analyse them yourself.
+          </p>
+        )}
         <Card className="p-6">
+
           <UserLibrary onSelectMultiple={onLibrarySelect} />
         </Card>
       </TabsContent>

@@ -215,7 +215,34 @@ const Index = () => {
             },
           ]}
         />
+
+        {!user && (
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-border/60 bg-card/50 p-4">
+              <p className="text-sm font-semibold text-foreground">Listen</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add a track — upload a file, search a streaming service, or pick from the shared
+                library — and SonicSIM listens to it across six meaning categories.
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-card/50 p-4">
+              <p className="text-sm font-semibold text-foreground">Understand</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                See what it heard: scores for emotion, cognition, social, communication, context and
+                artistry, plus how your sounds connect to each other.
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-card/50 p-4">
+              <p className="text-sm font-semibold text-foreground">Library</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Signed-in members keep every analysis, build a personal sonic signature, and compare
+                it with other people&apos;s.
+              </p>
+            </div>
+          </div>
+        )}
       </section>
+
 
       {/* Step 16a — the Consumer door: one input, one result, one ladder. */}
       {persona !== "marketing" && (

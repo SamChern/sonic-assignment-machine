@@ -59,12 +59,15 @@ export const ListenTab = ({
             Listen
             {totalItems > 0 && <span className="ml-2 text-primary">({totalItems} selected)</span>}
           </h2>
-          {isSignedIn && (
+          {isSignedIn ? (
             <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
               <Save className="h-3.5 w-3.5 text-primary" />
-              <span>Auto-saving selections &amp; fingerprints to your library</span>
+              <span>Saving your selections &amp; fingerprints to your library</span>
             </p>
+          ) : (
+            <p className="mt-1 text-sm text-muted-foreground">Up to 3 trial analyses.</p>
           )}
+
         </div>
 
         {totalItems > 0 && (
@@ -88,7 +91,9 @@ export const ListenTab = ({
           selectedFile={null}
           onSpotifyTrack={onSpotifyTrack}
           onLibrarySelect={onLibrarySelect}
+          showHints={!isSignedIn}
         />
+
         {isSignedIn && <AudioJobsPanel />}
       </div>
 

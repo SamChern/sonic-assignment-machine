@@ -78,7 +78,10 @@ export const useScoringRuns = (pollMs = 10000): ScoringRunsData => {
   const [error, setError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
   const [live, setLive] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [lastRun, setLastRun] = useState<string | null>(null);
   const inFlight = useRef(false);
+
 
   const load = useCallback(async () => {
     if (inFlight.current) return;

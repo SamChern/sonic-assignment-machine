@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,10 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   DEFAULT_RESONANCE_DEFINITION,
   RESONANCE_AXES,
+  resonanceIndex,
+  resonancePoint,
+  resonanceWording,
+  type AxisVector,
   type ResonanceDefinition,
 } from "@/lib/nextlevel/resonance";
 
@@ -17,17 +21,26 @@ interface Digest {
   bullets: unknown;
 }
 
+interface Example {
+  id: string;
+  name: string;
+  grounding: string;
+  vector: AxisVector;
+}
+
 /**
- * Public method page: how one resonance number is worked out, and — when an
- * admin has published them — the weekly notes on what the model learned.
+ * Public method page: how one resonance number is worked out, worked examples
+ * from real analysed sounds, and — when an admin has published them — the
+ * weekly notes on what the model learned.
  */
 export default function Methodology() {
   const [definition, setDefinition] = useState<ResonanceDefinition>(DEFAULT_RESONANCE_DEFINITION);
   const [digests, setDigests] = useState<Digest[]>([]);
+  const [examples, setExamples] = useState<Example[]>([]);
 
   useEffect(() => {
     void (async () => {
-      const [def, notes] = await Promise.all([
+      const [def, notes, runs] = await Promise.all([
         supabase
           .from("resonance_definitions")
           .select("version, weights, distance_shape, notes")
@@ -39,6 +52,14 @@ export default function Methodology() {
           .eq("published", true)
           .order("week_start", { ascending: false })
           .limit(8),
+        supabase
+          .from("source_analyses")
+          .select(
+            "id, source_name, grounding_level, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
+          )
+          .in("grounding_level", ["grounded", "bridged"])
+          .order("created_at", { ascending: false })
+          .limit(6),
       ]);
       if (def.data) {
         setDefinition({
@@ -48,8 +69,41 @@ export default function Methodology() {
         });
       }
       setDigests(notes.data ?? []);
+      setExamples(
+        (runs.data ?? []).map((r) => ({
+          id: r.id,
+          name: r.source_name,
+          grounding: r.grounding_level,
+          vector: {
+            emotional: r.emotional_score ?? 0,
+            cognitive: r.cognitive_score ?? 0,
+            social: r.social_score ?? 0,
+            communication: r.communication_score ?? 0,
+            contextual: r.contextual_score ?? 0,
+            artistic: r.artistic_score ?? 0,
+          },
+        })),
+      );
     })();
   }, []);
+
+  // The "audience" for a worked example is the average of the examples shown,
+  // so the numbers on this page can be recomputed from what is on screen.
+  const audience = useMemo<AxisVector>(() => {
+    if (examples.length === 0) return {};
+    const out: AxisVector = {};
+    for (const axis of RESONANCE_AXES) {
+      out[axis] =
+        examples.reduce((sum, e) => sum + (e.vector[axis] ?? 0), 0) / examples.length;
+    }
+    return out;
+  }, [examples]);
+
+  const overall = useMemo(
+    () => resonanceIndex(examples.map((e) => e.vector), audience, definition),
+    [examples, audience, definition],
+  );
+
 
   return (
     <main className="container mx-auto max-w-3xl space-y-8 px-4 py-10">

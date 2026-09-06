@@ -62,21 +62,21 @@ const TargetWeightsCard = ({
       <div className="flex flex-wrap items-center gap-2">
         <Target className="h-4 w-4 text-primary" />
         <h2 className="text-sm font-semibold">Predict SonicSIM-Users</h2>
-        <Badge variant="outline" className="text-[11px]">{pool.length} scored records</Badge>
+        <Badge variant="outline" className="text-[11px]">{pool.length} people available</Badge>
         <Badge variant="outline" className="text-[11px]">
           <Sliders className="mr-1 h-3 w-3" />
           {activeProfile ? `calibration v${activeProfile.version}` : "SonicSIM defaults"}
         </Badge>
         {vector && (
           <Badge className="text-[11px]">
-            seeded from {seedOrigin === "brief" ? "brief" : "exemplars"}
+            started from {seedOrigin === "brief" ? "your description" : "example people"}
           </Badge>
         )}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        Matching runs in the full embedding space; these sliders re-weight the ranked neighbours
-        and explain the result in six axes. Category names and calibration shifts come from your
-        organization&apos;s active version in the Categories tab.
+        These sliders set what matters most in the match, and each result is explained by the six
+        qualities. Category names come from your organization&apos;s active version in the
+        Categories tab.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">

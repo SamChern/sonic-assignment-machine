@@ -21,7 +21,7 @@ interface ReachResonanceCardProps {
   atThresholdCount: number;
 }
 
-/** Reach vs. resonance tradeoff curve for the similarity floor. */
+/** Audience size vs. match strength tradeoff curve. */
 const ReachResonanceCard = ({
   curve,
   retrieved,
@@ -32,18 +32,18 @@ const ReachResonanceCard = ({
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-semibold">Reach vs. resonance</h3>
+        <h3 className="text-sm font-semibold">Audience size vs. match strength</h3>
         <Badge variant="outline" className="text-[11px]">
-          {retrieved} neighbours retrieved
+          {retrieved} people considered
         </Badge>
         <Badge variant="outline" className="text-[11px]">
-          similarity floor {threshold.toFixed(2)}
+          minimum match strength {Math.round(threshold * 100)}%
         </Badge>
-        <Badge className="text-[11px]">{atThresholdCount} matched</Badge>
+        <Badge className="text-[11px]">{atThresholdCount} people matched</Badge>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        Drag the floor: tighter resonance, smaller audience. The shaded band is the uncertainty
-        implied by the calibration priors&apos; spread.
+        Drag the slider: a higher minimum match strength means a stronger fit but fewer people.
+        The shaded band shows how confident we are in each count.
       </p>
       <div className="mt-3 h-52 w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -90,12 +90,12 @@ const ReachResonanceCard = ({
           max={95}
           step={1}
           onValueChange={([v]) => setThreshold(v / 100)}
-          aria-label="Similarity floor"
+          aria-label="Minimum match strength"
         />
       </div>
       <p className="mt-2 text-[11px] text-muted-foreground">
-        Saving at this point writes a sonic cohort with a withheld holdout slice, ready for the
-        activation lane and lift measurement.
+        Saving here creates this audience and keeps a comparison group aside, so you can measure
+        what the audio actually changed.
       </p>
     </Card>
   );

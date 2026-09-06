@@ -4,7 +4,7 @@
  * appear when the role actually grants them.
  */
 import { Link, useNavigate } from "react-router-dom";
-import { Building2, Check, Compass, DoorOpen, LogOut, Megaphone, Palette, Shield, User } from "lucide-react";
+import { Building2, Check, Compass, DoorOpen, Headphones, LogOut, Megaphone, Palette, Shield, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,

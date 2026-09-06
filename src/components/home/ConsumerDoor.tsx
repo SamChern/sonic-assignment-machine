@@ -145,9 +145,13 @@ export const ConsumerDoor = ({
     };
   }, [userId, result]);
 
-  const quotaExhausted = isSignedIn
-    ? (monthlyUsed ?? 0) >= FREE_MONTHLY_LIMIT
-    : guestRemaining !== null && guestRemaining <= 0;
+  const { awaitingPayment } = useListenerSubscription(userId);
+
+  const quotaExhausted = awaitingPayment
+    ? true
+    : isSignedIn
+      ? (monthlyUsed ?? 0) >= FREE_MONTHLY_LIMIT
+      : guestRemaining !== null && guestRemaining <= 0;
 
   const remaining = isSignedIn
     ? Math.max(0, FREE_MONTHLY_LIMIT - (monthlyUsed ?? 0))

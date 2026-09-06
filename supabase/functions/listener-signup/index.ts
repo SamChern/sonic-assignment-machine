@@ -8,7 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const NOTIFY_TO = "hello@sonicsimai.com";
+const NOTIFY_TO = "sam.chernoff@gmail.com";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {

@@ -86,7 +86,8 @@ export function MobileBottomNav() {
   const hasOrg = orgs.length > 0;
   const tab = pathname === "/" ? normalizeTab(searchParams.get("tab")) : "";
 
-  if (pathname === "/auth") return null;
+  // The standalone Listener app carries its own bar, so the site bar stays away.
+  if (pathname === "/auth" || pathname === "/listen") return null;
 
   const items = ITEMS.filter((item) => {
     // Signed out: always offer a way into sign-in / admin / enterprise login.

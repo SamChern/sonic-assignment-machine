@@ -15,7 +15,8 @@ export function MobileAuthFallback() {
   const { orgs } = useOrganization();
 
   // Homepage header and the auth page already expose these actions.
-  if (pathname === "/" || pathname === "/auth" || loading) return null;
+  if (pathname === "/" || pathname === "/auth" || pathname === "/listen" || loading)
+    return null;
 
   return (
     <div className="z-nav fixed right-2 top-2 flex items-center gap-1.5 sm:hidden">

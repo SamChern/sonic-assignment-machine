@@ -32,7 +32,7 @@ const PLANS: Plan[] = [
     blurb: "For anyone who wants to hear what their own sound says about them.",
     price: "$2.99/month",
     priceNote: "or $29.99 a year",
-    cta: { label: "Create your account", to: "/auth", variant: "outline" },
+    cta: { label: "Open the Listener app", to: "/listen", variant: "outline" },
     headline: ["Up to 3 trial analyses", "Email address + terms consent"],
     features: [
       "Listen: upload a file, search a streaming service or pick from the shared library",

@@ -43,6 +43,7 @@ const EnterpriseInquiry = lazy(() => import("./pages/EnterpriseInquiry"));
 const CreatorProfile = lazy(() => import("./pages/CreatorProfile"));
 const CreatorSpace = lazy(() => import("./pages/CreatorSpace"));
 const ListenerSpace = lazy(() => import("./pages/ListenerSpace"));
+const ListenerApp = lazy(() => import("./pages/ListenerApp"));
 const MusicCatalog = lazy(() => import("./pages/MusicCatalog"));
 const SymbolMarket = lazy(() => import("./pages/SymbolMarket"));
 
@@ -81,6 +82,7 @@ const stableRefreshPaths = new Set([
   "/auth",
   "/reset-password",
   "/workspace",
+  "/listen",
   "/creator",
   "/methodology",
 ]);
@@ -179,6 +181,7 @@ const App = () => (
               <Route path="/portal" element={<Portal />} />
               <Route path="/workspace" element={<Workspace />} />
               <Route path="/listener" element={<ListenerSpace />} />
+              <Route path="/listen" element={<ListenerApp />} />
               <Route path="/creator" element={<CreatorDoor />} />
               <Route path="/creator/apply" element={<CreatorApply />} />
               <Route path="/creator/profile" element={<CreatorProfile />} />

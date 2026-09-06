@@ -2114,6 +2114,7 @@ export type Database = {
       listener_subscriptions: {
         Row: {
           activated_at: string | null
+          billing_period: string
           cancelled_at: string | null
           created_at: string
           data_sharing_accepted: boolean
@@ -2128,6 +2129,7 @@ export type Database = {
         }
         Insert: {
           activated_at?: string | null
+          billing_period?: string
           cancelled_at?: string | null
           created_at?: string
           data_sharing_accepted?: boolean
@@ -2142,6 +2144,7 @@ export type Database = {
         }
         Update: {
           activated_at?: string | null
+          billing_period?: string
           cancelled_at?: string | null
           created_at?: string
           data_sharing_accepted?: boolean

@@ -32,6 +32,7 @@ const AdminSoundLibrary = lazy(() => import("./pages/admin/AdminSoundLibrary"));
 const AdminGuide = lazy(() => import("./pages/admin/AdminGuide"));
 const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminResolver = lazy(() => import("./pages/admin/AdminResolver"));
+const AdminDemoRequests = lazy(() => import("./pages/admin/AdminDemoRequests"));
 const AdminNextLevelLab = lazy(() => import("./pages/admin/AdminNextLevelLab"));
 const Methodology = lazy(() => import("./pages/Methodology"));
 const CreatorDoor = lazy(() => import("./pages/CreatorDoor"));
@@ -130,6 +131,9 @@ const App = () => (
 
               {/* One gate for every admin screen: access checked once, crashes
                   contained once, no per-route wrappers to keep in sync. */}
+              {/* Any signed-in enterprise account can ask for a demo and track it;
+                  admins see the whole queue on the same page. */}
+              <Route path="/admin/demo-requests" element={<AdminDemoRequests />} />
               <Route
                 path="/admin"
                 element={

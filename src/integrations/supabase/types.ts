@@ -838,6 +838,71 @@ export type Database = {
           },
         ]
       }
+      demo_requests: {
+        Row: {
+          admin_notes: string | null
+          company_name: string
+          contact_email: string
+          contact_name: string
+          contact_phone: string | null
+          created_at: string
+          id: string
+          org_id: string | null
+          preferred_timing: string | null
+          requested_by: string
+          scheduled_at: string | null
+          status: string
+          status_changed_at: string
+          team_size: string | null
+          updated_at: string
+          use_case: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          company_name: string
+          contact_email: string
+          contact_name: string
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          org_id?: string | null
+          preferred_timing?: string | null
+          requested_by?: string
+          scheduled_at?: string | null
+          status?: string
+          status_changed_at?: string
+          team_size?: string | null
+          updated_at?: string
+          use_case: string
+        }
+        Update: {
+          admin_notes?: string | null
+          company_name?: string
+          contact_email?: string
+          contact_name?: string
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          org_id?: string | null
+          preferred_timing?: string | null
+          requested_by?: string
+          scheduled_at?: string | null
+          status?: string
+          status_changed_at?: string
+          team_size?: string | null
+          updated_at?: string
+          use_case?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demo_requests_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       embedding_bridges: {
         Row: {
           activated_at: string | null

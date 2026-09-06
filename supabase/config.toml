@@ -60,3 +60,6 @@ verify_jwt = false
 
 [functions.listener-signup]
 verify_jwt = false
+
+[functions.access-application]
+verify_jwt = false

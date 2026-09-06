@@ -36,6 +36,8 @@ const AdminDemoRequests = lazy(() => import("./pages/admin/AdminDemoRequests"));
 const AdminNextLevelLab = lazy(() => import("./pages/admin/AdminNextLevelLab"));
 const Methodology = lazy(() => import("./pages/Methodology"));
 const CreatorDoor = lazy(() => import("./pages/CreatorDoor"));
+const CreatorApply = lazy(() => import("./pages/CreatorApply"));
+const EnterpriseInquiry = lazy(() => import("./pages/EnterpriseInquiry"));
 const CreatorProfile = lazy(() => import("./pages/CreatorProfile"));
 const MusicCatalog = lazy(() => import("./pages/MusicCatalog"));
 const SymbolMarket = lazy(() => import("./pages/SymbolMarket"));
@@ -168,7 +170,9 @@ const App = () => (
               <Route path="/portal" element={<Portal />} />
               <Route path="/workspace" element={<Workspace />} />
               <Route path="/creator" element={<CreatorDoor />} />
+              <Route path="/creator/apply" element={<CreatorApply />} />
               <Route path="/creator/profile" element={<CreatorProfile />} />
+              <Route path="/enterprise/demo" element={<EnterpriseInquiry />} />
               <Route path="/library/catalog" element={<MusicCatalog />} />
               <Route path="/market" element={<SymbolMarket />} />
 

@@ -5,50 +5,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { McpToolForm } from "@/components/admin/McpToolForm";
-import { IntuiziCatalogTree } from "@/components/admin/IntuiziCatalogTree";
-import { McpResultView } from "@/components/admin/McpResultView";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
   Activity,
   AlertTriangle,
-  ChevronDown,
-  CloudDownload,
   Gauge,
   Loader2,
   Network,
-  Play,
-  Sparkles,
-
   RefreshCw,
-  ShieldAlert,
-  Terminal,
 } from "lucide-react";
 import {
   AUDIENCE_COMPLETED,
@@ -65,30 +29,18 @@ import {
   type McpTool,
 } from "@/lib/intuiziMcp";
 import {
-  CATALOG_DATASETS,
   buildCatalogTree,
   extractCatalogArray,
   normalizeCatalogRows,
   type CatalogNode,
 } from "@/lib/intuiziTaxonomy";
-
-type BrowseKind = "projects" | "audiences" | "activations" | "cohorts";
-
-const BROWSE_TOOL: Record<BrowseKind, string> = {
-  projects: "list_projects",
-  audiences: "list_audiences",
-  activations: "list_activations",
-  cohorts: "list_cohorts",
-};
-
-
-interface PendingWrite {
-  tool: string;
-  args: Record<string, unknown>;
-  label: string;
-  destructive: boolean;
-  onDone?: (resourceId: string | null, result: unknown) => void;
-}
+import { BrowseTab } from "@/components/admin/intuizi/BrowseTab";
+import { DeliveredObjectsPanel } from "@/components/admin/intuizi/DeliveredObjectsPanel";
+import { ReferenceCatalogPanel } from "@/components/admin/intuizi/ReferenceCatalogPanel";
+import { GuidedAudienceBuild } from "@/components/admin/intuizi/GuidedAudienceBuild";
+import { ToolRunnerPanel } from "@/components/admin/intuizi/ToolRunnerPanel";
+import { ConfirmWriteDialog } from "@/components/admin/intuizi/ConfirmWriteDialog";
+import { BROWSE_TOOL, type BrowseKind, type PendingWrite } from "@/components/admin/intuizi/types";
 
 /**
  * Admin cockpit for the Intuizi console over MCP. Reads are one click; every
@@ -656,475 +608,88 @@ export const IntuiziConsolePanel = () => {
 
       {!connError && !connecting && !!tools.length && (
         <>
-          <Tabs value={kind} onValueChange={(v) => setKind(v as BrowseKind)}>
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="audiences" className="text-xs">Audiences</TabsTrigger>
-              <TabsTrigger value="activations" className="text-xs">Activations</TabsTrigger>
-              <TabsTrigger value="cohorts" className="text-xs">Cohorts</TabsTrigger>
-              <TabsTrigger value="projects" className="text-xs">Projects</TabsTrigger>
-            </TabsList>
-            <TabsContent value={kind} className="mt-3 space-y-3">
-              <div className="flex gap-2">
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && void browse()}
-                  placeholder={`Search ${kind}…`}
-                  className="h-9 text-xs"
-                />
-                <Button size="sm" onClick={browse} disabled={listing}>
-                  {listing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Activity className="mr-1 h-4 w-4" />}
-                  {listRows.length ? "Refresh" : "Load"}
-                </Button>
-              </div>
-
-              {kind !== "projects" && (
-                <div className="flex gap-2">
-                  <Input
-                    value={lookupId}
-                    onChange={(e) => setLookupId(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && void lookupById()}
-                    placeholder={`Open ${kind.slice(0, -1)} by id (e.g. 5514)`}
-                    className="h-9 font-mono text-xs"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={lookupById}
-                    disabled={detailLoading || !lookupId.trim()}
-                  >
-                    Open
-                  </Button>
-                </div>
-              )}
-
-              <div className="space-y-1">
-                {listRows.map((row) => (
-                  <div
-                    key={String(row.id)}
-                    className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 p-2 transition-colors hover:border-primary/50"
-                  >
-                    <button
-                      onClick={() => void openDetail(row)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-xs font-medium">{row.name ?? `#${row.id}`}</span>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel(row)}</span>
-                      </div>
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        id {String(row.id)}
-                        {row.created_at ? ` · ${new Date(String(row.created_at)).toLocaleDateString()}` : ""}
-                      </span>
-                    </button>
-                    {kind === "audiences" && row.id != null && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="shrink-0 text-[11px]"
-                        onClick={() => void exportAudienceToApp(String(row.id))}
-                        disabled={exportingId !== null}
-                      >
-                        {exportingId === `aud:${String(row.id)}` ? (
-                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                        ) : (
-                          <Sparkles className="mr-1 h-3 w-3" />
-                        )}
-                        Add to semantic analysis
-                      </Button>
-                    )}
-                    {kind === "activations" && row.id != null && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="shrink-0 text-[11px]"
-                        onClick={() => void exportToApp(String(row.id))}
-                        disabled={exportingId !== null}
-                      >
-                        {exportingId === String(row.id) ? (
-                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                        ) : (
-                          <Sparkles className="mr-1 h-3 w-3" />
-                        )}
-                        Export
-                      </Button>
-                    )}
-
-
-                  </div>
-                ))}
-
-                {!listRows.length && !listing && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Nothing loaded yet — hit Load to pull the {kind} already in your Intuizi console,
-                    or open one directly by id.
-                  </p>
-                )}
-              </div>
-
-              {!!listResult && !!listRows.length && (
-                <McpResultView
-                  result={listResult}
-                  toolName={BROWSE_TOOL[kind]}
-                  onExportKeys={(k) => void ingestKeys(k)}
-                />
-              )}
-
-              {detailLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-
-              {detail && (
-                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-                  <p className="text-xs font-medium">
-                    {detail.row.name ?? `#${detail.row.id}`} · {statusLabel(detail.row)}
-                  </p>
-                  {!!detail.row.eligibility && (
-                    <pre className="max-h-40 overflow-auto rounded bg-background/60 p-2 text-[10px]">
-                      {JSON.stringify(detail.row.eligibility, null, 2)}
-                    </pre>
-                  )}
-                  {!!detail.row.totals && (
-                    <pre className="max-h-32 overflow-auto rounded bg-background/60 p-2 text-[10px]">
-                      {JSON.stringify(detail.row.totals, null, 2)}
-                    </pre>
-                  )}
-                  {detail.kind === "audiences" && statusId(detail.row) === AUDIENCE_COMPLETED && (
-                    <ActivationLauncher
-                      disabled={!writeEnabled}
-                      onActivate={(endpointId) => requestActivation(String(detail.row.id), endpointId)}
-                    />
-                  )}
-                  {detail.kind === "audiences" && detail.row.id != null && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => void exportAudienceToApp(String(detail.row.id))}
-                        disabled={exportingId !== null}
-                      >
-                        {exportingId === `aud:${String(detail.row.id)}` ? (
-                          <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Sparkles className="mr-1 h-4 w-4" />
-                        )}
-                        Add to semantic analysis
-                      </Button>
-                      <span className="text-[11px] text-muted-foreground">
-                        Finds this audience's S3 deliveries, ingests them, then opens semantic analysis.
-                      </span>
-                    </div>
-                  )}
-
-                  {detail.kind === "activations" && detail.row.id != null && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => void exportToApp(String(detail.row.id), keys)}
-                        disabled={exportingId !== null}
-                      >
-                        {exportingId === String(detail.row.id) ? (
-                          <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Sparkles className="mr-1 h-4 w-4" />
-                        )}
-                        Export to app for semantic analysis
-                      </Button>
-                      <span className="text-[11px] text-muted-foreground">
-                        Ingests delivered objects, then opens semantic analysis scoped to this activation.
-                      </span>
-                    </div>
-                  )}
-
-                  <McpResultView
-                    result={detail.raw}
-                    toolName={`get_${detail.kind}`}
-                    onExportKeys={(k) => void ingestKeys(k)}
-                  />
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+          <BrowseTab
+            kind={kind}
+            setKind={setKind}
+            search={search}
+            setSearch={setSearch}
+            browse={browse}
+            listing={listing}
+            listRows={listRows}
+            lookupId={lookupId}
+            setLookupId={setLookupId}
+            lookupById={lookupById}
+            detailLoading={detailLoading}
+            openDetail={openDetail}
+            exportAudienceToApp={exportAudienceToApp}
+            exportToApp={exportToApp}
+            exportingId={exportingId}
+            listResult={listResult}
+            ingestKeys={ingestKeys}
+            detail={detail}
+            requestActivation={requestActivation}
+            writeEnabled={writeEnabled}
+            keys={keys}
+          />
 
           {/* Delivery handoff into the untouched ingest pipeline */}
-          <div className="rounded-lg border border-border bg-muted/20 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <CloudDownload className="h-4 w-4 text-primary" />
-              <p className="text-xs font-medium">Delivered objects</p>
-              <Badge variant="outline" className="text-[11px]">{keys.length}</Badge>
-              <Button
-                size="sm"
-                className="ml-auto"
-                onClick={ingestDelivered}
-                disabled={!keys.length || ingesting}
-              >
-                {ingesting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Play className="mr-1 h-4 w-4" />}
-                Ingest these
-              </Button>
-            </div>
-            {keys.length ? (
-              <ul className="mt-2 space-y-1">
-                {keys.map((k) => (
-                  <li key={k} className="font-mono text-[10px] break-all text-muted-foreground">• {k}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Open a completed activation above — its delivery keys land here and go straight into
-                `intuizi-ingest` (taxonomy tagging → six-category scoring → calibration → speech-skew
-                normalization, all unchanged).
-              </p>
-            )}
-          </div>
+          <DeliveredObjectsPanel keys={keys} ingesting={ingesting} onIngest={ingestDelivered} />
 
           {/* Reference catalogs — nested per the Intuizi taxonomy */}
-          <div className="space-y-2 rounded-lg border border-border bg-muted/10 p-3">
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="min-w-[160px]">
-                <Label className="text-[11px]">Dataset</Label>
-                <Select
-                  value={refDataset}
-                  onValueChange={(v) => {
-                    setRefDataset(v);
-                    const first = CATALOG_DATASETS.find((d) => d.dataset === v)?.catalogs[0];
-                    if (first) setRefCatalog(first.catalog);
-                    setRefTree({ roots: [], synthesized: 0 });
-                    setRefError(null);
-                  }}
-                >
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CATALOG_DATASETS.map((d) => (
-                      <SelectItem key={d.dataset} value={d.dataset}>{d.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="min-w-[200px]">
-                <Label className="text-[11px]">Catalog</Label>
-                <Select value={refCatalog} onValueChange={setRefCatalog}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(CATALOG_DATASETS.find((d) => d.dataset === refDataset)?.catalogs ?? []).map((c) => (
-                      <SelectItem key={c.catalog} value={c.catalog}>{c.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button variant="outline" size="sm" onClick={loadReference} disabled={refBusy}>
-                {refBusy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Network className="mr-1 h-4 w-4" />}
-                Lookup
-              </Button>
-              {(() => {
-                const hint = CATALOG_DATASETS.find((d) => d.dataset === refDataset)
-                  ?.catalogs.find((c) => c.catalog === refCatalog)?.hint;
-                return hint ? (
-                  <span className="text-[11px] text-muted-foreground">{hint}</span>
-                ) : null;
-              })()}
-            </div>
-
-            {refError && (
-              <p className="text-[11px] text-destructive">{refError}</p>
-            )}
-
-            <IntuiziCatalogTree
-              roots={refTree.roots}
-              synthesizedParents={refTree.synthesized}
-              onPick={(node) => {
-                void navigator.clipboard.writeText(node.id);
-                toast.success(`Copied ${node.label} → ${node.id}`);
-              }}
-            />
-
-            {!!refRaw && (
-              <Collapsible>
-                <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <ChevronDown className="h-3 w-3" /> raw catalog payload
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <pre className="mt-1 max-h-40 overflow-auto rounded bg-muted/30 p-2 text-[10px]">{refRaw}</pre>
-                </CollapsibleContent>
-              </Collapsible>
-            )}
-          </div>
+          <ReferenceCatalogPanel
+            refDataset={refDataset}
+            setRefDataset={setRefDataset}
+            refCatalog={refCatalog}
+            setRefCatalog={setRefCatalog}
+            refTree={refTree}
+            setRefTree={setRefTree}
+            refRaw={refRaw}
+            refBusy={refBusy}
+            refError={refError}
+            setRefError={setRefError}
+            loadReference={loadReference}
+          />
 
           {/* Guided build */}
-          <Collapsible>
-            <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg border border-border bg-card/60 p-2 text-xs font-medium">
-              <ChevronDown className="h-3.5 w-3.5" /> Guided audience build (estimate → create → poll → activate)
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 space-y-2">
-              <Textarea
-                value={audienceBody}
-                onChange={(e) => setAudienceBody(e.target.value)}
-                rows={8}
-                spellCheck={false}
-                className="font-mono text-[11px]"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Body follows the documented `create_audience` contract — the same JSON is used for the
-                read-only estimate. A `WebDomain` block's `start_date` is limited to the last 45 days.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" size="sm" onClick={runEstimate} disabled={flowBusy}>
-                  {flowBusy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-                  Estimate size (read-only)
-                </Button>
-                <Button size="sm" onClick={requestCreateAudience} disabled={flowBusy || !writeEnabled}>
-                  Create audience…
-                </Button>
-                {!writeEnabled && (
-                  <span className="flex items-center gap-1 text-[11px] text-amber-500">
-                    <ShieldAlert className="h-3 w-3" /> enable the write capability to create
-                  </span>
-                )}
-              </div>
-              {!!flowLog.length && (
-                <pre className="max-h-48 overflow-auto rounded bg-muted/30 p-2 text-[10px]">
-                  {flowLog.join("\n")}
-                </pre>
-              )}
-            </CollapsibleContent>
-          </Collapsible>
+          <GuidedAudienceBuild
+            audienceBody={audienceBody}
+            setAudienceBody={setAudienceBody}
+            flowBusy={flowBusy}
+            flowLog={flowLog}
+            writeEnabled={writeEnabled}
+            runEstimate={runEstimate}
+            requestCreateAudience={requestCreateAudience}
+          />
 
           {/* Tool runner — native fields generated from each tool's schema */}
-          <Collapsible>
-            <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg border border-border bg-card/60 p-2 text-xs font-medium">
-              <Terminal className="h-3.5 w-3.5" /> Tool runner ({toolNames.length} tools)
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Select
-                  value={rawTool}
-                  onValueChange={(v) => {
-                    setRawTool(v);
-                    setFormArgs({});
-                    setRawArgs("{}");
-                    setRawOut("");
-                    setRawResult(null);
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-[260px] text-xs">
-                    <SelectValue placeholder="Pick a tool" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {toolNames.map((n) => (
-                      <SelectItem key={n} value={n}>{n}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button size="sm" onClick={runRaw} disabled={!rawTool || rawBusy}>
-                  {rawBusy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Play className="mr-1 h-4 w-4" />}
-                  Run
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-[11px]"
-                  onClick={() => {
-                    if (!jsonMode) setRawArgs(JSON.stringify(formArgs, null, 2));
-                    setJsonMode((v) => !v);
-                  }}
-                >
-                  {jsonMode ? "Use form fields" : "Edit as JSON"}
-                </Button>
-              </div>
-
-              {!!selectedToolDef?.description && (
-                <p className="text-[11px] text-muted-foreground">{selectedToolDef.description}</p>
-              )}
-
-              {rawTool ? (
-                jsonMode ? (
-                  <Textarea
-                    value={rawArgs}
-                    onChange={(e) => setRawArgs(e.target.value)}
-                    rows={6}
-                    spellCheck={false}
-                    className="font-mono text-[11px]"
-                  />
-                ) : (
-                  <McpToolForm
-                    schema={selectedToolDef?.inputSchema}
-                    resetKey={rawTool}
-                    onChange={setFormArgs}
-                  />
-                )
-              ) : (
-                <p className="text-[11px] text-muted-foreground">
-                  Pick a tool to get its native input fields.
-                </p>
-              )}
-
-              {!jsonMode && !!rawTool && (
-                <pre className="max-h-24 overflow-auto rounded bg-muted/20 p-2 text-[10px] text-muted-foreground">
-                  {JSON.stringify(formArgs, null, 2)}
-                </pre>
-              )}
-
-              {!!rawResult && (
-                <McpResultView
-                  result={rawResult}
-                  toolName={rawTool}
-                  onExportKeys={(k) => void ingestKeys(k)}
-                />
-              )}
-
-              {!!rawOut && (
-                <pre className="max-h-64 overflow-auto rounded bg-muted/30 p-2 text-[10px]">{rawOut}</pre>
-              )}
-
-            </CollapsibleContent>
-          </Collapsible>
+          <ToolRunnerPanel
+            toolNames={toolNames}
+            rawTool={rawTool}
+            setRawTool={setRawTool}
+            setFormArgs={setFormArgs}
+            setRawArgs={setRawArgs}
+            setRawOut={setRawOut}
+            setRawResult={setRawResult}
+            runRaw={runRaw}
+            rawBusy={rawBusy}
+            jsonMode={jsonMode}
+            setJsonMode={setJsonMode}
+            formArgs={formArgs}
+            selectedToolDef={selectedToolDef}
+            rawArgs={rawArgs}
+            rawResult={rawResult}
+            rawOut={rawOut}
+            ingestKeys={ingestKeys}
+          />
         </>
       )}
 
-      <AlertDialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pending?.destructive ? "Destructive Intuizi action" : "Confirm Intuizi write"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {pending?.label} Every call is recorded in the Intuizi run ledger.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <pre className="max-h-40 overflow-auto rounded bg-muted/30 p-2 text-[10px]">
-            {JSON.stringify(pending?.args ?? {}, null, 2)}
-          </pre>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmPending}>
-              Run {pending?.tool}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmWriteDialog
+        pending={pending}
+        onOpenChange={(o) => !o && setPending(null)}
+        onConfirm={confirmPending}
+      />
     </Card>
-  );
-};
-
-const ActivationLauncher = ({
-  disabled,
-  onActivate,
-}: {
-  disabled: boolean;
-  onActivate: (endpointId: string) => void;
-}) => {
-  const [endpointId, setEndpointId] = useState("");
-  return (
-    <div className="flex flex-wrap items-end gap-2">
-      <div className="min-w-[180px]">
-        <Label className="text-[11px]">Endpoint connection id</Label>
-        <Input
-          value={endpointId}
-          onChange={(e) => setEndpointId(e.target.value)}
-          placeholder="S3 endpoint connection id"
-          className="h-9 text-xs"
-        />
-      </div>
-      <Button size="sm" disabled={disabled || !endpointId.trim()} onClick={() => onActivate(endpointId.trim())}>
-        Activate…
-      </Button>
-    </div>
   );
 };
 

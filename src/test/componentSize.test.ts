@@ -14,29 +14,13 @@ import { join } from "node:path";
 const LIMIT = 500;
 
 const LEGACY: Record<string, number> = {
-  "src/pages/admin/AdminWorkbench.tsx": 1296,
-  "src/components/ConfidenceBreakdownPanel.tsx": 1235,
-  "src/pages/SemanticAnalysis.tsx": 1216,
-  "src/components/admin/IntuiziConsolePanel.tsx": 1131,
-  "src/components/PostIngestionWizard.tsx": 1098,
-  // AggregateNetworkVisualization + NetworkVisualization now sit under the
-  // ceiling: shared renderer in graph/engine.ts, math in graph/adapters/*.
-
-  "src/components/SpeechNormalizationPanel.tsx": 815,
-  // Ratcheted down after the report shapes/merge moved to src/lib/compatibilityReport.ts.
-  "src/pages/IngestionCompatibility.tsx": 739,
-
-  "src/components/enterprise/CategoryProfileEditor.tsx": 779,
-  "src/pages/IntegrationStatus.tsx": 718,
-  "src/components/enterprise/PredictUsersPanel.tsx": 708,
-  "src/pages/Index.tsx": 660,
-  "src/components/AnalysisResults.tsx": 500,
+  // Ratcheted down: the five largest screens were split into section
+  // components (confidence/, admin/intuizi/, speech/, categoryProfile/,
+  // predictUsers/) and pure helpers moved into src/lib.
   "src/components/FingerprintComparison.tsx": 573,
-  "src/components/visuals/SonicSimPanel.tsx": 560,
   "src/pages/AdminIntegrations.tsx": 552,
   "src/components/visuals/AudioscopeCompare.tsx": 537,
   "src/components/InspectMappingPanel.tsx": 537,
-  "src/components/enterprise/PredictOutcomesPanel.tsx": 512,
 };
 
 const SKIP = ["src/components/ui", "src/test", "__tests__"];

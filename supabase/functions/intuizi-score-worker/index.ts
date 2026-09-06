@@ -510,6 +510,13 @@ Deno.serve(async (req) => {
       elapsed_ms: Date.now() - startedAt,
       ...metrics.snapshot(),
     };
+    await heartbeat({
+      phase: willChain ? "chaining" : paused ? "paused" : "idle",
+      scored,
+      materialized,
+      failed,
+      pending: remaining,
+    });
     console.log(JSON.stringify({ evt: "intuizi_score_worker_run", ...body }));
     return json(body);
 

@@ -2111,6 +2111,51 @@ export type Database = {
         }
         Relationships: []
       }
+      listener_subscriptions: {
+        Row: {
+          activated_at: string | null
+          cancelled_at: string | null
+          created_at: string
+          data_sharing_accepted: boolean
+          email: string | null
+          id: string
+          plan: string
+          price_cents: number
+          status: string
+          terms_accepted: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activated_at?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          data_sharing_accepted?: boolean
+          email?: string | null
+          id?: string
+          plan?: string
+          price_cents?: number
+          status?: string
+          terms_accepted?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activated_at?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          data_sharing_accepted?: boolean
+          email?: string | null
+          id?: string
+          plan?: string
+          price_cents?: number
+          status?: string
+          terms_accepted?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       market_baselines: {
         Row: {
           created_at: string

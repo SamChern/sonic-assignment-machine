@@ -361,106 +361,15 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
 
       {identifier && (
         <>
-          {/* headline */}
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-md border border-border p-3">
-              <p className="text-xs text-muted-foreground">Recorded confidence</p>
-              <p className="text-2xl font-semibold">
-                {math ? math.confidence.toFixed(3) : "—"}
-              </p>
-              <Progress value={(math?.confidence ?? 0) * 100} className="mt-2 h-1.5" />
-            </div>
-            <div className="rounded-md border border-border p-3">
-              <p className="text-xs text-muted-foreground">Dominant category</p>
-              <div className="mt-1">
-                {analysis?.category ? (
-                  <Badge>{String(analysis.category)}</Badge>
-                ) : (
-                  <span className="text-sm text-muted-foreground">not scored</span>
-                )}
-              </div>
-
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                {tags.length} taxonomy node{tags.length === 1 ? "" : "s"} ·{" "}
-                {driverRows.length} driver row{driverRows.length === 1 ? "" : "s"}
-              </p>
-            </div>
-            <div className="rounded-md border border-border p-3">
-              <p className="text-xs text-muted-foreground">Evidence tier</p>
-              <p className="text-lg font-semibold capitalize">{math?.tier.kind ?? "—"}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                weight ×{math ? math.tier.factor.toFixed(1) : "—"} · {math?.tier.detail}
-              </p>
-            </div>
-          </div>
-
-          {/* math */}
-          {math && (
-            <div className="mt-4 rounded-md border border-border bg-muted/30 p-3">
-              <p className="text-xs font-medium">How the number is computed</p>
-              <p className="mt-1 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                scores = [{math.scores.map((s) => Math.round(s)).join(", ")}] · mean{" "}
-                {math.mean.toFixed(1)} · stddev {math.stddev.toFixed(2)}
-                <br />
-                spread = clamp(stddev / 30, 0.1, 1) = {math.spread.toFixed(3)}
-                <br />
-                confidence = spread × evidence({math.tier.kind} = {math.tier.factor.toFixed(1)}) ={" "}
-                {math.confidence.toFixed(3)}
-              </p>
-            </div>
-          )}
-
-          {/* low-confidence threshold */}
-          <div className="mt-4 rounded-md border border-border bg-card/60 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4 text-primary" />
-              <p className="text-xs font-medium">Low-confidence threshold</p>
-              <span className="ml-auto font-mono text-xs">{threshold.toFixed(2)}</span>
-            </div>
-            <div className="mt-3 flex items-center gap-3">
-              <Slider
-                value={[threshold]}
-                min={0.01}
-                max={0.8}
-                step={0.01}
-                onValueChange={(v) => setThreshold(v[0])}
-                className="flex-1"
-                aria-label="Low-confidence threshold"
-              />
-              <Input
-                type="number"
-                min={0.01}
-                max={0.8}
-                step={0.01}
-                value={threshold}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  if (Number.isFinite(v)) setThreshold(Math.min(0.8, Math.max(0.01, v)));
-                }}
-                className="h-8 w-20 font-mono text-xs"
-                aria-label="Low-confidence threshold value"
-              />
-              <Button size="sm" variant="ghost" onClick={() => setThreshold(0.15)}>
-                Reset
-              </Button>
-            </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              A driver row is flagged when share × evidence factor (
-              {math ? math.tier.factor.toFixed(1) : "—"}) falls below the threshold.{" "}
-              <span className={flaggedCount ? "text-destructive" : "text-primary"}>
-                {flaggedCount} of {driverRows.length} row{driverRows.length === 1 ? "" : "s"} flagged
-              </span>
-              {math && (
-                <>
-                  {" · overall confidence "}
-                  <span className={math.confidence < threshold ? "text-destructive" : "text-primary"}>
-                    {math.confidence.toFixed(3)} {math.confidence < threshold ? "below" : "above"} threshold
-                  </span>
-                </>
-              )}
-              .
-            </p>
-          </div>
+          <ConfidenceHeadline
+            analysis={analysis}
+            math={math}
+            tags={tags}
+            driverRows={driverRows}
+            threshold={threshold}
+            setThreshold={setThreshold}
+            flaggedCount={flaggedCount}
+          />
 
           <DriverRowsTable
             driverRows={driverRows}
@@ -472,62 +381,9 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
             onRowClick={loadDrill}
           />
 
-          {/* tag weights */}
-          {tags.length > 0 && (
-            <div className="mt-5">
-              <p className="text-xs font-medium">Resolved ontology nodes and weights</p>
-              <div className="mt-2 space-y-2">
-                {tags.map((t, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="w-64 shrink-0 truncate text-xs">
-                      {t.taxonomy_nodes?.label ?? "unknown node"}
-                    </span>
-                    <Progress value={Math.min(100, Number(t.weight) * 100)} className="h-1.5" />
-                    <span className="w-12 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
-                      {Number(t.weight).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {tags.map((t, i) => (
-                  <Badge key={i} variant="secondary" className="font-mono text-[10px]">
-                    {t.taxonomy_nodes?.code}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
+          <NodeWeightsAndScores tags={tags} analysis={analysis} />
 
-          {/* per-category scores */}
-          {analysis && (
-            <div className="mt-5 grid gap-2 sm:grid-cols-3">
-              {SCORE_KEYS.map(([k, label]) => (
-                <div key={k} className="rounded-md border border-border px-3 py-2">
-                  <p className="text-[11px] text-muted-foreground">{label}</p>
-                  <p className="text-sm font-semibold">{Math.round(Number(analysis[k]) || 0)}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* why low */}
-          {reasons.length > 0 && (
-            <div className="mt-5 rounded-md border border-destructive/30 bg-destructive/5 p-3">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Why confidence is low
-              </div>
-              <ul className="mt-2 space-y-1.5 text-xs text-muted-foreground">
-                {reasons.map((r, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="text-destructive">•</span>
-                    <span>{r}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <WhyLowList reasons={reasons} />
 
           <ComparisonSection
             activation={activation}
@@ -547,20 +403,7 @@ const ConfidenceBreakdownPanel = ({ defaultActivation = "5498" }: { defaultActiv
             rowKey={rowKey}
           />
 
-          <div className="mt-4 rounded-md border border-border p-3">
-            <div className="flex items-center gap-1.5 text-xs font-medium">
-              <Info className="h-3.5 w-3.5 text-primary" />
-              What would raise it
-            </div>
-            <ul className="mt-2 space-y-1.5 text-xs text-muted-foreground">
-              {fixes.map((f) => (
-                <li key={f} className="flex gap-2">
-                  <span className="text-primary">•</span>
-                  <span>{f}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <WhatWouldRaiseIt fixes={fixes} />
         </>
       )}
     </Card>

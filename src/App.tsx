@@ -178,6 +178,7 @@ const App = () => (
               <Route path="/creator" element={<CreatorDoor />} />
               <Route path="/creator/apply" element={<CreatorApply />} />
               <Route path="/creator/profile" element={<CreatorProfile />} />
+              <Route path="/creator/space" element={<CreatorSpace />} />
               <Route path="/enterprise/demo" element={<EnterpriseInquiry />} />
               <Route path="/library/catalog" element={<MusicCatalog />} />
               <Route path="/market" element={<SymbolMarket />} />

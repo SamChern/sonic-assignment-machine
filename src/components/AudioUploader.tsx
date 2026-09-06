@@ -21,9 +21,11 @@ interface AudioUploaderProps {
   selectedFile: File | null;
   onSpotifyTrack?: (track: any) => void;
   onLibrarySelect?: (sources: AudioSource[]) => void;
+  /** Signed-out visitors get one-line guidance under each choice. */
+  showHints?: boolean;
 }
 
-export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLibrarySelect }: AudioUploaderProps) => {
+export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLibrarySelect, showHints = false }: AudioUploaderProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const { providers, loading: providersLoading } = useConfiguredIntegrations();
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
@@ -34,6 +36,7 @@ export const AudioUploader = ({ onFileSelect, selectedFile, onSpotifyTrack, onLi
       setSelectedProvider(providers[0].id);
     }
   }, [providers, selectedProvider]);
+
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();

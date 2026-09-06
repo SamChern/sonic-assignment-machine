@@ -45,6 +45,11 @@ export default function AdminNextLevelLab() {
         <ResonanceLabPanel />
       </PanelErrorBoundary>
 
+      <PanelErrorBoundary label="Match a real sound">
+        <ResonanceAudioPanel />
+      </PanelErrorBoundary>
+
+
       <PanelErrorBoundary label="Sonic Commons">
         <CommonsPanel />
       </PanelErrorBoundary>

@@ -91,7 +91,9 @@ export const ListenTab = ({
           selectedFile={null}
           onSpotifyTrack={onSpotifyTrack}
           onLibrarySelect={onLibrarySelect}
+          showHints={!isSignedIn}
         />
+
         {isSignedIn && <AudioJobsPanel />}
       </div>
 

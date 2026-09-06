@@ -35,10 +35,13 @@ import {
   Zap,
   Settings2,
   RefreshCw,
+  Activity,
 } from "lucide-react";
 import { IntegrationDetailsDrawer } from "@/components/admin/IntegrationDetailsDrawer";
 import { LibrosaAudioTester } from "@/components/admin/LibrosaAudioTester";
 import IntuiziConsolePanel from "@/components/admin/IntuiziConsolePanel";
+import ScoringRunsDashboard from "@/components/admin/intuizi/ScoringRunsDashboard";
+import ScoreQueueHealthPanel from "@/components/ScoreQueueHealthPanel";
 import { replaceLegacyBrandText } from "@/lib/brandText";
 
 interface StatusEntry {
@@ -224,7 +227,6 @@ const AdminIntegrations = () => {
           </Card>
         )}
 
-        {kindFilter === "mcp" && <IntuiziConsolePanel />}
         {kindFilter === "mcp" && <LibrosaAudioTester />}
         </div>
         )}

@@ -48,7 +48,7 @@ const PLANS: Plan[] = [
     blurb: "For artists and sound designers who want their work measured and credited.",
     price: "$29.99/month",
     priceNote: "or $299.99 a year",
-    cta: { label: "Apply for creator access", to: "/creator" },
+    cta: { label: "Apply for creator access", to: "/creator/apply" },
     highlight: true,
     headline: ["Everything in Listener", "Rights and licence records"],
     features: [
@@ -65,10 +65,7 @@ const PLANS: Plan[] = [
     blurb: "For teams using sound to understand and reach real audiences.",
     price: "Inquire for demo and pricing",
     priceNote: undefined,
-    cta: {
-      label: "Inquire for demo and pricing",
-      href: "mailto:hello@sonicsimai.com?subject=SonicSIM%20Enterprise%20—%20Book%20a%20demo",
-    },
+    cta: { label: "Inquire for demo and pricing", to: "/enterprise/demo" },
     headline: ["Everything in Creator", "Shared team workspace"],
     features: [
       "Audience cohorts built from sonic behaviour, not guesses",

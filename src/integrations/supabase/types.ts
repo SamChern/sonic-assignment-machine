@@ -3921,6 +3921,24 @@ export type Database = {
         Args: { p_id: string; p_owner: string; p_seconds?: number }
         Returns: boolean
       }
+      admin_list_people: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          analyses_count: number
+          billing_period: string
+          creator_status: string
+          email: string
+          last_sign_in_at: string
+          membership_plan: string
+          membership_status: string
+          persona: string
+          price_cents: number
+          roles: string[]
+          signed_up_at: string
+          user_id: string
+          username: string
+        }[]
+      }
       admin_prune_analysis_telemetry: {
         Args: {
           p_cache_idle_days?: number
@@ -3932,6 +3950,15 @@ export type Database = {
       admin_recalculate_all_fingerprints: { Args: never; Returns: number }
       admin_recalculate_user_fingerprint: {
         Args: { p_user_id: string }
+        Returns: undefined
+      }
+      admin_set_membership: {
+        Args: {
+          p_billing_period?: string
+          p_plan?: string
+          p_status?: string
+          p_user_id: string
+        }
         Returns: undefined
       }
       backfill_intuizi_activation_ids: {

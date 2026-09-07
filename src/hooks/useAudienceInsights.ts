@@ -64,8 +64,11 @@ export const useAudienceInsights = (sample = 40000, perFamily = 12) => {
 };
 
 /** "demo.age.50-54" reads badly in a report; show the human part. */
-export const prettyTag = (code: string) =>
-  code
+export const prettyTag = (code: string) => {
+  // A bare age tag like "demo.age.75" means the open-ended top band.
+  const age = code.match(/^demo\.age\.(\d+)$/);
+  if (age) return `${age[1]}+`;
+  return code
     .replace(/^demo\.age\./, "")
     .replace(/^demo\./, "")
     .replace(/^ctv\.(genre|channel)\./, "")
@@ -73,3 +76,4 @@ export const prettyTag = (code: string) =>
     .replace(/[-_]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+};

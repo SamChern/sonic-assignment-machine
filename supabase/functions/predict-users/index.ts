@@ -572,7 +572,43 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* ------------------------------------------------------------- population */
+    // Dataset status, and an explicit rebuild from the activation data.
+    if (action === "population" || action === "refresh_population") {
+      if (action === "refresh_population") {
+        const { data: written, error: refreshErr } = await admin.rpc(
+          "refresh_listener_profiles",
+          { p_limit: 1_000_000 },
+        );
+        if (refreshErr) throw new Error(`refresh failed: ${refreshErr.message}`);
+        const { count } = await admin
+          .from("listener_profiles")
+          .select("audio_source_id", { count: "exact", head: true });
+        return json({
+          success: true,
+          action,
+          written: Number(written ?? 0),
+          population: Number(count ?? 0),
+        });
+      }
+
+      const [{ count: total }, { count: grounded }] = await Promise.all([
+        admin.from("listener_profiles").select("audio_source_id", { count: "exact", head: true }),
+        admin
+          .from("listener_profiles")
+          .select("audio_source_id", { count: "exact", head: true })
+          .eq("has_audio_embedding", true),
+      ]);
+      return json({
+        success: true,
+        action,
+        population: Number(total ?? 0),
+        audio_grounded: Number(grounded ?? 0),
+      });
+    }
+
     return json({ success: false, error: `unknown action "${action}"` }, 400);
+
   } catch (e) {
     const status = e instanceof AuthzError ? e.status : 500;
     console.error("predict-users failed:", (e as Error).message);

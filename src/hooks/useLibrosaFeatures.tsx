@@ -157,12 +157,10 @@ export function useLibrosaFeatures() {
         }
 
         if (job?.status === "done" && cacheKey) {
-          const { data: row } = await supabase
-            .from("librosa_cache")
-            .select("features")
-            .eq("cache_key", cacheKey)
-            .maybeSingle();
-          const blob = (row?.features as unknown as LibrosaFeatures | null) ?? null;
+          const { data: row } = await supabase.rpc("get_librosa_features", {
+            _cache_key: cacheKey,
+          });
+          const blob = (row as unknown as LibrosaFeatures | null) ?? null;
           if (blob) {
             setFeatures(blob);
             setStatus("ready");

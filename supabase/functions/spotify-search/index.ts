@@ -1,3 +1,5 @@
+import { allowSearchCaller } from "../_shared/searchGate.ts";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -87,6 +89,14 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const gate = await allowSearchCaller(req, 'spotify-search');
+    if (!gate.allowed) {
+      return new Response(
+        JSON.stringify({ error: gate.reason ?? 'Not allowed', spotify_unavailable: true }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     const { query, type = 'track' } = await req.json();
 
     if (!query) {

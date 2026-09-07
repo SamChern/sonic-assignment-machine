@@ -4205,6 +4205,7 @@ export type Database = {
         }[]
       }
       finish_intuizi_score_jobs: { Args: { p_rows: Json }; Returns: number }
+      get_librosa_features: { Args: { _cache_key: string }; Returns: Json }
       get_method_examples: {
         Args: { _limit?: number }
         Returns: {
@@ -4432,6 +4433,14 @@ export type Database = {
           source_type: string
           spotify_id: string
           user_id: string
+        }[]
+      }
+      public_profiles: {
+        Args: { _limit?: number; _search?: string; _user_ids?: string[] }
+        Returns: {
+          avatar_url: string
+          user_id: string
+          username: string
         }[]
       }
       read_ingest_rollup_subject_batch: {

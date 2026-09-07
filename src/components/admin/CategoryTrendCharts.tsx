@@ -15,8 +15,9 @@ const WINDOWS = [
 const BUCKET_WORD: Record<string, string> = { day: "day", week: "week", month: "month" };
 
 const num = (n: number) => n.toLocaleString();
+const day = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
 
-/** One category's line over time, drawn as a small inline SVG sparkline. */
+/** One category's line over time. Periods with no analyses stay blank. */
 const CategoryLine = ({
   category,
   points,
@@ -24,22 +25,33 @@ const CategoryLine = ({
   category: CategoryKey;
   points: CategoryTrendPoint[];
 }) => {
-  const values = points.map((p) => p.scores[category] ?? 0);
-  const first = values[0] ?? 0;
-  const last = values[values.length - 1] ?? 0;
+  const values = points.map((p) => (p.scores ? (p.scores[category] ?? 0) : null));
+  const present = values.filter((v): v is number => v !== null);
+  const first = present[0] ?? 0;
+  const last = present[present.length - 1] ?? 0;
   const delta = Math.round((last - first) * 10) / 10;
-  const avg = values.length
-    ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 10) / 10
+  const avg = present.length
+    ? Math.round((present.reduce((s, v) => s + v, 0) / present.length) * 10) / 10
     : 0;
+  const gaps = values.length - present.length;
 
   const width = 260;
   const height = 72;
   const step = values.length > 1 ? width / (values.length - 1) : 0;
   const y = (v: number) => height - (Math.max(0, Math.min(100, v)) / 100) * height;
-  const line = values.map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const area = values.length
-    ? `${line} L${((values.length - 1) * step).toFixed(1)},${height} L0,${height} Z`
-    : "";
+  // Each run of consecutive measured periods is its own path, so blank periods
+  // read as breaks rather than a line dropping to zero.
+  const segments: string[] = [];
+  let run: string[] = [];
+  values.forEach((v, i) => {
+    if (v === null) {
+      if (run.length > 1) segments.push(run.join(" "));
+      run = [];
+      return;
+    }
+    run.push(`${run.length === 0 ? "M" : "L"}${(i * step).toFixed(1)},${y(v).toFixed(1)}`);
+  });
+  if (run.length > 1) segments.push(run.join(" "));
   const stroke = `hsl(var(--category-${category}))`;
 
   return (
@@ -51,21 +63,24 @@ const CategoryLine = ({
         </Badge>
       </div>
       <p className="mt-0.5 text-[11px] text-muted-foreground">
-        now {last.toFixed(1)} · {delta === 0 ? "flat" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} over the window`}
+        now {last.toFixed(1)} ·{" "}
+        {delta === 0 ? "flat" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} over the window`}
+        {gaps ? ` · ${gaps} period${gaps === 1 ? "" : "s"} with no analyses` : ""}
       </p>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="none"
         className="mt-3 h-20 w-full"
         role="img"
-        aria-label={`${category} score over time, from ${first.toFixed(1)} to ${last.toFixed(1)}`}
+        aria-label={`${category} score over time, from ${first.toFixed(1)} to ${last.toFixed(1)}${gaps ? `, with ${gaps} periods that have no analyses` : ""}`}
       >
         <line x1="0" y1={y(50)} x2={width} y2={y(50)} stroke="hsl(var(--border))" strokeDasharray="3 3" strokeWidth="1" />
-        {area ? <path d={area} fill={stroke} opacity="0.12" /> : null}
-        <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-        {values.map((v, i) => (
-          <circle key={i} cx={i * step} cy={y(v)} r="2" fill={stroke} />
+        {segments.map((d, i) => (
+          <path key={i} d={d} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
         ))}
+        {values.map((v, i) =>
+          v === null ? null : <circle key={i} cx={i * step} cy={y(v)} r="2" fill={stroke} />,
+        )}
       </svg>
       <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
         <span>{points[0]?.bucket ?? ""}</span>
@@ -74,6 +89,7 @@ const CategoryLine = ({
     </Card>
   );
 };
+
 
 /** Six per-category score histories, one small chart each. */
 const CategoryTrendCharts = () => {

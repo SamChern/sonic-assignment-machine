@@ -38,7 +38,7 @@ const PLANS: Plan[] = [
       "Listen: upload a file, search a streaming service or pick from the shared library",
       "Understand: your six-category scores and how your sounds connect",
       "Library: keep your analyses and build a personal sonic signature",
-      "You agree to share your analysis data with the SonicSIM commons",
+      "You agree to share your analysis data with SonicSIM to improve results",
     ],
   },
   {
@@ -55,7 +55,7 @@ const PLANS: Plan[] = [
       "Unlimited analyses across your own catalogue",
       "Originality and divergence against the wider market",
       "Lineage: what your work sounds close to, and what it doesn't",
-      "Add work to the Sonic Commons with your licence terms and payout details",
+      "Register your work with your own licence terms and payout details",
     ],
   },
   {

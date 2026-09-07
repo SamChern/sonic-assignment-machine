@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
         `$2.99 a month (or $29.99 a year). Card payments open shortly \u2014 as soon as your ` +
         `membership is paid, your analyses unlock and everything you run is saved to your library.</p>` +
         `<p>We recorded your agreement to the terms and conditions` +
-        (dataSharing ? `, and your consent to share analysis data with the SonicSIM commons` : ``) +
+        (dataSharing ? `, and your consent to share analysis data with SonicSIM to improve results` : ``) +
         `.</p><p>\u2014 SonicSIM</p>`;
       const { error: welcomeError } = await supabase.rpc("enqueue_email", {
         queue_name: "transactional_emails",

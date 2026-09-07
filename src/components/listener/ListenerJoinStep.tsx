@@ -142,7 +142,7 @@ const ListenerJoinStep = ({ onSignedIn }: { onSignedIn: () => void }) => {
                 onCheckedChange={(v) => setSharing(v === true)}
               />
               <Label htmlFor="listen-sharing" className="text-sm font-normal leading-snug">
-                I&apos;m happy to share my results with the SonicSIM commons.
+                I&apos;m happy to share my results with SonicSIM to improve results.
               </Label>
             </div>
           </>

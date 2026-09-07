@@ -32,7 +32,7 @@ const INCLUDED = [
   "Unlimited analyses across your own catalogue",
   "Originality and divergence against the wider market",
   "Lineage: what your work sounds close to, and what it doesn't",
-  "Add work to the Sonic Commons with your licence terms and payout details",
+  "Register your work with your own licence terms and payout details",
 ];
 
 const CreatorApply = () => {

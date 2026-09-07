@@ -151,7 +151,7 @@ export const ListenerSignupDialog = ({
               onCheckedChange={(v) => setSharing(v === true)}
             />
             <Label htmlFor="listener-sharing" className="text-sm font-normal leading-snug">
-              I agree to share my analysis data with the SonicSIM commons.
+              I agree to share my analysis data with SonicSIM to improve results.
             </Label>
           </div>
           <DialogFooter>

@@ -4185,6 +4185,25 @@ export type Database = {
         Args: { p_error: string; p_id: string }
         Returns: undefined
       }
+      fingerprint_neighbors: {
+        Args: {
+          _artistic: number
+          _cognitive: number
+          _communication: number
+          _contextual: number
+          _emotional: number
+          _limit?: number
+          _social: number
+        }
+        Returns: {
+          avatar_url: string
+          similarity: number
+          top_shared_category: string
+          total_sources_analyzed: number
+          user_id: string
+          username: string
+        }[]
+      }
       finish_intuizi_score_jobs: { Args: { p_rows: Json }; Returns: number }
       get_method_examples: {
         Args: { _limit?: number }

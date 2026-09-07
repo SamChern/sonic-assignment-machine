@@ -19,12 +19,10 @@ import { Columns2, Disc3, Library, Users } from "lucide-react";
 export const LibraryTab = ({
   userId,
   myFingerprint,
-  allFingerprints,
   myAnalyses,
 }: {
   userId: string | null;
   myFingerprint: any;
-  allFingerprints: any[];
   myAnalyses: {
     id: string;
     source_name: string;
@@ -148,7 +146,6 @@ export const LibraryTab = ({
         <TasteNeighbors
           currentUserId={userId}
           currentFingerprint={myFingerprint}
-          allFingerprints={allFingerprints}
         />
       </div>
     </div>

@@ -41,8 +41,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";
 import { AUDIOSCOPE_CATEGORIES, categoryToken } from "@/lib/audioscope";
-import { calculateSimilarity, type FingerprintLike } from "@/lib/fingerprintMath";
-import type { UserFingerprint } from "@/hooks/useFingerprints";
+import { useFingerprintNeighbors } from "@/hooks/useFingerprintNeighbors";
 import type { SignatureVector } from "@/lib/signature/mapping";
 
 type Scores = Record<string, number>;
@@ -70,16 +69,6 @@ const toVector = (scores: Scores): SignatureVector =>
     return acc;
   }, {} as SignatureVector);
 
-const toFingerprintLike = (scores: Scores): FingerprintLike =>
-  ({
-    emotional_avg: scores.emotional || 0,
-    cognitive_avg: scores.cognitive || 0,
-    social_avg: scores.social || 0,
-    communication_avg: scores.communication || 0,
-    contextual_avg: scores.contextual || 0,
-    artistic_avg: scores.artistic || 0,
-  }) as FingerprintLike;
-
 /** One honest sentence: the two loudest axes and the quietest one. */
 const plainSentence = (result: DoorResult) => {
   const ranked = AUDIOSCOPE_CATEGORIES.map((c) => ({ c, v: Number(result.scores[c]) || 0 })).sort(
@@ -95,12 +84,10 @@ const plainSentence = (result: DoorResult) => {
 export const ConsumerDoor = ({
   isSignedIn,
   userId,
-  allFingerprints,
   onResult,
 }: {
   isSignedIn: boolean;
   userId: string | null;
-  allFingerprints: UserFingerprint[];
   /** Reports the six scores of the latest run so the page waveform can show them. */
   onResult?: (result: { name: string; scores: Scores } | null) => void;
 }) => {
@@ -281,14 +268,26 @@ export const ConsumerDoor = ({
     void run({ name: text, type: "track" });
   };
 
-  const cohorts = useMemo(() => {
-    if (!result) return [];
-    const me = toFingerprintLike(result.scores);
-    return allFingerprints
-      .map((fp) => ({ fp, similarity: calculateSimilarity(me, fp as never) }))
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 2);
-  }, [result, allFingerprints]);
+  // Neighbouring cohorts are matched on the server: other people's category
+  // averages stay private, so we only receive names and match percentages.
+  const { data: neighborRows = [] } = useFingerprintNeighbors(
+    result
+      ? {
+          emotional: Number(result.scores.emotional) || 0,
+          cognitive: Number(result.scores.cognitive) || 0,
+          social: Number(result.scores.social) || 0,
+          communication: Number(result.scores.communication) || 0,
+          contextual: Number(result.scores.contextual) || 0,
+          artistic: Number(result.scores.artistic) || 0,
+        }
+      : null,
+    2,
+  );
+
+  const cohorts = useMemo(
+    () => neighborRows.map((fp) => ({ fp, similarity: fp.similarity })),
+    [neighborRows],
+  );
 
   const share = async () => {
     const url = result?.id

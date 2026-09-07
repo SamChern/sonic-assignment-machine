@@ -7,10 +7,10 @@ import { Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { UserFingerprint } from "@/hooks/useFingerprints";
+import type { FingerprintNeighbor } from "@/hooks/useFingerprintNeighbors";
 
 export interface CohortMatch {
-  fp: UserFingerprint;
+  fp: FingerprintNeighbor;
   similarity: number;
 }
 

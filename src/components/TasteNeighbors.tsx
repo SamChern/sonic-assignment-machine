@@ -6,22 +6,19 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Users, User, Sparkles, Music, FileAudio } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  calculateSimilarity,
-  FINGERPRINT_CATEGORIES,
-  getVector,
-  type FingerprintLike,
-} from "@/lib/fingerprintMath";
+  useFingerprintNeighbors,
+  type FingerprintNeighbor,
+} from "@/hooks/useFingerprintNeighbors";
 import type { UserFingerprint } from "@/hooks/useFingerprints";
 
 interface TasteNeighborsProps {
   currentUserId: string;
   currentFingerprint: UserFingerprint | null;
-  allFingerprints: UserFingerprint[];
   limit?: number;
 }
 
 interface NeighborWithSources {
-  fingerprint: UserFingerprint;
+  neighbor: FingerprintNeighbor;
   similarity: number;
   topSharedCategory: string;
   uniqueSources: Array<{
@@ -36,40 +33,36 @@ interface NeighborWithSources {
 export const TasteNeighbors = ({
   currentUserId,
   currentFingerprint,
-  allFingerprints,
   limit = 5,
 }: TasteNeighborsProps) => {
   const [neighbors, setNeighbors] = useState<NeighborWithSources[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Compute the top-N neighbors by similarity
-  const topNeighbors = useMemo(() => {
-    if (!currentFingerprint) return [];
-
-    const others = allFingerprints.filter((fp) => fp.user_id !== currentUserId);
-    const scored = others.map((fp) => {
-      const similarity = calculateSimilarity(currentFingerprint, fp, "all");
-      // Find category where both users score highest combined
-      const myVec = getVector(currentFingerprint, "all");
-      const theirVec = getVector(fp, "all");
-      let bestIdx = 0;
-      let bestScore = -1;
-      myVec.forEach((v, i) => {
-        const combined = (v + theirVec[i]) / 2;
-        if (combined > bestScore) {
-          bestScore = combined;
-          bestIdx = i;
+  // Other people's category averages are private; the server ranks the matches
+  // and returns only display details plus a match percentage.
+  const { data: neighborRows = [], isLoading: matching } = useFingerprintNeighbors(
+    currentFingerprint
+      ? {
+          emotional: Number(currentFingerprint.emotional_avg) || 0,
+          cognitive: Number(currentFingerprint.cognitive_avg) || 0,
+          social: Number(currentFingerprint.social_avg) || 0,
+          communication: Number(currentFingerprint.communication_avg) || 0,
+          contextual: Number(currentFingerprint.contextual_avg) || 0,
+          artistic: Number(currentFingerprint.artistic_avg) || 0,
         }
-      });
-      return {
-        fingerprint: fp,
-        similarity,
-        topSharedCategory: FINGERPRINT_CATEGORIES[bestIdx].name,
-      };
-    });
+      : null,
+    limit,
+  );
 
-    return scored.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
-  }, [allFingerprints, currentFingerprint, currentUserId, limit]);
+  const topNeighbors = useMemo(
+    () =>
+      neighborRows.map((n) => ({
+        neighbor: n,
+        similarity: n.similarity,
+        topSharedCategory: n.top_shared_category || "Emotional",
+      })),
+    [neighborRows],
+  );
 
   // Fetch sources for top neighbors and the current user, then diff
   useEffect(() => {
@@ -82,7 +75,7 @@ export const TasteNeighbors = ({
     const loadSources = async () => {
       setLoading(true);
 
-      const neighborIds = topNeighbors.map((n) => n.fingerprint.user_id);
+      const neighborIds = topNeighbors.map((n) => n.neighbor.user_id);
 
       // Fetch in parallel
       const [{ data: mySources }, { data: theirSources }] = await Promise.all([
@@ -105,7 +98,7 @@ export const TasteNeighbors = ({
       });
 
       const enriched: NeighborWithSources[] = topNeighbors.map((n) => {
-        const theirs = (theirSources || []).filter((s) => s.user_id === n.fingerprint.user_id);
+        const theirs = (theirSources || []).filter((s) => s.user_id === n.neighbor.user_id);
         const unique = theirs
           .filter((s) => {
             const sk = s.spotify_id ? `spotify:${s.spotify_id}` : null;
@@ -145,7 +138,7 @@ export const TasteNeighbors = ({
     );
   }
 
-  if (allFingerprints.length <= 1) {
+  if (!matching && topNeighbors.length === 0) {
     return (
       <Card className="p-8 text-center bg-card/80">
         <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -173,25 +166,25 @@ export const TasteNeighbors = ({
         </div>
       </Card>
 
-      {loading && neighbors.length === 0 ? (
+      {(matching || loading) && neighbors.length === 0 ? (
         <Card className="p-6 text-center text-muted-foreground">Finding neighbors…</Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {neighbors.map((n) => (
-            <Card key={n.fingerprint.user_id} className="p-4 bg-card/80">
+            <Card key={n.neighbor.user_id} className="p-4 bg-card/80">
               <div className="flex items-center gap-3 mb-3">
                 <Avatar className="h-12 w-12">
-                  <AvatarImage src={n.fingerprint.avatar_url || undefined} />
+                  <AvatarImage src={n.neighbor.avatar_url || undefined} />
                   <AvatarFallback>
                     <User className="h-5 w-5" />
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-foreground truncate">
-                    {n.fingerprint.username || "Anonymous"}
+                    {n.neighbor.username || "Anonymous"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {n.fingerprint.total_sources_analyzed} sources • shared strength:{" "}
+                    {n.neighbor.total_sources_analyzed} sources • shared strength:{" "}
                     {n.topSharedCategory}
                   </p>
                 </div>

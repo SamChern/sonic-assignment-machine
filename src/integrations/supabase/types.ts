@@ -246,13 +246,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "audio_source_tags_audio_source_id_fkey"
-            columns: ["audio_source_id"]
-            isOneToOne: false
-            referencedRelation: "audio_sources_public"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "audio_source_tags_node_id_fkey"
             columns: ["node_id"]
             isOneToOne: false
@@ -399,13 +392,6 @@ export type Database = {
             columns: ["audio_source_id"]
             isOneToOne: false
             referencedRelation: "audio_sources"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "catalog_items_audio_source_id_fkey"
-            columns: ["audio_source_id"]
-            isOneToOne: false
-            referencedRelation: "audio_sources_public"
             referencedColumns: ["id"]
           },
           {
@@ -816,13 +802,6 @@ export type Database = {
             columns: ["audio_source_id"]
             isOneToOne: false
             referencedRelation: "audio_sources"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "creator_works_audio_source_id_fkey"
-            columns: ["audio_source_id"]
-            isOneToOne: false
-            referencedRelation: "audio_sources_public"
             referencedColumns: ["id"]
           },
         ]
@@ -1642,13 +1621,6 @@ export type Database = {
             columns: ["audio_source_id"]
             isOneToOne: false
             referencedRelation: "audio_sources"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "intuizi_identifiers_audio_source_id_fkey"
-            columns: ["audio_source_id"]
-            isOneToOne: false
-            referencedRelation: "audio_sources_public"
             referencedColumns: ["id"]
           },
         ]
@@ -3657,13 +3629,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "source_analyses_audio_source_id_fkey"
-            columns: ["audio_source_id"]
-            isOneToOne: false
-            referencedRelation: "audio_sources_public"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "source_analyses_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -4001,45 +3966,7 @@ export type Database = {
       }
     }
     Views: {
-      audio_sources_public: {
-        Row: {
-          album_image: string | null
-          album_name: string | null
-          analysis_status: string | null
-          artists: string[] | null
-          created_at: string | null
-          id: string | null
-          name: string | null
-          source_type: string | null
-          spotify_id: string | null
-          user_id: string | null
-        }
-        Insert: {
-          album_image?: string | null
-          album_name?: string | null
-          analysis_status?: string | null
-          artists?: string[] | null
-          created_at?: string | null
-          id?: string | null
-          name?: string | null
-          source_type?: string | null
-          spotify_id?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          album_image?: string | null
-          album_name?: string | null
-          analysis_status?: string | null
-          artists?: string[] | null
-          created_at?: string | null
-          id?: string | null
-          name?: string | null
-          source_type?: string | null
-          spotify_id?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       acquire_intuizi_lease: {
@@ -4472,6 +4399,21 @@ export type Database = {
       prune_guest_run_limits: {
         Args: { p_keep_days?: number }
         Returns: number
+      }
+      public_audio_sources: {
+        Args: { _limit?: number; _user_ids: string[] }
+        Returns: {
+          album_image: string
+          album_name: string
+          analysis_status: string
+          artists: string[]
+          created_at: string
+          id: string
+          name: string
+          source_type: string
+          spotify_id: string
+          user_id: string
+        }[]
       }
       read_ingest_rollup_subject_batch: {
         Args: {

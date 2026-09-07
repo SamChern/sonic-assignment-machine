@@ -3999,6 +3999,10 @@ export type Database = {
           username: string
         }[]
       }
+      admin_listener_population_stats: {
+        Args: { p_days?: number; p_tag_sample?: number }
+        Returns: Json
+      }
       admin_prune_analysis_telemetry: {
         Args: {
           p_cache_idle_days?: number

@@ -40,13 +40,37 @@ interface AudioCoverage {
   service_ok?: boolean;
 }
 
+/** Remembers how many tracks were waiting when this catch-up run started. */
+const BASELINE_KEY = "sonicsim.clapGroundingBaseline";
+
+const readBaseline = (): number | null => {
+  try {
+    const raw = localStorage.getItem(BASELINE_KEY);
+    const n = raw === null ? NaN : Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeBaseline = (value: number | null) => {
+  try {
+    if (value === null) localStorage.removeItem(BASELINE_KEY);
+    else localStorage.setItem(BASELINE_KEY, String(value));
+  } catch {
+    /* storage unavailable — tracker just falls back to live counts */
+  }
+};
+
 export const SemanticServicePanel = () => {
   const [health, setHealth] = useState<HealthState | null>(null);
   const [coverage, setCoverage] = useState<Coverage | null>(null);
   const [audio, setAudio] = useState<AudioCoverage | null>(null);
+  const [baseline, setBaseline] = useState<number | null>(() => readBaseline());
   const [checking, setChecking] = useState(false);
   const [running, setRunning] = useState(false);
   const [grounding, setGrounding] = useState(false);
+
 
   const refresh = useCallback(async (announce = false) => {
     setChecking(true);
@@ -73,7 +97,19 @@ export const SemanticServicePanel = () => {
       }
     }
     if (c) setCoverage(c as Coverage);
-    if (a) setAudio(a as AudioCoverage);
+    if (a) {
+      const cov = a as AudioCoverage;
+      setAudio(cov);
+      setBaseline((prev) => {
+        const waiting = Number(cov.ungrounded_sources) || 0;
+        if (prev === null || waiting > prev) {
+          const next = waiting > 0 ? waiting : null;
+          writeBaseline(next);
+          return next;
+        }
+        return prev;
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -117,7 +153,13 @@ export const SemanticServicePanel = () => {
     ? Math.round((coverage.embedded_nodes / coverage.total_nodes) * 100)
     : 0;
 
+  const waiting = audio?.ungrounded_sources ?? 0;
+  const target = baseline ?? waiting;
+  const done = Math.max(0, Math.min(target, target - waiting));
+  const catchUpPct = target > 0 ? Math.round((done / target) * 100) : 100;
+
   const meta = health?.health ?? null;
+
 
   const rows: Array<[string, string]> = [
     ["Model", pickStr(meta, "model") ?? "not reported"],
@@ -208,7 +250,40 @@ export const SemanticServicePanel = () => {
             {grounding ? "Listening…" : "Catch up grounding"}
           </Button>
         </div>
+
+        {audio ? (
+          <div className="mt-3 space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              <span>Catch-up progress</span>
+              <span className="font-mono">
+                {done.toLocaleString()} / {target.toLocaleString()} done ({catchUpPct}%) ·{" "}
+                {waiting.toLocaleString()} left
+              </span>
+            </div>
+            <Progress value={catchUpPct} className="h-2" aria-label="Grounding catch-up progress" />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-muted-foreground">
+                {waiting === 0
+                  ? "Every uploaded track has a grounding vector."
+                  : `Counting down from the ${target.toLocaleString()} tracks waiting when this catch-up started.`}
+              </p>
+              {baseline !== null ? (
+                <button
+                  type="button"
+                  className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  onClick={() => {
+                    writeBaseline(waiting > 0 ? waiting : null);
+                    setBaseline(waiting > 0 ? waiting : null);
+                  }}
+                >
+                  Reset counter
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </div>
+
 
       <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {rows.map(([label, value]) => (

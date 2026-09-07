@@ -3999,6 +3999,10 @@ export type Database = {
           username: string
         }[]
       }
+      admin_listener_audience_insights: {
+        Args: { p_per_family?: number; p_sample?: number }
+        Returns: Json
+      }
       admin_listener_population_stats: {
         Args: { p_days?: number; p_tag_sample?: number }
         Returns: Json

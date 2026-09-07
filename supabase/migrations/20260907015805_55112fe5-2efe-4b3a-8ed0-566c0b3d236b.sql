@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_intuizi_identifiers_updated_at ON public.intuizi_identifiers USING btree (updated_at DESC NULLS LAST);

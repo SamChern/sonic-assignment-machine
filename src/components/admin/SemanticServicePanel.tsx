@@ -188,6 +188,28 @@ export const SemanticServicePanel = () => {
         <Progress value={pct} className="h-2" />
       </div>
 
+      <div className="rounded-md border border-border/60 bg-background/40 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs font-medium">Uploaded tracks grounded</p>
+            <p className="text-[11px] text-muted-foreground">
+              {audio
+                ? `${audio.grounded_sources.toLocaleString()} listened to · ${audio.ungrounded_sources.toLocaleString()} waiting for the service`
+                : "Reading grounding coverage…"}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void groundAudio()}
+            disabled={grounding || !health?.ok || (audio?.ungrounded_sources ?? 0) === 0}
+          >
+            <Play className={`mr-1 h-4 w-4 ${grounding ? "animate-pulse" : ""}`} />
+            {grounding ? "Listening…" : "Catch up grounding"}
+          </Button>
+        </div>
+      </div>
+
       <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {rows.map(([label, value]) => (
           <div key={label} className="rounded-md border border-border/60 bg-background/40 p-3">

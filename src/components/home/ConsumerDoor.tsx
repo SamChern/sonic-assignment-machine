@@ -41,8 +41,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { AnalyzeAudioResponse } from "@/lib/analyzeAudio";
 import { AUDIOSCOPE_CATEGORIES, categoryToken } from "@/lib/audioscope";
-import { calculateSimilarity, type FingerprintLike } from "@/lib/fingerprintMath";
-import type { UserFingerprint } from "@/hooks/useFingerprints";
+import { useFingerprintNeighbors } from "@/hooks/useFingerprintNeighbors";
 import type { SignatureVector } from "@/lib/signature/mapping";
 
 type Scores = Record<string, number>;
@@ -70,16 +69,6 @@ const toVector = (scores: Scores): SignatureVector =>
     return acc;
   }, {} as SignatureVector);
 
-const toFingerprintLike = (scores: Scores): FingerprintLike =>
-  ({
-    emotional_avg: scores.emotional || 0,
-    cognitive_avg: scores.cognitive || 0,
-    social_avg: scores.social || 0,
-    communication_avg: scores.communication || 0,
-    contextual_avg: scores.contextual || 0,
-    artistic_avg: scores.artistic || 0,
-  }) as FingerprintLike;
-
 /** One honest sentence: the two loudest axes and the quietest one. */
 const plainSentence = (result: DoorResult) => {
   const ranked = AUDIOSCOPE_CATEGORIES.map((c) => ({ c, v: Number(result.scores[c]) || 0 })).sort(
@@ -95,12 +84,10 @@ const plainSentence = (result: DoorResult) => {
 export const ConsumerDoor = ({
   isSignedIn,
   userId,
-  allFingerprints,
   onResult,
 }: {
   isSignedIn: boolean;
   userId: string | null;
-  allFingerprints: UserFingerprint[];
   /** Reports the six scores of the latest run so the page waveform can show them. */
   onResult?: (result: { name: string; scores: Scores } | null) => void;
 }) => {

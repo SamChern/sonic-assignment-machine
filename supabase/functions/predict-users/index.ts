@@ -489,7 +489,11 @@ Deno.serve(async (req) => {
         p_limit: 50_000,
       });
       if (memberErr) throw new Error(`cohort selection failed: ${memberErr.message}`);
-      keys = ((memberRows ?? []) as { subject_key: string }[]).map((r) => String(r.subject_key));
+      const fitByKey = new Map<string, number>();
+      for (const r of (memberRows ?? []) as { subject_key: string; fit: number }[]) {
+        fitByKey.set(String(r.subject_key), Number(r.fit));
+      }
+      keys = [...fitByKey.keys()];
       if (!keys.length && Array.isArray(body.member_keys)) {
         keys = (body.member_keys as unknown[]).map(String).slice(0, 50_000);
       }
@@ -504,7 +508,7 @@ Deno.serve(async (req) => {
       const slug = `predict-${organizationId.slice(0, 8)}-${Date.now().toString(36)}`;
       const narrative = `Seeded from ${
         body.brief ? "a brand brief" : "exemplar records"
-      }; kNN in the shared embedding space, sliders re-weighted; similarity floor ${
+      }; matched across the full listener population on the six categories, with sampled-audio profiles favoured; minimum match strength ${
         threshold.toFixed(2)
       }.`;
 
@@ -517,7 +521,6 @@ Deno.serve(async (req) => {
           centroid: vector && vector.length ? (vector as unknown as string) : null,
           member_count: keys.length,
           narrative,
-          export_eligible: keys.length >= 1000,
         })
         .select("id, slug, member_count, export_eligible")
         .single();
@@ -530,7 +533,12 @@ Deno.serve(async (req) => {
         const rows = keys.slice(i, i + CHUNK).map((key) => {
           const inHoldout = isHoldout(slug, key, pctHoldout);
           if (inHoldout) holdout++;
-          return { cohort_id: cohortId, subject_key: key, similarity: null, holdout: inHoldout };
+          return {
+            cohort_id: cohortId,
+            subject_key: key,
+            similarity: fitByKey.get(key) ?? null,
+            holdout: inHoldout,
+          };
         });
         const { error } = await admin.from("sonic_cohort_members").upsert(rows, {
           onConflict: "cohort_id,subject_key",

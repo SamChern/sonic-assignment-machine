@@ -34,17 +34,26 @@ const pickStr = (o: Record<string, unknown> | null | undefined, key: string): st
   return null;
 };
 
+interface AudioCoverage {
+  ungrounded_sources: number;
+  grounded_sources: number;
+  service_ok?: boolean;
+}
+
 export const SemanticServicePanel = () => {
   const [health, setHealth] = useState<HealthState | null>(null);
   const [coverage, setCoverage] = useState<Coverage | null>(null);
+  const [audio, setAudio] = useState<AudioCoverage | null>(null);
   const [checking, setChecking] = useState(false);
   const [running, setRunning] = useState(false);
+  const [grounding, setGrounding] = useState(false);
 
   const refresh = useCallback(async (announce = false) => {
     setChecking(true);
-    const [{ data: h }, { data: c }] = await Promise.all([
+    const [{ data: h }, { data: c }, { data: a }] = await Promise.all([
       supabase.functions.invoke("semantic-embed", { body: { action: "health" } }),
       supabase.functions.invoke("semantic-backfill", { body: { status_only: true } }),
+      supabase.functions.invoke("clap-ground-audio", { body: { status_only: true } }),
     ]);
     setChecking(false);
     if (h) {
@@ -64,6 +73,7 @@ export const SemanticServicePanel = () => {
       }
     }
     if (c) setCoverage(c as Coverage);
+    if (a) setAudio(a as AudioCoverage);
   }, []);
 
   useEffect(() => {
@@ -86,9 +96,27 @@ export const SemanticServicePanel = () => {
     void refresh();
   };
 
+  /** Catch up every upload that never received a grounding vector. */
+  const groundAudio = async () => {
+    setGrounding(true);
+    const { data, error } = await supabase.functions.invoke("clap-ground-audio", {
+      body: { limit: 50 },
+    });
+    setGrounding(false);
+    if (error || !data?.success) {
+      toast.error(data?.error ?? error?.message ?? "Audio grounding failed");
+    } else {
+      toast.success(
+        `Grounded ${data.grounded} of ${data.considered} tracks (${data.ungrounded_sources} still waiting)`,
+      );
+    }
+    void refresh();
+  };
+
   const pct = coverage && coverage.total_nodes > 0
     ? Math.round((coverage.embedded_nodes / coverage.total_nodes) * 100)
     : 0;
+
   const meta = health?.health ?? null;
 
   const rows: Array<[string, string]> = [

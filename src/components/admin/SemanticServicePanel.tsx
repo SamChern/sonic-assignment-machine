@@ -153,7 +153,13 @@ export const SemanticServicePanel = () => {
     ? Math.round((coverage.embedded_nodes / coverage.total_nodes) * 100)
     : 0;
 
+  const waiting = audio?.ungrounded_sources ?? 0;
+  const target = baseline ?? waiting;
+  const done = Math.max(0, Math.min(target, target - waiting));
+  const catchUpPct = target > 0 ? Math.round((done / target) * 100) : 100;
+
   const meta = health?.health ?? null;
+
 
   const rows: Array<[string, string]> = [
     ["Model", pickStr(meta, "model") ?? "not reported"],

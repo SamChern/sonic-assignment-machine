@@ -34,6 +34,11 @@ export interface KnnMatch {
   axis_fit: number;
   score: number;
   scores: Record<CategoryKey, number>;
+  /** True when real audio was sampled for this listener profile (CLAP). */
+  audio_grounded?: boolean;
+  grounding_level?: string;
+  identifier_count?: number;
+  confidence?: number | null;
 }
 
 export interface CurvePoint {

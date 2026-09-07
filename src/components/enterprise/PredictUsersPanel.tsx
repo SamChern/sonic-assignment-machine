@@ -67,6 +67,7 @@ const PredictUsersPanel = ({
   const [curve, setCurve] = useState<CurvePoint[]>([]);
   const [threshold, setThreshold] = useState(0.6);
   const [retrieved, setRetrieved] = useState(0);
+  const [audioGrounded, setAudioGrounded] = useState(0);
 
   // Adopt the active organization calibration's weights as the starting point.
   useEffect(() => {
@@ -218,7 +219,8 @@ const PredictUsersPanel = ({
       const data = await call({ action: "match", vector, target, weights });
       setKnn((data.matches as KnnMatch[]) ?? []);
       setCurve((data.curve as CurvePoint[]) ?? []);
-      setRetrieved(Number(data.retrieved ?? 0));
+      setRetrieved(Number(data.population ?? data.retrieved ?? 0));
+      setAudioGrounded(Number(data.audio_grounded ?? 0));
       if (typeof data.default_threshold === "number") {
         setThreshold(Number(data.default_threshold));
       }
@@ -251,12 +253,25 @@ const PredictUsersPanel = ({
     [reweighted, threshold],
   );
 
+  /**
+   * How many people actually match at this minimum. The list on screen is only
+   * the strongest hundred, so the count comes from the population curve the
+   * backend measured over the whole listener dataset.
+   */
+  const matchedAtThreshold = useMemo(() => {
+    if (!curve.length) return atThreshold.length;
+    const point = curve.reduce((best, p) =>
+      Math.abs(p.threshold - threshold) < Math.abs(best.threshold - threshold) ? p : best,
+    );
+    return point.matched;
+  }, [curve, threshold, atThreshold.length]);
+
   /* ------------------------------------------------------------------- saving */
 
   const saveRun = useCallback(async () => {
     setSaving(true);
     try {
-      if (reweighted && atThreshold.length) {
+      if (reweighted && matchedAtThreshold > 0) {
         const data = await call({
           action: "save_cohort",
           vector,
@@ -266,6 +281,7 @@ const PredictUsersPanel = ({
           brief: seedOrigin === "brief" ? brief : null,
           name: brief.trim() ? brief.trim().slice(0, 80) : "Predicted look-alikes",
           member_keys: atThreshold.map((m) => m.key),
+          audio_source_ids: atThreshold.filter((m) => m.audio_grounded).map((m) => m.key),
         });
         toast({
           title: "Cohort saved",
@@ -308,6 +324,7 @@ const PredictUsersPanel = ({
   }, [
     reweighted,
     atThreshold,
+    matchedAtThreshold,
     call,
     vector,
     threshold,
@@ -366,7 +383,8 @@ const PredictUsersPanel = ({
           retrieved={retrieved}
           threshold={threshold}
           setThreshold={setThreshold}
-          atThresholdCount={atThreshold.length}
+          atThresholdCount={matchedAtThreshold}
+          audioGrounded={audioGrounded}
         />
       )}
 

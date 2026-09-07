@@ -315,22 +315,53 @@ Deno.serve(async (req) => {
         }));
       }
 
-      // Slider re-weighting: constrain the kNN ranking, never replace it.
-      const wSum = CATEGORIES.reduce((s, c) => s + Math.max(0, weights[c]), 0) || 1;
-      const ranked = neighbours
-        .map((n) => {
-          let dist = 0;
-          for (const c of CATEGORIES) {
-            dist += (Math.max(0, weights[c]) / wSum) * Math.abs(n.scores[c] - target[c]) / 100;
-          }
-          const axisFit = clamp(1 - dist, 0, 1);
-          return {
-            ...n,
-            axis_fit: axisFit,
-            score: 0.65 * clamp(n.knn_similarity, 0, 1) + 0.35 * axisFit,
-          };
-        })
-        .sort((a, b) => b.score - a.score);
+      // The listener population itself: every scored Intuizi identifier carries a
+      // six-axis profile, so matching runs over that whole dataset in SQL rather
+      // than over the handful of audio profiles the kNN step could retrieve. The
+      // CLAP neighbours are not discarded — they mark which listener profiles have
+      // real sampled audio behind them and give those a bounded boost.
+      const audioBoost = await controlNumber(admin, "predict.audio_boost", 0.15, {
+        min: 0,
+        max: 0.5,
+      });
+      const { data: popRaw, error: popErr } = await admin.rpc("match_listener_profiles", {
+        p_target: target as unknown as Record<string, number>,
+        p_weights: weights as unknown as Record<string, number>,
+        p_limit: 100,
+        p_audio_source_ids: neighbours.map((n) => n.key),
+        p_audio_boost: audioBoost,
+      });
+      if (popErr) throw new Error(`listener match failed: ${popErr.message}`);
+
+      const pop = (popRaw ?? {}) as {
+        population?: number;
+        audio_grounded?: number;
+        histogram?: { bucket: number; count: number }[];
+        matches?: Record<string, unknown>[];
+      };
+      const population = Number(pop.population ?? 0);
+      const histogram = pop.histogram ?? [];
+
+      const ranked = (pop.matches ?? []).map((m) => {
+        const fit = Number(m.fit ?? 0);
+        return {
+          key: String(m.audio_source_id),
+          label: String(m.label ?? "").slice(0, 160) || String(m.audio_source_id).slice(0, 8),
+          knn_similarity: fit,
+          axis_fit: fit,
+          score: fit,
+          audio_grounded: Boolean(m.audio_grounded),
+          grounding_level: String(m.grounding_level ?? "text-only"),
+          identifier_count: Number(m.identifier_count ?? 1),
+          confidence: m.confidence === null ? null : Number(m.confidence),
+          scores: Object.fromEntries(
+            CATEGORIES.map((c) => [
+              c,
+              Number((m.scores as Record<string, unknown> | undefined)?.[c] ?? 0),
+            ]),
+          ) as Scores,
+        };
+      });
 
       // Confidence band from the Welford priors' std.
       const { data: calRows } = await admin
@@ -357,22 +388,28 @@ Deno.serve(async (req) => {
       /** Band width as a share of matched count: priors' std / 100, capped. */
       const bandShare = clamp(meanStd / 100, 0.03, 0.4);
 
-      // The curve must span the similarities actually retrieved. A fixed
-      // 0.40-0.95 sweep reads as "0 matched" whenever the embedding space is
-      // tighter than that, so the sweep and the opening threshold are derived
-      // from the retrieved distribution and the configured floor is only used
-      // when it is reachable.
-      const sims = ranked
-        .map((r) => clamp(r.knn_similarity, 0, 1))
-        .sort((a, b) => a - b);
-      const quantile = (q: number) =>
-        sims.length ? sims[clamp(Math.floor(q * (sims.length - 1)), 0, sims.length - 1)] : 0;
-      const maxSim = sims.length ? sims[sims.length - 1] : 0;
-      const lowEdge = sims.length ? Math.max(0, quantile(0.05) - 0.01) : 0.4;
-      const highEdge = sims.length ? Math.max(lowEdge + 0.01, maxSim) : 0.95;
-      const usableFloor = defaultFloor <= maxSim
-        ? defaultFloor
-        : Number(clamp(quantile(0.5), lowEdge, highEdge).toFixed(3));
+      /** Real population count at a minimum match strength, from the histogram. */
+      const countAtOrAbove = (threshold: number) =>
+        histogram
+          .filter((h) => Number(h.bucket) >= Math.ceil(threshold * 100))
+          .reduce((s, h) => s + Number(h.count ?? 0), 0);
+
+      // The curve spans the strengths this population actually reaches, so the
+      // slider never lands in a region where nobody can match.
+      const occupied = histogram
+        .filter((h) => Number(h.count ?? 0) > 0)
+        .map((h) => Number(h.bucket));
+      const maxBucket = occupied.length ? Math.max(...occupied) : 100;
+      const minBucket = occupied.length ? Math.min(...occupied) : 40;
+      const lowEdge = clamp(minBucket / 100, 0, 0.95);
+      const highEdge = Math.max(lowEdge + 0.05, clamp(maxBucket / 100, 0.05, 1));
+      const usableFloor = Number(
+        clamp(
+          await controlNumber(admin, "predict.min_similarity", 0.55, { min: 0, max: 1 }),
+          lowEdge,
+          highEdge,
+        ).toFixed(3),
+      );
 
       const curve: {
         threshold: number;
@@ -384,16 +421,13 @@ Deno.serve(async (req) => {
       const steps = 12;
       for (let i = 0; i < steps; i++) {
         const threshold = Number((lowEdge + ((highEdge - lowEdge) * i) / (steps - 1)).toFixed(3));
-        const hits = ranked.filter((r) => r.knn_similarity >= threshold);
-        const meanSim = hits.length
-          ? hits.reduce((s, r) => s + r.knn_similarity, 0) / hits.length
-          : 0;
+        const matched = countAtOrAbove(threshold);
         curve.push({
           threshold,
-          matched: hits.length,
-          low: Math.max(0, Math.round(hits.length * (1 - bandShare))),
-          high: Math.round(hits.length * (1 + bandShare)),
-          mean_similarity: Number(meanSim.toFixed(4)),
+          matched,
+          low: Math.max(0, Math.round(matched * (1 - bandShare))),
+          high: Math.round(matched * (1 + bandShare)),
+          mean_similarity: Number(((threshold + highEdge) / 2).toFixed(4)),
         });
       }
 
@@ -404,7 +438,10 @@ Deno.serve(async (req) => {
         default_threshold: usableFloor,
         configured_floor: defaultFloor,
         similarity_range: { min: Number(lowEdge.toFixed(4)), max: Number(highEdge.toFixed(4)) },
-        retrieved: neighbours.length,
+        population,
+        audio_grounded: Number(pop.audio_grounded ?? 0),
+        audio_neighbours: neighbours.length,
+        retrieved: population,
         band_share: bandShare,
         category_std: stdByCat,
         curve,
@@ -415,32 +452,63 @@ Deno.serve(async (req) => {
           knn_similarity: Number(r.knn_similarity.toFixed(4)),
           axis_fit: Number(r.axis_fit.toFixed(4)),
           score: Number(r.score.toFixed(4)),
+          audio_grounded: r.audio_grounded,
+          grounding_level: r.grounding_level,
+          identifier_count: r.identifier_count,
+          confidence: r.confidence,
           scores: r.scores,
         })),
       });
     }
+
 
     /* ------------------------------------------------------------- save_cohort */
     if (action === "save_cohort") {
       const vector = parseVector(body.vector);
       const threshold = clamp(Number(body.threshold ?? 0.6), 0, 1);
       const name = String(body.name ?? "").trim().slice(0, 120) || "Predicted look-alikes";
-      const keys = Array.isArray(body.member_keys)
-        ? (body.member_keys as unknown[]).map(String).slice(0, 50_000)
-        : [];
       const target = { ...emptyScores(50), ...(body.target as Partial<Scores> ?? {}) } as Scores;
       const weights = { ...emptyScores(1), ...(body.weights as Partial<Scores> ?? {}) } as Scores;
+
+      // The audience is everyone in the listener population who clears the chosen
+      // minimum, not just the hundred rows the screen showed. The client's own
+      // key list is only a fallback for callers that pass an explicit selection.
+      const audioBoost = await controlNumber(admin, "predict.audio_boost", 0.15, {
+        min: 0,
+        max: 0.5,
+      });
+      let keys: string[] = [];
+      const { data: memberRows, error: memberErr } = await admin.rpc("select_listener_cohort", {
+        p_target: target as unknown as Record<string, number>,
+        p_weights: weights as unknown as Record<string, number>,
+        p_threshold: threshold,
+        p_audio_source_ids: Array.isArray(body.audio_source_ids)
+          ? (body.audio_source_ids as unknown[]).map(String)
+          : null,
+        p_audio_boost: audioBoost,
+        p_limit: 50_000,
+      });
+      if (memberErr) throw new Error(`cohort selection failed: ${memberErr.message}`);
+      const fitByKey = new Map<string, number>();
+      for (const r of (memberRows ?? []) as { subject_key: string; fit: number }[]) {
+        fitByKey.set(String(r.subject_key), Number(r.fit));
+      }
+      keys = [...fitByKey.keys()];
+      if (!keys.length && Array.isArray(body.member_keys)) {
+        keys = (body.member_keys as unknown[]).map(String).slice(0, 50_000);
+      }
 
       if (!keys.length) {
         return json({ success: false, error: "No matches at this threshold to save." }, 400);
       }
+
 
       const pctHoldout = await holdoutPct(admin);
 
       const slug = `predict-${organizationId.slice(0, 8)}-${Date.now().toString(36)}`;
       const narrative = `Seeded from ${
         body.brief ? "a brand brief" : "exemplar records"
-      }; kNN in the shared embedding space, sliders re-weighted; similarity floor ${
+      }; matched across the full listener population on the six categories, with sampled-audio profiles favoured; minimum match strength ${
         threshold.toFixed(2)
       }.`;
 
@@ -453,7 +521,6 @@ Deno.serve(async (req) => {
           centroid: vector && vector.length ? (vector as unknown as string) : null,
           member_count: keys.length,
           narrative,
-          export_eligible: keys.length >= 1000,
         })
         .select("id, slug, member_count, export_eligible")
         .single();
@@ -466,7 +533,12 @@ Deno.serve(async (req) => {
         const rows = keys.slice(i, i + CHUNK).map((key) => {
           const inHoldout = isHoldout(slug, key, pctHoldout);
           if (inHoldout) holdout++;
-          return { cohort_id: cohortId, subject_key: key, similarity: null, holdout: inHoldout };
+          return {
+            cohort_id: cohortId,
+            subject_key: key,
+            similarity: fitByKey.get(key) ?? null,
+            holdout: inHoldout,
+          };
         });
         const { error } = await admin.from("sonic_cohort_members").upsert(rows, {
           onConflict: "cohort_id,subject_key",
@@ -508,7 +580,43 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* ------------------------------------------------------------- population */
+    // Dataset status, and an explicit rebuild from the activation data.
+    if (action === "population" || action === "refresh_population") {
+      if (action === "refresh_population") {
+        const { data: written, error: refreshErr } = await admin.rpc(
+          "refresh_listener_profiles",
+          { p_limit: 1_000_000 },
+        );
+        if (refreshErr) throw new Error(`refresh failed: ${refreshErr.message}`);
+        const { count } = await admin
+          .from("listener_profiles")
+          .select("audio_source_id", { count: "exact", head: true });
+        return json({
+          success: true,
+          action,
+          written: Number(written ?? 0),
+          population: Number(count ?? 0),
+        });
+      }
+
+      const [{ count: total }, { count: grounded }] = await Promise.all([
+        admin.from("listener_profiles").select("audio_source_id", { count: "exact", head: true }),
+        admin
+          .from("listener_profiles")
+          .select("audio_source_id", { count: "exact", head: true })
+          .eq("has_audio_embedding", true),
+      ]);
+      return json({
+        success: true,
+        action,
+        population: Number(total ?? 0),
+        audio_grounded: Number(grounded ?? 0),
+      });
+    }
+
     return json({ success: false, error: `unknown action "${action}"` }, 400);
+
   } catch (e) {
     const status = e instanceof AuthzError ? e.status : 500;
     console.error("predict-users failed:", (e as Error).message);

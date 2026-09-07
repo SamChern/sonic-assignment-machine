@@ -90,11 +90,10 @@ export const TasteNeighbors = ({
           .from("audio_sources")
           .select("id, name, spotify_id")
           .eq("user_id", currentUserId),
-        supabase
-          .from("audio_sources")
-          .select("id, user_id, name, spotify_id, album_image, source_type, artists")
-          .in("user_id", neighborIds),
+        // Other people's tracks come through a limited public listing (no files or raw features).
+        supabase.rpc("public_audio_sources", { _user_ids: neighborIds, _limit: 400 }),
       ]);
+
 
       if (cancelled) return;
 

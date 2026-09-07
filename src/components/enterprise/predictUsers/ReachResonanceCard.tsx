@@ -19,6 +19,8 @@ interface ReachResonanceCardProps {
   threshold: number;
   setThreshold: (value: number) => void;
   atThresholdCount: number;
+  /** How many of the people considered have real sampled audio behind them. */
+  audioGrounded?: number;
 }
 
 /** Audience size vs. match strength tradeoff curve. */
@@ -28,6 +30,7 @@ const ReachResonanceCard = ({
   threshold,
   setThreshold,
   atThresholdCount,
+  audioGrounded = 0,
 }: ReachResonanceCardProps) => {
   // The usable range follows the strengths actually found, so the slider never
   // sits in a region where nobody can match.
@@ -42,12 +45,17 @@ const ReachResonanceCard = ({
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold">Audience size vs. match strength</h3>
         <Badge variant="outline" className="text-[11px]">
-          {retrieved} people considered
+          {retrieved.toLocaleString()} people considered
         </Badge>
+        {audioGrounded > 0 && (
+          <Badge variant="outline" className="text-[11px]">
+            {audioGrounded.toLocaleString()} with sampled audio
+          </Badge>
+        )}
         <Badge variant="outline" className="text-[11px]">
           minimum match strength {Math.round(threshold * 100)}%
         </Badge>
-        <Badge className="text-[11px]">{atThresholdCount} people matched</Badge>
+        <Badge className="text-[11px]">{atThresholdCount.toLocaleString()} people matched</Badge>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         Drag the slider: a higher minimum match strength means a stronger fit but fewer people.

@@ -467,15 +467,37 @@ Deno.serve(async (req) => {
       const vector = parseVector(body.vector);
       const threshold = clamp(Number(body.threshold ?? 0.6), 0, 1);
       const name = String(body.name ?? "").trim().slice(0, 120) || "Predicted look-alikes";
-      const keys = Array.isArray(body.member_keys)
-        ? (body.member_keys as unknown[]).map(String).slice(0, 50_000)
-        : [];
       const target = { ...emptyScores(50), ...(body.target as Partial<Scores> ?? {}) } as Scores;
       const weights = { ...emptyScores(1), ...(body.weights as Partial<Scores> ?? {}) } as Scores;
+
+      // The audience is everyone in the listener population who clears the chosen
+      // minimum, not just the hundred rows the screen showed. The client's own
+      // key list is only a fallback for callers that pass an explicit selection.
+      const audioBoost = await controlNumber(admin, "predict.audio_boost", 0.15, {
+        min: 0,
+        max: 0.5,
+      });
+      let keys: string[] = [];
+      const { data: memberRows, error: memberErr } = await admin.rpc("select_listener_cohort", {
+        p_target: target as unknown as Record<string, number>,
+        p_weights: weights as unknown as Record<string, number>,
+        p_threshold: threshold,
+        p_audio_source_ids: Array.isArray(body.audio_source_ids)
+          ? (body.audio_source_ids as unknown[]).map(String)
+          : null,
+        p_audio_boost: audioBoost,
+        p_limit: 50_000,
+      });
+      if (memberErr) throw new Error(`cohort selection failed: ${memberErr.message}`);
+      keys = ((memberRows ?? []) as { subject_key: string }[]).map((r) => String(r.subject_key));
+      if (!keys.length && Array.isArray(body.member_keys)) {
+        keys = (body.member_keys as unknown[]).map(String).slice(0, 50_000);
+      }
 
       if (!keys.length) {
         return json({ success: false, error: "No matches at this threshold to save." }, 400);
       }
+
 
       const pctHoldout = await holdoutPct(admin);
 

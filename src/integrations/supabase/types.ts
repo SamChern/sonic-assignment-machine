@@ -2078,6 +2078,66 @@ export type Database = {
         }
         Relationships: []
       }
+      listener_profiles: {
+        Row: {
+          artistic: number
+          audio_source_id: string
+          cognitive: number
+          communication: number
+          confidence: number | null
+          contextual: number
+          created_at: string
+          emotional: number
+          grounding_level: string | null
+          has_audio_embedding: boolean
+          identifier_count: number
+          last_seen_at: string | null
+          observation_count: number
+          social: number
+          source_name: string | null
+          tag_codes: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          artistic?: number
+          audio_source_id: string
+          cognitive?: number
+          communication?: number
+          confidence?: number | null
+          contextual?: number
+          created_at?: string
+          emotional?: number
+          grounding_level?: string | null
+          has_audio_embedding?: boolean
+          identifier_count?: number
+          last_seen_at?: string | null
+          observation_count?: number
+          social?: number
+          source_name?: string | null
+          tag_codes?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          artistic?: number
+          audio_source_id?: string
+          cognitive?: number
+          communication?: number
+          confidence?: number | null
+          contextual?: number
+          created_at?: string
+          emotional?: number
+          grounding_level?: string | null
+          has_audio_embedding?: boolean
+          identifier_count?: number
+          last_seen_at?: string | null
+          observation_count?: number
+          social?: number
+          source_name?: string | null
+          tag_codes?: string[] | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       listener_signups: {
         Row: {
           created_at: string
@@ -4254,6 +4314,16 @@ export type Database = {
           similarity: number
         }[]
       }
+      match_listener_profiles: {
+        Args: {
+          p_audio_boost?: number
+          p_audio_source_ids?: string[]
+          p_limit?: number
+          p_target: Json
+          p_weights?: Json
+        }
+        Returns: Json
+      }
       match_taxonomy_nodes: {
         Args: {
           code_prefix?: string
@@ -4342,6 +4412,7 @@ export type Database = {
         Args: { p_activation_id: string }
         Returns: string
       }
+      refresh_listener_profiles: { Args: { p_limit?: number }; Returns: number }
       refresh_taxonomy_grounding: {
         Args: never
         Returns: {

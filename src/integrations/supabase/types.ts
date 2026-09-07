@@ -4401,7 +4401,7 @@ export type Database = {
         Returns: number
       }
       public_audio_sources: {
-        Args: { _limit?: number; _user_ids: string[] }
+        Args: { _limit?: number; _user_ids?: string[] }
         Returns: {
           album_image: string
           album_name: string

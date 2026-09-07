@@ -3,6 +3,7 @@
 // results normalized to match the shape used by SpotifySearch so the rest of
 // the app can consume them unchanged.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { allowSearchCaller } from "../_shared/searchGate.ts";
 import { create as createJwt, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
 const corsHeaders = {
@@ -95,6 +96,11 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const gate = await allowSearchCaller(req, "apple-music-search");
+    if (!gate.allowed) {
+      return json({ error: gate.reason ?? "Not allowed", apple_music_unavailable: true });
+    }
+
     const { query, type = "songs", storefront = "us" } = await req.json();
     if (!query) throw new Error("Query parameter is required");
 

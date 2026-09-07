@@ -83,6 +83,13 @@ const DESTINATIONS: {
     depths: ["glance", "operate", "diagnose"],
   },
   {
+    to: "/admin/audience-insights",
+    label: "Audience insights",
+    description: "Most common tags, age groups, viewing genres and the scores that go with them.",
+    icon: Layers,
+    depths: ["glance", "operate", "diagnose"],
+  },
+  {
     to: "/admin/workbench",
     label: "Users, cohorts & fingerprints",
     description: "Cross-user analysis, aggregate networks, scope & compare.",

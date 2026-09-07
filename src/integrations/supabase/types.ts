@@ -4453,6 +4453,20 @@ export type Database = {
       }
       run_intuizi_retention: { Args: { p_days?: number }; Returns: Json }
       scan_intuizi_custody: { Args: never; Returns: Json }
+      select_listener_cohort: {
+        Args: {
+          p_audio_boost?: number
+          p_audio_source_ids?: string[]
+          p_limit?: number
+          p_target: Json
+          p_threshold?: number
+          p_weights?: Json
+        }
+        Returns: {
+          fit: number
+          subject_key: string
+        }[]
+      }
       skip_ingest_file: {
         Args: { p_id: string; p_reason: string }
         Returns: undefined

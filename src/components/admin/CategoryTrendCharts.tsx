@@ -104,8 +104,9 @@ const CategoryTrendCharts = () => {
         <p className="text-xs text-muted-foreground">
           {loading && !data
             ? "Reading score history…"
-            : `${num(analysed)} analyses, grouped by ${BUCKET_WORD[data?.bucket ?? "day"] ?? "day"}.`}
+            : `${num(analysed)} analyses, grouped by ${BUCKET_WORD[data?.bucket ?? "day"] ?? "day"}. Real listening data runs from ${day(data?.first_analysis_at ?? null)} to ${day(data?.last_analysis_at ?? null)}; earlier periods are blank because nothing was analysed yet.`}
         </p>
+
         <div className="flex flex-wrap items-center gap-1">
           {WINDOWS.map((w) => (
             <Button

@@ -35,7 +35,7 @@ const Index = () => {
   const { persona, setPersona, ready: personaReady } = usePersona();
   const [personaAsked, setPersonaAsked] = useState(false);
 
-  const { myFingerprint, allFingerprints, myAnalyses } = useFingerprints();
+  const { myFingerprint, myAnalyses } = useFingerprints();
 
   /** Source name currently playing in "See my SonicSIM" — pulses its ontology nodes. */
   const [sonicSimSubject, setSonicSimSubject] = useState<string | null>(null);
@@ -266,7 +266,6 @@ const Index = () => {
           <ConsumerDoor
             isSignedIn={!!user}
             userId={user?.id ?? null}
-            allFingerprints={allFingerprints || []}
             onResult={setTrialScope}
           />
         </div>
@@ -328,7 +327,6 @@ const Index = () => {
             <LibraryTab
               userId={user?.id ?? null}
               myFingerprint={myFingerprint}
-              allFingerprints={allFingerprints}
               myAnalyses={(myAnalyses || []) as never}
             />
           </TabsContent>

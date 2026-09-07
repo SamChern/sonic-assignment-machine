@@ -58,13 +58,16 @@ async function fetchAllSourcesData(): Promise<AudioSource[]> {
 
   const profileMap = new Map((profilesData || []).map((p) => [p.user_id, p]));
 
-  return (sourcesData || []).map((source) => {
+  return (sourcesData || []).map((source): AudioSource => {
     const profile = profileMap.get(source.user_id);
     return {
       ...source,
+      spotify_url: null,
+      preview_url: null,
+      file_url: null,
       profile: profile ? { username: profile.username, avatar_url: profile.avatar_url } : null,
     };
-  }) as unknown as AudioSource[];
+  });
 }
 
 export function useAudioSources() {

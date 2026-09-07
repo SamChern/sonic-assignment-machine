@@ -5,16 +5,20 @@ import type { CategoryKey } from "@/lib/enterpriseSchema";
 export interface CategoryTrendPoint {
   bucket: string;
   count: number;
-  confidence: number;
-  scores: Partial<Record<CategoryKey, number>>;
+  confidence: number | null;
+  /** Null when nothing was analysed in this period — the chart shows a gap. */
+  scores: Partial<Record<CategoryKey, number>> | null;
 }
 
 export interface CategoryScoreTrend {
   points: CategoryTrendPoint[];
   bucket: "day" | "week" | "month";
   window_days: number;
+  first_analysis_at: string | null;
+  last_analysis_at: string | null;
   computed_at: string;
 }
+
 
 /**
  * Admin-only per-category score history. The aggregation happens server-side in

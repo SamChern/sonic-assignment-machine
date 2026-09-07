@@ -39,13 +39,14 @@ async function fetchMySourcesData(userId: string): Promise<AudioSource[]> {
 }
 
 async function fetchAllSourcesData(): Promise<AudioSource[]> {
-  const { data: sourcesData, error: sourcesError } = await supabase
-    .from('audio_sources')
-    .select(SOURCE_COLUMNS)
-    .order('created_at', { ascending: false })
-    .limit(100);
+  // Community library: limited public fields only — no file locations or raw features.
+  const { data: sourcesData, error: sourcesError } = await supabase.rpc('public_audio_sources', {
+    _user_ids: undefined,
+    _limit: 100,
+  });
 
   if (sourcesError) throw sourcesError;
+
 
   const userIds = [...new Set((sourcesData || []).map((s) => s.user_id))];
   if (userIds.length === 0) return [];
@@ -57,13 +58,16 @@ async function fetchAllSourcesData(): Promise<AudioSource[]> {
 
   const profileMap = new Map((profilesData || []).map((p) => [p.user_id, p]));
 
-  return (sourcesData || []).map((source) => {
+  return (sourcesData || []).map((source): AudioSource => {
     const profile = profileMap.get(source.user_id);
     return {
       ...source,
+      spotify_url: null,
+      preview_url: null,
+      file_url: null,
       profile: profile ? { username: profile.username, avatar_url: profile.avatar_url } : null,
     };
-  }) as AudioSource[];
+  });
 }
 
 export function useAudioSources() {

@@ -4400,6 +4400,21 @@ export type Database = {
         Args: { p_keep_days?: number }
         Returns: number
       }
+      public_audio_sources: {
+        Args: { _limit?: number; _user_ids?: string[] }
+        Returns: {
+          album_image: string
+          album_name: string
+          analysis_status: string
+          artists: string[]
+          created_at: string
+          id: string
+          name: string
+          source_type: string
+          spotify_id: string
+          user_id: string
+        }[]
+      }
       read_ingest_rollup_subject_batch: {
         Args: {
           p_after_subject?: string

@@ -3981,6 +3981,10 @@ export type Database = {
         Args: { p_id: string; p_owner: string; p_seconds?: number }
         Returns: boolean
       }
+      admin_category_score_trend: {
+        Args: { p_bucket?: string; p_days?: number }
+        Returns: Json
+      }
       admin_list_people: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: {

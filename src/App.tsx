@@ -22,6 +22,7 @@ const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminWorkbench = lazy(() => import("./pages/admin/AdminWorkbench"));
+const AdminPeople = lazy(() => import("./pages/admin/AdminPeople"));
 const AdminEc2 = lazy(() => import("./pages/admin/AdminEc2"));
 const AdminIntegrations = lazy(() => import("./pages/AdminIntegrations"));
 const AdminIntegrationSetup = lazy(() => import("./pages/AdminIntegrationSetup"));
@@ -158,6 +159,7 @@ const App = () => (
                 }
               >
                 <Route index element={<AdminDashboard />} />
+                <Route path="people" element={<AdminPeople />} />
                 <Route path="workbench" element={<AdminWorkbench />} />
                 <Route path="ec2" element={<AdminEc2 />} />
                 <Route path="integrations" element={<AdminIntegrations />} />

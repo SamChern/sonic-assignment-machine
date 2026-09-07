@@ -69,6 +69,13 @@ const DESTINATIONS: {
   depths: Depth[];
 }[] = [
   {
+    to: "/admin/people",
+    label: "People & access",
+    description: "Every account, its plan, its access, and creator approvals.",
+    icon: Users,
+    depths: ["glance", "operate"],
+  },
+  {
     to: "/admin/workbench",
     label: "Users, cohorts & fingerprints",
     description: "Cross-user analysis, aggregate networks, scope & compare.",

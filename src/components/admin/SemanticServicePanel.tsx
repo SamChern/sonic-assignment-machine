@@ -250,7 +250,40 @@ export const SemanticServicePanel = () => {
             {grounding ? "Listening…" : "Catch up grounding"}
           </Button>
         </div>
+
+        {audio ? (
+          <div className="mt-3 space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              <span>Catch-up progress</span>
+              <span className="font-mono">
+                {done.toLocaleString()} / {target.toLocaleString()} done ({catchUpPct}%) ·{" "}
+                {waiting.toLocaleString()} left
+              </span>
+            </div>
+            <Progress value={catchUpPct} className="h-2" aria-label="Grounding catch-up progress" />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-muted-foreground">
+                {waiting === 0
+                  ? "Every uploaded track has a grounding vector."
+                  : `Counting down from the ${target.toLocaleString()} tracks waiting when this catch-up started.`}
+              </p>
+              {baseline !== null ? (
+                <button
+                  type="button"
+                  className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  onClick={() => {
+                    writeBaseline(waiting > 0 ? waiting : null);
+                    setBaseline(waiting > 0 ? waiting : null);
+                  }}
+                >
+                  Reset counter
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </div>
+
 
       <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {rows.map(([label, value]) => (

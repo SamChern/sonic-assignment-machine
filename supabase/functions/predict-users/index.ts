@@ -391,7 +391,7 @@ Deno.serve(async (req) => {
       /** Real population count at a minimum match strength, from the histogram. */
       const countAtOrAbove = (threshold: number) =>
         histogram
-          .filter((h) => Number(h.bucket) >= Math.ceil(threshold * 20))
+          .filter((h) => Number(h.bucket) >= Math.ceil(threshold * 100))
           .reduce((s, h) => s + Number(h.count ?? 0), 0);
 
       // The curve spans the strengths this population actually reaches, so the
@@ -399,10 +399,10 @@ Deno.serve(async (req) => {
       const occupied = histogram
         .filter((h) => Number(h.count ?? 0) > 0)
         .map((h) => Number(h.bucket));
-      const maxBucket = occupied.length ? Math.max(...occupied) : 20;
-      const minBucket = occupied.length ? Math.min(...occupied) : 8;
-      const lowEdge = clamp(minBucket / 20, 0, 0.95);
-      const highEdge = Math.max(lowEdge + 0.05, clamp(maxBucket / 20, 0.05, 1));
+      const maxBucket = occupied.length ? Math.max(...occupied) : 100;
+      const minBucket = occupied.length ? Math.min(...occupied) : 40;
+      const lowEdge = clamp(minBucket / 100, 0, 0.95);
+      const highEdge = Math.max(lowEdge + 0.05, clamp(maxBucket / 100, 0.05, 1));
       const usableFloor = Number(
         clamp(
           await controlNumber(admin, "predict.min_similarity", 0.55, { min: 0, max: 1 }),

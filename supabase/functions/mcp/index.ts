@@ -231,7 +231,10 @@ var hear_default = defineTool5({
       contextual: data.contextual_score,
       artistic: data.artistic_score
     };
-    const { data: signature } = await supabase.from("sonic_signatures").select("subject_hash, archetype_slug, distance, audio_path").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const { data: rendered } = await supabase.functions.invoke("signature-render", {
+      body: { vector, subject_ref: `analysis:${data.id}` }
+    });
+    const signature = rendered?.signature ?? null;
     const text = [
       `Fingerprint \u2014 emotional ${vector.emotional}, cognitive ${vector.cognitive}, social ${vector.social}, communication ${vector.communication}, contextual ${vector.contextual}, artistic ${vector.artistic}`,
       `Confidence ${data.confidence_score ?? "n/a"} \xB7 grounding ${data.grounding_level ?? "text-only"}`,

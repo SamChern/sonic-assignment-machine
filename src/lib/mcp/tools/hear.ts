@@ -80,12 +80,14 @@ export default defineTool({
       artistic: data.artistic_score,
     };
 
-    const { data: signature } = await supabase
-      .from("sonic_signatures")
-      .select("subject_hash, archetype_slug, distance, audio_path")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Signature rows are private (admin-readable only): the archetype for this
+    // fingerprint is rendered on demand instead of reading someone else's row.
+    const { data: rendered } = await supabase.functions.invoke("signature-render", {
+      body: { vector, subject_ref: `analysis:${data.id}` },
+    });
+    const signature =
+      (rendered as { signature?: { subject_hash: string; archetype_slug: string | null; distance: number | null } } | null)
+        ?.signature ?? null;
 
     const text = [
       `Fingerprint — emotional ${vector.emotional}, cognitive ${vector.cognitive}, social ${vector.social}, communication ${vector.communication}, contextual ${vector.contextual}, artistic ${vector.artistic}`,

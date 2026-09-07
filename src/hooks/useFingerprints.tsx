@@ -102,10 +102,10 @@ async function fetchAllFingerprintsData(): Promise<UserFingerprint[]> {
     return [];
   }
 
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('user_id, username, avatar_url')
-    .in('user_id', userIds);
+  const { data: profiles } = await supabase.rpc('public_profiles', {
+    _user_ids: userIds,
+    _limit: 500,
+  });
 
   const merged = (fingerprints || []).map(fp => {
     const profile = (profiles || []).find(p => p.user_id === fp.user_id);

@@ -51,10 +51,10 @@ async function fetchAllSourcesData(): Promise<AudioSource[]> {
   const userIds = [...new Set((sourcesData || []).map((s) => s.user_id))];
   if (userIds.length === 0) return [];
 
-  const { data: profilesData } = await supabase
-    .from('profiles')
-    .select('user_id, username, avatar_url')
-    .in('user_id', userIds);
+  const { data: profilesData } = await supabase.rpc('public_profiles', {
+    _user_ids: userIds,
+    _limit: 500,
+  });
 
   const profileMap = new Map((profilesData || []).map((p) => [p.user_id, p]));
 

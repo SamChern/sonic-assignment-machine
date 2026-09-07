@@ -354,6 +354,10 @@ const AdminDashboard = () => {
           <CollapsibleSection title="Semantic scope (audioscope)">
             <AdminSonicSim />
           </CollapsibleSection>
+          <CollapsibleSection title="Category scores over time">
+            <CategoryTrendCharts />
+          </CollapsibleSection>
+
 
         </div>
 

@@ -166,7 +166,7 @@ export const TasteNeighbors = ({
         </div>
       </Card>
 
-      {loading && neighbors.length === 0 ? (
+      {(matching || loading) && neighbors.length === 0 ? (
         <Card className="p-6 text-center text-muted-foreground">Finding neighbors…</Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">

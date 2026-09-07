@@ -246,6 +246,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "audio_source_tags_audio_source_id_fkey"
+            columns: ["audio_source_id"]
+            isOneToOne: false
+            referencedRelation: "audio_sources_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "audio_source_tags_node_id_fkey"
             columns: ["node_id"]
             isOneToOne: false
@@ -392,6 +399,13 @@ export type Database = {
             columns: ["audio_source_id"]
             isOneToOne: false
             referencedRelation: "audio_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_items_audio_source_id_fkey"
+            columns: ["audio_source_id"]
+            isOneToOne: false
+            referencedRelation: "audio_sources_public"
             referencedColumns: ["id"]
           },
           {
@@ -802,6 +816,13 @@ export type Database = {
             columns: ["audio_source_id"]
             isOneToOne: false
             referencedRelation: "audio_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_works_audio_source_id_fkey"
+            columns: ["audio_source_id"]
+            isOneToOne: false
+            referencedRelation: "audio_sources_public"
             referencedColumns: ["id"]
           },
         ]
@@ -1621,6 +1642,13 @@ export type Database = {
             columns: ["audio_source_id"]
             isOneToOne: false
             referencedRelation: "audio_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intuizi_identifiers_audio_source_id_fkey"
+            columns: ["audio_source_id"]
+            isOneToOne: false
+            referencedRelation: "audio_sources_public"
             referencedColumns: ["id"]
           },
         ]
@@ -3629,6 +3657,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "source_analyses_audio_source_id_fkey"
+            columns: ["audio_source_id"]
+            isOneToOne: false
+            referencedRelation: "audio_sources_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "source_analyses_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -3966,7 +4001,45 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      audio_sources_public: {
+        Row: {
+          album_image: string | null
+          album_name: string | null
+          analysis_status: string | null
+          artists: string[] | null
+          created_at: string | null
+          id: string | null
+          name: string | null
+          source_type: string | null
+          spotify_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          album_image?: string | null
+          album_name?: string | null
+          analysis_status?: string | null
+          artists?: string[] | null
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          source_type?: string | null
+          spotify_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          album_image?: string | null
+          album_name?: string | null
+          analysis_status?: string | null
+          artists?: string[] | null
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          source_type?: string | null
+          spotify_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       acquire_intuizi_lease: {

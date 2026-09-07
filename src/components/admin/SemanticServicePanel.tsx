@@ -40,13 +40,37 @@ interface AudioCoverage {
   service_ok?: boolean;
 }
 
+/** Remembers how many tracks were waiting when this catch-up run started. */
+const BASELINE_KEY = "sonicsim.clapGroundingBaseline";
+
+const readBaseline = (): number | null => {
+  try {
+    const raw = localStorage.getItem(BASELINE_KEY);
+    const n = raw === null ? NaN : Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeBaseline = (value: number | null) => {
+  try {
+    if (value === null) localStorage.removeItem(BASELINE_KEY);
+    else localStorage.setItem(BASELINE_KEY, String(value));
+  } catch {
+    /* storage unavailable — tracker just falls back to live counts */
+  }
+};
+
 export const SemanticServicePanel = () => {
   const [health, setHealth] = useState<HealthState | null>(null);
   const [coverage, setCoverage] = useState<Coverage | null>(null);
   const [audio, setAudio] = useState<AudioCoverage | null>(null);
+  const [baseline, setBaseline] = useState<number | null>(() => readBaseline());
   const [checking, setChecking] = useState(false);
   const [running, setRunning] = useState(false);
   const [grounding, setGrounding] = useState(false);
+
 
   const refresh = useCallback(async (announce = false) => {
     setChecking(true);

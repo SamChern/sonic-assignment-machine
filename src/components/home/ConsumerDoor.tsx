@@ -281,14 +281,26 @@ export const ConsumerDoor = ({
     void run({ name: text, type: "track" });
   };
 
-  const cohorts = useMemo(() => {
-    if (!result) return [];
-    const me = toFingerprintLike(result.scores);
-    return allFingerprints
-      .map((fp) => ({ fp, similarity: calculateSimilarity(me, fp as never) }))
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 2);
-  }, [result, allFingerprints]);
+  // Neighbouring cohorts are matched on the server: other people's category
+  // averages stay private, so we only receive names and match percentages.
+  const { data: neighborRows = [] } = useFingerprintNeighbors(
+    result
+      ? {
+          emotional: Number(result.scores.emotional) || 0,
+          cognitive: Number(result.scores.cognitive) || 0,
+          social: Number(result.scores.social) || 0,
+          communication: Number(result.scores.communication) || 0,
+          contextual: Number(result.scores.contextual) || 0,
+          artistic: Number(result.scores.artistic) || 0,
+        }
+      : null,
+    2,
+  );
+
+  const cohorts = useMemo(
+    () => neighborRows.map((fp) => ({ fp, similarity: fp.similarity })),
+    [neighborRows],
+  );
 
   const share = async () => {
     const url = result?.id

@@ -97,7 +97,19 @@ export const SemanticServicePanel = () => {
       }
     }
     if (c) setCoverage(c as Coverage);
-    if (a) setAudio(a as AudioCoverage);
+    if (a) {
+      const cov = a as AudioCoverage;
+      setAudio(cov);
+      setBaseline((prev) => {
+        const waiting = Number(cov.ungrounded_sources) || 0;
+        if (prev === null || waiting > prev) {
+          const next = waiting > 0 ? waiting : null;
+          writeBaseline(next);
+          return next;
+        }
+        return prev;
+      });
+    }
   }, []);
 
   useEffect(() => {

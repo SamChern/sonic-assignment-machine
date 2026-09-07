@@ -76,6 +76,13 @@ const DESTINATIONS: {
     depths: ["glance", "operate"],
   },
   {
+    to: "/admin/listener-dataset",
+    label: "Listener population",
+    description: "Score distribution, activity trend and evidence quality across every listener profile.",
+    icon: Users,
+    depths: ["glance", "operate", "diagnose"],
+  },
+  {
     to: "/admin/workbench",
     label: "Users, cohorts & fingerprints",
     description: "Cross-user analysis, aggregate networks, scope & compare.",

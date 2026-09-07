@@ -315,22 +315,53 @@ Deno.serve(async (req) => {
         }));
       }
 
-      // Slider re-weighting: constrain the kNN ranking, never replace it.
-      const wSum = CATEGORIES.reduce((s, c) => s + Math.max(0, weights[c]), 0) || 1;
-      const ranked = neighbours
-        .map((n) => {
-          let dist = 0;
-          for (const c of CATEGORIES) {
-            dist += (Math.max(0, weights[c]) / wSum) * Math.abs(n.scores[c] - target[c]) / 100;
-          }
-          const axisFit = clamp(1 - dist, 0, 1);
-          return {
-            ...n,
-            axis_fit: axisFit,
-            score: 0.65 * clamp(n.knn_similarity, 0, 1) + 0.35 * axisFit,
-          };
-        })
-        .sort((a, b) => b.score - a.score);
+      // The listener population itself: every scored Intuizi identifier carries a
+      // six-axis profile, so matching runs over that whole dataset in SQL rather
+      // than over the handful of audio profiles the kNN step could retrieve. The
+      // CLAP neighbours are not discarded — they mark which listener profiles have
+      // real sampled audio behind them and give those a bounded boost.
+      const audioBoost = await controlNumber(admin, "predict.audio_boost", 0.15, {
+        min: 0,
+        max: 0.5,
+      });
+      const { data: popRaw, error: popErr } = await admin.rpc("match_listener_profiles", {
+        p_target: target as unknown as Record<string, number>,
+        p_weights: weights as unknown as Record<string, number>,
+        p_limit: 100,
+        p_audio_source_ids: neighbours.map((n) => n.key),
+        p_audio_boost: audioBoost,
+      });
+      if (popErr) throw new Error(`listener match failed: ${popErr.message}`);
+
+      const pop = (popRaw ?? {}) as {
+        population?: number;
+        audio_grounded?: number;
+        histogram?: { bucket: number; count: number }[];
+        matches?: Record<string, unknown>[];
+      };
+      const population = Number(pop.population ?? 0);
+      const histogram = pop.histogram ?? [];
+
+      const ranked = (pop.matches ?? []).map((m) => {
+        const fit = Number(m.fit ?? 0);
+        return {
+          key: String(m.audio_source_id),
+          label: String(m.label ?? "").slice(0, 160) || String(m.audio_source_id).slice(0, 8),
+          knn_similarity: fit,
+          axis_fit: fit,
+          score: fit,
+          audio_grounded: Boolean(m.audio_grounded),
+          grounding_level: String(m.grounding_level ?? "text-only"),
+          identifier_count: Number(m.identifier_count ?? 1),
+          confidence: m.confidence === null ? null : Number(m.confidence),
+          scores: Object.fromEntries(
+            CATEGORIES.map((c) => [
+              c,
+              Number((m.scores as Record<string, unknown> | undefined)?.[c] ?? 0),
+            ]),
+          ) as Scores,
+        };
+      });
 
       // Confidence band from the Welford priors' std.
       const { data: calRows } = await admin
@@ -357,22 +388,28 @@ Deno.serve(async (req) => {
       /** Band width as a share of matched count: priors' std / 100, capped. */
       const bandShare = clamp(meanStd / 100, 0.03, 0.4);
 
-      // The curve must span the similarities actually retrieved. A fixed
-      // 0.40-0.95 sweep reads as "0 matched" whenever the embedding space is
-      // tighter than that, so the sweep and the opening threshold are derived
-      // from the retrieved distribution and the configured floor is only used
-      // when it is reachable.
-      const sims = ranked
-        .map((r) => clamp(r.knn_similarity, 0, 1))
-        .sort((a, b) => a - b);
-      const quantile = (q: number) =>
-        sims.length ? sims[clamp(Math.floor(q * (sims.length - 1)), 0, sims.length - 1)] : 0;
-      const maxSim = sims.length ? sims[sims.length - 1] : 0;
-      const lowEdge = sims.length ? Math.max(0, quantile(0.05) - 0.01) : 0.4;
-      const highEdge = sims.length ? Math.max(lowEdge + 0.01, maxSim) : 0.95;
-      const usableFloor = defaultFloor <= maxSim
-        ? defaultFloor
-        : Number(clamp(quantile(0.5), lowEdge, highEdge).toFixed(3));
+      /** Real population count at a minimum match strength, from the histogram. */
+      const countAtOrAbove = (threshold: number) =>
+        histogram
+          .filter((h) => Number(h.bucket) >= Math.ceil(threshold * 20))
+          .reduce((s, h) => s + Number(h.count ?? 0), 0);
+
+      // The curve spans the strengths this population actually reaches, so the
+      // slider never lands in a region where nobody can match.
+      const occupied = histogram
+        .filter((h) => Number(h.count ?? 0) > 0)
+        .map((h) => Number(h.bucket));
+      const maxBucket = occupied.length ? Math.max(...occupied) : 20;
+      const minBucket = occupied.length ? Math.min(...occupied) : 8;
+      const lowEdge = clamp(minBucket / 20, 0, 0.95);
+      const highEdge = Math.max(lowEdge + 0.05, clamp(maxBucket / 20, 0.05, 1));
+      const usableFloor = Number(
+        clamp(
+          await controlNumber(admin, "predict.min_similarity", 0.55, { min: 0, max: 1 }),
+          lowEdge,
+          highEdge,
+        ).toFixed(3),
+      );
 
       const curve: {
         threshold: number;
@@ -384,16 +421,13 @@ Deno.serve(async (req) => {
       const steps = 12;
       for (let i = 0; i < steps; i++) {
         const threshold = Number((lowEdge + ((highEdge - lowEdge) * i) / (steps - 1)).toFixed(3));
-        const hits = ranked.filter((r) => r.knn_similarity >= threshold);
-        const meanSim = hits.length
-          ? hits.reduce((s, r) => s + r.knn_similarity, 0) / hits.length
-          : 0;
+        const matched = countAtOrAbove(threshold);
         curve.push({
           threshold,
-          matched: hits.length,
-          low: Math.max(0, Math.round(hits.length * (1 - bandShare))),
-          high: Math.round(hits.length * (1 + bandShare)),
-          mean_similarity: Number(meanSim.toFixed(4)),
+          matched,
+          low: Math.max(0, Math.round(matched * (1 - bandShare))),
+          high: Math.round(matched * (1 + bandShare)),
+          mean_similarity: Number(((threshold + highEdge) / 2).toFixed(4)),
         });
       }
 
@@ -404,7 +438,10 @@ Deno.serve(async (req) => {
         default_threshold: usableFloor,
         configured_floor: defaultFloor,
         similarity_range: { min: Number(lowEdge.toFixed(4)), max: Number(highEdge.toFixed(4)) },
-        retrieved: neighbours.length,
+        population,
+        audio_grounded: Number(pop.audio_grounded ?? 0),
+        audio_neighbours: neighbours.length,
+        retrieved: population,
         band_share: bandShare,
         category_std: stdByCat,
         curve,
@@ -415,10 +452,15 @@ Deno.serve(async (req) => {
           knn_similarity: Number(r.knn_similarity.toFixed(4)),
           axis_fit: Number(r.axis_fit.toFixed(4)),
           score: Number(r.score.toFixed(4)),
+          audio_grounded: r.audio_grounded,
+          grounding_level: r.grounding_level,
+          identifier_count: r.identifier_count,
+          confidence: r.confidence,
           scores: r.scores,
         })),
       });
     }
+
 
     /* ------------------------------------------------------------- save_cohort */
     if (action === "save_cohort") {

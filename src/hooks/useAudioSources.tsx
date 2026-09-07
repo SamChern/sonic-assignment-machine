@@ -64,7 +64,7 @@ async function fetchAllSourcesData(): Promise<AudioSource[]> {
       ...source,
       profile: profile ? { username: profile.username, avatar_url: profile.avatar_url } : null,
     };
-  }) as AudioSource[];
+  }) as unknown as AudioSource[];
 }
 
 export function useAudioSources() {

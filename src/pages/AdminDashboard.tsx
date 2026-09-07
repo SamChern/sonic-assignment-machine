@@ -7,6 +7,8 @@ import { ResolverNudge } from "@/components/admin/ResolverNudge";
 import { AudioSignalQueue } from "@/components/admin/AudioSignalQueue";
 import { ActivationCostPanel } from "@/components/admin/ActivationCostPanel";
 import { AdminSonicSim } from "@/components/admin/AdminSonicSim";
+import CategoryTrendCharts from "@/components/admin/CategoryTrendCharts";
+
 
 import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
 import { CollapsibleSection } from "@/components/admin/CollapsibleSection";

@@ -65,21 +65,32 @@ def _require_auth(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid Bearer token")
 
 
+_model_lock = threading.Lock()
+
+
 def _load_model():
-    """Lazy-load CLAP so /healthz answers before the first (slow) model load."""
+    """Lazy-load CLAP so /healthz answers before the first (slow) model load.
+
+    The lock matters: without it two concurrent first requests each build their
+    own ~2.5GB CLAP copy and systemd's MemoryMax OOM-kills the worker mid-load.
+    """
     global _model
     if _model is not None:
         return _model
-    import laion_clap  # imported lazily: heavy torch import
+    with _model_lock:
+        if _model is not None:
+            return _model
+        import laion_clap  # imported lazily: heavy torch import
 
-    model = laion_clap.CLAP_Module(enable_fusion=False)
-    ckpt = os.environ.get("SEMANTIC_CLAP_CKPT_PATH", "").strip()
-    if ckpt:
-        model.load_ckpt(ckpt)
-    else:
-        model.load_ckpt()  # downloads the default 630k-audioset checkpoint
-    _model = model
+        model = laion_clap.CLAP_Module(enable_fusion=False)
+        ckpt = os.environ.get("SEMANTIC_CLAP_CKPT_PATH", "").strip()
+        if ckpt:
+            model.load_ckpt(ckpt)
+        else:
+            model.load_ckpt()  # downloads the default 630k-audioset checkpoint
+        _model = model
     return _model
+
 
 
 def _l2(v: np.ndarray) -> np.ndarray:

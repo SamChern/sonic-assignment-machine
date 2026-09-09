@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
         latency_ms: h.duration_ms,
         health: h.body,
         error: h.ok ? undefined : (h.error ?? `HTTP ${h.status}`),
-      }, h.ok ? 200 : 502);
+      }, 200); // health is a status report, not a failure — always 200 so the UI can render it
     }
 
     if (action === "embed_text") {

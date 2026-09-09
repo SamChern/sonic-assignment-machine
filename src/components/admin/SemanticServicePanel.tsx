@@ -74,10 +74,22 @@ export const SemanticServicePanel = () => {
 
   const refresh = useCallback(async (announce = false) => {
     setChecking(true);
-    const [{ data: h }, { data: c }, { data: a }] = await Promise.all([
-      supabase.functions.invoke("semantic-embed", { body: { action: "health" } }),
-      supabase.functions.invoke("semantic-backfill", { body: { status_only: true } }),
-      supabase.functions.invoke("clap-ground-audio", { body: { status_only: true } }),
+    // Never let one unreachable service blank the panel — turn failures into data.
+    // deno-lint-ignore no-explicit-any
+    const call = async (fn: string, body: Record<string, unknown>): Promise<any> => {
+      try {
+        const { data, error } = await supabase.functions.invoke(fn, { body });
+        if (error) return { success: false, error: error.message };
+        return data ?? null;
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "unreachable" };
+      }
+    };
+
+    const [h, c, a] = await Promise.all([
+      call("semantic-embed", { action: "health" }),
+      call("semantic-backfill", { status_only: true }),
+      call("clap-ground-audio", { status_only: true }),
     ]);
     setChecking(false);
     if (h) {

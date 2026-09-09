@@ -10,7 +10,9 @@ bind = os.environ.get("SEMANTIC_BIND", "127.0.0.1:8769")
 
 workers = int(os.environ.get("SEMANTIC_WORKERS", 1))
 worker_class = "uvicorn.workers.UvicornWorker"
-threads = int(os.environ.get("SEMANTIC_THREADS", 2))
+# One thread: the model load is serialized by a lock anyway, and a single CLAP
+# copy already saturates the 2 vCPUs. More threads only risked memory spikes.
+threads = int(os.environ.get("SEMANTIC_THREADS", 1))
 worker_connections = 16
 
 # First request pays the model load (~30-60s cold). Keep the timeout generous

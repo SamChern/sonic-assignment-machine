@@ -39,8 +39,9 @@ ProtectHome=read-only
 PrivateTmp=false
 ReadWritePaths=/tmp /opt/semantic-svc
 
-# Resource caps — CLAP resident model is ~1.5GB; leave headroom for librosa.
-MemoryMax=3G
+# Resource caps — one resident CLAP model is ~2.5GB while loading. 3G was too
+# tight and the worker was OOM-killed mid-load; leave headroom for librosa.
+MemoryMax=5G
 
 [Install]
 WantedBy=multi-user.target

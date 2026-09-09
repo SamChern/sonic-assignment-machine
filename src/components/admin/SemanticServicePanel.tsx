@@ -74,10 +74,19 @@ export const SemanticServicePanel = () => {
 
   const refresh = useCallback(async (announce = false) => {
     setChecking(true);
-    const [{ data: h }, { data: c }, { data: a }] = await Promise.all([
-      supabase.functions.invoke("semantic-embed", { body: { action: "health" } }),
-      supabase.functions.invoke("semantic-backfill", { body: { status_only: true } }),
-      supabase.functions.invoke("clap-ground-audio", { body: { status_only: true } }),
+    const call = async (fn: string, body: Record<string, unknown>) => {
+      try {
+        const { data, error } = await supabase.functions.invoke(fn, { body });
+        if (error) return { success: false, error: error.message } as Record<string, unknown>;
+        return (data ?? null) as Record<string, unknown> | null;
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "unreachable" };
+      }
+    };
+    const [h, c, a] = await Promise.all([
+      call("semantic-embed", { action: "health" }),
+      call("semantic-backfill", { status_only: true }),
+      call("clap-ground-audio", { status_only: true }),
     ]);
     setChecking(false);
     if (h) {

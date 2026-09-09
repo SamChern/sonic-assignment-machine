@@ -87,10 +87,26 @@ serve(async (req) => {
       fetchOptions.body = JSON.stringify(body);
     }
 
-    const response = await fetch(targetUrl, {
-      ...fetchOptions,
-      signal: AbortSignal.timeout(30_000),
-    });
+    let response: Response;
+    try {
+      response = await fetch(targetUrl, {
+        ...fetchOptions,
+        signal: AbortSignal.timeout(20_000),
+      });
+    } catch (netErr: unknown) {
+      // Upstream machine unreachable / slow: report it as data so admin screens
+      // can render an outage state instead of blanking on a 500.
+      const reason = netErr instanceof Error ? netErr.message : 'upstream request failed';
+      console.error(`aws-proxy upstream unreachable: ${reason}`);
+      return json({
+        ok: false,
+        unreachable: true,
+        endpoint,
+        error: reason.includes('timed out')
+          ? 'Analysis service did not respond in time'
+          : 'Analysis service unreachable',
+      }, 200);
+    }
     const responseData = await response.json().catch(() => ({}));
     console.log(`aws-proxy upstream status: ${response.status}`);
 

@@ -44,6 +44,15 @@ export const useEC2Api = () => {
         };
       }
 
+      const payload = data as (T & { unreachable?: boolean; error?: string }) | null;
+      if (payload && typeof payload === 'object' && payload.unreachable) {
+        return {
+          data: null,
+          error: payload.error || 'Analysis service unreachable',
+          loading: false,
+        };
+      }
+
       return { data: data as T, error: null, loading: false };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';

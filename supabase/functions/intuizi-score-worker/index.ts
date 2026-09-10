@@ -201,6 +201,14 @@ Deno.serve(async (req) => {
     /** Adaptive: starts wide, collapses to 1 as soon as the gateway pushes back. */
     let concurrency = configuredConcurrency;
     let rateLimits = state?.consecutive_rate_limits ?? 0;
+    /**
+     * Set the moment the gateway rate limits us. The run then stops asking for
+     * NEW AI work: it finishes the claimed batch, drains whatever the freshly
+     * learned tag patterns unlocked (pure database writes) and ends. Continuing
+     * to claim under a 429 only produced more 429s and longer provider backoff.
+     */
+    let rateLimited = false;
+
 
     type QueuedTask = ScoreTask & {
       id: string;

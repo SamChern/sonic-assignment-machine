@@ -397,6 +397,8 @@ export async function runIngestPipeline(
           avg_similarity?: number;
           confidence_before?: number;
           confidence_after?: number;
+          scores_before?: Scores | null;
+          scores_after?: Scores | null;
         } | null;
         notes?: string[];
       };

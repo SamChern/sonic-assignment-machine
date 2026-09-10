@@ -12,6 +12,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 import { groundSourceWithClap } from "../_shared/clapAudio.ts";
 import {
+  tuneActivationProfileScores,
+  type ProfileTuning,
+} from "../_shared/profileTuning.ts";
+import {
   clapEmbedText,
   getSemanticSvcConfig,
   logSemanticCall,
@@ -230,6 +234,7 @@ Deno.serve(async (req) => {
     // rows first, and text-ground the audience profile itself.
     const profileNotes: string[] = [];
     let profileGrounded = false;
+    let profileTuning: ProfileTuning | null = null;
     let scopedIds: string[] | null = null;
     if (activationId) {
       scopedIds = await activationSourceIds(admin, activationId, limit);
@@ -256,6 +261,18 @@ Deno.serve(async (req) => {
           if (res.error) profileNotes.push(res.error);
         } else if (srcRow?.profile_embedding) {
           profileGrounded = true;
+        }
+        // With a vector in hand, move the six scores off the text-only average
+        // and toward the audio we have actually listened to.
+        if (profileGrounded) {
+          profileTuning = await tuneActivationProfileScores(
+            admin,
+            profileSourceId,
+            activationId,
+          );
+          if (!profileTuning.tuned && profileTuning.reason) {
+            profileNotes.push(`Score tuning: ${profileTuning.reason}`);
+          }
         }
       } else {
         profileNotes.push("no activation profile row exists yet");
@@ -316,7 +333,12 @@ Deno.serve(async (req) => {
       configured: true,
       service_ok: true,
       ...(activationId
-        ? { activation_id: activationId, profile_grounded: profileGrounded, notes: profileNotes }
+        ? {
+          activation_id: activationId,
+          profile_grounded: profileGrounded,
+          profile_tuning: profileTuning,
+          notes: profileNotes,
+        }
         : {}),
       considered: rows.length,
       grounded,

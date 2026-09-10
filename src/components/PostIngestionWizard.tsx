@@ -174,6 +174,30 @@ const PostIngestionWizard = () => {
         expandedStages={expandedStages}
         setExpandedStages={setExpandedStages}
       />
+
+      <div className="mt-5 border-t border-border pt-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <KeyRound className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Ingest by object key</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setShowByKey((v) => !v)}
+          >
+            {showByKey ? "Hide" : "Open"}
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Use this when bucket scanning is unavailable: paste the exact intuizi-export-delivery file
+          names, validate them, and ingest with read-only object access.
+        </p>
+        {showByKey && (
+          <div className="mt-3">
+            <IngestByKeyPanel />
+          </div>
+        )}
+      </div>
     </Card>
   );
 };

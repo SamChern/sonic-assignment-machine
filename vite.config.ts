@@ -45,6 +45,7 @@ export default defineConfig(({ mode }) => ({
           if (!id.includes("node_modules")) return undefined;
           // @supabase has no React coupling, so it is safe to isolate.
           if (id.includes("@supabase")) return "vendor-supabase";
+          if (/[\\/]node_modules[\\/](d3|d3-[a-z]+)[\\/]/.test(id)) return "vendor-d3";
           return "vendor";
         },
       },

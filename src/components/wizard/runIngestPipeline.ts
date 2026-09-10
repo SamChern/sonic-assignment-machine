@@ -368,12 +368,15 @@ export async function runIngestPipeline(
 
     let groundNote: string | null = null;
     let groundedNow = 0;
+    type Scores = Record<string, number>;
     let tuning: {
       tuned?: boolean;
       neighbours?: number;
       avg_similarity?: number;
       confidence_before?: number;
       confidence_after?: number;
+      scores_before?: Scores | null;
+      scores_after?: Scores | null;
     } | null = null;
     let profileGrounded = Boolean(src?.profile_embedding);
     try {

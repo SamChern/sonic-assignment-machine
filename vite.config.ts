@@ -41,8 +41,12 @@ export default defineConfig(({ mode }) => ({
         // the chart libs into separate chunks reordered their module
         // initialisation and blew up production with a TDZ error
         // ("Cannot access 'P' before initialization") on a blank page.
-        manualChunks: (id: string) =>
-          id.includes("node_modules") ? "vendor" : undefined,
+        manualChunks: (id: string) => {
+          if (!id.includes("node_modules")) return undefined;
+          // @supabase has no React coupling, so it is safe to isolate.
+          if (id.includes("@supabase")) return "vendor-supabase";
+          return "vendor";
+        },
       },
     },
   },

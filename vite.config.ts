@@ -33,6 +33,19 @@ export default defineConfig(({ mode }) => ({
       },
     } satisfies Plugin,
   ].filter(Boolean),
+  build: {
+    rollupOptions: {
+      output: {
+        // Keep the entry chunk under the reviewed bundle budget. All third-party
+        // code goes into ONE vendor chunk on purpose: splitting React, Radix and
+        // the chart libs into separate chunks reordered their module
+        // initialisation and blew up production with a TDZ error
+        // ("Cannot access 'P' before initialization") on a blank page.
+        manualChunks: (id: string) =>
+          id.includes("node_modules") ? "vendor" : undefined,
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

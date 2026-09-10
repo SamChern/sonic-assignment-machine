@@ -75,6 +75,13 @@ Deno.serve(async (req) => {
     const configuredConcurrency = Math.round(
       await controlNumber(admin, "ingest.score_concurrency", CONCURRENCY_DEFAULT, { min: 1, max: 8 }),
     );
+    // Distinct tag patterns folded into ONE analyze-audio call. Bigger groups =
+    // fewer gateway requests for the same work, which is what actually keeps the
+    // provider from rate limiting us.
+    const prewarmGroupSize = Math.round(
+      await controlNumber(admin, "ingest.prewarm_group_size", 10, { min: 1, max: 10 }),
+    );
+
 
 
     const reqBody = await req.json().catch(() => ({})) as {

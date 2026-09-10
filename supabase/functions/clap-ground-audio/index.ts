@@ -12,6 +12,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 import { groundSourceWithClap } from "../_shared/clapAudio.ts";
 import {
+  tuneActivationProfileScores,
+  type ProfileTuning,
+} from "../_shared/profileTuning.ts";
+import {
   clapEmbedText,
   getSemanticSvcConfig,
   logSemanticCall,
@@ -329,7 +333,12 @@ Deno.serve(async (req) => {
       configured: true,
       service_ok: true,
       ...(activationId
-        ? { activation_id: activationId, profile_grounded: profileGrounded, notes: profileNotes }
+        ? {
+          activation_id: activationId,
+          profile_grounded: profileGrounded,
+          profile_tuning: profileTuning,
+          notes: profileNotes,
+        }
         : {}),
       considered: rows.length,
       grounded,

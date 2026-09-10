@@ -40,7 +40,24 @@ export interface WorkerRow {
   last_seen: string;
 }
 
+/**
+ * How much of the queued population has real audio behind its scores.
+ * `identifiers` counts Intuizi identifiers, `profiles` the listener rows.
+ */
+export interface GroundingBucket {
+  profiles: number;
+  identifiers: number;
+  with_audio: number;
+}
+
+export interface Coverage {
+  queue: Record<string, number>;
+  grounding: Record<string, GroundingBucket>;
+  computed_at: string;
+}
+
 export interface ScoringRunsData {
+  coverage: Coverage | null;
   depth: QueueDepth | null;
   activations: ActivationSnapshot[];
   running: QueueItem[];

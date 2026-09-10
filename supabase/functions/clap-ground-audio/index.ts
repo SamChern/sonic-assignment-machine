@@ -12,9 +12,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 import { groundSourceWithClap } from "../_shared/clapAudio.ts";
 import {
+  clapEmbedText,
   getSemanticSvcConfig,
+  logSemanticCall,
   semanticSvcBreakerOpen,
   semanticSvcHealth,
+  type SemanticSvcConfig,
 } from "../_shared/semanticSvc.ts";
 
 const corsHeaders = {
@@ -78,6 +81,93 @@ async function playableUrl(admin: any, row: SourceRow): Promise<string | null> {
   return data.signedUrl;
 }
 
+/**
+ * The activation profile row has no audio file of its own — it is an audience
+ * aggregate. Ground it in the SAME CLAP space as real audio by embedding what
+ * the taxonomy says about it, so profile <-> track kNN stays comparable.
+ */
+async function groundActivationProfile(
+  // deno-lint-disable-next-line no-explicit-any
+  admin: any,
+  cfg: SemanticSvcConfig,
+  sourceId: string,
+  name: string,
+): Promise<{ grounded: boolean; tags: number; error?: string }> {
+  const { data: tagRows } = await admin
+    .from("audio_source_tags")
+    .select("weight, taxonomy_nodes(code, label)")
+    .eq("audio_source_id", sourceId)
+    .order("weight", { ascending: false })
+    .limit(40);
+  // deno-lint-disable-next-line no-explicit-any
+  const labels = ((tagRows ?? []) as any[])
+    .map((r) => (r.taxonomy_nodes?.label ?? r.taxonomy_nodes?.code ?? "").toString().trim())
+    .filter(Boolean);
+  if (labels.length === 0) {
+    return { grounded: false, tags: 0, error: "no resolved taxonomy tags to embed yet" };
+  }
+
+  const text = `Audience listening profile "${name}": ${labels.join(", ")}.`;
+  const started = Date.now();
+  const vector = await clapEmbedText(cfg, text);
+  await logSemanticCall(admin, {
+    action: "embed_text",
+    outcome: vector ? "ok" : "error",
+    duration_ms: Date.now() - started,
+    dims: vector?.length ?? null,
+    subject_ref: `activation-profile :: ${name}`.slice(0, 200),
+    error_message: vector ? null : "embed_text failed (see function logs)",
+  });
+  if (!vector) return { grounded: false, tags: labels.length, error: "embedding service returned nothing" };
+
+  const { error } = await admin
+    .from("audio_sources")
+    .update({ profile_embedding: JSON.stringify(vector) })
+    .eq("id", sourceId);
+  if (error) return { grounded: false, tags: labels.length, error: error.message };
+  return { grounded: true, tags: labels.length };
+}
+
+/** Audio source ids belonging to one activation, via its queued identifiers. */
+async function activationSourceIds(
+  // deno-lint-disable-next-line no-explicit-any
+  admin: any,
+  activationId: string,
+  limit: number,
+): Promise<string[]> {
+  const ids = new Set<string>();
+  const { data: profile } = await admin
+    .from("intuizi_identifiers")
+    .select("audio_source_id")
+    .eq("primary_identifier", `activation:${activationId}`)
+    .maybeSingle();
+  if (profile?.audio_source_id) ids.add(profile.audio_source_id as string);
+
+  const { data: queued } = await admin
+    .from("intuizi_score_queue")
+    .select("identifier")
+    .eq("activation_id", activationId)
+    .limit(Math.min(2000, limit * 20));
+  // deno-lint-disable-next-line no-explicit-any
+  const identifiers = [...new Set(((queued ?? []) as any[]).map((r) => String(r.identifier)))].slice(
+    0,
+    2000,
+  );
+  if (identifiers.length > 0) {
+    const { data: linked } = await admin
+      .from("intuizi_identifiers")
+      .select("audio_source_id")
+      .in("primary_identifier", identifiers)
+      .not("audio_source_id", "is", null)
+      .limit(limit * 4);
+    // deno-lint-disable-next-line no-explicit-any
+    for (const r of (linked ?? []) as any[]) {
+      if (r.audio_source_id) ids.add(String(r.audio_source_id));
+    }
+  }
+  return [...ids];
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -95,6 +185,9 @@ Deno.serve(async (req) => {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const rawLimit = Number(body.limit ?? 25);
     const limit = Math.max(1, Math.min(200, Number.isFinite(rawLimit) ? Math.round(rawLimit) : 25));
+    const activationId = typeof body.activation_id === "string" && body.activation_id.trim()
+      ? body.activation_id.trim()
+      : null;
 
     const coverage = await readCoverage(admin);
     const cfg = await getSemanticSvcConfig(admin);
@@ -133,13 +226,68 @@ Deno.serve(async (req) => {
       }, 503);
     }
 
-    const { data, error } = await admin
+    // Activation-scoped run (the ingest wizard): ground this activation's own
+    // rows first, and text-ground the audience profile itself.
+    const profileNotes: string[] = [];
+    let profileGrounded = false;
+    let scopedIds: string[] | null = null;
+    if (activationId) {
+      scopedIds = await activationSourceIds(admin, activationId, limit);
+      const { data: profileRow } = await admin
+        .from("intuizi_identifiers")
+        .select("audio_source_id")
+        .eq("primary_identifier", `activation:${activationId}`)
+        .maybeSingle();
+      const profileSourceId = profileRow?.audio_source_id as string | null | undefined;
+      if (profileSourceId) {
+        const { data: srcRow } = await admin
+          .from("audio_sources")
+          .select("id, name, file_url, preview_url, profile_embedding")
+          .eq("id", profileSourceId)
+          .maybeSingle();
+        if (srcRow && !srcRow.profile_embedding && !srcRow.file_url && !srcRow.preview_url) {
+          const res = await groundActivationProfile(
+            admin,
+            cfg,
+            profileSourceId,
+            srcRow.name ?? `Activation ${activationId}`,
+          );
+          profileGrounded = res.grounded;
+          if (res.error) profileNotes.push(res.error);
+        } else if (srcRow?.profile_embedding) {
+          profileGrounded = true;
+        }
+      } else {
+        profileNotes.push("no activation profile row exists yet");
+      }
+    }
+
+    let query = admin
       .from("audio_sources")
       .select("id, name, file_url, preview_url")
       .is("profile_embedding", null)
       .or("file_url.not.is.null,preview_url.not.is.null")
       .order("created_at", { ascending: false })
       .limit(limit);
+    if (scopedIds) {
+      if (scopedIds.length === 0) {
+        return json({
+          success: true,
+          configured: true,
+          service_ok: true,
+          activation_id: activationId,
+          profile_grounded: profileGrounded,
+          considered: 0,
+          grounded: 0,
+          skipped: 0,
+          failed: 0,
+          notes: profileNotes,
+          ...(await readCoverage(admin)),
+        });
+      }
+      query = query.in("id", scopedIds);
+    }
+    const { data, error } = await query;
     if (error) return json({ success: false, error: error.message }, 500);
 
     const rows = (data ?? []) as SourceRow[];
@@ -167,6 +315,9 @@ Deno.serve(async (req) => {
       success: true,
       configured: true,
       service_ok: true,
+      ...(activationId
+        ? { activation_id: activationId, profile_grounded: profileGrounded, notes: profileNotes }
+        : {}),
       considered: rows.length,
       grounded,
       skipped,

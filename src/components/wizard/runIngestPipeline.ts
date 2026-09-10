@@ -357,14 +357,51 @@ export async function runIngestPipeline(
       taxonomy_nodes: { code: string; label: string } | null;
     }[];
 
+    // --- CLAP grounding ----------------------------------------------------
+    // Every audio row in this activation (and the audience profile itself) gets
+    // a vector in CLAP's space on the EC2 box, so profile <-> track kNN is
+    // comparable. Enrichment only: an unreachable box degrades to a note.
+    setStage("source", {
+      state: "running",
+      summary: "grounding this activation's audio on the CLAP box…",
+    });
+
+    let groundNote: string | null = null;
+    let groundedNow = 0;
+    let profileGrounded = Boolean(src?.profile_embedding);
+    try {
+      const { data: ground, error: groundErr } = await supabase.functions.invoke(
+        "clap-ground-audio",
+        { body: { activation_id: activation.activation_id, limit: 25 } },
+      );
+      if (groundErr) throw new Error(groundErr.message);
+      const g = (ground ?? {}) as {
+        success?: boolean;
+        error?: string;
+        grounded?: number;
+        failed?: number;
+        profile_grounded?: boolean;
+        notes?: string[];
+      };
+      if (g.success === false) throw new Error(g.error ?? "grounding failed");
+      groundedNow = Number(g.grounded ?? 0) || 0;
+      profileGrounded = profileGrounded || Boolean(g.profile_grounded);
+      if (g.notes?.length) groundNote = `Grounding: ${g.notes[0]}`;
+      else if (Number(g.failed ?? 0) > 0) groundNote = `Grounding: ${g.failed} row(s) could not be embedded.`;
+    } catch (e) {
+      groundNote = `Audio grounding skipped — ${e instanceof Error ? e.message : String(e)}`;
+    }
+
     setStage("source", {
       state: !src || tags.length === 0 ? "warn" : src.analysis_status === "failed" ? "error" : "ok",
       summary: src
-        ? `${src.name} · ${tags.length} taxonomy tag(s) · ${src.analysis_status}${src.profile_embedding ? " · embedded" : ""}`
+        ? `${src.name} · ${tags.length} taxonomy tag(s) · ${src.analysis_status}${profileGrounded ? " · grounded vector" : ""}`
         : "audio source row not found",
       outputs: [
         ["Queued rows aggregated", identifiersSeen.toLocaleString()],
         ["Taxonomy tags", String(tags.length)],
+        ["Profile vector", profileGrounded ? "grounded (CLAP)" : "not grounded yet"],
+        ["Audio rows grounded now", String(groundedNow)],
         ...tags.slice(0, 8).map(
           (t) =>
             [t.taxonomy_nodes?.code ?? "unresolved", `weight ${Number(t.weight).toFixed(2)}`] as [
@@ -380,6 +417,7 @@ export async function runIngestPipeline(
               "No queued tag code matched a taxonomy node. Run the Intuizi taxonomy crosswalk so these codes resolve, then re-run this step.",
             ]
           : []),
+        ...(groundNote ? [groundNote] : []),
         ...(buildError ? [`Profile builder warning: ${buildError}`] : []),
       ].slice(0, 3),
     });

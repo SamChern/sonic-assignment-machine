@@ -315,6 +315,9 @@ Deno.serve(async (req) => {
       success: true,
       configured: true,
       service_ok: true,
+      ...(activationId
+        ? { activation_id: activationId, profile_grounded: profileGrounded, notes: profileNotes }
+        : {}),
       considered: rows.length,
       grounded,
       skipped,

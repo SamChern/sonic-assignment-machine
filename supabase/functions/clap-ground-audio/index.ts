@@ -258,6 +258,18 @@ Deno.serve(async (req) => {
         } else if (srcRow?.profile_embedding) {
           profileGrounded = true;
         }
+        // With a vector in hand, move the six scores off the text-only average
+        // and toward the audio we have actually listened to.
+        if (profileGrounded) {
+          profileTuning = await tuneActivationProfileScores(
+            admin,
+            profileSourceId,
+            activationId,
+          );
+          if (!profileTuning.tuned && profileTuning.reason) {
+            profileNotes.push(`Score tuning: ${profileTuning.reason}`);
+          }
+        }
       } else {
         profileNotes.push("no activation profile row exists yet");
       }

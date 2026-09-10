@@ -4346,6 +4346,25 @@ export type Database = {
           similarity: number
         }[]
       }
+      match_grounded_audio_profiles: {
+        Args: {
+          exclude_id?: string
+          match_count?: number
+          query_embedding: string
+        }
+        Returns: {
+          artistic_score: number
+          cognitive_score: number
+          communication_score: number
+          confidence: number
+          contextual_score: number
+          emotional_score: number
+          id: string
+          name: string
+          similarity: number
+          social_score: number
+        }[]
+      }
       match_listener_profiles: {
         Args: {
           p_audio_boost?: number

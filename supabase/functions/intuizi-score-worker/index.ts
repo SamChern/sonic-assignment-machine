@@ -410,7 +410,7 @@ Deno.serve(async (req) => {
     };
     await materializePass();
 
-    while (timeLeft() > SAFETY_MS && !paused) {
+    while (timeLeft() > SAFETY_MS && !paused && !rateLimited) {
 
       const { data: claimed, error: claimErr } = await admin.rpc(
         "claim_intuizi_score_jobs",
@@ -425,18 +425,22 @@ Deno.serve(async (req) => {
       if (!tasks.length) break;
 
       // Warm every DISTINCT tag pattern in this batch with a single
-      // multi-source analyze-audio call each (up to 5 patterns per call), then
-      // let the identifiers take the cache path. This is the difference between
-      // one gateway call per identifier and one per ~5 distinct patterns.
+      // multi-source analyze-audio call each (up to `prewarmGroupSize` patterns
+      // per call), then let the identifiers take the cache path. This is the
+      // difference between one gateway call per identifier and one per group of
+      // distinct patterns — the single biggest lever on provider rate limits.
+      let learned = 0;
       try {
-        await prewarmTagSignatures(admin, tasks, metrics, {
+        const warm = await prewarmTagSignatures(admin, tasks, metrics, {
           traceId: runTraceId,
-          batchSize: 5,
+          batchSize: prewarmGroupSize,
         });
+        learned = warm.warmed;
       } catch (e) {
         const verdict = classifyFailure(e);
         console.warn("tag prewarm failed, falling back per identifier", verdict.reason);
         if (verdict.kind === "credits" || verdict.kind === "policy") paused = true;
+        if (verdict.kind === "rate_limit") rateLimited = true;
       }
 
       // Bounded parallelism: `concurrency` identifiers in flight at once. Each
@@ -457,8 +461,27 @@ Deno.serve(async (req) => {
       await Promise.all(lanes);
       // One write for the whole batch's outcomes.
       await flushWrites();
+
+      // Every newly learned tag pattern typically matches thousands of queued
+      // identifiers. Draining them right away is pure database work (~800/s),
+      // so a single paid batch clears far more of the backlog than the 16 rows
+      // it claimed — and it needs no further gateway calls.
+      if (learned > 0) await materializePass();
     }
     await flushWrites();
+    // Last cheap sweep with whatever this run learned.
+    if (!paused) await materializePass();
+
+    // A run that got through its AI work without a single 429 clears the parking
+    // counter, so one transient rate limit can no longer creep the pipeline
+    // toward a 30-minute park.
+    if (!rateLimited && !paused && rateLimits > 0 && (scored > 0 || materialized > 0)) {
+      rateLimits = 0;
+      await admin.from("intuizi_ingest_state")
+        .update({ consecutive_rate_limits: 0 })
+        .eq("id", "singleton");
+    }
+
 
     // Keep the activation's enterprise summary (the homepage "synced enterprise
     // analyses" card) in step with what has actually been scored.

@@ -368,6 +368,13 @@ export async function runIngestPipeline(
 
     let groundNote: string | null = null;
     let groundedNow = 0;
+    let tuning: {
+      tuned?: boolean;
+      neighbours?: number;
+      avg_similarity?: number;
+      confidence_before?: number;
+      confidence_after?: number;
+    } | null = null;
     let profileGrounded = Boolean(src?.profile_embedding);
     try {
       const { data: ground, error: groundErr } = await supabase.functions.invoke(
@@ -381,11 +388,19 @@ export async function runIngestPipeline(
         grounded?: number;
         failed?: number;
         profile_grounded?: boolean;
+        profile_tuning?: {
+          tuned?: boolean;
+          neighbours?: number;
+          avg_similarity?: number;
+          confidence_before?: number;
+          confidence_after?: number;
+        } | null;
         notes?: string[];
       };
       if (g.success === false) throw new Error(g.error ?? "grounding failed");
       groundedNow = Number(g.grounded ?? 0) || 0;
       profileGrounded = profileGrounded || Boolean(g.profile_grounded);
+      tuning = g.profile_tuning ?? null;
       if (g.notes?.length) groundNote = `Grounding: ${g.notes[0]}`;
       else if (Number(g.failed ?? 0) > 0) groundNote = `Grounding: ${g.failed} row(s) could not be embedded.`;
     } catch (e) {
@@ -402,6 +417,14 @@ export async function runIngestPipeline(
         ["Taxonomy tags", String(tags.length)],
         ["Profile vector", profileGrounded ? "grounded (CLAP)" : "not grounded yet"],
         ["Audio rows grounded now", String(groundedNow)],
+        [
+          "Scores tuned by audio",
+          tuning?.tuned
+            ? `yes · ${tuning.neighbours ?? 0} close track(s), confidence ${(
+                Number(tuning.confidence_before ?? 0) * 100
+              ).toFixed(0)}% → ${(Number(tuning.confidence_after ?? 0) * 100).toFixed(0)}%`
+            : "no · using tag-based scores",
+        ],
         ...tags.slice(0, 8).map(
           (t) =>
             [t.taxonomy_nodes?.code ?? "unresolved", `weight ${Number(t.weight).toFixed(2)}`] as [

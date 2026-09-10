@@ -1114,7 +1114,19 @@ Deno.serve(async (req) => {
           objects = await listObjects(prefix, 100);
         } catch (e) {
           const msg = errMsg(e);
-          summary.errors.push(`list ${prefix}: ${msg}`);
+          // s3:ListBucket denied is a bucket-permission fact, not a per-prefix
+          // failure: report it once, in plain language, and point at the manual
+          // key path which needs only s3:GetObject.
+          if (/AccessDenied|ListBucket|\[403\]/i.test(msg)) {
+            const note =
+              "Automatic file discovery is switched off by the data provider: the S3 key we " +
+              "were given can read files but is not allowed to list the delivery bucket " +
+              "(s3:ListBucket). Ask Intuizi to add s3:ListBucket for this key, or paste the " +
+              "delivered file keys into “Ingest by key”, which needs no listing permission.";
+            if (!summary.errors.includes(note)) summary.errors.push(note);
+          } else {
+            summary.errors.push(`list ${prefix}: ${msg}`);
+          }
           continue;
         }
         const dataObjects = objects.filter(

@@ -85,6 +85,7 @@ const QUEUE_COLS =
 
 export const useScoringRuns = (pollMs = 10000): ScoringRunsData => {
   const [depth, setDepth] = useState<QueueDepth | null>(null);
+  const [coverage, setCoverage] = useState<Coverage | null>(null);
   const [activations, setActivations] = useState<ActivationSnapshot[]>([]);
   const [running, setRunning] = useState<QueueItem[]>([]);
   const [recent, setRecent] = useState<QueueItem[]>([]);
@@ -105,9 +106,11 @@ export const useScoringRuns = (pollMs = 10000): ScoringRunsData => {
     inFlight.current = true;
     setLoading(true);
     try {
-      const [depthRes, cacheRes, runningRes, recentRes, workerRes, stateRes] =
+      const [depthRes, coverRes, cacheRes, runningRes, recentRes, workerRes, stateRes] =
         await Promise.all([
           supabase.rpc("intuizi_score_queue_depth", { p_cap: 100000 }),
+          // Grounded vs tag-only split across the whole scored population.
+          supabase.rpc("admin_intuizi_grounding_coverage"),
           supabase
             .from("intuizi_cost_estimate_cache")
             .select("activation_id,total_rows,done_rows,pending_rows,computed_at")
@@ -144,6 +147,7 @@ export const useScoringRuns = (pollMs = 10000): ScoringRunsData => {
 
       const d = Array.isArray(depthRes.data) ? depthRes.data[0] : depthRes.data;
       if (d) setDepth(d as QueueDepth);
+      if (!coverRes.error && coverRes.data) setCoverage(coverRes.data as unknown as Coverage);
       setActivations((cacheRes.data ?? []) as ActivationSnapshot[]);
       setRunning((runningRes.data ?? []) as QueueItem[]);
       setRecent((recentRes.data ?? []) as QueueItem[]);
@@ -253,6 +257,7 @@ export const useScoringRuns = (pollMs = 10000): ScoringRunsData => {
   }, [live, pollMs, load]);
 
   return {
+    coverage,
     depth,
     activations,
     running,

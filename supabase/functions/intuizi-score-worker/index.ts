@@ -526,8 +526,17 @@ Deno.serve(async (req) => {
 
     const remaining = pending ?? 0;
 
-    const willChain = remaining > 0 && !paused;
+    // Chaining immediately after a 429 just re-triggers the provider's backoff,
+    // so a rate-limited run parks itself briefly instead and lets the next
+    // scheduled invocation resume.
+    if (rateLimited && !paused) {
+      await admin.from("intuizi_ingest_state")
+        .update({ parked_until: new Date(Date.now() + 90_000).toISOString() })
+        .eq("id", "singleton");
+    }
+    const willChain = remaining > 0 && !paused && !rateLimited;
     if (willChain) {
+
       // Self-chaining: fire and forget, so this response returns immediately.
       admin.functions.invoke("intuizi-score-worker", {
         body: {

@@ -101,7 +101,7 @@ export default function Methodology() {
 
 
   return (
-    <main className="container mx-auto max-w-3xl space-y-8 px-4 py-10">
+    <main className="container mx-auto max-w-3xl space-y-8 px-4 py-10 pb-mobile-nav">
       <header className="space-y-3">
         <h1 className="text-3xl font-semibold">How we work out a match</h1>
         <p className="text-muted-foreground">

@@ -123,7 +123,7 @@ export default function AdminCTV() {
   if (loading) return null;
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-5xl">
+    <div className="container mx-auto py-8 px-4 pb-mobile-nav max-w-5xl">
       <Button variant="ghost" onClick={() => navigate("/admin")} className="mb-4">
         <ArrowLeft className="w-4 h-4 mr-2" /> Back to admin
       </Button>

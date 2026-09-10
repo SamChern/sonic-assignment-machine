@@ -12,7 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Play, RefreshCw, Search, Wand2 } from "lucide-react";
+import { KeyRound, Loader2, Play, RefreshCw, Search, Wand2 } from "lucide-react";
+import { useState } from "react";
+import IngestByKeyPanel from "@/components/IngestByKeyPanel";
 
 import DeadlinePanel from "@/components/wizard/DeadlinePanel";
 import LiveRunBanner from "@/components/wizard/LiveRunBanner";

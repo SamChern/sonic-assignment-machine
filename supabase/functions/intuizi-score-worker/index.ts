@@ -333,8 +333,9 @@ Deno.serve(async (req) => {
             paused_at: new Date().toISOString(),
           }).eq("id", "singleton");
         } else if (verdict.kind === "rate_limit") {
-          // Back off hard: serialize the remaining work for this invocation.
+          // Back off hard: serialize what is left and claim nothing new.
           concurrency = 1;
+          rateLimited = true;
           rateLimits += 1;
           const next = rateLimits;
           await admin.from("intuizi_ingest_state").update({
@@ -345,8 +346,15 @@ Deno.serve(async (req) => {
               : {}),
           }).eq("id", "singleton");
           if (next >= 3) paused = true;
-          else await new Promise((r) => setTimeout(r, 2000 * next));
+          else {
+            // Respect the gateway's own Retry-After hint when it gave one.
+            const hint = Math.max(0, ...(metrics.retryAfterMs ?? [0]));
+            await new Promise((r) =>
+              setTimeout(r, Math.min(20_000, Math.max(hint, 2000 * next)))
+            );
+          }
         }
+
       }
       console.log(JSON.stringify({
         evt: "intuizi_score_task",

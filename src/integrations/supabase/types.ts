@@ -3985,6 +3985,7 @@ export type Database = {
         Args: { p_bucket?: string; p_days?: number }
         Returns: Json
       }
+      admin_intuizi_grounding_coverage: { Args: never; Returns: Json }
       admin_list_people: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: {

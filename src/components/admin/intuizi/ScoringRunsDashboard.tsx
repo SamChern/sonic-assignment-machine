@@ -20,6 +20,8 @@ import {
   RefreshCw,
   RotateCcw,
   Skull,
+  Waves,
+  FileText,
 
 } from "lucide-react";
 import { useScoringRuns, type QueueItem } from "./useScoringRuns";
@@ -95,6 +97,20 @@ export const ScoringRunsDashboard = () => {
   const s = useScoringRuns();
   const capped = s.depth ? s.depth.pending_capped >= s.depth.capped_at : false;
   const doneTotal = s.activations.reduce((a, r) => a + r.done_rows, 0);
+
+  // Grounded vs tag-only: 'grounded' means real audio was analysed, 'bridged'
+  // means an audio vector was carried across, anything else is text-only.
+  const g = s.coverage?.grounding ?? {};
+  const ids = (k: string) => Number(g[k]?.identifiers ?? 0);
+  const grounded = ids("grounded") + ids("bridged");
+  const textOnly = Object.entries(g)
+    .filter(([k]) => k !== "grounded" && k !== "bridged")
+    .reduce((a, [, v]) => a + Number(v.identifiers ?? 0), 0);
+  const scoredTotal = grounded + textOnly;
+  const queue = s.coverage?.queue ?? {};
+  const queueTotal = Object.values(queue).reduce((a, n) => a + Number(n || 0), 0);
+  const pct = (n: number) =>
+    scoredTotal ? `${((n / scoredTotal) * 100).toFixed(1)}%` : "—";
 
   return (
     <Card className="p-5 space-y-5">
@@ -211,6 +227,55 @@ export const ScoringRunsDashboard = () => {
           value={s.depth ? fmt(s.depth.dead_letter_capped) : "—"}
           tone={s.depth?.dead_letter_capped ? "text-destructive" : undefined}
         />
+      </div>
+
+      <div>
+        <h3 className="mb-2 text-sm font-medium">Audio grounding across the queue</h3>
+        {!s.coverage ? (
+          <p className="text-xs text-muted-foreground">Reading coverage…</p>
+        ) : (
+          <>
+            <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+              <Stat
+                icon={<Waves className="h-3.5 w-3.5" />}
+                label="Grounded in real audio"
+                value={fmt(grounded)}
+                hint={`${pct(grounded)} of scored identifiers`}
+                tone="text-emerald-400"
+              />
+              <Stat
+                icon={<FileText className="h-3.5 w-3.5" />}
+                label="Tag-only estimates"
+                value={fmt(textOnly)}
+                hint={`${pct(textOnly)} — no audio analysed yet`}
+                tone="text-amber-500"
+              />
+              <Stat
+                icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                label="Identifiers scored"
+                value={fmt(Number(queue.done ?? 0))}
+                hint={`of ${fmt(queueTotal)} queued`}
+              />
+              <Stat
+                icon={<Clock className="h-3.5 w-3.5" />}
+                label="Still to score"
+                value={fmt(Number(queue.pending ?? 0) + Number(queue.processing ?? 0))}
+                hint={`${fmt(Number(queue.dead_letter ?? 0))} stuck · ${fmt(
+                  Number(queue.skipped ?? 0),
+                )} skipped`}
+              />
+            </div>
+            <Progress
+              value={scoredTotal ? (grounded / scoredTotal) * 100 : 0}
+              className="mt-3 h-2"
+              aria-label="Share of scored identifiers grounded in real audio"
+            />
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Scoring runs automatically every couple of minutes until the queue is empty; grounding
+              rises as tracks are analysed with the audio model.
+            </p>
+          </>
+        )}
       </div>
 
       <div>

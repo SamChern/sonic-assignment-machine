@@ -12,9 +12,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { requireAdmin, AuthzError } from "../_shared/admin.ts";
 import { groundSourceWithClap } from "../_shared/clapAudio.ts";
 import {
+  clapEmbedText,
   getSemanticSvcConfig,
+  logSemanticCall,
   semanticSvcBreakerOpen,
   semanticSvcHealth,
+  type SemanticSvcConfig,
 } from "../_shared/semanticSvc.ts";
 
 const corsHeaders = {

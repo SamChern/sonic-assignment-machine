@@ -226,13 +226,68 @@ Deno.serve(async (req) => {
       }, 503);
     }
 
-    const { data, error } = await admin
+    // Activation-scoped run (the ingest wizard): ground this activation's own
+    // rows first, and text-ground the audience profile itself.
+    const profileNotes: string[] = [];
+    let profileGrounded = false;
+    let scopedIds: string[] | null = null;
+    if (activationId) {
+      scopedIds = await activationSourceIds(admin, activationId, limit);
+      const { data: profileRow } = await admin
+        .from("intuizi_identifiers")
+        .select("audio_source_id")
+        .eq("primary_identifier", `activation:${activationId}`)
+        .maybeSingle();
+      const profileSourceId = profileRow?.audio_source_id as string | null | undefined;
+      if (profileSourceId) {
+        const { data: srcRow } = await admin
+          .from("audio_sources")
+          .select("id, name, file_url, preview_url, profile_embedding")
+          .eq("id", profileSourceId)
+          .maybeSingle();
+        if (srcRow && !srcRow.profile_embedding && !srcRow.file_url && !srcRow.preview_url) {
+          const res = await groundActivationProfile(
+            admin,
+            cfg,
+            profileSourceId,
+            srcRow.name ?? `Activation ${activationId}`,
+          );
+          profileGrounded = res.grounded;
+          if (res.error) profileNotes.push(res.error);
+        } else if (srcRow?.profile_embedding) {
+          profileGrounded = true;
+        }
+      } else {
+        profileNotes.push("no activation profile row exists yet");
+      }
+    }
+
+    let query = admin
       .from("audio_sources")
       .select("id, name, file_url, preview_url")
       .is("profile_embedding", null)
       .or("file_url.not.is.null,preview_url.not.is.null")
       .order("created_at", { ascending: false })
       .limit(limit);
+    if (scopedIds) {
+      if (scopedIds.length === 0) {
+        return json({
+          success: true,
+          configured: true,
+          service_ok: true,
+          activation_id: activationId,
+          profile_grounded: profileGrounded,
+          considered: 0,
+          grounded: 0,
+          skipped: 0,
+          failed: 0,
+          notes: profileNotes,
+          ...(await readCoverage(admin)),
+        });
+      }
+      query = query.in("id", scopedIds);
+    }
+    const { data, error } = await query;
     if (error) return json({ success: false, error: error.message }, 500);
 
     const rows = (data ?? []) as SourceRow[];

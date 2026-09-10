@@ -230,6 +230,7 @@ Deno.serve(async (req) => {
     // rows first, and text-ground the audience profile itself.
     const profileNotes: string[] = [];
     let profileGrounded = false;
+    let profileTuning: ProfileTuning | null = null;
     let scopedIds: string[] | null = null;
     if (activationId) {
       scopedIds = await activationSourceIds(admin, activationId, limit);

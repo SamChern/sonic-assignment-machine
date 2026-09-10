@@ -384,8 +384,15 @@ export async function runIngestPipeline(
       ].slice(0, 3),
     });
 
+    // --- Background scoring -----------------------------------------------
+    // Ingest only enqueues scoring work, so kick `intuizi-score-worker` and poll
+    // its progress here. The worker self-chains, so this never blocks the run
+    // budget — and the profile above is already on screen while it drains.
+    await drainScoreQueue(activation.activation_id);
+
     // --- Stage: scoring ----------------------------------------------------
     setStage("score", { state: "running", summary: "reading ontology scores…" });
+
     const { data: ana } = await supabase
       .from("source_analyses")
       .select(

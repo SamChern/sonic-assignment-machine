@@ -87,6 +87,46 @@ export function useWizardEngine() {
   const setStage = (key: StageKey, value: StageResult) =>
     setResults((prev) => ({ ...prev, [key]: value }));
 
+  /**
+   * Files already recorded in the database, grouped by activation id. Used when
+   * bucket listing is unavailable (the delivery credential often has object-read
+   * access but no `s3:ListBucket`), so previously-seen deliveries can still be
+   * re-run from the wizard.
+   */
+  const activationsFromLedger = useCallback(async (): Promise<Activation[]> => {
+    const { data } = await supabase
+      .from("intuizi_ingest_files")
+      .select(
+        "object_key, report_type, size_bytes, status, total_rows, processed_rows, finished_at, error_message",
+      )
+      .order("updated_at", { ascending: false })
+      .limit(500);
+
+    const groups = new Map<string, Activation>();
+    for (const r of data ?? []) {
+      const key = String(r.object_key ?? "");
+      const id = key.match(/activation[_-]?id[_-]?(\d+)/i)?.[1] ?? "unassigned";
+      const group =
+        groups.get(id) ??
+        ({ activation_id: id, files: [], empty_files: 0, total_bytes: 0, done_files: 0 } as Activation);
+      group.files.push({
+        object_key: key,
+        report_type: r.report_type ?? null,
+        size: Number(r.size_bytes ?? 0) || 0,
+        prefix: key.split("/").slice(0, -1).join("/"),
+        status: r.status ?? null,
+        total_rows: r.total_rows == null ? null : Number(r.total_rows),
+        processed_rows: r.processed_rows == null ? null : Number(r.processed_rows),
+        finished_at: r.finished_at ?? null,
+        error_message: r.error_message ?? null,
+      });
+      group.total_bytes += Number(r.size_bytes ?? 0) || 0;
+      if (r.status === "done") group.done_files += 1;
+      groups.set(id, group);
+    }
+    return [...groups.values()].sort((a, b) => b.activation_id.localeCompare(a.activation_id));
+  }, []);
+
   /** Step 0 — list inbound objects grouped by activation id. */
   const discover = useCallback(async () => {
     setDiscovering(true);
@@ -94,24 +134,36 @@ export function useWizardEngine() {
       activations?: Activation[];
       errors?: string[];
     }>("intuizi-ingest", { body: { action: "activations" }, timeoutMs: 60_000 });
+
+    let list = error ? [] : (data?.activations ?? []).filter((a) => a.files.length > 0);
+    let fromLedger = false;
+    if (!list.length) {
+      list = await activationsFromLedger();
+      fromLedger = list.length > 0;
+    }
     setDiscovering(false);
 
-    if (error) {
-      toast({ title: "Could not list activations", description: error.message, variant: "destructive" });
-      return;
-    }
-    const list = (data?.activations ?? []).filter((a) => a.files.length > 0);
     setActivations(list);
     setResults({});
     if (!list.length) {
-      const why = data?.errors?.length
-        ? data.errors.join("; ")
-        : "Nothing is waiting under the Intuizi prefixes.";
-      toast({ title: "No inbound objects found", description: why });
+      const why = error
+        ? error.message
+        : data?.errors?.length
+          ? data.errors.join("; ")
+          : "Nothing is waiting under the Intuizi prefixes.";
+      toast({ title: "No inbound objects found", description: why, variant: "destructive" });
       return;
     }
+    if (fromLedger) {
+      toast({
+        title: "Listing from delivery history",
+        description:
+          "Bucket scanning is unavailable, so these activations come from files already recorded here.",
+      });
+    }
     if (!list.some((a) => a.activation_id === selected)) setSelected(list[0].activation_id);
-  }, [selected]);
+  }, [selected, activationsFromLedger]);
+
 
   /**
    * Wait for the background scorer to drain this activation's queue.

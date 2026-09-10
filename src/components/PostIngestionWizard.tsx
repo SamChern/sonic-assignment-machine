@@ -45,6 +45,8 @@ const PostIngestionWizard = () => {
     resume,
   } = useWizardEngine();
 
+  const [showByKey, setShowByKey] = useState(false);
+
   const {
     readiness,
     loading: inferenceLoading,

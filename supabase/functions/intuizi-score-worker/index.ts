@@ -557,6 +557,8 @@ Deno.serve(async (req) => {
       failed,
 
       paused,
+      rate_limited: rateLimited,
+
       pending: remaining,
       pending_capped_at: depthCap,
       dead_letter: deadLetter ?? 0,

@@ -368,12 +368,15 @@ export async function runIngestPipeline(
 
     let groundNote: string | null = null;
     let groundedNow = 0;
+    type Scores = Record<string, number>;
     let tuning: {
       tuned?: boolean;
       neighbours?: number;
       avg_similarity?: number;
       confidence_before?: number;
       confidence_after?: number;
+      scores_before?: Scores | null;
+      scores_after?: Scores | null;
     } | null = null;
     let profileGrounded = Boolean(src?.profile_embedding);
     try {
@@ -394,6 +397,8 @@ export async function runIngestPipeline(
           avg_similarity?: number;
           confidence_before?: number;
           confidence_after?: number;
+          scores_before?: Scores | null;
+          scores_after?: Scores | null;
         } | null;
         notes?: string[];
       };
@@ -406,6 +411,43 @@ export async function runIngestPipeline(
     } catch (e) {
       groundNote = `Audio grounding skipped — ${e instanceof Error ? e.message : String(e)}`;
     }
+
+    // Six-axis comparison: what the taxonomy text said vs what the CLAP audio
+    // neighbours pulled it to. `scores_before/after` only exist when tuning ran,
+    // so fall back to the stored analysis row for a text-only readout.
+    const CATS = [
+      ["emotional", "Emotional"],
+      ["cognitive", "Cognitive"],
+      ["social", "Social"],
+      ["communication", "Communication"],
+      ["contextual", "Contextual"],
+      ["artistic", "Artistic"],
+    ] as const;
+
+    const { data: anaRow } = await supabase
+      .from("source_analyses")
+      .select(
+        "emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
+      )
+      .eq("audio_source_id", sourceId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const before = tuning?.scores_before ?? null;
+    const after = tuning?.scores_after ?? null;
+    const scoreRows: [string, string][] = CATS.map(([key, label]) => {
+      const textScore = Number(
+        before?.[key] ?? (anaRow as Record<string, unknown> | null)?.[`${key}_score`] ?? 0,
+      );
+      if (!after) return [`${label} (text)`, `${Math.round(textScore)}`];
+      const audioScore = Math.round(Number(after[key] ?? textScore));
+      const delta = audioScore - Math.round(textScore);
+      return [
+        `${label} · text → audio`,
+        `${Math.round(textScore)} → ${audioScore}${delta === 0 ? "" : ` (${delta > 0 ? "+" : ""}${delta})`}`,
+      ];
+    });
 
     setStage("source", {
       state: !src || tags.length === 0 ? "warn" : src.analysis_status === "failed" ? "error" : "ok",
@@ -425,6 +467,7 @@ export async function runIngestPipeline(
               ).toFixed(0)}% → ${(Number(tuning.confidence_after ?? 0) * 100).toFixed(0)}%`
             : "no · using tag-based scores",
         ],
+        ...scoreRows,
         ...tags.slice(0, 8).map(
           (t) =>
             [t.taxonomy_nodes?.code ?? "unresolved", `weight ${Number(t.weight).toFixed(2)}`] as [

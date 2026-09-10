@@ -81,6 +81,93 @@ async function playableUrl(admin: any, row: SourceRow): Promise<string | null> {
   return data.signedUrl;
 }
 
+/**
+ * The activation profile row has no audio file of its own — it is an audience
+ * aggregate. Ground it in the SAME CLAP space as real audio by embedding what
+ * the taxonomy says about it, so profile <-> track kNN stays comparable.
+ */
+async function groundActivationProfile(
+  // deno-lint-disable-next-line no-explicit-any
+  admin: any,
+  cfg: SemanticSvcConfig,
+  sourceId: string,
+  name: string,
+): Promise<{ grounded: boolean; tags: number; error?: string }> {
+  const { data: tagRows } = await admin
+    .from("audio_source_tags")
+    .select("weight, taxonomy_nodes(code, label)")
+    .eq("audio_source_id", sourceId)
+    .order("weight", { ascending: false })
+    .limit(40);
+  // deno-lint-disable-next-line no-explicit-any
+  const labels = ((tagRows ?? []) as any[])
+    .map((r) => (r.taxonomy_nodes?.label ?? r.taxonomy_nodes?.code ?? "").toString().trim())
+    .filter(Boolean);
+  if (labels.length === 0) {
+    return { grounded: false, tags: 0, error: "no resolved taxonomy tags to embed yet" };
+  }
+
+  const text = `Audience listening profile "${name}": ${labels.join(", ")}.`;
+  const started = Date.now();
+  const vector = await clapEmbedText(cfg, text);
+  await logSemanticCall(admin, {
+    action: "embed_text",
+    outcome: vector ? "ok" : "error",
+    duration_ms: Date.now() - started,
+    dims: vector?.length ?? null,
+    subject_ref: `activation-profile :: ${name}`.slice(0, 200),
+    error_message: vector ? null : "embed_text failed (see function logs)",
+  });
+  if (!vector) return { grounded: false, tags: labels.length, error: "embedding service returned nothing" };
+
+  const { error } = await admin
+    .from("audio_sources")
+    .update({ profile_embedding: JSON.stringify(vector) })
+    .eq("id", sourceId);
+  if (error) return { grounded: false, tags: labels.length, error: error.message };
+  return { grounded: true, tags: labels.length };
+}
+
+/** Audio source ids belonging to one activation, via its queued identifiers. */
+async function activationSourceIds(
+  // deno-lint-disable-next-line no-explicit-any
+  admin: any,
+  activationId: string,
+  limit: number,
+): Promise<string[]> {
+  const ids = new Set<string>();
+  const { data: profile } = await admin
+    .from("intuizi_identifiers")
+    .select("audio_source_id")
+    .eq("primary_identifier", `activation:${activationId}`)
+    .maybeSingle();
+  if (profile?.audio_source_id) ids.add(profile.audio_source_id as string);
+
+  const { data: queued } = await admin
+    .from("intuizi_score_queue")
+    .select("identifier")
+    .eq("activation_id", activationId)
+    .limit(Math.min(2000, limit * 20));
+  // deno-lint-disable-next-line no-explicit-any
+  const identifiers = [...new Set(((queued ?? []) as any[]).map((r) => String(r.identifier)))].slice(
+    0,
+    2000,
+  );
+  if (identifiers.length > 0) {
+    const { data: linked } = await admin
+      .from("intuizi_identifiers")
+      .select("audio_source_id")
+      .in("primary_identifier", identifiers)
+      .not("audio_source_id", "is", null)
+      .limit(limit * 4);
+    // deno-lint-disable-next-line no-explicit-any
+    for (const r of (linked ?? []) as any[]) {
+      if (r.audio_source_id) ids.add(String(r.audio_source_id));
+    }
+  }
+  return [...ids];
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 

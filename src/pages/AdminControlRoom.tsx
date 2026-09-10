@@ -107,7 +107,7 @@ export default function AdminControlRoom() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-6 sm:px-6">
+    <main className="mx-auto w-full max-w-5xl px-4 pb-mobile-nav pt-6 sm:px-6">
       <header className="mb-6 flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
           <ArrowLeft className="mr-1 h-4 w-4" /> Admin

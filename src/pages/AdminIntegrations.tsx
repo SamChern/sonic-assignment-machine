@@ -95,7 +95,7 @@ const AdminIntegrations = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card/40 backdrop-blur sticky top-0 z-10">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-2 sm:px-6 sm:py-4">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -113,7 +113,7 @@ const AdminIntegrations = () => {
             <Button variant="ghost" size="sm" onClick={refreshStatus} disabled={statusLoading} aria-label="Refresh connection status">
               <RefreshCw className={`h-4 w-4 ${statusLoading ? "animate-spin" : ""}`} />
             </Button>
-            <Badge variant="outline" className="gap-1">
+            <Badge variant="outline" className="hidden gap-1 sm:inline-flex">
               <ShieldCheck className="h-3 w-3" /> Admin only
             </Badge>
           </div>
@@ -121,19 +121,19 @@ const AdminIntegrations = () => {
       </header>
 
       <main
-        className={`container mx-auto px-6 py-8 space-y-6 ${
+        className={`container mx-auto px-4 py-6 pb-mobile-nav space-y-6 sm:px-6 sm:py-8 ${
           view === "console" ? "max-w-5xl" : "max-w-3xl"
         }`}
       >
         <Tabs value={view} onValueChange={(v) => setView(v as "connected" | "setup" | "console")}>
-          <TabsList className="grid w-full max-w-2xl grid-cols-3">
-            <TabsTrigger value="connected" className="gap-1">
+          <TabsList className="flex w-full max-w-2xl overflow-x-auto sm:grid sm:grid-cols-3">
+            <TabsTrigger value="connected" className="shrink-0 gap-1 text-xs sm:text-sm">
               <Zap className="h-3.5 w-3.5" /> Connected ({connectedCount})
             </TabsTrigger>
-            <TabsTrigger value="setup" className="gap-1">
+            <TabsTrigger value="setup" className="shrink-0 gap-1 text-xs sm:text-sm">
               <Settings2 className="h-3.5 w-3.5" /> Needs setup ({setupCount})
             </TabsTrigger>
-            <TabsTrigger value="console" className="gap-1">
+            <TabsTrigger value="console" className="shrink-0 gap-1 text-xs sm:text-sm">
               <Activity className="h-3.5 w-3.5" /> Intuizi Console
             </TabsTrigger>
           </TabsList>

@@ -95,6 +95,9 @@ Deno.serve(async (req) => {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const rawLimit = Number(body.limit ?? 25);
     const limit = Math.max(1, Math.min(200, Number.isFinite(rawLimit) ? Math.round(rawLimit) : 25));
+    const activationId = typeof body.activation_id === "string" && body.activation_id.trim()
+      ? body.activation_id.trim()
+      : null;
 
     const coverage = await readCoverage(admin);
     const cfg = await getSemanticSvcConfig(admin);

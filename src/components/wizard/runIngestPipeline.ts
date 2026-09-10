@@ -276,19 +276,19 @@ export async function runIngestPipeline(
       notes: ingestErrors.length ? ingestErrors : undefined,
     });
 
-    // --- Background scoring -----------------------------------------------
-    // Ingest only enqueues scoring work now, so wait for `intuizi-score-worker`
-    // to drain this activation's queue before reading scores. The worker
-    // self-chains, so this is a read-only poll that never blocks the run budget.
-    await drainScoreQueue(activation.activation_id);
-
     // --- Stage: source + tags ---------------------------------------------
     // The activation profile is BUILT here, not merely read: normalization now
     // happens on the EC2 worker, which emits per-identifier rows only, so the
     // audience-level profile has to be assembled from what already landed in the
     // database (queue tags + scored identifiers). This is idempotent, costs no AI
     // credits, and repairs an activation whose profile is missing or stale.
+    //
+    // It deliberately runs BEFORE the scoring drain: the taxonomy side of the
+    // profile only needs the queued rows, so waiting for a 100k-deep scoring
+    // queue (which is rate-limited by the AI gateway) used to leave this step
+    // stuck at "not started" for many minutes.
     setStage("source", { state: "running", summary: "building the activation profile…" });
+
 
     let identifiersSeen = 0;
     let buildError: string | null = null;

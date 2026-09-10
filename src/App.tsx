@@ -11,7 +11,6 @@ import AppErrorBoundary from "@/components/AppErrorBoundary";
 import AdminErrorBoundary from "@/components/AdminErrorBoundary";
 import RequireAdmin from "@/components/RequireAdmin";
 import MobileBottomNav from "@/components/MobileBottomNav";
-import MobileAuthFallback from "@/components/MobileAuthFallback";
 
 import VersionStatusPanel from "@/components/VersionStatusPanel";
 import Index from "./pages/Index";
@@ -207,7 +206,6 @@ const App = () => (
           </AppErrorBoundary>
 
           </div>
-          <MobileAuthFallback />
           <MobileBottomNav />
 
           <VersionStatusPanel />

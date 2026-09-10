@@ -467,6 +467,7 @@ export async function runIngestPipeline(
               ).toFixed(0)}% → ${(Number(tuning.confidence_after ?? 0) * 100).toFixed(0)}%`
             : "no · using tag-based scores",
         ],
+        ...scoreRows,
         ...tags.slice(0, 8).map(
           (t) =>
             [t.taxonomy_nodes?.code ?? "unresolved", `weight ${Number(t.weight).toFixed(2)}`] as [

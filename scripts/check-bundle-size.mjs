@@ -7,15 +7,20 @@ const KiB = 1024;
 const MiB = 1024 * KiB;
 
 // Reviewed 2026-09-10: the admin/enterprise surfaces grew total JS past the old
-// 2 MiB ceiling. Vendor libraries are now split into cached chunks (see
-// vite.config.ts manualChunks), so the entry chunk is well under budget; the
-// total ceiling is raised deliberately to 2.6 MiB to match reality.
+// 2 MiB ceiling, so the total ceiling is 2.6 MiB deliberately.
+//
+// Aggressive vendor splitting (separate React / Radix / chart chunks) reordered
+// module initialisation and shipped a blank page in production with
+// "Cannot access 'P' before initialization". Third-party code is therefore kept
+// in one vendor chunk (plus the two independent libs), and the largest-chunk
+// ceiling is raised to 1 MiB to match that safe chunking.
 const budgets = {
   total: 20 * MiB,
   javascript: 2.6 * MiB,
   css: 150 * KiB,
-  largestJavaScript: 850 * KiB,
+  largestJavaScript: 1024 * KiB,
 };
+
 
 async function collectFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });

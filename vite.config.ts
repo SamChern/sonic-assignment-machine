@@ -36,19 +36,17 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        // Keep the entry chunk under the reviewed bundle budget by pulling the
-        // big third-party libraries into their own long-cached chunks.
+        // Keep the entry chunk under the reviewed bundle budget. All third-party
+        // code goes into ONE vendor chunk on purpose: splitting React, Radix and
+        // the chart libs into separate chunks reordered their module
+        // initialisation and blew up production with a TDZ error
+        // ("Cannot access 'P' before initialization") on a blank page.
         manualChunks: (id: string) => {
           if (!id.includes("node_modules")) return undefined;
-          if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) {
-            return "vendor-react";
-          }
+          // @supabase has no React coupling, so it is safe to isolate.
           if (id.includes("@supabase")) return "vendor-supabase";
-          if (id.includes("@radix-ui")) return "vendor-radix";
-          if (/[\\/]node_modules[\\/](d3|d3-[a-z]+|recharts|victory-vendor)[\\/]/.test(id)) {
-            return "vendor-charts";
-          }
-          return undefined;
+          if (/[\\/]node_modules[\\/](d3|d3-[a-z]+)[\\/]/.test(id)) return "vendor-d3";
+          return "vendor";
         },
       },
     },

@@ -202,6 +202,11 @@ Deno.serve(async (req) => {
 
     const conclusive = drivers.filter((d) => !d.inconclusive);
 
+    // Mean score per axis across the training rows — computed once.
+    const meanScore = CATEGORIES.map(
+      (_c, i) => X.reduce((s, row) => s + row[i + 1] * 100, 0) / X.length,
+    );
+
     const rows = audioRows.map((r) => {
       const scores = CATEGORIES.map((c) => Number(r[`${c}_score`] ?? 0));
       const predicted = [1, ...scores.map((s) => s / 100)].reduce(
@@ -209,9 +214,6 @@ Deno.serve(async (req) => {
         0,
       );
       // Which conclusive axis contributes most to the gap from the baseline mix.
-      const meanScore = CATEGORIES.map(
-        (c, i) => X.reduce((s, row) => s + row[i + 1] * 100, 0) / X.length,
-      );
       const lead = conclusive
         .map((d) => {
           const idx = CATEGORIES.indexOf(d.category);

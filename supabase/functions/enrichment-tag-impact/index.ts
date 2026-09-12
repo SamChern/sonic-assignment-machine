@@ -111,17 +111,51 @@ Deno.serve(async (req) => {
       .sort((a, b) => b.devices - a.devices || b.events - a.events);
 
     // ---- 2. the account's own saved audio rows ------------------------------
+    // Analyses saved under the account come first. Older accounts loaded their
+    // audio through data rows instead, so when nothing is tagged to the account
+    // we fall back to the analyses those rows actually name — never to the
+    // shared pool.
+    const AUDIO_COLUMNS =
+      "id, source_name, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score";
+
     const { data: audio, error: audioErr } = await admin
       .from("source_analyses")
-      .select(
-        "id, source_name, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
-      )
+      .select(AUDIO_COLUMNS)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
       .limit(rowLimit);
     if (audioErr) throw new Error(audioErr.message);
 
-    const audioRows = (audio ?? []) as Record<string, unknown>[];
+    let audioRows = (audio ?? []) as Record<string, unknown>[];
+    let audioSource: "account_analyses" | "account_data_rows" = "account_analyses";
+
+    if (!audioRows.length) {
+      const { data: named, error: namedErr } = await admin
+        .from("enterprise_records")
+        .select("source_name")
+        .eq("organization_id", organizationId)
+        .not("source_name", "is", null)
+        .limit(RECORD_SAMPLE);
+      if (namedErr) throw new Error(namedErr.message);
+
+      const names = [
+        ...new Set((named ?? []).map((r) => String(r.source_name ?? "").trim()).filter(Boolean)),
+      ].slice(0, 200);
+
+      if (names.length) {
+        const { data: linked, error: linkedErr } = await admin
+          .from("source_analyses")
+          .select(AUDIO_COLUMNS)
+          .in("source_name", names)
+          .order("created_at", { ascending: false })
+          .limit(rowLimit);
+        if (linkedErr) throw new Error(linkedErr.message);
+        if (linked?.length) {
+          audioRows = linked as Record<string, unknown>[];
+          audioSource = "account_data_rows";
+        }
+      }
+    }
 
     if (!tags.length) {
       return json({
@@ -130,6 +164,7 @@ Deno.serve(async (req) => {
         reason: "no_tags",
         tags: [],
         audio_rows: audioRows.length,
+        audio_source: audioSource,
         computed_at: new Date().toISOString(),
       });
     }
@@ -156,15 +191,30 @@ Deno.serve(async (req) => {
       .limit(RECORD_SAMPLE);
     if (recErr) throw new Error(recErr.message);
 
-    const X: number[][] = [];
+    const scoreRows: number[][] = [];
     const y: number[] = [];
     for (const rec of records ?? []) {
       const device = String(rec.external_user_id ?? "").trim();
       const agg = device ? chosen.devices.get(device) : undefined;
       if (!agg || !agg.n) continue;
-      X.push([1, ...CATEGORIES.map((c) => Number(rec[`${c}_score`] ?? 0) / 100)]);
+      scoreRows.push(CATEGORIES.map((c) => Number(rec[`${c}_score`] ?? 0) / 100));
       y.push(agg.total / agg.n);
     }
+
+    // An axis that never varies across the matched devices carries no
+    // information about this tag and makes the system degenerate, so it is left
+    // out of the fit and reported as having nothing to learn from.
+    const varying = CATEGORIES.map((_c, i) => {
+      const col = scoreRows.map((row) => row[i]);
+      const min = Math.min(...col);
+      const max = Math.max(...col);
+      return Number.isFinite(min) && max - min > 1e-6;
+    });
+    const usedAxes = CATEGORIES.map((c, i) => ({ category: c, index: i })).filter(
+      (a) => varying[a.index],
+    );
+
+    const X = scoreRows.map((row) => [1, ...usedAxes.map((a) => row[a.index])]);
 
     const shared = {
       success: true,
@@ -173,11 +223,16 @@ Deno.serve(async (req) => {
       matched_rows: y.length,
       min_rows: minRows,
       audio_rows: audioRows.length,
+      audio_source: audioSource,
+      fitted_axes: usedAxes.map((a) => a.category),
       computed_at: new Date().toISOString(),
     };
 
     if (y.length < minRows) {
       return json({ ...shared, fitted: false, reason: "not_enough_matches" });
+    }
+    if (!usedAxes.length) {
+      return json({ ...shared, fitted: false, reason: "not_fittable" });
     }
 
     const out = await fitRemoteOrLocal(admin, X, y, iters, { lambda: RIDGE_LAMBDA });
@@ -187,13 +242,30 @@ Deno.serve(async (req) => {
     const beta = fit.beta;
     const baseline = y.reduce((a, b) => a + b, 0) / y.length;
 
-    const drivers = CATEGORIES.map((c, i) => {
-      const ci = fit.ci[i + 1] ?? [Number.NaN, Number.NaN];
+    // Coefficient per category; axes left out of the fit have no coefficient.
+    const coefficient = new Map<string, { beta: number; ci: [number, number] }>();
+    usedAxes.forEach((a, k) => {
+      const ci = (fit.ci[k + 1] ?? [Number.NaN, Number.NaN]) as [number, number];
+      coefficient.set(a.category, { beta: beta[k + 1], ci });
+    });
+
+    const drivers = CATEGORIES.map((c) => {
+      const co = coefficient.get(c);
+      if (!co) {
+        return {
+          category: c,
+          per_10_points: 0,
+          per_10_ci: [Number.NaN, Number.NaN] as [number, number],
+          inconclusive: true,
+          no_variation: true,
+        };
+      }
       return {
         category: c,
-        per_10_points: beta[i + 1] * 0.1,
-        per_10_ci: [ci[0] * 0.1, ci[1] * 0.1] as [number, number],
-        inconclusive: crossesZero(ci),
+        per_10_points: co.beta * 0.1,
+        per_10_ci: [co.ci[0] * 0.1, co.ci[1] * 0.1] as [number, number],
+        inconclusive: crossesZero(co.ci),
+        no_variation: false,
       };
     }).sort((a, b) => {
       if (a.inconclusive !== b.inconclusive) return a.inconclusive ? 1 : -1;
@@ -204,12 +276,12 @@ Deno.serve(async (req) => {
 
     // Mean score per axis across the training rows — computed once.
     const meanScore = CATEGORIES.map(
-      (_c, i) => X.reduce((s, row) => s + row[i + 1] * 100, 0) / X.length,
+      (_c, i) => scoreRows.reduce((s, row) => s + row[i] * 100, 0) / scoreRows.length,
     );
 
     const rows = audioRows.map((r) => {
       const scores = CATEGORIES.map((c) => Number(r[`${c}_score`] ?? 0));
-      const predicted = [1, ...scores.map((s) => s / 100)].reduce(
+      const predicted = [1, ...usedAxes.map((a) => scores[a.index] / 100)].reduce(
         (s, v, i) => s + v * beta[i],
         0,
       );

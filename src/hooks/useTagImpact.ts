@@ -24,6 +24,8 @@ export interface TagImpactDriver {
   per_10_points: number;
   per_10_ci: [number, number];
   inconclusive: boolean;
+  /** True when this score never varied across the matched devices. */
+  no_variation?: boolean;
 }
 
 export interface TagImpact {
@@ -35,6 +37,8 @@ export interface TagImpact {
   matched_rows?: number;
   min_rows?: number;
   audio_rows: number;
+  audio_source?: "account_analyses" | "account_data_rows";
+  fitted_axes?: string[];
   baseline?: number;
   r2?: number;
   engine?: "ec2" | "edge";

@@ -26,6 +26,7 @@ import IntuiziSyncStatusPanel from "@/components/enterprise/IntuiziSyncStatusPan
 import DatasetDiscovery from "@/components/enterprise/DatasetDiscovery";
 import PredictUsersPanel from "@/components/enterprise/PredictUsersPanel";
 import CohortExplorerPanel from "@/components/enterprise/CohortExplorerPanel";
+import TagImpactPanel from "@/components/enterprise/TagImpactPanel";
 import PredictOutcomesPanel from "@/components/enterprise/PredictOutcomesPanel";
 import PixelSetupPanel from "@/components/enterprise/PixelSetupPanel";
 import CategoryProfileEditor from "@/components/enterprise/CategoryProfileEditor";
@@ -421,6 +422,12 @@ const Workspace = () => {
               key={refreshKey}
               organizationId={active.organization_id}
               canWrite={canWrite}
+            />
+          </PanelErrorBoundary>
+          <PanelErrorBoundary label="Predicted impact on your site tags">
+            <TagImpactPanel
+              key={`predict-impact-${refreshKey}-${active.organization_id}`}
+              organizationId={active.organization_id}
             />
           </PanelErrorBoundary>
           {isAdmin && (

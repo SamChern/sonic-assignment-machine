@@ -98,15 +98,19 @@ export default function TagImpactPanel({ organizationId }: { organizationId: str
                 variant={d.inconclusive ? "outline" : "secondary"}
                 className={`text-[10px] ${d.inconclusive ? "opacity-60" : ""}`}
                 title={
-                  d.inconclusive
-                    ? "Not yet distinguishable from no effect."
-                    : `95% interval ${num(d.per_10_ci[0])} to ${num(d.per_10_ci[1])} per +10 points.`
+                  d.no_variation
+                    ? "This score is the same on every matched device, so there is nothing to learn from it yet."
+                    : d.inconclusive
+                      ? "Not yet distinguishable from no effect."
+                      : `95% interval ${num(d.per_10_ci[0])} to ${num(d.per_10_ci[1])} per +10 points.`
                 }
               >
                 {CATEGORY_LABEL[d.category] ?? d.category}{" "}
-                {d.inconclusive
-                  ? "· unclear"
-                  : `· ${d.per_10_points > 0 ? "+" : ""}${num(d.per_10_points)} per +10`}
+                {d.no_variation
+                  ? "· no variation"
+                  : d.inconclusive
+                    ? "· unclear"
+                    : `· ${d.per_10_points > 0 ? "+" : ""}${num(d.per_10_points)} per +10`}
               </Badge>
             ))}
           </div>
@@ -171,6 +175,9 @@ export default function TagImpactPanel({ organizationId }: { organizationId: str
           )}
 
           <p className="mt-3 text-[11px] text-muted-foreground">
+            {data.audio_source === "account_data_rows"
+              ? "Tracks matched from the audio named on your own data rows. "
+              : ""}
             Updated {new Date(data.computed_at).toLocaleString()}
           </p>
         </>

@@ -18,6 +18,18 @@ const corsHeaders = {
 
 const ORG_ROLES = ["owner", "analyst", "viewer"] as const;
 
+/** Per-account access switches. All default on so existing orgs are unchanged. */
+const CAPABILITY_KEYS = [
+  "intuizi_console",
+  "semantic_model",
+  "clap_grounding",
+  "eid_enrichment",
+  "pixels_tracking",
+  "predict_users",
+  "predict_outcomes",
+  "enrichment_preview",
+] as const;
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,

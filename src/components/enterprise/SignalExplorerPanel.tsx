@@ -211,11 +211,11 @@ export default function SignalExplorerPanel({
                       <th className="py-1.5 text-left font-medium">Grounding</th>
                       <th className="py-1.5 text-right font-medium">Confidence</th>
                       {CATEGORIES.map((c) => (
-                        <th key={c} className="py-1.5 text-right font-medium capitalize">
+                        <th key={c} className="py-1.5 pr-2 text-right font-medium capitalize">
                           {c.slice(0, 3)}
                         </th>
                       ))}
-                      <th className="py-1.5 text-left font-medium">Other signals</th>
+                      <th className="py-1.5 pl-2 text-left font-medium">Other signals</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -242,7 +242,7 @@ export default function SignalExplorerPanel({
                               : Math.round(Number(d.scores[c]))}
                           </td>
                         ))}
-                        <td className="py-1.5">
+                        <td className="py-1.5 pl-2">
                           <div className="flex flex-wrap gap-1">
                             {(d.labels ?? [])
                               .filter((l) => l !== `${family}: ${value}`)

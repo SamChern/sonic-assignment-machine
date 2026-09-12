@@ -55,16 +55,28 @@ export const useIdentifierGrounding = (sample = 500) => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error: rpcError } = await supabase.rpc("admin_identifier_grounding", {
-      _activation_id: activationId.trim() || null,
-      _grounding: filter === "all" ? null : filter,
-      _scored_only: scoredOnly,
-      _sample: sample,
-      _limit: PAGE_SIZE,
-      _offset: page * PAGE_SIZE,
-    });
+    const call = (size: number) =>
+      supabase.rpc("admin_identifier_grounding", {
+        _activation_id: activationId.trim() || null,
+        _grounding: filter === "all" ? null : filter,
+        _scored_only: scoredOnly,
+        _sample: size,
+        _limit: PAGE_SIZE,
+        _offset: page * PAGE_SIZE,
+      });
+
+    let { data, error: rpcError } = await call(sample);
+    // The queue is huge and the console runs several reports at once, so a busy
+    // database can cut this one short. Retry once with a smaller sample.
+    if (rpcError && /statement timeout|57014/i.test(rpcError.message)) {
+      ({ data, error: rpcError } = await call(Math.min(sample, 150)));
+    }
     if (rpcError) {
-      setError(rpcError.message);
+      setError(
+        /statement timeout|57014/i.test(rpcError.message)
+          ? "The database was too busy to build this sample. Try Refresh in a moment."
+          : rpcError.message,
+      );
       setRows([]);
     } else {
       const payload = (data ?? {}) as {
@@ -80,6 +92,7 @@ export const useIdentifierGrounding = (sample = 500) => {
     }
     setLoading(false);
   }, [activationId, filter, scoredOnly, page, sample]);
+
 
   useEffect(() => {
     void load();

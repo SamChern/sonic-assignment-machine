@@ -110,7 +110,7 @@ export default function TagImpactPanel({ organizationId }: { organizationId: str
                   ? "· no variation"
                   : d.inconclusive
                     ? "· unclear"
-                  : `· ${d.per_10_points > 0 ? "+" : ""}${num(d.per_10_points)} per +10`}
+                    : `· ${d.per_10_points > 0 ? "+" : ""}${num(d.per_10_points)} per +10`}
               </Badge>
             ))}
           </div>

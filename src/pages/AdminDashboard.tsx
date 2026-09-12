@@ -155,6 +155,13 @@ const DESTINATIONS: {
     depths: ["operate"],
   },
   {
+    to: "/admin/enterprise",
+    label: "Enterprise accounts",
+    description: "Create an enterprise account, set what it can reach and share data feeds.",
+    icon: ShieldCheck,
+    depths: ["operate"],
+  },
+  {
     to: "/admin/demo-requests",
     label: "Enterprise demos",
     description: "Demo requests from enterprise accounts, with status and booked times.",

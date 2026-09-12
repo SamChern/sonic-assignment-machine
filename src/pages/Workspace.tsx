@@ -33,6 +33,9 @@ import JobCards from "@/components/enterprise/JobCards";
 import PlaybooksPanel from "@/components/enterprise/PlaybooksPanel";
 import OrgComplianceStrip from "@/components/enterprise/OrgComplianceStrip";
 import WorkspaceDigestCard from "@/components/enterprise/WorkspaceDigestCard";
+import EnrichmentPreviewPanel from "@/components/enterprise/EnrichmentPreviewPanel";
+import type { CapabilityKey, Capabilities } from "@/lib/orgCapabilities";
+
 
 
 import sonicSimLogo from "@/assets/SonicSIM_transp.png";
@@ -42,6 +45,7 @@ import {
   BookMarked,
   Building2,
   Compass,
+  Layers,
   LineChart,
   Radio,
   RefreshCw,
@@ -65,7 +69,8 @@ const GROUPS = [
     icon: Upload,
     tabs: [
       { key: "data", label: "My data", icon: Upload },
-      { key: "discover", label: "Discovery", icon: Compass },
+      { key: "enrich", label: "Enrichment", icon: Layers, needs: "enrichment_preview" },
+      { key: "discover", label: "Discovery", icon: Compass, needs: "semantic_model" },
     ],
   },
   {
@@ -74,8 +79,8 @@ const GROUPS = [
     icon: Sparkles,
     tabs: [
       { key: "analyses", label: "Analyses", icon: Sparkles },
-      { key: "sonicsim", label: "See my SonicSIM", icon: Activity },
-      { key: "categories", label: "Categories", icon: Sliders },
+      { key: "sonicsim", label: "See my SonicSIM", icon: Activity, needs: "semantic_model" },
+      { key: "categories", label: "Categories", icon: Sliders, needs: "semantic_model" },
     ],
   },
   {
@@ -83,18 +88,23 @@ const GROUPS = [
     label: "Predict",
     icon: Target,
     tabs: [
-      { key: "users", label: "Predict users", icon: Target },
-      { key: "outcomes", label: "Predict outcomes", icon: LineChart },
-      { key: "playbooks", label: "Playbooks", icon: BookMarked },
+      { key: "users", label: "Predict users", icon: Target, needs: "predict_users" },
+      { key: "outcomes", label: "Predict outcomes", icon: LineChart, needs: "predict_outcomes" },
+      { key: "playbooks", label: "Playbooks", icon: BookMarked, needs: "predict_users" },
     ],
   },
   {
     key: "activate",
     label: "Activate",
     icon: Tag,
-    tabs: [{ key: "tags", label: "Tracking & pixels", icon: Tag }],
+    tabs: [{ key: "tags", label: "Tracking & pixels", icon: Tag, needs: "pixels_tracking" }],
   },
-] as const;
+] as const satisfies readonly {
+  key: string;
+  label: string;
+  icon: typeof Upload;
+  tabs: readonly { key: string; label: string; icon: typeof Upload; needs?: CapabilityKey }[];
+}[];
 
 type GroupKey = (typeof GROUPS)[number]["key"];
 
@@ -103,10 +113,18 @@ const ALL_TABS = GROUPS.flatMap((g) => g.tabs.map((t) => ({ ...t, group: g.key }
 const groupOf = (tabKey: string): GroupKey =>
   (ALL_TABS.find((t) => t.key === tabKey)?.group ?? "understand") as GroupKey;
 
+/** Only the tabs this account's access switches allow, groups with none dropped. */
+const permittedGroups = (caps: Capabilities) =>
+  GROUPS.map((g) => ({
+    ...g,
+    tabs: g.tabs.filter((t) => !("needs" in t) || !t.needs || caps[t.needs]),
+  })).filter((g) => g.tabs.length > 0);
+
 const Workspace = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { orgs, active, activeId, setActiveId, canWrite, isOrgAdmin, loading } = useOrganization();
+  const { orgs, active, activeId, setActiveId, canWrite, isOrgAdmin, capabilities, loading } =
+    useOrganization();
   const [params, setParams] = useSearchParams();
   // Tab choice follows the user across devices; the URL still wins for deep links.
   const [storedTab, setStoredTab] = useUiPreferenceValue<string>(
@@ -114,9 +132,18 @@ const Workspace = () => {
     "analyses",
     (v) => typeof v === "string" && ALL_TABS.some((t) => t.key === v),
   );
-  const validTab = (value: string | null) =>
-    value && ALL_TABS.some((t) => t.key === value) ? value : null;
-  const tab = validTab(params.get("tab")) ?? validTab(storedTab) ?? "analyses";
+  // Only the sections this account is permissioned for.
+  const groups = useMemo(() => permittedGroups(capabilities), [capabilities]);
+  const allowedTabs = useMemo<string[]>(
+    () => groups.flatMap((g) => g.tabs.map((t) => t.key as string)),
+    [groups],
+  );
+  const validTab = useCallback(
+    (value: string | null) => (value && allowedTabs.includes(value) ? value : null),
+    [allowedTabs],
+  );
+  const tab =
+    validTab(params.get("tab")) ?? validTab(storedTab) ?? allowedTabs[0] ?? "analyses";
   const group = useMemo(() => groupOf(tab), [tab]);
   const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
   const [analysisCount, setAnalysisCount] = useState<number | null>(null);
@@ -169,9 +196,9 @@ const Workspace = () => {
     setParams(p, { replace: true });
   };
 
-  /** Switching group lands on that group's first tab. */
+  /** Switching group lands on that group's first permitted tab. */
   const setGroup = (next: string) => {
-    const g = GROUPS.find((x) => x.key === next);
+    const g = groups.find((x) => x.key === next);
     if (g) setTab(g.tabs[0].key);
   };
 
@@ -324,12 +351,12 @@ const Workspace = () => {
 
 
         <Tabs value={group} onValueChange={setGroup} className="mt-6">
-          <TabsList className="grid h-auto w-full grid-cols-4 gap-1 border border-border/60 bg-card/70 p-1 backdrop-blur-sm">
-            {GROUPS.map((g) => (
+          <TabsList className="flex h-auto w-full flex-wrap gap-1 border border-border/60 bg-card/70 p-1 backdrop-blur-sm">
+            {groups.map((g) => (
               <TabsTrigger
                 key={g.key}
                 value={g.key}
-                className="min-w-0 whitespace-normal px-1 text-[11px] leading-tight sm:px-2 sm:text-sm"
+                className="min-w-0 flex-1 whitespace-normal px-1 text-[11px] leading-tight sm:px-2 sm:text-sm"
               >
                 <g.icon className="hidden h-3.5 w-3.5 shrink-0 sm:mr-1 sm:inline-block" />
                 <span className="min-w-0 break-words">{g.label}</span>
@@ -341,7 +368,7 @@ const Workspace = () => {
 
         <Tabs value={tab} onValueChange={setTab} className="mt-3">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 border border-border/60 bg-card/50 p-1 backdrop-blur-sm sm:flex sm:flex-wrap sm:justify-start">
-            {(GROUPS.find((g) => g.key === group) ?? GROUPS[1]).tabs.map((t) => (
+            {(groups.find((g) => g.key === group) ?? groups[0])?.tabs.map((t) => (
               <TabsTrigger
                 key={t.key}
                 value={t.key}
@@ -396,6 +423,17 @@ const Workspace = () => {
             <OrgComplianceStrip organizationId={active.organization_id} />
           </PanelErrorBoundary>
         </TabsContent>
+
+        <TabsContent value="enrich" className="mt-4">
+          <PanelErrorBoundary label="Enrichment">
+            <EnrichmentPreviewPanel
+              key={`${refreshKey}-${active.organization_id}`}
+              organizationId={active.organization_id}
+            />
+          </PanelErrorBoundary>
+        </TabsContent>
+
+
 
         <TabsContent value="discover" className="mt-4">
           <PanelErrorBoundary label="Discover">

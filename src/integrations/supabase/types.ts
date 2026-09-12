@@ -2261,6 +2261,65 @@ export type Database = {
         }
         Relationships: []
       }
+      org_capabilities: {
+        Row: {
+          clap_grounding: boolean
+          created_at: string
+          eid_enrichment: boolean
+          enrichment_preview: boolean
+          id: string
+          intuizi_console: boolean
+          notes: string | null
+          organization_id: string
+          pixels_tracking: boolean
+          predict_outcomes: boolean
+          predict_users: boolean
+          semantic_model: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          clap_grounding?: boolean
+          created_at?: string
+          eid_enrichment?: boolean
+          enrichment_preview?: boolean
+          id?: string
+          intuizi_console?: boolean
+          notes?: string | null
+          organization_id: string
+          pixels_tracking?: boolean
+          predict_outcomes?: boolean
+          predict_users?: boolean
+          semantic_model?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          clap_grounding?: boolean
+          created_at?: string
+          eid_enrichment?: boolean
+          enrichment_preview?: boolean
+          id?: string
+          intuizi_console?: boolean
+          notes?: string | null
+          organization_id?: string
+          pixels_tracking?: boolean
+          predict_outcomes?: boolean
+          predict_users?: boolean
+          semantic_model?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_capabilities_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_category_profiles: {
         Row: {
           config: Json
@@ -4403,6 +4462,14 @@ export type Database = {
       normalize_score_to_percentile: {
         Args: { pop_mean: number; pop_stddev: number; raw_score: number }
         Returns: number
+      }
+      org_activation_enrichment: {
+        Args: {
+          _activation_id: string
+          _organization_id: string
+          _sample?: number
+        }
+        Returns: Json
       }
       org_cohort_aggregates: {
         Args: { _org: string }

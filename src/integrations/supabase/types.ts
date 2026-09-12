@@ -264,6 +264,7 @@ export type Database = {
           created_at: string
           ctv_metadata: Json | null
           file_url: string | null
+          grounding_rescore_checked_at: string | null
           id: string
           librosa_features: Json | null
           name: string
@@ -284,6 +285,7 @@ export type Database = {
           created_at?: string
           ctv_metadata?: Json | null
           file_url?: string | null
+          grounding_rescore_checked_at?: string | null
           id?: string
           librosa_features?: Json | null
           name: string
@@ -304,6 +306,7 @@ export type Database = {
           created_at?: string
           ctv_metadata?: Json | null
           file_url?: string | null
+          grounding_rescore_checked_at?: string | null
           id?: string
           librosa_features?: Json | null
           name?: string
@@ -1352,6 +1355,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      grounding_rescore_sweeps: {
+        Row: {
+          batch_size: number
+          id: string
+          last_source_id: string | null
+          lease_until: string | null
+          note: string | null
+          scanned: number
+          singleton: boolean
+          skipped: number
+          started_at: string
+          status: string
+          updated_at: string
+          upgraded: number
+        }
+        Insert: {
+          batch_size?: number
+          id?: string
+          last_source_id?: string | null
+          lease_until?: string | null
+          note?: string | null
+          scanned?: number
+          singleton?: boolean
+          skipped?: number
+          started_at?: string
+          status?: string
+          updated_at?: string
+          upgraded?: number
+        }
+        Update: {
+          batch_size?: number
+          id?: string
+          last_source_id?: string | null
+          lease_until?: string | null
+          note?: string | null
+          scanned?: number
+          singleton?: boolean
+          skipped?: number
+          started_at?: string
+          status?: string
+          updated_at?: string
+          upgraded?: number
+        }
+        Relationships: []
       }
       guest_run_limits: {
         Row: {
@@ -4117,6 +4165,11 @@ export type Database = {
         Args: { p_bucket?: string; p_days?: number }
         Returns: Json
       }
+      admin_grounding_rescore_control: {
+        Args: { _action: string; _batch?: number }
+        Returns: Json
+      }
+      admin_grounding_rescore_status: { Args: never; Returns: Json }
       admin_identifier_grounding: {
         Args: {
           _activation_id?: string
@@ -4417,6 +4470,13 @@ export type Database = {
           queued: boolean
         }[]
       }
+      grounding_rescore_autostart: { Args: never; Returns: Json }
+      grounding_rescore_candidates: {
+        Args: { _stale_hours?: number }
+        Returns: number
+      }
+      grounding_rescore_guard: { Args: never; Returns: undefined }
+      grounding_rescore_tick: { Args: { _batch?: number }; Returns: Json }
       has_org_access: { Args: { _org: string }; Returns: boolean }
       has_org_write: { Args: { _org: string }; Returns: boolean }
       has_role: {

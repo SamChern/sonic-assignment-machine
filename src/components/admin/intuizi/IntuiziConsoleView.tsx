@@ -4,6 +4,7 @@
  */
 import ScoringRunsDashboard from "@/components/admin/intuizi/ScoringRunsDashboard";
 import IdentifierGroundingPanel from "@/components/admin/intuizi/IdentifierGroundingPanel";
+import GroundingRescorePanel from "@/components/admin/intuizi/GroundingRescorePanel";
 import ScoreQueueHealthPanel from "@/components/ScoreQueueHealthPanel";
 import IntuiziConsolePanel from "@/components/admin/IntuiziConsolePanel";
 
@@ -16,6 +17,7 @@ export const IntuiziConsoleView = () => (
     </p>
     <ScoringRunsDashboard />
     <IdentifierGroundingPanel />
+    <GroundingRescorePanel />
     <ScoreQueueHealthPanel />
 
     <IntuiziConsolePanel />

@@ -472,6 +472,22 @@ Deno.serve(async (req) => {
     // Last cheap sweep with whatever this run learned.
     if (!paused) await materializePass();
 
+    // Keep grounded-vs-text-only coverage from drifting: one bounded, leased
+    // batch of the grounding re-score sweep per run. Pure database work — it
+    // re-scores audiences that now have a CLAP vector against their grounded
+    // neighbours, so no gateway calls and no credits are involved. The sweep
+    // auto-starts again whenever newly grounded audiences appear.
+    if (!paused) {
+      const { error: autoErr } = await admin.rpc("grounding_rescore_autostart");
+      if (autoErr) console.warn("grounding autostart failed", autoErr.message);
+      const { data: sweepTick, error: sweepErr } = await admin.rpc(
+        "grounding_rescore_tick",
+        { _batch: 200 },
+      );
+      if (sweepErr) console.warn("grounding rescore tick failed", sweepErr.message);
+      else if (sweepTick) console.log(JSON.stringify({ evt: "grounding_rescore_tick", ...sweepTick }));
+    }
+
     // A run that got through its AI work without a single 429 clears the parking
     // counter, so one transient rate limit can no longer creep the pipeline
     // toward a 30-minute park.

@@ -2491,6 +2491,75 @@ export type Database = {
           },
         ]
       }
+      org_scoring_runs: {
+        Row: {
+          avg_confidence: number | null
+          created_at: string
+          dataset_id: string | null
+          datasets_touched: number
+          error: string | null
+          finished_at: string | null
+          id: string
+          organization_id: string
+          processed: number
+          scored: number
+          started_at: string
+          status: string
+          trigger_source: string
+          unresolved: number
+          updated_at: string
+        }
+        Insert: {
+          avg_confidence?: number | null
+          created_at?: string
+          dataset_id?: string | null
+          datasets_touched?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          organization_id: string
+          processed?: number
+          scored?: number
+          started_at?: string
+          status?: string
+          trigger_source?: string
+          unresolved?: number
+          updated_at?: string
+        }
+        Update: {
+          avg_confidence?: number | null
+          created_at?: string
+          dataset_id?: string | null
+          datasets_touched?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          organization_id?: string
+          processed?: number
+          scored?: number
+          started_at?: string
+          status?: string
+          trigger_source?: string
+          unresolved?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_scoring_runs_dataset_id_fkey"
+            columns: ["dataset_id"]
+            isOneToOne: false
+            referencedRelation: "enterprise_datasets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_scoring_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_tracking_settings: {
         Row: {
           created_at: string
@@ -4502,6 +4571,10 @@ export type Database = {
           narrative: string
           slug: string
         }[]
+      }
+      org_own_data_confidence: {
+        Args: { _organization_id: string }
+        Returns: Json
       }
       org_retention_summary: {
         Args: { _org: string }

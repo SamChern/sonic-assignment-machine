@@ -357,6 +357,44 @@ export async function runIngestPipeline(
       taxonomy_nodes: { code: string; label: string } | null;
     }[];
 
+    // --- Device-level signal values ---------------------------------------
+    // Same device rows the Enterprise "Enrichment" tab reads, so this step shows
+    // the real values behind each tag (which CTV channels, genres, site topics
+    // this audience actually carries) instead of codes and weights only.
+    type SignalValue = {
+      family: string;
+      value: string;
+      label: string;
+      devices: number;
+      share_pct: number;
+    };
+    type SignalFamily = { family: string; values: number; devices: number };
+    let signalValues: SignalValue[] = [];
+    let signalFamilies: SignalFamily[] = [];
+    let sampledDevices = 0;
+    let signalNote: string | null = null;
+    try {
+      const { data: sig, error: sigErr } = await supabase.rpc(
+        "admin_activation_signal_values",
+        { _activation_id: activation.activation_id, _sample: 2000, _top: 12 },
+      );
+      if (sigErr) throw new Error(sigErr.message);
+      const s = (sig ?? {}) as {
+        sampled_devices?: number;
+        values?: SignalValue[];
+        families?: SignalFamily[];
+      };
+      sampledDevices = Number(s.sampled_devices ?? 0) || 0;
+      signalValues = Array.isArray(s.values) ? s.values : [];
+      signalFamilies = Array.isArray(s.families) ? s.families : [];
+      if (!signalValues.length) {
+        signalNote =
+          "No device-level signal values landed for this feed yet — ingest the signals/summary report to populate them.";
+      }
+    } catch (e) {
+      signalNote = `Device signals unavailable — ${e instanceof Error ? e.message : String(e)}`;
+    }
+
     // --- CLAP grounding ----------------------------------------------------
     // Every audio row in this activation (and the audience profile itself) gets
     // a vector in CLAP's space on the EC2 box, so profile <-> track kNN is

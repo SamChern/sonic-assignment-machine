@@ -298,10 +298,13 @@ const Workspace = () => {
               </Select>
             )}
             <Button asChild variant="ghost" size="sm">
-              <Link to="/">
+              <Link to={`/portal/${active.slug || active.organization_id}`}>
                 <ArrowLeft className="mr-1 h-4 w-4" />
-                Home
+                {active.name}
               </Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/">Home</Link>
             </Button>
             <Button
               variant="outline"

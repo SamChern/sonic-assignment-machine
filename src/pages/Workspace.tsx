@@ -421,6 +421,17 @@ const Workspace = () => {
           </PanelErrorBoundary>
         </TabsContent>
 
+        <TabsContent value="enrich" className="mt-4">
+          <PanelErrorBoundary label="Enrichment">
+            <EnrichmentPreviewPanel
+              key={`${refreshKey}-${active.organization_id}`}
+              organizationId={active.organization_id}
+            />
+          </PanelErrorBoundary>
+        </TabsContent>
+
+
+
         <TabsContent value="discover" className="mt-4">
           <PanelErrorBoundary label="Discover">
             <DatasetDiscovery key={refreshKey} organizationId={active.organization_id} />

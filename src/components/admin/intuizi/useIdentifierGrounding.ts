@@ -32,6 +32,7 @@ export interface GroundingSummary {
   bridged: number;
   text_only: number;
   with_audio: number;
+  with_scores: number;
   avg_confidence: number | null;
 }
 
@@ -43,6 +44,7 @@ export const useIdentifierGrounding = (sample = 500) => {
   const [matched, setMatched] = useState(0);
   const [activationId, setActivationId] = useState<string>("");
   const [filter, setFilter] = useState<GroundingFilter>("all");
+  const [scoredOnly, setScoredOnly] = useState(true);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export const useIdentifierGrounding = (sample = 500) => {
     const { data, error: rpcError } = await supabase.rpc("admin_identifier_grounding", {
       _activation_id: activationId.trim() || null,
       _grounding: filter === "all" ? null : filter,
+      _scored_only: scoredOnly,
       _sample: sample,
       _limit: PAGE_SIZE,
       _offset: page * PAGE_SIZE,
@@ -76,7 +79,7 @@ export const useIdentifierGrounding = (sample = 500) => {
       setFetchedAt(new Date());
     }
     setLoading(false);
-  }, [activationId, filter, page, sample]);
+  }, [activationId, filter, scoredOnly, page, sample]);
 
   useEffect(() => {
     void load();
@@ -139,6 +142,12 @@ export const useIdentifierGrounding = (sample = 500) => {
       setPage(0);
       setSelected([]);
       setFilter(v);
+    },
+    scoredOnly,
+    setScoredOnly: (v: boolean) => {
+      setPage(0);
+      setSelected([]);
+      setScoredOnly(v);
     },
     page,
     setPage,

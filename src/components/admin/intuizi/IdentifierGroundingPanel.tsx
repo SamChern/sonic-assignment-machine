@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -239,6 +240,16 @@ export const IdentifierGroundingPanel = () => {
               <SelectItem value="text-only">Text-only</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div className="flex items-center gap-2 pb-2">
+          <Switch
+            id="scored-only"
+            checked={s.scoredOnly}
+            onCheckedChange={s.setScoredOnly}
+          />
+          <label htmlFor="scored-only" className="text-xs text-muted-foreground">
+            Finished scoring only
+          </label>
         </div>
       </div>
 

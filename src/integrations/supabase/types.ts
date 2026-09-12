@@ -4467,6 +4467,7 @@ export type Database = {
           queued: boolean
         }[]
       }
+      grounding_rescore_autostart: { Args: never; Returns: Json }
       grounding_rescore_guard: { Args: never; Returns: undefined }
       grounding_rescore_tick: { Args: { _batch?: number }; Returns: Json }
       has_org_access: { Args: { _org: string }; Returns: boolean }

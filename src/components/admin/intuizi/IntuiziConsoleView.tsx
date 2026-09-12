@@ -3,6 +3,7 @@
  * console, grouped in one place for operators.
  */
 import ScoringRunsDashboard from "@/components/admin/intuizi/ScoringRunsDashboard";
+import IdentifierGroundingPanel from "@/components/admin/intuizi/IdentifierGroundingPanel";
 import ScoreQueueHealthPanel from "@/components/ScoreQueueHealthPanel";
 import IntuiziConsolePanel from "@/components/admin/IntuiziConsolePanel";
 
@@ -14,7 +15,9 @@ export const IntuiziConsoleView = () => (
       deliveries to ingest.
     </p>
     <ScoringRunsDashboard />
+    <IdentifierGroundingPanel />
     <ScoreQueueHealthPanel />
+
     <IntuiziConsolePanel />
   </div>
 );

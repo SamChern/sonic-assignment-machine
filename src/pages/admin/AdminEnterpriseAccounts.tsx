@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import CapabilitySwitches from "@/components/admin/enterprise/CapabilitySwitches";
 import OrgPeopleCard from "@/components/admin/enterprise/OrgPeopleCard";
+import PipelinePanel from "@/components/admin/enterprise/PipelinePanel";
 import {
   ALL_CAPABILITIES,
   toCapabilities,
@@ -425,6 +426,8 @@ export default function AdminEnterpriseAccounts() {
               </Button>
             </div>
           </Card>
+
+          <PipelinePanel organizationId={org.id} orgName={org.name} />
 
           <OrgPeopleCard
             members={members}

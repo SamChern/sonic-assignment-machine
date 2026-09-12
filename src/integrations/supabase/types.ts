@@ -4165,6 +4165,10 @@ export type Database = {
         Args: { p_bucket?: string; p_days?: number }
         Returns: Json
       }
+      admin_enterprise_pipeline: {
+        Args: { _feeds?: number; _organization_id: string; _sample?: number }
+        Returns: Json
+      }
       admin_grounding_rescore_control: {
         Args: { _action: string; _batch?: number }
         Returns: Json

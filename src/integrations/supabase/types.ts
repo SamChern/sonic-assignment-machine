@@ -4181,6 +4181,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_signal_explorer: {
+        Args: {
+          _activation_id: string
+          _family?: string
+          _limit?: number
+          _offset?: number
+          _sample?: number
+          _search?: string
+          _value?: string
+        }
+        Returns: Json
+      }
       backfill_intuizi_activation_ids: {
         Args: { p_limit?: number }
         Returns: number

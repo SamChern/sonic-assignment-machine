@@ -62,7 +62,7 @@ import { ALL_TABS, GROUPS, groupOf, permittedGroups } from "@/lib/workspaceTabs"
 
 
 const Workspace = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
   const { orgs, active, activeId, setActiveId, canWrite, isOrgAdmin, capabilities, loading } =
     useOrganization();

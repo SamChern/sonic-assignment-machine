@@ -432,6 +432,8 @@ export default function AdminEnterpriseAccounts() {
 
           <ScoringProgressPanel organizationId={org.id} orgName={org.name} />
 
+          <TagEventsUploadPanel organizationId={org.id} orgName={org.name} />
+
           <OrgPeopleCard
             members={members}
             busy={busy}

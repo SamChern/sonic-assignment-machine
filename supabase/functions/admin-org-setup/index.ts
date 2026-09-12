@@ -331,28 +331,21 @@ Deno.serve(async (req) => {
       let ids = Array.isArray(body.activation_ids)
         ? (body.activation_ids as unknown[]).map((v) => String(v).trim().replace(/^#/, ""))
         : [];
-      // "All current feeds": every activation SonicSIM has actually ingested.
+      // "All current feeds": activations SonicSIM has already worked with, taken
+      // from the cost snapshots plus anything already granted anywhere. Both are
+      // tiny tables, so no scan of the million-row scoring queue is needed.
       if (body.all_current === true) {
-        const { data: rows } = await admin
-          .from("intuizi_activations_seen")
-          .select("activation_id")
-          .limit(1000);
-        if (rows?.length) {
-          ids = (rows as { activation_id: string }[]).map((r) => String(r.activation_id));
-        } else {
-          const { data: queueRows } = await admin
-            .from("intuizi_score_queue")
-            .select("activation_id")
-            .not("activation_id", "is", null)
-            .limit(5000);
-          ids = [
-            ...new Set(
-              (queueRows ?? [])
-                .map((r: { activation_id: unknown }) => String(r.activation_id ?? "").trim())
-                .filter(Boolean),
-            ),
-          ];
-        }
+        const [cacheRes, grantRes] = await Promise.all([
+          admin.from("intuizi_cost_estimate_cache").select("activation_id").limit(1000),
+          admin.from("org_intuizi_activations").select("activation_id").limit(1000),
+        ]);
+        ids = [
+          ...new Set(
+            [...(cacheRes.data ?? []), ...(grantRes.data ?? [])]
+              .map((r: { activation_id: unknown }) => String(r.activation_id ?? "").trim())
+              .filter(Boolean),
+          ),
+        ];
       }
       ids = [...new Set(ids.filter(Boolean))];
       if (!ids.length) {

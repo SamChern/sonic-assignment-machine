@@ -29,6 +29,7 @@ import PredictOutcomesPanel from "@/components/enterprise/PredictOutcomesPanel";
 import PixelSetupPanel from "@/components/enterprise/PixelSetupPanel";
 import CategoryProfileEditor from "@/components/enterprise/CategoryProfileEditor";
 import WorkspaceSonicSim from "@/components/enterprise/WorkspaceSonicSim";
+import SignalSonicSimPanel from "@/components/enterprise/SignalSonicSimPanel";
 import JobCards from "@/components/enterprise/JobCards";
 import PlaybooksPanel from "@/components/enterprise/PlaybooksPanel";
 import OrgComplianceStrip from "@/components/enterprise/OrgComplianceStrip";
@@ -386,7 +387,7 @@ const Workspace = () => {
             <WorkspaceAnalyses key={refreshKey} organizationId={active.organization_id} />
           </PanelErrorBoundary>
         </TabsContent>
-        <TabsContent value="sonicsim" className="mt-4">
+        <TabsContent value="sonicsim" className="mt-4 space-y-4">
           <PanelErrorBoundary label="SonicSIM">
             <WorkspaceSonicSim
               key={refreshKey}
@@ -394,6 +395,14 @@ const Workspace = () => {
               orgName={active.name}
             />
           </PanelErrorBoundary>
+          {capabilities.enrichment_preview && (
+            <PanelErrorBoundary label="Performance by signal">
+              <SignalSonicSimPanel
+                key={`sigsim-${refreshKey}`}
+                organizationId={active.organization_id}
+              />
+            </PanelErrorBoundary>
+          )}
         </TabsContent>
         <TabsContent value="data" className="mt-4 space-y-4">
           {/* Data-feed sync is its own access switch: an account without it can

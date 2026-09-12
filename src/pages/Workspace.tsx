@@ -157,6 +157,14 @@ const Workspace = () => {
     }
   }, [authLoading, user, navigate]);
 
+  // A per-account portal deep-links here with ?org=<id>; honour it once loaded.
+  const requestedOrg = params.get("org");
+  useEffect(() => {
+    if (!requestedOrg || requestedOrg === activeId) return;
+    if (orgs.some((o) => o.organization_id === requestedOrg)) setActiveId(requestedOrg);
+  }, [requestedOrg, activeId, orgs, setActiveId]);
+
+
   const loadDatasets = useCallback(async () => {
     if (!activeId) return;
     const { data, error } = await supabase

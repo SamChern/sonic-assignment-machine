@@ -427,6 +427,8 @@ export default function AdminEnterpriseAccounts() {
             </div>
           </Card>
 
+          <PipelinePanel organizationId={org.id} orgName={org.name} />
+
           <OrgPeopleCard
             members={members}
             busy={busy}

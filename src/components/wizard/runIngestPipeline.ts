@@ -506,13 +506,42 @@ export async function runIngestPipeline(
             : "no · using tag-based scores",
         ],
         ...scoreRows,
-        ...tags.slice(0, 8).map(
-          (t) =>
-            [t.taxonomy_nodes?.code ?? "unresolved", `weight ${Number(t.weight).toFixed(2)}`] as [
+        ...(sampledDevices
+          ? ([["Devices sampled for signals", sampledDevices.toLocaleString()]] as [
               string,
               string,
-            ],
+            ][])
+          : []),
+        ...signalFamilies.slice(0, 5).map(
+          (f) =>
+            [
+              `Signal family · ${f.family}`,
+              `${f.values.toLocaleString()} value(s) · ${f.devices.toLocaleString()} device(s)`,
+            ] as [string, string],
         ),
+        ...signalValues.slice(0, 10).map(
+          (v) =>
+            [
+              `${v.family} · ${v.value}`,
+              `${v.devices.toLocaleString()} device(s) · ${v.share_pct}% of sample`,
+            ] as [string, string],
+        ),
+        ...tags.slice(0, 8).map((t) => {
+          const code = t.taxonomy_nodes?.code ?? "unresolved";
+          const label = t.taxonomy_nodes?.label ?? "";
+          const hit = signalValues.find(
+            (v) =>
+              v.label === label ||
+              v.value === label ||
+              (code !== "unresolved" && v.label.includes(code)),
+          );
+          return [
+            label ? `${code} — ${label}` : code,
+            `weight ${Number(t.weight).toFixed(2)}${
+              hit ? ` · ${hit.devices.toLocaleString()} device(s) (${hit.share_pct}%)` : ""
+            }`,
+          ] as [string, string];
+        }),
       ],
       notes: [
         ...(src?.analysis_error ? [src.analysis_error] : []),
@@ -522,8 +551,9 @@ export async function runIngestPipeline(
             ]
           : []),
         ...(groundNote ? [groundNote] : []),
+        ...(signalNote ? [signalNote] : []),
         ...(buildError ? [`Profile builder warning: ${buildError}`] : []),
-      ].slice(0, 3),
+      ].slice(0, 4),
     });
 
     // --- Background scoring -----------------------------------------------

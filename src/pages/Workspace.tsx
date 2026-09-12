@@ -414,7 +414,7 @@ const Workspace = () => {
             />
           </PanelErrorBoundary>
         </TabsContent>
-        <TabsContent value="users" className="mt-4">
+        <TabsContent value="users" className="mt-4 space-y-4">
           <PanelErrorBoundary label="Audiences">
             <PredictUsersPanel
               key={refreshKey}
@@ -422,6 +422,11 @@ const Workspace = () => {
               canWrite={canWrite}
             />
           </PanelErrorBoundary>
+          {isAdmin && (
+            <PanelErrorBoundary label="Segment explorer">
+              <CohortExplorerPanel key={`segments-${refreshKey}`} />
+            </PanelErrorBoundary>
+          )}
         </TabsContent>
 
         <TabsContent value="outcomes" className="mt-4">

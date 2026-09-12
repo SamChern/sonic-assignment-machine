@@ -25,6 +25,12 @@ export default function EnrichmentTabPanels({
           canWrite={canWrite}
         />
       </PanelErrorBoundary>
+      <PanelErrorBoundary label="Predicted impact on your site tags">
+        <TagImpactPanel
+          key={`impact-${refreshKey}-${organizationId}`}
+          organizationId={organizationId}
+        />
+      </PanelErrorBoundary>
       <PanelErrorBoundary label="Enrichment">
         <EnrichmentPreviewPanel
           key={`${refreshKey}-${organizationId}`}

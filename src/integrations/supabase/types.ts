@@ -4463,6 +4463,14 @@ export type Database = {
         Args: { pop_mean: number; pop_stddev: number; raw_score: number }
         Returns: number
       }
+      org_activation_enrichment: {
+        Args: {
+          _activation_id: string
+          _organization_id: string
+          _sample?: number
+        }
+        Returns: Json
+      }
       org_cohort_aggregates: {
         Args: { _org: string }
         Returns: {

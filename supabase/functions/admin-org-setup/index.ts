@@ -269,12 +269,110 @@ Deno.serve(async (req) => {
     }
 
     const organizationId = String(body.organization_id ?? "");
-    if (["invite", "set_role", "members", "remove_member"].includes(action) && !organizationId) {
+    if (
+      [
+        "invite",
+        "set_role",
+        "members",
+        "remove_member",
+        "set_capabilities",
+        "grant_activations",
+        "org_detail",
+      ].includes(action) && !organizationId
+    ) {
       return json({ success: false, error: "organization_id is required" }, 400);
     }
 
     if (action === "members") {
       return json({ success: true, members: await listMembers(admin, organizationId) });
+    }
+
+    if (action === "org_detail") {
+      const { data: org, error } = await admin
+        .from("organizations")
+        .select("id, name, slug, plan, created_at")
+        .eq("id", organizationId)
+        .maybeSingle();
+      if (error) return json({ success: false, error: error.message }, 500);
+      if (!org) return json({ success: false, error: "account not found" }, 404);
+      const { data: grants } = await admin
+        .from("org_intuizi_activations")
+        .select("id, activation_id, label, is_active, last_synced_at, created_at")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false });
+      return json({
+        success: true,
+        org,
+        capabilities: await ensureCapabilities(admin, organizationId, authz.userId),
+        grants: grants ?? [],
+        members: await listMembers(admin, organizationId),
+      });
+    }
+
+    if (action === "set_capabilities") {
+      const requested = (body.capabilities ?? {}) as Record<string, unknown>;
+      const patch: Record<string, unknown> = { updated_by: authz.userId };
+      for (const key of CAPABILITY_KEYS) {
+        if (typeof requested[key] === "boolean") patch[key] = requested[key];
+      }
+      if (typeof body.notes === "string") patch.notes = String(body.notes).slice(0, 2000) || null;
+      await ensureCapabilities(admin, organizationId, authz.userId);
+      const { data: updated, error } = await admin
+        .from("org_capabilities")
+        .update(patch)
+        .eq("organization_id", organizationId)
+        .select("*")
+        .single();
+      if (error) return json({ success: false, error: error.message }, 500);
+      return json({ success: true, capabilities: updated });
+    }
+
+    if (action === "grant_activations") {
+      let ids = Array.isArray(body.activation_ids)
+        ? (body.activation_ids as unknown[]).map((v) => String(v).trim().replace(/^#/, ""))
+        : [];
+      // "All current feeds": every activation SonicSIM has actually ingested.
+      if (body.all_current === true) {
+        const { data: rows } = await admin
+          .from("intuizi_activations_seen")
+          .select("activation_id")
+          .limit(1000);
+        if (rows?.length) {
+          ids = (rows as { activation_id: string }[]).map((r) => String(r.activation_id));
+        } else {
+          const { data: queueRows } = await admin
+            .from("intuizi_score_queue")
+            .select("activation_id")
+            .not("activation_id", "is", null)
+            .limit(5000);
+          ids = [
+            ...new Set(
+              (queueRows ?? [])
+                .map((r: { activation_id: unknown }) => String(r.activation_id ?? "").trim())
+                .filter(Boolean),
+            ),
+          ];
+        }
+      }
+      ids = [...new Set(ids.filter(Boolean))];
+      if (!ids.length) {
+        return json({ success: false, error: "no activation ids to grant" }, 400);
+      }
+      const { error } = await admin.from("org_intuizi_activations").upsert(
+        ids.map((activation_id) => ({
+          organization_id: organizationId,
+          activation_id,
+          granted_by: authz.userId,
+        })),
+        { onConflict: "organization_id,activation_id", ignoreDuplicates: true },
+      );
+      if (error) return json({ success: false, error: error.message }, 500);
+      const { data: grants } = await admin
+        .from("org_intuizi_activations")
+        .select("id, activation_id, label, is_active, last_synced_at, created_at")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false });
+      return json({ success: true, granted: ids.length, grants: grants ?? [] });
     }
 
     if (action === "invite") {

@@ -134,7 +134,10 @@ const Workspace = () => {
   );
   // Only the sections this account is permissioned for.
   const groups = useMemo(() => permittedGroups(capabilities), [capabilities]);
-  const allowedTabs = useMemo(() => groups.flatMap((g) => g.tabs.map((t) => t.key)), [groups]);
+  const allowedTabs = useMemo<string[]>(
+    () => groups.flatMap((g) => g.tabs.map((t) => t.key as string)),
+    [groups],
+  );
   const validTab = useCallback(
     (value: string | null) => (value && allowedTabs.includes(value) ? value : null),
     [allowedTabs],

@@ -56,6 +56,7 @@ const IngestionCompatibility = lazy(() => import("./pages/IngestionCompatibility
 const SemanticAnalysis = lazy(() => import("./pages/SemanticAnalysis"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const Portal = lazy(() => import("./pages/Portal"));
+const AccountPortal = lazy(() => import("./pages/AccountPortal"));
 const Demo = lazy(() => import("./pages/Demo"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -186,6 +187,7 @@ const App = () => (
               <Route path="/methodology" element={<Methodology />} />
 
               <Route path="/portal" element={<Portal />} />
+              <Route path="/portal/:account" element={<AccountPortal />} />
               <Route path="/workspace" element={<Workspace />} />
               <Route path="/listener" element={<ListenerSpace />} />
               <Route path="/listen" element={<ListenerApp />} />

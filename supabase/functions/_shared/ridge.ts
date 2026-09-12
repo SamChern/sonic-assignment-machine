@@ -5,16 +5,26 @@
 // confident nonsense with plain OLS, so every coefficient we surface carries an
 // interval and callers grey out any effect whose interval crosses zero.
 
-/** Solves A x = b by Gaussian elimination with partial pivoting. */
+/**
+ * Solves A x = b by Gaussian elimination with partial pivoting.
+ *
+ * The pivot tolerance is relative to the largest entry in A: a design matrix
+ * with a duplicated or constant column leaves rounding residue far above any
+ * fixed epsilon, and dividing by that residue used to hand back NaN
+ * coefficients that callers then presented as real numbers. Returning null on a
+ * degenerate system — and on any non-finite result — keeps that impossible.
+ */
 export function solveLinear(a: number[][], b: number[]): number[] | null {
   const n = b.length;
   const m = a.map((row, i) => [...row, b[i]]);
+  const scale = Math.max(...a.flat().map((v) => Math.abs(v)), 1);
+  const tol = 1e-9 * scale;
   for (let col = 0; col < n; col++) {
     let pivot = col;
     for (let r = col + 1; r < n; r++) {
       if (Math.abs(m[r][col]) > Math.abs(m[pivot][col])) pivot = r;
     }
-    if (Math.abs(m[pivot][col]) < 1e-12) return null;
+    if (!Number.isFinite(m[pivot][col]) || Math.abs(m[pivot][col]) < tol) return null;
     [m[col], m[pivot]] = [m[pivot], m[col]];
     for (let r = 0; r < n; r++) {
       if (r === col) continue;
@@ -22,7 +32,8 @@ export function solveLinear(a: number[][], b: number[]): number[] | null {
       for (let c = col; c <= n; c++) m[r][c] -= f * m[col][c];
     }
   }
-  return m.map((row, i) => row[n] / row[i][i]);
+  const out = m.map((row, i) => row[n] / row[i][i]);
+  return out.every((v) => Number.isFinite(v)) ? out : null;
 }
 
 /**

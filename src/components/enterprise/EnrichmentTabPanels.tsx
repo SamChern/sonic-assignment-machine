@@ -2,6 +2,8 @@ import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import OwnDataScoringPanel from "@/components/enterprise/OwnDataScoringPanel";
 import EnrichmentPreviewPanel from "@/components/enterprise/EnrichmentPreviewPanel";
 import TagImpactPanel from "@/components/enterprise/TagImpactPanel";
+import SignalExplorerPanel from "@/components/enterprise/SignalExplorerPanel";
+import { useAuth } from "@/hooks/useAuth";
 
 /**
  * The Enrichment tab: first what the account's own rows say (their numbers),

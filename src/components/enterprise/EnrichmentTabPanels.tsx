@@ -40,6 +40,14 @@ export default function EnrichmentTabPanels({
           organizationId={organizationId}
         />
       </PanelErrorBoundary>
+      {isAdmin && (
+        <PanelErrorBoundary label="Signal explorer">
+          <SignalExplorerPanel
+            key={`explore-${refreshKey}-${organizationId}`}
+            organizationId={organizationId}
+          />
+        </PanelErrorBoundary>
+      )}
     </>
   );
 }

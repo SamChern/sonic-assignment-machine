@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_intuizi_score_queue_identifier ON public.intuizi_score_queue (identifier);

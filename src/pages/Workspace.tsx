@@ -396,22 +396,28 @@ const Workspace = () => {
           </PanelErrorBoundary>
         </TabsContent>
         <TabsContent value="data" className="mt-4 space-y-4">
-          <PanelErrorBoundary label="Data sync">
-            <IntuiziSyncPanel
-              organizationId={active.organization_id}
-              canWrite={canWrite}
-              onSynced={() => {
-                setRefreshKey((k) => k + 1);
-                void loadDatasets();
-              }}
-            />
-          </PanelErrorBoundary>
-          <PanelErrorBoundary label="Sync status">
-            <IntuiziSyncStatusPanel
-              organizationId={active.organization_id}
-              refreshKey={refreshKey}
-            />
-          </PanelErrorBoundary>
+          {/* Data-feed sync is its own access switch: an account without it can
+              still upload its own files, but never reaches the feed. */}
+          {capabilities.intuizi_console && (
+            <>
+              <PanelErrorBoundary label="Data sync">
+                <IntuiziSyncPanel
+                  organizationId={active.organization_id}
+                  canWrite={canWrite}
+                  onSynced={() => {
+                    setRefreshKey((k) => k + 1);
+                    void loadDatasets();
+                  }}
+                />
+              </PanelErrorBoundary>
+              <PanelErrorBoundary label="Sync status">
+                <IntuiziSyncStatusPanel
+                  organizationId={active.organization_id}
+                  refreshKey={refreshKey}
+                />
+              </PanelErrorBoundary>
+            </>
+          )}
           <PanelErrorBoundary label="Upload">
             <WorkspaceUpload
               organizationId={active.organization_id}

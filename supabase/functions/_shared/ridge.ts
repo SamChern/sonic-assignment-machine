@@ -32,7 +32,7 @@ export function solveLinear(a: number[][], b: number[]): number[] | null {
       for (let c = col; c <= n; c++) m[r][c] -= f * m[col][c];
     }
   }
-  const out = m.map((row, i) => row[n] / row[i][i]);
+  const out = m.map((row, i) => row[n] / m[i][i]);
   return out.every((v) => Number.isFinite(v)) ? out : null;
 }
 

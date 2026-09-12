@@ -111,17 +111,51 @@ Deno.serve(async (req) => {
       .sort((a, b) => b.devices - a.devices || b.events - a.events);
 
     // ---- 2. the account's own saved audio rows ------------------------------
+    // Analyses saved under the account come first. Older accounts loaded their
+    // audio through data rows instead, so when nothing is tagged to the account
+    // we fall back to the analyses those rows actually name — never to the
+    // shared pool.
+    const AUDIO_COLUMNS =
+      "id, source_name, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score";
+
     const { data: audio, error: audioErr } = await admin
       .from("source_analyses")
-      .select(
-        "id, source_name, confidence, created_at, emotional_score, cognitive_score, social_score, communication_score, contextual_score, artistic_score",
-      )
+      .select(AUDIO_COLUMNS)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
       .limit(rowLimit);
     if (audioErr) throw new Error(audioErr.message);
 
-    const audioRows = (audio ?? []) as Record<string, unknown>[];
+    let audioRows = (audio ?? []) as Record<string, unknown>[];
+    let audioSource: "account_analyses" | "account_data_rows" = "account_analyses";
+
+    if (!audioRows.length) {
+      const { data: named, error: namedErr } = await admin
+        .from("enterprise_records")
+        .select("source_name")
+        .eq("organization_id", organizationId)
+        .not("source_name", "is", null)
+        .limit(RECORD_SAMPLE);
+      if (namedErr) throw new Error(namedErr.message);
+
+      const names = [
+        ...new Set((named ?? []).map((r) => String(r.source_name ?? "").trim()).filter(Boolean)),
+      ].slice(0, 200);
+
+      if (names.length) {
+        const { data: linked, error: linkedErr } = await admin
+          .from("source_analyses")
+          .select(AUDIO_COLUMNS)
+          .in("source_name", names)
+          .order("created_at", { ascending: false })
+          .limit(rowLimit);
+        if (linkedErr) throw new Error(linkedErr.message);
+        if (linked?.length) {
+          audioRows = linked as Record<string, unknown>[];
+          audioSource = "account_data_rows";
+        }
+      }
+    }
 
     if (!tags.length) {
       return json({

@@ -8,32 +8,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   Building2,
   KeyRound,
   Loader2,
-  Mail,
   Plus,
   RefreshCw,
   Save,
-  Users,
 } from "lucide-react";
+import CapabilitySwitches from "@/components/admin/enterprise/CapabilitySwitches";
+import OrgPeopleCard from "@/components/admin/enterprise/OrgPeopleCard";
 import {
-  CAPABILITY_KEYS,
-  CAPABILITY_LABELS,
   ALL_CAPABILITIES,
   toCapabilities,
   type Capabilities,
-  type CapabilityKey,
 } from "@/lib/orgCapabilities";
 
 interface Org {

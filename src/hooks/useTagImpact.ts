@@ -35,6 +35,7 @@ export interface TagImpact {
   matched_rows?: number;
   min_rows?: number;
   audio_rows: number;
+  audio_source?: "account_analyses" | "account_data_rows";
   baseline?: number;
   r2?: number;
   engine?: "ec2" | "edge";

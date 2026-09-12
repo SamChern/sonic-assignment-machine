@@ -69,6 +69,36 @@ async function listMembers(admin: Client, organizationId: string) {
   return rows;
 }
 
+/** Capabilities row for an org, creating the all-on default when absent. */
+async function ensureCapabilities(admin: Client, organizationId: string, updatedBy: string | null) {
+  const { data: existing } = await admin
+    .from("org_capabilities")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (existing) return existing;
+  const { data: created } = await admin
+    .from("org_capabilities")
+    .insert({ organization_id: organizationId, updated_by: updatedBy })
+    .select("*")
+    .single();
+  return created;
+}
+
+/** Resolve an email to an existing account, inviting one when it is new. */
+async function resolveUser(admin: Client, email: string, redirectTo?: string) {
+  const { data: invited } = await admin.auth.admin.inviteUserByEmail(
+    email,
+    redirectTo ? { redirectTo } : undefined,
+  );
+  if (invited?.user?.id) return { userId: invited.user.id as string, invited: true };
+  const existing = await findUserByEmail(admin, email);
+  if (!existing) return { userId: null, invited: false };
+  return { userId: existing.id as string, invited: false };
+}
+
+
+
 async function findUserByEmail(admin: Client, email: string) {
   // Auth admin has no direct email lookup; scan the first pages of users.
   for (let page = 1; page <= 10; page += 1) {

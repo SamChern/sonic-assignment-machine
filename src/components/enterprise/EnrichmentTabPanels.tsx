@@ -1,4 +1,4 @@
-import PanelErrorBoundary from "@/components/enterprise/PanelErrorBoundary";
+import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import OwnDataScoringPanel from "@/components/enterprise/OwnDataScoringPanel";
 import EnrichmentPreviewPanel from "@/components/enterprise/EnrichmentPreviewPanel";
 

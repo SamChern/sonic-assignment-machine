@@ -269,34 +269,7 @@ export default function AdminEnterpriseAccounts() {
     }
   };
 
-  const CapSwitches = ({
-    value,
-    onChange,
-  }: {
-    value: Capabilities;
-    onChange: (next: Capabilities) => void;
-  }) => (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {CAPABILITY_KEYS.map((key: CapabilityKey) => (
-        <label
-          key={key}
-          className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 p-3"
-        >
-          <span className="min-w-0">
-            <span className="block text-sm font-medium">{CAPABILITY_LABELS[key].label}</span>
-            <span className="block text-xs text-muted-foreground">
-              {CAPABILITY_LABELS[key].hint}
-            </span>
-          </span>
-          <Switch
-            checked={value[key]}
-            onCheckedChange={(checked) => onChange({ ...value, [key]: checked })}
-            aria-label={CAPABILITY_LABELS[key].label}
-          />
-        </label>
-      ))}
-    </div>
-  );
+  const CapSwitches = CapabilitySwitches;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 pb-mobile-nav">
@@ -468,67 +441,12 @@ export default function AdminEnterpriseAccounts() {
             </div>
           </Card>
 
-          <Card className="p-4">
-            <p className="flex items-center gap-2 text-sm font-semibold">
-              <Users className="h-4 w-4 text-primary" />
-              People
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="teammate@company.com"
-                className="w-full sm:w-64"
-                aria-label="Invite email"
-              />
-              <Select value={inviteRole} onValueChange={setInviteRole}>
-                <SelectTrigger className="w-full sm:w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLES.map((r) => (
-                    <SelectItem key={r} value={r} className="capitalize">
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button onClick={() => void invite()} disabled={busy === "invite"}>
-                {busy === "invite" ? (
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                ) : (
-                  <Mail className="mr-1 h-4 w-4" />
-                )}
-                Invite
-              </Button>
-            </div>
-            <ul className="mt-3 divide-y divide-border/60">
-              {members.map((m) => (
-                <li key={m.user_id} className="flex flex-wrap items-center gap-2 py-2">
-                  <span className="min-w-0 flex-1 truncate text-sm">{m.email ?? m.user_id}</span>
-                  <Badge variant={m.signed_in ? "secondary" : "outline"} className="text-[10px]">
-                    {m.signed_in ? "signed in" : "invited"}
-                  </Badge>
-                  <Select value={m.role} onValueChange={(r) => void setRole(m.user_id, r)}>
-                    <SelectTrigger className="h-8 w-[130px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ROLES.map((r) => (
-                        <SelectItem key={r} value={r} className="capitalize">
-                          {r}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </li>
-              ))}
-              {!members.length && (
-                <li className="py-2 text-sm text-muted-foreground">No people yet.</li>
-              )}
-            </ul>
-          </Card>
+          <OrgPeopleCard
+            members={members}
+            busy={busy}
+            onInvite={(email, role) => void invite(email, role)}
+            onSetRole={(userId, role) => void setRole(userId, role)}
+          />
         </>
       )}
     </div>

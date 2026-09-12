@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  ALL_CAPABILITIES,
+  type Capabilities,
+  toCapabilities,
+} from "@/lib/orgCapabilities";
 
 export interface OrgMembership {
   organization_id: string;
@@ -18,6 +23,7 @@ export function useOrganization() {
   const { user, loading: authLoading } = useAuth();
   const [orgs, setOrgs] = useState<OrgMembership[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [capsByOrg, setCapsByOrg] = useState<Record<string, Capabilities>>({});
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {

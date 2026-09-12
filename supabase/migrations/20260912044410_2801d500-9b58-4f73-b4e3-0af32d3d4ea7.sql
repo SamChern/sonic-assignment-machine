@@ -1,0 +1,1 @@
+ALTER FUNCTION public.org_signal_sonicsim(uuid, text, text, integer, integer) VOLATILE;

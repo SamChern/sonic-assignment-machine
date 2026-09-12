@@ -4598,6 +4598,16 @@ export type Database = {
           retention_days: number
         }[]
       }
+      org_signal_sonicsim: {
+        Args: {
+          _activation_id: string
+          _family?: string
+          _organization_id: string
+          _sample?: number
+          _top?: number
+        }
+        Returns: Json
+      }
       prune_analysis_telemetry: {
         Args: {
           p_cache_idle_days?: number

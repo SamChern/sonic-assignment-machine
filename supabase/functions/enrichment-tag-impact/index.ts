@@ -164,6 +164,7 @@ Deno.serve(async (req) => {
         reason: "no_tags",
         tags: [],
         audio_rows: audioRows.length,
+        audio_source: audioSource,
         computed_at: new Date().toISOString(),
       });
     }
@@ -207,6 +208,7 @@ Deno.serve(async (req) => {
       matched_rows: y.length,
       min_rows: minRows,
       audio_rows: audioRows.length,
+      audio_source: audioSource,
       computed_at: new Date().toISOString(),
     };
 

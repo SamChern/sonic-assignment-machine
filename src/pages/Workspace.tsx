@@ -33,6 +33,9 @@ import JobCards from "@/components/enterprise/JobCards";
 import PlaybooksPanel from "@/components/enterprise/PlaybooksPanel";
 import OrgComplianceStrip from "@/components/enterprise/OrgComplianceStrip";
 import WorkspaceDigestCard from "@/components/enterprise/WorkspaceDigestCard";
+import EnrichmentPreviewPanel from "@/components/enterprise/EnrichmentPreviewPanel";
+import type { CapabilityKey, Capabilities } from "@/lib/orgCapabilities";
+
 
 
 import sonicSimLogo from "@/assets/SonicSIM_transp.png";
@@ -42,6 +45,7 @@ import {
   BookMarked,
   Building2,
   Compass,
+  Layers,
   LineChart,
   Radio,
   RefreshCw,

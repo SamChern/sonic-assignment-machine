@@ -2,6 +2,8 @@ import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import OwnDataScoringPanel from "@/components/enterprise/OwnDataScoringPanel";
 import EnrichmentPreviewPanel from "@/components/enterprise/EnrichmentPreviewPanel";
 import TagImpactPanel from "@/components/enterprise/TagImpactPanel";
+import SignalExplorerPanel from "@/components/enterprise/SignalExplorerPanel";
+import { useAuth } from "@/hooks/useAuth";
 
 /**
  * The Enrichment tab: first what the account's own rows say (their numbers),
@@ -16,6 +18,7 @@ export default function EnrichmentTabPanels({
   canWrite: boolean;
   refreshKey: number;
 }) {
+  const { isAdmin } = useAuth();
   return (
     <>
       <PanelErrorBoundary label="Your own data">
@@ -37,6 +40,14 @@ export default function EnrichmentTabPanels({
           organizationId={organizationId}
         />
       </PanelErrorBoundary>
+      {isAdmin && (
+        <PanelErrorBoundary label="Signal explorer">
+          <SignalExplorerPanel
+            key={`explore-${refreshKey}-${organizationId}`}
+            organizationId={organizationId}
+          />
+        </PanelErrorBoundary>
+      )}
     </>
   );
 }

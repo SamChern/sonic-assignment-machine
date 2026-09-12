@@ -91,7 +91,7 @@ export default function OwnDataScoringPanel({
             <p className="text-2xl font-semibold">{fmt(totals.rows_pending)}</p>
             <p className="mt-1 text-[11px] text-muted-foreground">
               {totals.rows_unresolved
-                ? `${fmt(totals.rows_unresolved)} need audio evidence`
+                ? `${fmt(totals.rows_unresolved)} ${totals.rows_unresolved === 1 ? "row needs" : "rows need"} audio evidence`
                 : "nothing blocked"}
             </p>
           </div>

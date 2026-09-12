@@ -33,8 +33,7 @@ import JobCards from "@/components/enterprise/JobCards";
 import PlaybooksPanel from "@/components/enterprise/PlaybooksPanel";
 import OrgComplianceStrip from "@/components/enterprise/OrgComplianceStrip";
 import WorkspaceDigestCard from "@/components/enterprise/WorkspaceDigestCard";
-import EnrichmentPreviewPanel from "@/components/enterprise/EnrichmentPreviewPanel";
-import OwnDataScoringPanel from "@/components/enterprise/OwnDataScoringPanel";
+import EnrichmentTabPanels from "@/components/enterprise/EnrichmentTabPanels";
 import type { CapabilityKey, Capabilities } from "@/lib/orgCapabilities";
 
 
@@ -432,19 +431,11 @@ const Workspace = () => {
         </TabsContent>
 
         <TabsContent value="enrich" className="mt-4 space-y-4">
-          <PanelErrorBoundary label="Your own data">
-            <OwnDataScoringPanel
-              key={`own-${refreshKey}-${active.organization_id}`}
-              organizationId={active.organization_id}
-              canWrite={canWrite}
-            />
-          </PanelErrorBoundary>
-          <PanelErrorBoundary label="Enrichment">
-            <EnrichmentPreviewPanel
-              key={`${refreshKey}-${active.organization_id}`}
-              organizationId={active.organization_id}
-            />
-          </PanelErrorBoundary>
+          <EnrichmentTabPanels
+            organizationId={active.organization_id}
+            canWrite={canWrite}
+            refreshKey={refreshKey}
+          />
         </TabsContent>
 
 

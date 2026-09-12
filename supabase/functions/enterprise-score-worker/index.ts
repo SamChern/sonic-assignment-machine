@@ -123,10 +123,16 @@ async function scoreBatch(
     const cacheHit = !prior && name ? cacheByName.get(name) : undefined;
     const scores = prior?.scores ?? cacheHit ?? null;
 
+    // An upsert is an insert when it misses, so every payload carries the row's
+    // NOT NULL owner columns — without them PostgREST rejects the whole batch.
+    const owner = { organization_id: organizationId, dataset_id: datasetId };
+
     if (!scores) {
       unresolved += 1;
       updates.push({
+        ...owner,
         id: rec.id,
+        source_name: rec.source_name,
         analysis_status: "unresolved",
         analysis_error: rec.audio_url
           ? "Audio link present but not yet analysed — run the audio pipeline for this source"
@@ -136,7 +142,9 @@ async function scoreBatch(
     }
 
     const update: Record<string, unknown> = {
+      ...owner,
       id: rec.id,
+      source_name: rec.source_name,
       analysis_status: "scored",
       analysis_error: null,
       // A cache hit carries no per-analysis confidence, so it lands lower than

@@ -193,9 +193,9 @@ const Workspace = () => {
     setParams(p, { replace: true });
   };
 
-  /** Switching group lands on that group's first tab. */
+  /** Switching group lands on that group's first permitted tab. */
   const setGroup = (next: string) => {
-    const g = GROUPS.find((x) => x.key === next);
+    const g = groups.find((x) => x.key === next);
     if (g) setTab(g.tabs[0].key);
   };
 
@@ -353,7 +353,7 @@ const Workspace = () => {
               <TabsTrigger
                 key={g.key}
                 value={g.key}
-                className="min-w-0 whitespace-normal px-1 text-[11px] leading-tight sm:px-2 sm:text-sm"
+                className="min-w-0 flex-1 whitespace-normal px-1 text-[11px] leading-tight sm:px-2 sm:text-sm"
               >
                 <g.icon className="hidden h-3.5 w-3.5 shrink-0 sm:mr-1 sm:inline-block" />
                 <span className="min-w-0 break-words">{g.label}</span>
@@ -365,7 +365,7 @@ const Workspace = () => {
 
         <Tabs value={tab} onValueChange={setTab} className="mt-3">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 border border-border/60 bg-card/50 p-1 backdrop-blur-sm sm:flex sm:flex-wrap sm:justify-start">
-            {(GROUPS.find((g) => g.key === group) ?? GROUPS[1]).tabs.map((t) => (
+            {(groups.find((g) => g.key === group) ?? groups[0])?.tabs.map((t) => (
               <TabsTrigger
                 key={t.key}
                 value={t.key}

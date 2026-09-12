@@ -348,8 +348,8 @@ const Workspace = () => {
 
 
         <Tabs value={group} onValueChange={setGroup} className="mt-6">
-          <TabsList className="grid h-auto w-full grid-cols-4 gap-1 border border-border/60 bg-card/70 p-1 backdrop-blur-sm">
-            {GROUPS.map((g) => (
+          <TabsList className="flex h-auto w-full flex-wrap gap-1 border border-border/60 bg-card/70 p-1 backdrop-blur-sm">
+            {groups.map((g) => (
               <TabsTrigger
                 key={g.key}
                 value={g.key}

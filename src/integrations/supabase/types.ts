@@ -4044,6 +4044,17 @@ export type Database = {
         Args: { p_bucket?: string; p_days?: number }
         Returns: Json
       }
+      admin_identifier_grounding: {
+        Args: {
+          _activation_id?: string
+          _grounding?: string
+          _limit?: number
+          _offset?: number
+          _sample?: number
+          _scored_only?: boolean
+        }
+        Returns: Json
+      }
       admin_intuizi_grounding_coverage: { Args: never; Returns: Json }
       admin_list_people: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
@@ -4083,6 +4094,10 @@ export type Database = {
       admin_recalculate_user_fingerprint: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      admin_rescore_identifiers: {
+        Args: { _force_fresh?: boolean; _ids: string[] }
+        Returns: Json
       }
       admin_set_membership: {
         Args: {

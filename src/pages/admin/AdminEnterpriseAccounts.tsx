@@ -21,6 +21,7 @@ import {
 import CapabilitySwitches from "@/components/admin/enterprise/CapabilitySwitches";
 import OrgPeopleCard from "@/components/admin/enterprise/OrgPeopleCard";
 import PipelinePanel from "@/components/admin/enterprise/PipelinePanel";
+import ScoringProgressPanel from "@/components/admin/enterprise/ScoringProgressPanel";
 import {
   ALL_CAPABILITIES,
   toCapabilities,
@@ -428,6 +429,8 @@ export default function AdminEnterpriseAccounts() {
           </Card>
 
           <PipelinePanel organizationId={org.id} orgName={org.name} />
+
+          <ScoringProgressPanel organizationId={org.id} orgName={org.name} />
 
           <OrgPeopleCard
             members={members}

@@ -25,6 +25,7 @@ import IntuiziSyncPanel from "@/components/enterprise/IntuiziSyncPanel";
 import IntuiziSyncStatusPanel from "@/components/enterprise/IntuiziSyncStatusPanel";
 import DatasetDiscovery from "@/components/enterprise/DatasetDiscovery";
 import PredictUsersPanel from "@/components/enterprise/PredictUsersPanel";
+import CohortExplorerPanel from "@/components/enterprise/CohortExplorerPanel";
 import PredictOutcomesPanel from "@/components/enterprise/PredictOutcomesPanel";
 import PixelSetupPanel from "@/components/enterprise/PixelSetupPanel";
 import CategoryProfileEditor from "@/components/enterprise/CategoryProfileEditor";
@@ -62,7 +63,7 @@ import { ALL_TABS, GROUPS, groupOf, permittedGroups } from "@/lib/workspaceTabs"
 
 
 const Workspace = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
   const { orgs, active, activeId, setActiveId, canWrite, isOrgAdmin, capabilities, loading } =
     useOrganization();
@@ -414,7 +415,7 @@ const Workspace = () => {
             />
           </PanelErrorBoundary>
         </TabsContent>
-        <TabsContent value="users" className="mt-4">
+        <TabsContent value="users" className="mt-4 space-y-4">
           <PanelErrorBoundary label="Audiences">
             <PredictUsersPanel
               key={refreshKey}
@@ -422,6 +423,11 @@ const Workspace = () => {
               canWrite={canWrite}
             />
           </PanelErrorBoundary>
+          {isAdmin && (
+            <PanelErrorBoundary label="Segment explorer">
+              <CohortExplorerPanel key={`segments-${refreshKey}`} />
+            </PanelErrorBoundary>
+          )}
         </TabsContent>
 
         <TabsContent value="outcomes" className="mt-4">

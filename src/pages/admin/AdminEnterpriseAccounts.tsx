@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import CapabilitySwitches from "@/components/admin/enterprise/CapabilitySwitches";
 import OrgPeopleCard from "@/components/admin/enterprise/OrgPeopleCard";
+import PipelinePanel from "@/components/admin/enterprise/PipelinePanel";
 import {
   ALL_CAPABILITIES,
   toCapabilities,

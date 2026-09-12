@@ -25,6 +25,7 @@ import IntuiziSyncPanel from "@/components/enterprise/IntuiziSyncPanel";
 import IntuiziSyncStatusPanel from "@/components/enterprise/IntuiziSyncStatusPanel";
 import DatasetDiscovery from "@/components/enterprise/DatasetDiscovery";
 import PredictUsersPanel from "@/components/enterprise/PredictUsersPanel";
+import CohortExplorerPanel from "@/components/enterprise/CohortExplorerPanel";
 import PredictOutcomesPanel from "@/components/enterprise/PredictOutcomesPanel";
 import PixelSetupPanel from "@/components/enterprise/PixelSetupPanel";
 import CategoryProfileEditor from "@/components/enterprise/CategoryProfileEditor";

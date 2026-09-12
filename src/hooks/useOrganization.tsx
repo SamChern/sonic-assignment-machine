@@ -76,12 +76,20 @@ export function useOrganization() {
     ? capsByOrg[active.organization_id] ?? ALL_CAPABILITIES
     : ALL_CAPABILITIES;
 
+  /** Switches for any organization the user belongs to (per-account portals). */
+  const capabilitiesFor = useCallback(
+    (organizationId: string | null) =>
+      organizationId ? capsByOrg[organizationId] ?? ALL_CAPABILITIES : ALL_CAPABILITIES,
+    [capsByOrg],
+  );
+
   return {
     orgs,
     active,
     activeId,
     setActiveId,
     capabilities,
+    capabilitiesFor,
     role: active?.role ?? null,
     canWrite: active ? ["owner", "analyst"].includes(active.role) : false,
     // Only org owners (enterprise admins) may edit the 6 semantic categories.

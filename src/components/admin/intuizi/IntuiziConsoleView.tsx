@@ -17,6 +17,7 @@ export const IntuiziConsoleView = () => (
     </p>
     <ScoringRunsDashboard />
     <IdentifierGroundingPanel />
+    <GroundingRescorePanel />
     <ScoreQueueHealthPanel />
 
     <IntuiziConsolePanel />

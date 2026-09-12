@@ -123,7 +123,8 @@ const permittedGroups = (caps: Capabilities) =>
 const Workspace = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { orgs, active, activeId, setActiveId, canWrite, isOrgAdmin, loading } = useOrganization();
+  const { orgs, active, activeId, setActiveId, canWrite, isOrgAdmin, capabilities, loading } =
+    useOrganization();
   const [params, setParams] = useSearchParams();
   // Tab choice follows the user across devices; the URL still wins for deep links.
   const [storedTab, setStoredTab] = useUiPreferenceValue<string>(
@@ -131,9 +132,15 @@ const Workspace = () => {
     "analyses",
     (v) => typeof v === "string" && ALL_TABS.some((t) => t.key === v),
   );
-  const validTab = (value: string | null) =>
-    value && ALL_TABS.some((t) => t.key === value) ? value : null;
-  const tab = validTab(params.get("tab")) ?? validTab(storedTab) ?? "analyses";
+  // Only the sections this account is permissioned for.
+  const groups = useMemo(() => permittedGroups(capabilities), [capabilities]);
+  const allowedTabs = useMemo(() => groups.flatMap((g) => g.tabs.map((t) => t.key)), [groups]);
+  const validTab = useCallback(
+    (value: string | null) => (value && allowedTabs.includes(value) ? value : null),
+    [allowedTabs],
+  );
+  const tab =
+    validTab(params.get("tab")) ?? validTab(storedTab) ?? allowedTabs[0] ?? "analyses";
   const group = useMemo(() => groupOf(tab), [tab]);
   const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
   const [analysisCount, setAnalysisCount] = useState<number | null>(null);

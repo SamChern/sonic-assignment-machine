@@ -357,6 +357,44 @@ export async function runIngestPipeline(
       taxonomy_nodes: { code: string; label: string } | null;
     }[];
 
+    // --- Device-level signal values ---------------------------------------
+    // Same device rows the Enterprise "Enrichment" tab reads, so this step shows
+    // the real values behind each tag (which CTV channels, genres, site topics
+    // this audience actually carries) instead of codes and weights only.
+    type SignalValue = {
+      family: string;
+      value: string;
+      label: string;
+      devices: number;
+      share_pct: number;
+    };
+    type SignalFamily = { family: string; values: number; devices: number };
+    let signalValues: SignalValue[] = [];
+    let signalFamilies: SignalFamily[] = [];
+    let sampledDevices = 0;
+    let signalNote: string | null = null;
+    try {
+      const { data: sig, error: sigErr } = await supabase.rpc(
+        "admin_activation_signal_values",
+        { _activation_id: activation.activation_id, _sample: 2000, _top: 12 },
+      );
+      if (sigErr) throw new Error(sigErr.message);
+      const s = (sig ?? {}) as {
+        sampled_devices?: number;
+        values?: SignalValue[];
+        families?: SignalFamily[];
+      };
+      sampledDevices = Number(s.sampled_devices ?? 0) || 0;
+      signalValues = Array.isArray(s.values) ? s.values : [];
+      signalFamilies = Array.isArray(s.families) ? s.families : [];
+      if (!signalValues.length) {
+        signalNote =
+          "No device-level signal values landed for this feed yet — ingest the signals/summary report to populate them.";
+      }
+    } catch (e) {
+      signalNote = `Device signals unavailable — ${e instanceof Error ? e.message : String(e)}`;
+    }
+
     // --- CLAP grounding ----------------------------------------------------
     // Every audio row in this activation (and the audience profile itself) gets
     // a vector in CLAP's space on the EC2 box, so profile <-> track kNN is
@@ -468,13 +506,42 @@ export async function runIngestPipeline(
             : "no · using tag-based scores",
         ],
         ...scoreRows,
-        ...tags.slice(0, 8).map(
-          (t) =>
-            [t.taxonomy_nodes?.code ?? "unresolved", `weight ${Number(t.weight).toFixed(2)}`] as [
+        ...(sampledDevices
+          ? ([["Devices sampled for signals", sampledDevices.toLocaleString()]] as [
               string,
               string,
-            ],
+            ][])
+          : []),
+        ...signalFamilies.slice(0, 5).map(
+          (f) =>
+            [
+              `Signal family · ${f.family}`,
+              `${f.values.toLocaleString()} value(s) · ${f.devices.toLocaleString()} device(s)`,
+            ] as [string, string],
         ),
+        ...signalValues.slice(0, 10).map(
+          (v) =>
+            [
+              `${v.family} · ${v.value}`,
+              `${v.devices.toLocaleString()} device(s) · ${v.share_pct}% of sample`,
+            ] as [string, string],
+        ),
+        ...tags.slice(0, 8).map((t) => {
+          const code = t.taxonomy_nodes?.code ?? "unresolved";
+          const label = t.taxonomy_nodes?.label ?? "";
+          const hit = signalValues.find(
+            (v) =>
+              v.label === label ||
+              v.value === label ||
+              (code !== "unresolved" && v.label.includes(code)),
+          );
+          return [
+            label ? `${code} — ${label}` : code,
+            `weight ${Number(t.weight).toFixed(2)}${
+              hit ? ` · ${hit.devices.toLocaleString()} device(s) (${hit.share_pct}%)` : ""
+            }`,
+          ] as [string, string];
+        }),
       ],
       notes: [
         ...(src?.analysis_error ? [src.analysis_error] : []),
@@ -484,8 +551,9 @@ export async function runIngestPipeline(
             ]
           : []),
         ...(groundNote ? [groundNote] : []),
+        ...(signalNote ? [signalNote] : []),
         ...(buildError ? [`Profile builder warning: ${buildError}`] : []),
-      ].slice(0, 3),
+      ].slice(0, 4),
     });
 
     // --- Background scoring -----------------------------------------------

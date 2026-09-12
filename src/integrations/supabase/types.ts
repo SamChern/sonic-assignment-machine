@@ -4040,6 +4040,10 @@ export type Database = {
         Args: { p_id: string; p_owner: string; p_seconds?: number }
         Returns: boolean
       }
+      admin_activation_signal_values: {
+        Args: { _activation_id: string; _sample?: number; _top?: number }
+        Returns: Json
+      }
       admin_category_score_trend: {
         Args: { p_bucket?: string; p_days?: number }
         Returns: Json

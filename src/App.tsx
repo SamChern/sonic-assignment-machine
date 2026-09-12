@@ -34,6 +34,7 @@ const AdminControlRoom = lazy(() => import("./pages/AdminControlRoom"));
 const AdminSoundLibrary = lazy(() => import("./pages/admin/AdminSoundLibrary"));
 const AdminGuide = lazy(() => import("./pages/admin/AdminGuide"));
 const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
+const AdminEnterpriseAccounts = lazy(() => import("./pages/admin/AdminEnterpriseAccounts"));
 const AdminResolver = lazy(() => import("./pages/admin/AdminResolver"));
 const AdminDemoRequests = lazy(() => import("./pages/admin/AdminDemoRequests"));
 const AdminCreatorApplications = lazy(() => import("./pages/admin/AdminCreatorApplications"));
@@ -175,6 +176,7 @@ const App = () => (
                 <Route path="sound-library" element={<AdminSoundLibrary />} />
                 <Route path="guide" element={<AdminGuide />} />
                 <Route path="setup" element={<AdminSetup />} />
+                <Route path="enterprise" element={<AdminEnterpriseAccounts />} />
                 <Route path="resolver" element={<AdminResolver />} />
                 <Route path="lab" element={<AdminNextLevelLab />} />
                 <Route path="pipeline" element={<IntegrationStatus />} />

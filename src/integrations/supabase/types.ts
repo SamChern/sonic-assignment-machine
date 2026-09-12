@@ -4165,6 +4165,17 @@ export type Database = {
         Args: { p_bucket?: string; p_days?: number }
         Returns: Json
       }
+      admin_cohort_explorer: {
+        Args: {
+          _cohort_id: string
+          _limit?: number
+          _offset?: number
+          _sample?: number
+          _window_days?: number
+        }
+        Returns: Json
+      }
+      admin_cohort_list: { Args: { _limit?: number }; Returns: Json }
       admin_enterprise_pipeline: {
         Args: { _feeds?: number; _organization_id: string; _sample?: number }
         Returns: Json

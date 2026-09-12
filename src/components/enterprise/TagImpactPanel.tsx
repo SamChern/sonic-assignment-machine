@@ -171,6 +171,9 @@ export default function TagImpactPanel({ organizationId }: { organizationId: str
           )}
 
           <p className="mt-3 text-[11px] text-muted-foreground">
+            {data.audio_source === "account_data_rows"
+              ? "Tracks matched from the audio named on your own data rows. "
+              : ""}
             Updated {new Date(data.computed_at).toLocaleString()}
           </p>
         </>

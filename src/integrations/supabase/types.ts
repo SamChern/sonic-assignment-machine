@@ -4051,6 +4051,7 @@ export type Database = {
           _limit?: number
           _offset?: number
           _sample?: number
+          _scored_only?: boolean
         }
         Returns: Json
       }

@@ -346,7 +346,7 @@ const Workspace = () => {
         </div>
 
         <div className="mt-4">
-          <JobCards onPick={setTab} />
+          <JobCards onPick={setTab} allowed={allowedTabs} />
         </div>
 
 

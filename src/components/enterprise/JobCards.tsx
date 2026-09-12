@@ -29,25 +29,39 @@ const JOBS = [
   },
 ] as const;
 
-export const JobCards = ({ onPick }: { onPick: (tab: string) => void }) => (
-  <div className="grid gap-3 sm:grid-cols-3">
-    {JOBS.map((j) => (
-      <button key={j.tab} type="button" onClick={() => onPick(j.tab)} className="text-left">
-        <Card className="relative h-full overflow-hidden border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth hover:shadow-elegant">
-          <span
-            aria-hidden
-            className="absolute inset-x-0 top-0 h-1"
-            style={{ background: j.gradient }}
-          />
-          <span className="mb-2 inline-flex rounded-lg bg-primary/10 p-2 text-primary">
-            <j.icon className="h-4 w-4" />
-          </span>
-          <p className="text-sm font-semibold text-foreground">{j.label}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">{j.blurb}</p>
-        </Card>
-      </button>
-    ))}
-  </div>
-);
+/**
+ * `allowed` is the set of tabs this account's access switches permit, so a card
+ * never offers a shortcut into a section the account cannot open.
+ */
+export const JobCards = ({
+  onPick,
+  allowed,
+}: {
+  onPick: (tab: string) => void;
+  allowed?: readonly string[];
+}) => {
+  const jobs = allowed ? JOBS.filter((j) => allowed.includes(j.tab)) : JOBS;
+  if (!jobs.length) return null;
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {jobs.map((j) => (
+        <button key={j.tab} type="button" onClick={() => onPick(j.tab)} className="text-left">
+          <Card className="relative h-full overflow-hidden border-border/60 bg-card/70 p-4 backdrop-blur-sm transition-smooth hover:shadow-elegant">
+            <span
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-1"
+              style={{ background: j.gradient }}
+            />
+            <span className="mb-2 inline-flex rounded-lg bg-primary/10 p-2 text-primary">
+              <j.icon className="h-4 w-4" />
+            </span>
+            <p className="text-sm font-semibold text-foreground">{j.label}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{j.blurb}</p>
+          </Card>
+        </button>
+      ))}
+    </div>
+  );
+};
 
 export default JobCards;

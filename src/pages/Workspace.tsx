@@ -33,8 +33,7 @@ import JobCards from "@/components/enterprise/JobCards";
 import PlaybooksPanel from "@/components/enterprise/PlaybooksPanel";
 import OrgComplianceStrip from "@/components/enterprise/OrgComplianceStrip";
 import WorkspaceDigestCard from "@/components/enterprise/WorkspaceDigestCard";
-import EnrichmentPreviewPanel from "@/components/enterprise/EnrichmentPreviewPanel";
-import OwnDataScoringPanel from "@/components/enterprise/OwnDataScoringPanel";
+import EnrichmentTabPanels from "@/components/enterprise/EnrichmentTabPanels";
 import type { CapabilityKey, Capabilities } from "@/lib/orgCapabilities";
 
 

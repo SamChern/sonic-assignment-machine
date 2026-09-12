@@ -4169,6 +4169,10 @@ export type Database = {
         Args: { _feeds?: number; _organization_id: string; _sample?: number }
         Returns: Json
       }
+      admin_enterprise_scoring_progress: {
+        Args: { _organization_id: string; _sample?: number }
+        Returns: Json
+      }
       admin_grounding_rescore_control: {
         Args: { _action: string; _batch?: number }
         Returns: Json

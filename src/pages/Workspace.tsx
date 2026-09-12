@@ -430,7 +430,14 @@ const Workspace = () => {
           </PanelErrorBoundary>
         </TabsContent>
 
-        <TabsContent value="enrich" className="mt-4">
+        <TabsContent value="enrich" className="mt-4 space-y-4">
+          <PanelErrorBoundary label="Your own data">
+            <OwnDataScoringPanel
+              key={`own-${refreshKey}-${active.organization_id}`}
+              organizationId={active.organization_id}
+              canWrite={canWrite}
+            />
+          </PanelErrorBoundary>
           <PanelErrorBoundary label="Enrichment">
             <EnrichmentPreviewPanel
               key={`${refreshKey}-${active.organization_id}`}

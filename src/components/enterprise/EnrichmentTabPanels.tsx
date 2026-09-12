@@ -1,6 +1,7 @@
 import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import OwnDataScoringPanel from "@/components/enterprise/OwnDataScoringPanel";
 import EnrichmentPreviewPanel from "@/components/enterprise/EnrichmentPreviewPanel";
+import TagImpactPanel from "@/components/enterprise/TagImpactPanel";
 
 /**
  * The Enrichment tab: first what the account's own rows say (their numbers),
@@ -22,6 +23,12 @@ export default function EnrichmentTabPanels({
           key={`own-${refreshKey}-${organizationId}`}
           organizationId={organizationId}
           canWrite={canWrite}
+        />
+      </PanelErrorBoundary>
+      <PanelErrorBoundary label="Predicted impact on your site tags">
+        <TagImpactPanel
+          key={`impact-${refreshKey}-${organizationId}`}
+          organizationId={organizationId}
         />
       </PanelErrorBoundary>
       <PanelErrorBoundary label="Enrichment">

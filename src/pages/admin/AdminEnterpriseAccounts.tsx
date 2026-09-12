@@ -52,8 +52,6 @@ interface Grant {
   last_synced_at: string | null;
 }
 
-const ROLES = ["owner", "analyst", "viewer"] as const;
-
 /**
  * Provision and permission enterprise accounts: create the account, invite its
  * owner, set what the account may reach, and share Intuizi data feeds with it.
@@ -77,8 +75,6 @@ export default function AdminEnterpriseAccounts() {
   const [notes, setNotes] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [grants, setGrants] = useState<Grant[]>([]);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<string>("analyst");
   const [feedIds, setFeedIds] = useState("");
 
   const call = useCallback(async (body: Record<string, unknown>) => {

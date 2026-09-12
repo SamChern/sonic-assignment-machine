@@ -331,9 +331,15 @@ Deno.serve(async (req) => {
     const action = String(body.action ?? "run");
 
     if (action === "tick") {
-      // Cron path: only an internal caller may sweep across accounts.
+      // Cron path: only an internal caller may sweep across accounts — either
+      // the service key or the dedicated scheduled-job secret.
       const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-      if (bearer !== SERVICE_KEY) throw new AuthzError("Internal action", 403);
+      const jobSecret = Deno.env.get("INTERNAL_CRON_SECRET");
+      const presented = req.headers.get("x-internal-cron-secret");
+      const secretOk = Boolean(
+        jobSecret && presented && presented.length === jobSecret.length && presented === jobSecret,
+      );
+      if (!secretOk && bearer !== SERVICE_KEY) throw new AuthzError("Internal action", 403);
 
       const { data: waiting, error } = await admin
         .from("enterprise_records")

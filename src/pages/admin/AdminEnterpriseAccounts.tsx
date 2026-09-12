@@ -228,20 +228,19 @@ export default function AdminEnterpriseAccounts() {
     }
   };
 
-  const invite = async () => {
-    if (!org || !inviteEmail.trim()) return;
+  const invite = async (email: string, role: string) => {
+    if (!org || !email) return;
     setBusy("invite");
     try {
       const res = (await call({
         action: "invite",
         organization_id: org.id,
-        email: inviteEmail.trim(),
-        role: inviteRole,
+        email,
+        role,
         redirect_to: `${window.location.origin}/workspace`,
       })) as { members?: Member[] };
       setMembers(res.members ?? members);
-      setInviteEmail("");
-      toast.success(`Invited ${inviteEmail} as ${inviteRole}.`);
+      toast.success(`Invited ${email} as ${role}.`);
       await loadOrgs();
     } catch (e) {
       toast.error((e as Error).message);

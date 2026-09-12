@@ -264,6 +264,7 @@ export type Database = {
           created_at: string
           ctv_metadata: Json | null
           file_url: string | null
+          grounding_rescore_checked_at: string | null
           id: string
           librosa_features: Json | null
           name: string
@@ -284,6 +285,7 @@ export type Database = {
           created_at?: string
           ctv_metadata?: Json | null
           file_url?: string | null
+          grounding_rescore_checked_at?: string | null
           id?: string
           librosa_features?: Json | null
           name: string
@@ -304,6 +306,7 @@ export type Database = {
           created_at?: string
           ctv_metadata?: Json | null
           file_url?: string | null
+          grounding_rescore_checked_at?: string | null
           id?: string
           librosa_features?: Json | null
           name?: string
@@ -4468,6 +4471,10 @@ export type Database = {
         }[]
       }
       grounding_rescore_autostart: { Args: never; Returns: Json }
+      grounding_rescore_candidates: {
+        Args: { _stale_hours?: number }
+        Returns: number
+      }
       grounding_rescore_guard: { Args: never; Returns: undefined }
       grounding_rescore_tick: { Args: { _batch?: number }; Returns: Json }
       has_org_access: { Args: { _org: string }; Returns: boolean }

@@ -18,6 +18,7 @@ export default function EnrichmentTabPanels({
   canWrite: boolean;
   refreshKey: number;
 }) {
+  const { isAdmin } = useAuth();
   return (
     <>
       <PanelErrorBoundary label="Your own data">

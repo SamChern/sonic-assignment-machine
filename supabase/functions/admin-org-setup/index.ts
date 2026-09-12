@@ -144,8 +144,96 @@ Deno.serve(async (req) => {
       for (const m of (members ?? []) as { organization_id: string }[]) {
         counts[m.organization_id] = (counts[m.organization_id] ?? 0) + 1;
       }
-      return json({ success: true, orgs: orgs ?? [], member_counts: counts });
+      const { data: caps } = await admin.from("org_capabilities").select("*").limit(500);
+      const { data: grants } = await admin
+        .from("org_intuizi_activations")
+        .select("organization_id, activation_id, is_active")
+        .limit(5000);
+      const grantCounts: Record<string, number> = {};
+      for (const g of (grants ?? []) as { organization_id: string }[]) {
+        grantCounts[g.organization_id] = (grantCounts[g.organization_id] ?? 0) + 1;
+      }
+      return json({
+        success: true,
+        orgs: orgs ?? [],
+        member_counts: counts,
+        capabilities: caps ?? [],
+        grant_counts: grantCounts,
+      });
     }
+
+    if (action === "provision_org") {
+      const name = String(body.name ?? "").trim();
+      if (!name) return json({ success: false, error: "an account name is required" }, 400);
+      const slug = slugify(String(body.slug ?? "") || name);
+      if (!slug) return json({ success: false, error: "slug could not be derived" }, 400);
+      const plan = String(body.plan ?? "enterprise");
+      const ownerEmail = String(body.owner_email ?? "").trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ownerEmail)) {
+        return json({ success: false, error: "a valid owner email is required" }, 400);
+      }
+      const redirectTo = String(body.redirect_to ?? "") || undefined;
+
+      const { userId: ownerUserId, invited } = await resolveUser(admin, ownerEmail, redirectTo);
+      if (!ownerUserId) {
+        return json({ success: false, error: `could not invite or find ${ownerEmail}` }, 400);
+      }
+
+      // Reuse an existing account with the same slug instead of failing the flow.
+      const { data: existingOrg } = await admin
+        .from("organizations")
+        .select("id, name, slug, plan, created_at")
+        .eq("slug", slug)
+        .maybeSingle();
+
+      let org = existingOrg;
+      if (!org) {
+        const { data: created, error: createErr } = await admin
+          .from("organizations")
+          .insert({ name, slug, plan, owner_user_id: ownerUserId })
+          .select("id, name, slug, plan, created_at")
+          .single();
+        if (createErr) return json({ success: false, error: createErr.message }, 500);
+        org = created;
+      }
+
+      await admin
+        .from("organization_members")
+        .upsert(
+          { organization_id: org.id, user_id: ownerUserId, role: "owner" },
+          { onConflict: "organization_id,user_id" },
+        );
+
+      const requested = (body.capabilities ?? null) as Record<string, unknown> | null;
+      const caps = await ensureCapabilities(admin, org.id, authz.userId);
+      let capabilities = caps;
+      if (requested) {
+        const patch: Record<string, boolean> = {};
+        for (const key of CAPABILITY_KEYS) {
+          if (typeof requested[key] === "boolean") patch[key] = requested[key] as boolean;
+        }
+        if (Object.keys(patch).length) {
+          const { data: updated } = await admin
+            .from("org_capabilities")
+            .update({ ...patch, updated_by: authz.userId })
+            .eq("organization_id", org.id)
+            .select("*")
+            .single();
+          capabilities = updated ?? caps;
+        }
+      }
+
+      return json({
+        success: true,
+        org,
+        owner_invited: invited,
+        owner_user_id: ownerUserId,
+        capabilities,
+        members: await listMembers(admin, org.id),
+      });
+    }
+
+
 
     if (action === "create_org") {
       const name = String(body.name ?? "").trim();

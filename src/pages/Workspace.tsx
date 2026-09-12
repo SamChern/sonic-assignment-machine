@@ -423,6 +423,12 @@ const Workspace = () => {
               canWrite={canWrite}
             />
           </PanelErrorBoundary>
+          <PanelErrorBoundary label="Predicted impact on your site tags">
+            <TagImpactPanel
+              key={`predict-impact-${refreshKey}-${active.organization_id}`}
+              organizationId={active.organization_id}
+            />
+          </PanelErrorBoundary>
           {isAdmin && (
             <PanelErrorBoundary label="Segment explorer">
               <CohortExplorerPanel key={`segments-${refreshKey}`} />
